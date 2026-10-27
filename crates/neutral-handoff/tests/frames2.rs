@@ -91,7 +91,7 @@ fn ffmpeg_filter_declares_its_geometry_with_a_bounded_dry_run() {
         ("fps=60", "declared", "changes the frame rate"),
         ("scale=40:24", "preserve", "expect=declared"),
         ("movie=clip.mp4", "declared", "unsafe=1"),
-        ("drawtext=textfile=t.txt", "declared", "unsafe=1"),
+        ("lut3d=a.cube", "declared", "unsafe=1"),
         ("nosuchfilter", "preserve", "has no filter `nosuchfilter`"),
     ] {
         let mut a = base.to_vec();
