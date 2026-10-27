@@ -1,0 +1,36 @@
+//! P1: verified ports. Each submodule is one batch (generated); everything is re-exported flat.
+#![allow(unused_imports)]
+mod b01;
+pub use b01::*;
+mod b02;
+pub use b02::*;
+mod b03;
+pub use b03::*;
+mod b04;
+pub use b04::*;
+mod b05;
+pub use b05::*;
+mod b06;
+pub use b06::*;
+mod b07;
+pub use b07::*;
+mod b08;
+pub use b08::*;
+mod b09;
+pub use b09::*;
+mod b10;
+pub use b10::*;
+mod b11;
+pub use b11::*;
+mod b12;
+pub use b12::*;
+mod b13;
+pub use b13::*;
+mod b14;
+pub use b14::*;
+mod b15;
+pub use b15::*;
+mod b16;
+pub use b16::*;
+mod regs;
+pub use regs::*;

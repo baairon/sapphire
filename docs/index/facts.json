@@ -1,0 +1,701 @@
+{
+ "generator": "tools/gen_docs.py",
+ "facts": {
+  "fn_total": {
+   "value": 2702,
+   "text": "2,702",
+   "source": "docs/data/FUNCTION_MAP.tsv rows"
+  },
+  "code_bytes": {
+   "value": 964659,
+   "text": "964,659",
+   "source": "docs/data/FUNCTION_MAP.tsv sum of size"
+  },
+  "strict_fns": {
+   "value": 2695,
+   "text": "2,695",
+   "source": "docs/data/FUNCTION_MAP.tsv strict in {p1, exact}"
+  },
+  "strict_bytes": {
+   "value": 939332,
+   "text": "939,332",
+   "source": "docs/data/FUNCTION_MAP.tsv strict in {p1, exact}"
+  },
+  "strict_pct": {
+   "value": 97.4,
+   "text": "97.4",
+   "source": "docs/data/FUNCTION_MAP.tsv strict in {p1, exact}, share of code bytes"
+  },
+  "p1_fns": {
+   "value": 549,
+   "text": "549",
+   "source": "docs/data/FUNCTION_MAP.tsv tier P1"
+  },
+  "p1_bytes": {
+   "value": 58078,
+   "text": "58,078",
+   "source": "docs/data/FUNCTION_MAP.tsv tier P1"
+  },
+  "p1_pct": {
+   "value": 6.0,
+   "text": "6.0",
+   "source": "docs/data/FUNCTION_MAP.tsv tier P1, share of code bytes"
+  },
+  "p2v_exact_fns": {
+   "value": 2146,
+   "text": "2,146",
+   "source": "docs/data/FUNCTION_MAP.tsv strict exact"
+  },
+  "p2v_exact_bytes": {
+   "value": 881254,
+   "text": "881,254",
+   "source": "docs/data/FUNCTION_MAP.tsv strict exact"
+  },
+  "p2v_exact_pct": {
+   "value": 91.4,
+   "text": "91.4",
+   "source": "docs/data/FUNCTION_MAP.tsv strict exact, share of code bytes"
+  },
+  "strictest_fns": {
+   "value": 2692,
+   "text": "2,692",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner}"
+  },
+  "strictest_bytes": {
+   "value": 935056,
+   "text": "935,056",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner}"
+  },
+  "strictest_pct": {
+   "value": 96.9,
+   "text": "96.9",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner}, share of code bytes"
+  },
+  "unproven_fns": {
+   "value": 7,
+   "text": "7",
+   "source": "docs/data/FUNCTION_MAP.tsv strict unproven"
+  },
+  "unproven_bytes": {
+   "value": 25327,
+   "text": "25,327",
+   "source": "docs/data/FUNCTION_MAP.tsv strict unproven"
+  },
+  "unproven_pct": {
+   "value": 2.6,
+   "text": "2.6",
+   "source": "docs/data/FUNCTION_MAP.tsv strict unproven, share of code bytes"
+  },
+  "ev_second_fns": {
+   "value": 1945,
+   "text": "1,945",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence second"
+  },
+  "ev_owner_fns": {
+   "value": 198,
+   "text": "198",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence owner"
+  },
+  "ev_anyworld_fns": {
+   "value": 3,
+   "text": "3",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence anyworld"
+  },
+  "partial_fns": {
+   "value": 7,
+   "text": "7",
+   "source": "docs/data/FUNCTION_MAP.tsv status partial"
+  },
+  "unproven_offsets": {
+   "value": [
+    "0x1b438",
+    "0x2405b",
+    "0x24a39",
+    "0x30040",
+    "0x31780",
+    "0x56fa6",
+    "0x651c2"
+   ],
+   "text": "`0x1b438`, `0x2405b`, `0x24a39`, `0x30040`, `0x31780`, `0x56fa6`, `0x651c2`",
+   "source": "docs/data/FUNCTION_MAP.tsv strict unproven"
+  },
+  "p1_vectors": {
+   "value": 117988,
+   "text": "117,988",
+   "source": "docs/data/PARITY.md P1 vectors line"
+  },
+  "p1_vector_fns": {
+   "value": 236,
+   "text": "236",
+   "source": "docs/data/PARITY.md P1 vectors line"
+  },
+  "names_total": {
+   "value": 2702,
+   "text": "2,702",
+   "source": "docs/data/names.tsv rows"
+  },
+  "names_ids_agree": {
+   "value": 2702,
+   "text": "2,702",
+   "source": "docs/data/names.tsv symbol and offset against docs/data/FUNCTION_MAP.tsv"
+  },
+  "origin_bundled": {
+   "value": 1983,
+   "text": "1,983",
+   "source": "docs/data/names.tsv origin bundled_library"
+  },
+  "origin_std": {
+   "value": 514,
+   "text": "514",
+   "source": "docs/data/names.tsv origin std"
+  },
+  "origin_undetermined": {
+   "value": 136,
+   "text": "136",
+   "source": "docs/data/names.tsv origin undetermined"
+  },
+  "origin_component": {
+   "value": 69,
+   "text": "69",
+   "source": "docs/data/names.tsv origin component"
+  },
+  "kind_method": {
+   "value": 1432,
+   "text": "1,432",
+   "source": "docs/data/names.tsv kind method"
+  },
+  "kind_std": {
+   "value": 514,
+   "text": "514",
+   "source": "docs/data/names.tsv kind std"
+  },
+  "kind_function": {
+   "value": 478,
+   "text": "478",
+   "source": "docs/data/names.tsv kind function"
+  },
+  "kind_destructor": {
+   "value": 159,
+   "text": "159",
+   "source": "docs/data/names.tsv kind destructor"
+  },
+  "kind_constructor": {
+   "value": 112,
+   "text": "112",
+   "source": "docs/data/names.tsv kind constructor"
+  },
+  "kind_initialiser": {
+   "value": 7,
+   "text": "7",
+   "source": "docs/data/names.tsv kind initialiser"
+  },
+  "cntv2card_fns": {
+   "value": 906,
+   "text": "906",
+   "source": "docs/data/namecheck_checks.tsv class CNTV2Card"
+  },
+  "nc_checked": {
+   "value": 2700,
+   "text": "2,700",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence)"
+  },
+  "nc_align": {
+   "value": 2188,
+   "text": "2,188",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence)"
+  },
+  "nc_align_high": {
+   "value": 664,
+   "text": "664",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence)"
+  },
+  "nc_align_med": {
+   "value": 947,
+   "text": "947",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence)"
+  },
+  "nc_align_low": {
+   "value": 577,
+   "text": "577",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence)"
+  },
+  "nc_weak": {
+   "value": 511,
+   "text": "511",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence)"
+  },
+  "nc_mismatch": {
+   "value": 1,
+   "text": "1",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence)"
+  },
+  "nc_mismatch_id": {
+   "value": "f_0006590c",
+   "text": "f_0006590c",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence)"
+  },
+  "nc_unchecked": {
+   "value": 2,
+   "text": "2",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence), functions without a verdict"
+  },
+  "nc_deep": {
+   "value": 207,
+   "text": "207",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence), reviewed deep in the row that gives the verdict"
+  },
+  "nc_sampled": {
+   "value": 79,
+   "text": "79",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence), reviewed sample in the row that gives the verdict"
+  },
+  "nc_script": {
+   "value": 2414,
+   "text": "2,414",
+   "source": "docs/data/namecheck_classes.tsv and namecheck_rest.tsv, merged (worst verdict, then highest confidence), reviewed script in the row that gives the verdict"
+  },
+  "arity_fit_pct": {
+   "value": 97.2,
+   "text": "97.2",
+   "source": "docs/data/namecheck_summary.md"
+  },
+  "arity_fit_base": {
+   "value": 2353,
+   "text": "2,353",
+   "source": "docs/data/namecheck_summary.md"
+  },
+  "arity_shift_pct": {
+   "value": 68,
+   "text": "68",
+   "source": "docs/data/namecheck_summary.md (stated as about 67 to 68%)"
+  },
+  "class_hier_match": {
+   "value": 16,
+   "text": "16",
+   "source": "docs/data/namecheck_summary.md"
+  },
+  "ctor_dtor_own_vtable": {
+   "value": 54,
+   "text": "54",
+   "source": "docs/data/namecheck_summary.md"
+  },
+  "classes_total": {
+   "value": 16,
+   "text": "16",
+   "source": "docs/data/classes_names.tsv rows"
+  },
+  "twin_fns": {
+   "value": 432,
+   "text": "432",
+   "source": "docs/data/namecheck_rest.tsv flag twin_interchangeable"
+  },
+  "const_result_fns": {
+   "value": 10,
+   "text": "10",
+   "source": "docs/data/namecheck_rest.tsv flag CONSTANT_RESULT"
+  },
+  "stubs_total": {
+   "value": 458,
+   "text": "458",
+   "source": "docs/data/stub_names.tsv rows"
+  },
+  "stub_align": {
+   "value": 183,
+   "text": "183",
+   "source": "docs/data/namecheck_stubs.tsv verdict"
+  },
+  "stub_weak": {
+   "value": 275,
+   "text": "275",
+   "source": "docs/data/namecheck_stubs.tsv verdict"
+  },
+  "stub_mismatch": {
+   "value": 0,
+   "text": "0",
+   "source": "docs/data/namecheck_stubs.tsv verdict"
+  },
+  "stub_hyp_total": {
+   "value": 157,
+   "text": "157",
+   "source": "docs/data/namecheck_stub_hypotheses.tsv outcome other than no_hypothesis"
+  },
+  "stub_hyp_confirmed": {
+   "value": 116,
+   "text": "116",
+   "source": "docs/data/namecheck_stub_hypotheses.tsv outcome"
+  },
+  "stub_hyp_refined": {
+   "value": 23,
+   "text": "23",
+   "source": "docs/data/namecheck_stub_hypotheses.tsv outcome"
+  },
+  "stub_hyp_refuted": {
+   "value": 18,
+   "text": "18",
+   "source": "docs/data/namecheck_stub_hypotheses.tsv outcome"
+  },
+  "stub_arity_sites": {
+   "value": 48,
+   "text": "48",
+   "source": "docs/data/namecheck_stub_arity_defects.tsv rows"
+  },
+  "stub_arity_stubs": {
+   "value": 12,
+   "text": "12",
+   "source": "docs/data/namecheck_stub_arity_defects.tsv distinct stub_offset"
+  },
+  "effects_total": {
+   "value": 272,
+   "text": "272",
+   "source": "docs/data/effect_names.tsv rows"
+  },
+  "params_total": {
+   "value": 1040,
+   "text": "1,040",
+   "source": "docs/data/param_candidates.tsv rows"
+  },
+  "missing_refs": {
+   "value": 19563,
+   "text": "19,563",
+   "source": "docs/data/MISSING_DATA.md"
+  },
+  "exact_audit_rows": {
+   "value": 1702,
+   "text": "1,702",
+   "source": "docs/data/EXACT_AUDIT.tsv rows"
+  },
+  "audit_pass": {
+   "value": 1699,
+   "text": "1,699",
+   "source": "docs/data/audit_final.tsv verdict PASS"
+  },
+  "audit_open": {
+   "value": 3,
+   "text": "3",
+   "source": "docs/data/audit_final.tsv verdict OPEN"
+  },
+  "pipeline_parity_rows": {
+   "value": 43,
+   "text": "43",
+   "source": "docs/data/pipeline_parity.tsv rows"
+  },
+  "pipeline_parity_equal": {
+   "value": 43,
+   "text": "43",
+   "source": "docs/data/pipeline_parity.tsv equal true"
+  },
+  "risks_total": {
+   "value": 33,
+   "text": "33",
+   "source": "docs/data/RISKS.tsv rows"
+  },
+  "crates_total": {
+   "value": 14,
+   "text": "14",
+   "source": "crates/ folders with a Cargo.toml"
+  },
+  "lift_crates": {
+   "value": 10,
+   "text": "10",
+   "source": "crates/lift-* folders"
+  },
+  "tests_scan_total": {
+   "value": 5653,
+   "text": "5,653",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_1": {
+   "value": 19,
+   "text": "19",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_2": {
+   "value": 213,
+   "text": "213",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_3": {
+   "value": 1053,
+   "text": "1,053",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_4": {
+   "value": 500,
+   "text": "500",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_5": {
+   "value": 315,
+   "text": "315",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_6": {
+   "value": 168,
+   "text": "168",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_7": {
+   "value": 167,
+   "text": "167",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_8": {
+   "value": 153,
+   "text": "153",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_a": {
+   "value": 1205,
+   "text": "1,205",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_lift_b": {
+   "value": 1515,
+   "text": "1,515",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_neutral_ffmpeg": {
+   "value": 130,
+   "text": "130",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_neutral_handoff": {
+   "value": 199,
+   "text": "199",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_neutral_parity": {
+   "value": 4,
+   "text": "4",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "tests_scan_neutral_world": {
+   "value": 12,
+   "text": "12",
+   "source": "text scan of crates/ (#[test] lines), not a test run"
+  },
+  "lift_defs_total": {
+   "value": 5248,
+   "text": "5,248",
+   "source": "text scan of crates/lift-*/src/ for fn f_XXXXXXXX definitions"
+  },
+  "lift_ids_multi": {
+   "value": 1605,
+   "text": "1,605",
+   "source": "text scan of crates/lift-*/src/ for fn f_XXXXXXXX definitions, ids with more than one definition"
+  },
+  "anyworld_fn": {
+   "value": 3,
+   "text": "3",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence anyworld"
+  },
+  "anyworld_bytes": {
+   "value": 4276,
+   "text": "4,276",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence anyworld"
+  },
+  "unproven_p2v_fn": {
+   "value": 2,
+   "text": "2",
+   "source": "docs/data/FUNCTION_MAP.tsv strict unproven, tier P2v"
+  },
+  "unproven_p2v_bytes": {
+   "value": 542,
+   "text": "542",
+   "source": "docs/data/FUNCTION_MAP.tsv strict unproven, tier P2v"
+  },
+  "unproven_p2_fn": {
+   "value": 5,
+   "text": "5",
+   "source": "docs/data/FUNCTION_MAP.tsv strict unproven, tier P2"
+  },
+  "unproven_p2_bytes": {
+   "value": 24785,
+   "text": "24,785",
+   "source": "docs/data/FUNCTION_MAP.tsv strict unproven, tier P2"
+  },
+  "group_a_fn": {
+   "value": 1480,
+   "text": "1,480",
+   "source": "docs/data/FUNCTION_MAP.tsv group A"
+  },
+  "group_a_bytes": {
+   "value": 482327,
+   "text": "482,327",
+   "source": "docs/data/FUNCTION_MAP.tsv group A"
+  },
+  "group_b_fn": {
+   "value": 1222,
+   "text": "1,222",
+   "source": "docs/data/FUNCTION_MAP.tsv group B"
+  },
+  "group_b_bytes": {
+   "value": 482332,
+   "text": "482,332",
+   "source": "docs/data/FUNCTION_MAP.tsv group B"
+  },
+  "p1_candidates": {
+   "value": 606,
+   "text": "606",
+   "source": "docs/data/PARITY.md P1 candidates line"
+  },
+  "p1_downgraded": {
+   "value": 57,
+   "text": "57",
+   "source": "docs/data/PARITY.md P1 candidates line"
+  },
+  "audit_rows": {
+   "value": 1702,
+   "text": "1,702",
+   "source": "docs/data/audit_final.tsv rows"
+  },
+  "audit_proof_rows": {
+   "value": 30,
+   "text": "30",
+   "source": "docs/data/audit_final.tsv detail, 'explained by proof' above 0"
+  },
+  "audit_landing_rows": {
+   "value": 15,
+   "text": "15",
+   "source": "docs/data/audit_final.tsv detail, 'only in blocks unreachable from the entry' above 0"
+  },
+  "audit_rule_w_rows": {
+   "value": 0,
+   "text": "0",
+   "source": "docs/data/audit_final.tsv detail, 'only under rule W' above 0"
+  },
+  "audit_stack_rows": {
+   "value": 0,
+   "text": "0",
+   "source": "docs/data/audit_final.tsv detail, 'only under the stack protector assumption' above 0"
+  },
+  "audit_rule_assumption_rows": {
+   "value": 0,
+   "text": "0",
+   "source": "docs/data/audit_final.tsv detail, 'only under rule W' or 'only under the stack protector assumption' above 0"
+  },
+  "audit_hand_proof_rows": {
+   "value": 17,
+   "text": "17",
+   "source": "docs/data/audit_final.tsv detail, 'hand proofs' above 0"
+  },
+  "audit_callee_writes_rows": {
+   "value": 11,
+   "text": "11",
+   "source": "docs/data/audit_final.tsv detail, rows mentioning 'callee writes'"
+  },
+  "assume_write_nothing_rows": {
+   "value": 8,
+   "text": "8",
+   "source": "docs/data/ledger_digest.tsv note, 'write nothing through pointers'"
+  },
+  "stub_arity_fns": {
+   "value": 17,
+   "text": "17",
+   "source": "docs/data/namecheck_stub_arity_defects.tsv distinct function"
+  },
+  "conf_confirmed": {
+   "value": 1085,
+   "text": "1,085",
+   "source": "docs/data/name_confirmation.tsv level"
+  },
+  "conf_consistent": {
+   "value": 875,
+   "text": "875",
+   "source": "docs/data/name_confirmation.tsv level"
+  },
+  "conf_twin": {
+   "value": 432,
+   "text": "432",
+   "source": "docs/data/name_confirmation.tsv level"
+  },
+  "conf_stub": {
+   "value": 68,
+   "text": "68",
+   "source": "docs/data/name_confirmation.tsv level"
+  },
+  "conf_weak": {
+   "value": 241,
+   "text": "241",
+   "source": "docs/data/name_confirmation.tsv level"
+  },
+  "conf_mismatch": {
+   "value": 1,
+   "text": "1",
+   "source": "docs/data/name_confirmation.tsv level"
+  },
+  "conf_consistent_know_only": {
+   "value": 69,
+   "text": "69",
+   "source": "docs/data/name_confirmation.tsv level consistent rows whose only evidence id is know (library knowledge, no repository evidence)"
+  },
+  "conf_decode_dtor_shared": {
+   "value": 44,
+   "text": "44",
+   "source": "docs/data/namecheck_fingerprints.tsv RegisterExpert::Decode* destructors, consistent or confirmed in docs/data/name_confirmation.tsv, that share their most common code fingerprint"
+  }
+ },
+ "aliases": {
+  "strict_fn": "strict_fns",
+  "p1_fn": "p1_fns",
+  "p2v_fn": "p2v_exact_fns",
+  "p2v_pct": "p2v_exact_pct",
+  "exact_fn": "strictest_fns",
+  "exact_bytes": "strictest_bytes",
+  "exact_pct": "strictest_pct",
+  "second_fn": "ev_second_fns",
+  "owner_fn": "ev_owner_fns",
+  "anyworld_fns": "anyworld_fn",
+  "unproven_fn": "unproven_fns",
+  "names_fn": "names_total",
+  "class_cntv2card_fn": "cntv2card_fns",
+  "stub_names": "stubs_total",
+  "classes_local": "classes_total",
+  "effect_names": "effects_total",
+  "param_candidates": "params_total",
+  "arity_lifted": "arity_fit_base",
+  "ctor_vtable": "ctor_dtor_own_vtable",
+  "twin_fn": "twin_fns",
+  "const_return_fn": "const_result_fns",
+  "tests_lift_1": "tests_scan_lift_1",
+  "tests_lift_2": "tests_scan_lift_2",
+  "tests_lift_3": "tests_scan_lift_3",
+  "tests_lift_4": "tests_scan_lift_4",
+  "tests_lift_5": "tests_scan_lift_5",
+  "tests_lift_6": "tests_scan_lift_6",
+  "tests_lift_7": "tests_scan_lift_7",
+  "tests_lift_8": "tests_scan_lift_8",
+  "tests_lift_a": "tests_scan_lift_a",
+  "tests_lift_b": "tests_scan_lift_b",
+  "tests_neutral_ffmpeg": "tests_scan_neutral_ffmpeg",
+  "tests_neutral_handoff": "tests_scan_neutral_handoff",
+  "tests_neutral_parity": "tests_scan_neutral_parity",
+  "tests_neutral_world": "tests_scan_neutral_world"
+ },
+ "blocks": [
+  "anyworld",
+  "audit_verdicts",
+  "confirmation",
+  "confirmation_levels",
+  "crates",
+  "data_files",
+  "evidence",
+  "generated_pages",
+  "lift_crates",
+  "missing",
+  "missing_kinds",
+  "name_kinds",
+  "name_origins",
+  "namecheck",
+  "namecheck_verdicts",
+  "origins",
+  "parity_evidence",
+  "parity_tiers",
+  "strict",
+  "stub_hypotheses",
+  "stub_origins",
+  "stubcheck",
+  "tiers",
+  "unproven"
+ ]
+}

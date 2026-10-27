@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  # Every push to main runs, so main always carries a check of its own, and so
+  # does every pull request.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# On a pull request a new push supersedes the run in flight: only the branch's
+# latest commit needs a verdict. A push to main is never cancelled and never
+# waits behind another one: each is a group of its own, so commits pushed one
+# after another all keep a result of their own.
+concurrency:
+  group: ci-${{ forgejo.event_name == 'pull_request' && forgejo.ref || forgejo.sha }}
+  cancel-in-progress: ${{ forgejo.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  test:
+    name: Rust tests on Linux
+    runs-on: docker
+    timeout-minutes: 60
+    # The checkout action needs Node in the job container, so the job runs in
+    # the Node image and installs Rust itself.
+    container:
+      image: "docker.io/library/node:24-bookworm"
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v6
+
+      # The ffmpeg bridge tests render raw frames with ffmpeg and compare its
+      # pixel format table with the live binary, so the job uses the same
+      # static 9.0 build as the other repositories.
+      # The tools run on Debian's python3 (3.11 or later), so they use no
+      # 3.12-only syntax.
+      - run: |
+          apt-get update && apt-get install -y --no-install-recommends python3 xz-utils
+          curl -sSfL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-gpl-9.0.tar.xz | tar -xJ -C /opt
+          echo /opt/ffmpeg-n9.0-latest-linux64-gpl-9.0/bin >> "$GITHUB_PATH"
+
+      - run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      # The workspace tests its default members: the harness, the parity
+      # replayer, the ffmpeg bridge and the handoff pipeline, in the release
+      # profile the parity runs use. The lifted crates need the stored
+      # vectors, which stay out of the repository, so they are not built here.
+      - run: cargo test --release
+
+      # The stage provider that the handoff and conformance suites drive.
+      - run: cargo build --release -p neutral-handoff
+
+      # The Python tools need no packages beyond the standard library to
+      # compile, so a syntax slip anywhere in them fails here.
+      - run: python3 -m compileall -q tools
+
+      # The handoff control plane and the conformance suite (docs/handoff.md).
+      - run: python3 -I tools/test_handoff.py
+
+      - run: python3 -I tools/test_conformance.py
+
+      # twixtor is not checked out here (no token, no secret). test_handoff.py
+      # above names the absent peer as the reason for each real-repository
+      # check it cannot make (HANDOFF_REQUIRE_PEERS stays unset), and every
+      # part of the conformance run that needs it prints a NOT RUN line that
+      # names the absent peer. --allow-absent-peer lets only those parts
+      # through: anything else that does not run, and every failed check,
+      # still fails the job.
+      - run: python3 -I tools/conformance.py --quick --allow-absent-peer
+
+      # The generated reference pages and the documentation checks.
+      - run: python3 -I tools/test_docgen.py
+
+      - run: python3 -I tools/gen_docs.py --check
+
+      - run: python3 -I tools/check_docs.py

@@ -1,0 +1,8 @@
+ffprobe_color_space	scale_matrix_name	tags_written_by_setparams	decode_accepts	encode_tags_read_back	verified_by
+bt709	bt709	colorspace=bt709 plus the source's color_primaries and color_trc when present	yes	tv,bt709 (primaries and transfer as set)	colour.decode_accepts.bt709,colour.encode_tags.bt709
+bt470bg	bt601	colorspace=bt470bg plus the source's primaries and transfer	yes (name bt601)	tv,bt470bg	colour.decode_accepts.bt470bg,colour.encode_tags.bt470bg
+smpte170m	smpte170m	colorspace=smpte170m plus the source's primaries and transfer	yes	tv,smpte170m	colour.decode_accepts.smpte170m,colour.encode_tags.smpte170m
+bt2020nc	bt2020	colorspace=bt2020nc plus the source's primaries (bt2020) and transfer (bt2020-10; smpte2084 and arib-std-b67 are refused as HDR)	yes (name bt2020)	tv,bt2020nc,bt2020-10,bt2020 (as measured with those tags)	colour.decode_accepts.bt2020nc,colour.encode_tags.bt2020nc
+smpte240m	smpte240m	colorspace=smpte240m plus the source's primaries and transfer	yes	tv,smpte240m	colour.decode_accepts.smpte240m,colour.encode_tags.smpte240m
+fcc	fcc	colorspace=fcc; a primaries or transfer tag the source lacks stays unset	yes	tv,fcc,unknown,unknown	colour.decode_accepts.fcc,colour.encode_tags.fcc
+anything else or untagged	bt709 when max(width, height) >= 1280 or height >= 720, else smpte170m (display size after rotation)	colorspace, color_primaries and color_trc all set to that name	-	tv,<name>,<name>,<name>	colour.size_rule.1280x720,colour.size_rule.1279x719,colour.size_rule.160x96,colour.size_rule.1920x1080,decode.hd_untagged.d8.E_defaults,colour.hd_encode_with_graph_bt709_tags,colour.hd_encode_plain_tags

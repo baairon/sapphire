@@ -1,0 +1,10 @@
+[package]
+name = "neutral-world"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+description = "World-parametric parity harness: deterministic pseudo-random memory, import and call model"
+
+[dependencies]

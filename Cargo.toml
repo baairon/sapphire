@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+# The lifted crates (lift-1 to lift-8, lift-a, lift-b) test against stored vectors that are not in
+# the repository, so a plain `cargo test` covers only the four crates that run on their own.
+default-members = [
+    "crates/neutral-world",
+    "crates/neutral-parity",
+    "crates/neutral-ffmpeg",
+    "crates/neutral-handoff",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["bairon"]
+publish = false

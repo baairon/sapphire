@@ -1,0 +1,602 @@
+# world vectors v1
+world noreturn_call entry=0x40 n=111 anchor=0x1000006f stub_end=0xf91 args=0 rets=1 seed=5 ptrn=6 heap=aligned fetch=byte
+case 0 ok seed=0x3eb2ecbc903907fc
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 1 ok seed=0xb1441d254bd86cd7
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 2 ok seed=0x953deb0d47b9380a
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 3 ok seed=0xce61248c734f5c4f
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 4 ok seed=0xf401f15cfee747e8
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 5 ok seed=0xe06b51eec968ea89
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 6 ok seed=0x5765c9fd02a11332
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 7 ok seed=0x88bf589a5ce00596
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 8 ok seed=0xf5d11eeed2def48c
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 9 ok seed=0x019b757cd93ccfc1
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 10 ok seed=0x5f29a418d5090b55
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 11 ok seed=0x763c050319cde70f
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 12 ok seed=0xb58fff5b44204d96
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 13 ok seed=0xc43c23c01bed0c3b
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 14 ok seed=0x85ad9ceae5b28a03
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 15 ok seed=0x37822bb8d6ce75c4
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 16 ok seed=0x6d0f32ac2f8bf91d
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 17 ok seed=0x717378d182baf002
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 18 ok seed=0xe213a3dd2a2af5de
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 19 ok seed=0x2e26c2f8238fa4f0
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 20 ok seed=0x2ef4392f3dc5ba5a
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 21 ok seed=0xc265c53ba11b401c
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 22 ok seed=0xef9a16a0300d14fb
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 23 ok seed=0xa75c0f844db1aced
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 24 ok seed=0xbf98dc64be02b4c7
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 25 ok seed=0xe2246a52ebb195fc
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 26 ok seed=0x56d573c3c4122bda
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 27 ok seed=0xeec1b492ede790ab
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 28 ok seed=0xd7182f156f80e083
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 29 ok seed=0x9c460a223ba09dfe
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 30 ok seed=0x613caf12afc7d260
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 31 ok seed=0xc7f6ab67c3ee7cb9
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 32 ok seed=0x26ff26eede52eabb
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 33 ok seed=0x432fc1ac52b2f1d1
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 34 ok seed=0x1c0525327b9736b6
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 35 ok seed=0xff299a4e88626736
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 36 ok seed=0x289b09426141a897
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 37 ok seed=0x74b856b63edab4ba
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 38 ok seed=0x3eace924202a9268
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 39 ok seed=0x8975de31d7bf6b5b
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 40 ok seed=0xef80f3459691fe51
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 41 ok seed=0x71331592234d7136
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 42 ok seed=0xe9e86f4d987a9df9
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 43 ok seed=0x58d6ac881b7b9d13
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 44 ok seed=0xce0d2989033e09e5
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 45 ok seed=0x6d85cf945029e4c1
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 46 ok seed=0x4cc14b7d3d46619b
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 47 ok seed=0xc531bc60d26819d7
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 48 ok seed=0x0fe870b4d76f553d
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 49 ok seed=0x10b975b055ffddc6
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 50 ok seed=0x8d823f9f6707c834
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 51 ok seed=0x2941005510b216d2
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 52 ok seed=0x45f6fada8d75d20f
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 53 ok seed=0x7aaf1200d6b5739e
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 54 ok seed=0x8cc678002f644c45
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 55 ok seed=0x07546b08b98496c3
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 56 ok seed=0x0f083c04e4ead3ad
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 57 ok seed=0xc4cc76017b0cd1cd
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 58 ok seed=0x75c9d2e58f6afff0
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 59 ok seed=0xcf42830a55b55c6f
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 60 ok seed=0xb26d53f7a351bd95
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 61 ok seed=0xa6757ec7e1d1c479
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 62 ok seed=0x92a31317c2dfea74
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 63 ok seed=0xec83b2fe4785d936
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 64 ok seed=0x8fc5d5c413df369c
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 65 ok seed=0xa9381f197a9164a2
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 66 ok seed=0xa6e1ff6211b0c599
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 67 ok seed=0x85f423a759ec8291
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 68 ok seed=0xdde0cf4f59d3573d
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 69 ok seed=0x79bbb6a63450b07c
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 70 ok seed=0x9e10b7ca3f52df2c
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 71 ok seed=0x579aa0769b040b28
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 72 ok seed=0xcc2d057600c0721d
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 73 ok seed=0x2115736730b2e3f4
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 74 ok seed=0x109fc21e2aa2a134
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 75 ok seed=0xcc676526b667a8aa
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 76 ok seed=0xa36f78e4ba403311
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 77 ok seed=0xcc0cd0c6f765520c
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 78 ok seed=0x7f3f6f3f4bd3a783
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 79 ok seed=0x3cf06ed06b7034e5
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 80 ok seed=0xc60ac25c59403ed2
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 81 ok seed=0x3b4a14eb89110a75
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 82 ok seed=0x0e312ce491a6cfd3
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 83 ok seed=0x763658dfc713fe38
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 84 ok seed=0x452be5082efac077
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 85 ok seed=0x7839f0ff6cfe4319
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 86 ok seed=0xf00544d0f5c423ce
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 87 ok seed=0x43e55bad26dbb5bd
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 88 ok seed=0xecbf0c65c363c973
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 89 ok seed=0x62cfc73afbed8277
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 90 ok seed=0x8fafc06e19af0276
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 91 ok seed=0x0ec88dacc085bdf8
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 92 ok seed=0xdb34fb5db1746aea
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 93 ok seed=0x010880648b860574
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 94 ok seed=0x471abc93326b7541
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 95 ok seed=0x07fb18ec5b02364e
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 96 ok seed=0xf59c58be8dba5492
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 97 ok seed=0x36c477f7a3dab0af
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 98 ok seed=0x413c8a6ca28cd0f5
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 99 ok seed=0xb2b1a8a6e515938d
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 100 ok seed=0xfaff049088daffdd
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 101 ok seed=0xf9b4e51ace21f173
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 102 ok seed=0xf5229ebdb626071a
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 103 ok seed=0xa19269b64f705826
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 104 ok seed=0x04d95a054e9c755e
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 105 ok seed=0x0aee08cb2aa1f6fd
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 106 ok seed=0xc9e28ec447c7a5a0
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 107 ok seed=0xb30bd0e61e064d07
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 108 ok seed=0x637352640cb143d5
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 109 ok seed=0x6691f492c9571316
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 110 ok seed=0x1da542c13bac9e65
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 111 ok seed=0x68ccda1809b3d612
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 112 ok seed=0x4a7b0677b275ece8
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 113 ok seed=0x8535a96ac6fa1aa6
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 114 ok seed=0x8e927ce3d74068cc
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 115 ok seed=0x0e9d68fc269e268d
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 116 ok seed=0x4bb915a06f299fea
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 117 ok seed=0x342f9c799b7b9735
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 118 ok seed=0x14193b3eaecaa6e3
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end
+case 119 ok seed=0x9253416ec626fce1
+abi ok
+t 0 0x1000007b i 1 0x7 f 0
+x noreturn 0x1000007b
+end

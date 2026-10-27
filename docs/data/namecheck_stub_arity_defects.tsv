@@ -1,0 +1,49 @@
+stub_offset	exact_target	function	call_addr	owner_source	int_args_listed_in_lift	int_args_in_bank_signature	arg_regs_freshly_written_before_call
+0x11b	__vector_base<NTV2DeviceInfo, allocator<NTV2DeviceInfo> >::~__vector_base()	f_00016080		findings/port-a/rust/src/p2v/w001.rs	0	1	
+0x11b	__vector_base<NTV2DeviceInfo, allocator<NTV2DeviceInfo> >::~__vector_base()	f_000160de		findings/port-a/rust/src/p2v/w001.rs	0	1	
+0x2bf	void vector<NTV2_RP188, allocator<NTV2_RP188> >::__push_back_slow_path<NTV2_RP188 const&>(	f_000270b9	270e2	findings/port-b/rust/src/p2v/g013.rs	1	2	0
+0x319	__tree<NTV2AudioChannelPair, less<NTV2AudioChannelPair>, allocator<NTV2AudioChannelPair> >	f_000444c4	445c5	findings/fleet-3/rust/src/p2v/u5001.rs	2	3	0,1
+0x319	__tree<NTV2AudioChannelPair, less<NTV2AudioChannelPair>, allocator<NTV2AudioChannelPair> >	f_000446c2	447c4	findings/fleet-3/rust/src/p2v/u5001.rs	2	3	0,1
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae15a	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae180	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae1eb	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae203	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae26e	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae288	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae2f3	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae30d	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae378	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae393	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae3fe	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae419	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae484	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae49f	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae50a	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae525	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae590	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae5ab	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae616	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae644	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae6af	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x355	basic_ostream<char, char_traits<char> >& __put_character_sequence<char, char_traits<char> 	f_000ae032	ae6cb	findings/fleet-6/rust/src/p2v/p006.rs	2	3	0,1,2
+0x6f1	void __half_inplace_merge<__less<EMsupportFormat, EMsupportFormat>, EMsupportFormat*, __wr	f_0001261c	12729	findings/fleet-5/rust/src/p2v/k3_001.rs	5	6	0,1,2,3,4
+0x7f3	STR::basic_string(STR const&)	f_000174d0		findings/port-a/rust/src/p2v/w001.rs	1	2	
+0x7f3	STR::basic_string(STR const&)	f_000b5094	b50a2	findings/port-b/rust/src/p2v/g004.rs	1	2	
+0x7f3	STR::basic_string(STR const&)	f_000bbdbe		findings/port-a/rust/src/p2v/w005.rs	1	2	
+0x7ff	STR::~basic_string()	f_000174d0		findings/port-a/rust/src/p2v/w001.rs	0	1	
+0x7ff	STR::~basic_string()	f_000bbdbe		findings/port-a/rust/src/p2v/w005.rs	0	1	
+0x7ff	STR::~basic_string()	f_000e73ea		findings/port-a/rust/src/p2v/w006.rs	0	1	
+0x805	STR::operator=(STR const&)	f_0002d5e0	2d5f4	findings/fleet-3/rust/src/p2v/u5001.rs	1	2	0
+0x805	STR::operator=(STR const&)	f_000e53ca	e53de	findings/fleet-3/rust/src/p2v/b001.rs	1	2	0
+0x823	basic_istream<char, char_traits<char> >::~basic_istream()	f_00012934		findings/port-a/rust/src/p2v/w001.rs	1	2	
+0x823	basic_istream<char, char_traits<char> >::~basic_istream()	f_00012934		findings/port-a/rust/src/p2v/w001.rs	1	2	
+0x86b	basic_ostream<char, char_traits<char> >::operator<<(unsigned int)	f_00030788	30938	findings/fleet-5/rust/src/p2v/k5_001.rs	1	2	0,1
+0x86b	basic_ostream<char, char_traits<char> >::operator<<(unsigned int)	f_00030788	30ceb	findings/fleet-5/rust/src/p2v/k5_001.rs	1	2	0,1
+0x86b	basic_ostream<char, char_traits<char> >::operator<<(unsigned int)	f_0005cf4c	5cf59	findings/port-b/rust/src/p2v/g013.rs	1	2	
+0x86b	basic_ostream<char, char_traits<char> >::operator<<(unsigned int)	f_0005cf4c	5cf77	findings/port-b/rust/src/p2v/g013.rs	1	2	0,1
+0x925	___cxa_begin_catch	f_00014e6c		findings/port-a/rust/src/p2v/w001.rs	0	1	
+0x94f	__Unwind_Resume	f_00016080		findings/port-a/rust/src/p2v/w001.rs	0	1	
+0x94f	__Unwind_Resume	f_000160de		findings/port-a/rust/src/p2v/w001.rs	0	1	
+0x94f	__Unwind_Resume	f_000174d0		findings/port-a/rust/src/p2v/w001.rs	0	1	
+0x94f	__Unwind_Resume	f_000bbdbe		findings/port-a/rust/src/p2v/w005.rs	0	1	
+0x94f	__Unwind_Resume	f_000e73ea		findings/port-a/rust/src/p2v/w006.rs	0	1	

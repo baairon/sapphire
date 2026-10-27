@@ -1,0 +1,28 @@
+target/
+__pycache__/
+*.pyc
+handoff/
+/.agents/
+/handoff/
+/target/
+# stored vectors of the lifted crates: the tests read <crate>/../vectors (or VEC_DIR); not part of the repository
+/crates/vectors/
+vectors/
+# binaries: dumps, build output, libraries and archives never go into the repository
+*.bin
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.obj
+*.a
+*.lib
+*.pdb
+*.rlib
+*.rmeta
+*.zip
+*.7z
+*.tar
+*.gz
+/original/

@@ -1,0 +1,19 @@
+[package]
+name = "lift_7"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+neutral-world = { path = "../neutral-world" }
+
+[dev-dependencies]
+neutral-parity = { path = "../neutral-parity" }
+
+[features]
+# Branch coverage recording for the parity tests (see src/cov.rs). Off by default.
+cov = []
+# Prints the pc and registers at every block of a lifted function (debugging).
+trace = []

@@ -1,0 +1,124 @@
+# Missing data
+
+Everything the ported code needs that is not in the dumps. If the full binary or its data sections are found, each entry below becomes a drop-in value.
+
+19563 references recorded by the port agents.
+
+| kind | references | distinct items | functions |
+|---|---|---|---|
+| import | 9470 | 294 | 459 |
+| const | 6009 | 5445 | 127 |
+| other | 4036 | 2412 | 291 |
+| vtable | 48 | 27 | 31 |
+
+### Most referenced import items (rel_to_end, references)
+
+- 0x7ff: 3735
+- 0x7b1: 1682
+- 0x355: 489
+- 0x3f1: 414
+- 0x8ad: 282
+- 0x445: 219
+- 0x907: 151
+- 0x79f: 149
+- 0x799: 149
+- 0x83b: 148
+- 0x835: 147
+- 0x94f: 121
+- 0x895: 107
+- 0x8e3: 103
+- 0x84d: 88
+- 0x913: 47
+- 0x9eb: 47
+- 0x8c5: 46
+- 0x271: 44
+- 0x88f: 44
+- 0xc1: 43
+- 0xa63: 42
+- 0x86b: 37
+- 0x253: 36
+- 0x40f: 35
+
+### Most referenced const items (rel_to_end, references)
+
+- 0x5495d: 149
+- 0x549d5: 77
+- 0x54b75: 49
+- 0x54ba5: 45
+- 0x5499d: 39
+- 0x54b8d: 39
+- 0x130a5: 12
+- 0x549a5: 11
+- 0x549bd: 9
+- 0x145fd: 9
+- 0x1460d: 9
+- 0x54bad: 9
+- 0x54b6d: 8
+- 0x14f81: 8
+- 0x549cd: 7
+- 0x5494d: 7
+- 0xd61ed: 7
+- 0x549c5: 6
+- 0x54b85: 5
+- 0x54b7d: 5
+- 0x1301d: 5
+- 0x1304d: 5
+- 0x13075: 4
+- 0x13065: 4
+- 0x1303d: 4
+
+### Most referenced other items (rel_to_end, references)
+
+- 0x4d495: 317
+- 0x481e8: 132
+- 0x49d57: 122
+- 0x3e770: 68
+- 0x481d8: 62
+- 0x49d78: 54
+- 0x481ca: 52
+- 0x481a6: 38
+- 0x4810e: 36
+- 0xd623d: 35
+- 0x481b7: 34
+- 0x48121: 32
+- 0x48134: 28
+- 0x48147: 28
+- 0x48193: 28
+- 0x4815a: 26
+- 0x4816d: 26
+- 0x48180: 26
+- 0x3f3ef: 25
+- 0x49b2e: 17
+- 0x3f020: 15
+- -968387: 14
+- 0x49fcc: 14
+- 0x14b8d: 12
+- 0x484d2: 12
+
+### Most referenced vtable items (rel_to_end, references)
+
+- 0x4d8ed: 5
+- 0x5a995: 5
+- 0x56bfd: 3
+- 0x58bdd: 3
+- 0x55cbd: 2
+- 0x4d4e5: 2
+- 0x4d6ea: 2
+- 0x4d702: 2
+- 0x4d731: 2
+- 0x4d745: 2
+- 0x5a9b5: 2
+- 0x5b0fd: 2
+- 0x5b1cd: 2
+- 0x55a6d: 1
+- 0x55be5: 1
+- 0x589a5: 1
+- 0x58a25: 1
+- 0x4d4cd: 1
+- 0x4d555: 1
+- 0x4d5a1: 1
+- 0x4d76d: 1
+- 0x41901: 1
+- 0x4d9ef: 1
+- 0x4d9f6: 1
+- 0x4da01: 1
