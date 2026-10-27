@@ -379,27 +379,34 @@ fn read_thread(mut stdout: ChildStdout, tx: SyncSender<Vec<u8>>, frame_bytes: us
         meter.blocked.store(false, Ordering::Relaxed);
         meter.touch();
         if sent.is_err() {
-            drain_rest(&mut stdout);
-            return (Outcome::Aborted, frames, String::new());
+            return drain_rest(&mut stdout, frames, frames + 1, frame_bytes);
         }
         frames += 1;
         if cancel.load(Ordering::Relaxed) {
-            drain_rest(&mut stdout);
-            return (Outcome::Aborted, frames, String::new());
+            return drain_rest(&mut stdout, frames, frames, frame_bytes);
         }
     }
 }
 
 /// Read and discard what a stage still writes, so that it is not killed by a closed pipe while
 /// the run is being stopped: a stage upstream of the failure must not look like the failure.
-fn drain_rest(stdout: &mut ChildStdout) {
+/// `delivered` frames went on, `whole` were read in full. An output that then ends inside a frame
+/// is still reported, as at any other end; `analyse` sets it aside when the stage was killed here.
+fn drain_rest(stdout: &mut ChildStdout, delivered: u64, whole: u64, frame_bytes: usize) -> (Outcome, u64, String) {
     let mut sink = [0u8; 64 * 1024];
+    let mut total = 0usize;
     loop {
         match stdout.read(&mut sink) {
             Ok(0) | Err(_) => break,
-            Ok(_) => {}
+            Ok(n) => total += n,
         }
     }
+    let size = frame_bytes.max(1);
+    if total % size == 0 {
+        return (Outcome::Aborted, delivered, String::new());
+    }
+    let after = whole + (total / size) as u64;
+    (Outcome::Failed(Failure::Partial { got: total % size, expected: frame_bytes, after }), delivered, String::new())
 }
 
 fn builtin_thread(rx: Receiver<Vec<u8>>, tx: SyncSender<Vec<u8>>, mut stage: Box<dyn FrameStage>, cancel: &AtomicBool) -> (Outcome, u64, String) {

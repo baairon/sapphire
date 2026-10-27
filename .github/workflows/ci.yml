@@ -60,9 +60,15 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ffmpeg
 
+      # The same static 9.0 build on Windows: the Chocolatey package puts a launcher in
+      # front of ffmpeg, and a timeout ends the launcher but not the ffmpeg it started.
       - name: Install ffmpeg (Windows)
         if: runner.os == 'Windows'
-        run: choco install ffmpeg --no-progress -y
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-gpl-9.0.zip -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\ffmpeg.zip" -DestinationPath "$env:RUNNER_TEMP"
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:RUNNER_TEMP\ffmpeg-n9.0-latest-win64-gpl-9.0\bin"
 
       # The workspace tests its default members: the harness, the parity
       # replayer, the ffmpeg bridge and the handoff pipeline, in the release

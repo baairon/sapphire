@@ -233,6 +233,7 @@ python -I tools/handoff.py doctor --conformance
 | ffmpeg versions | 9.0.2 is the measured version; other versions run conformance live and are reported as unverified |
 | POSIX | the process group branches have not run yet; the first Linux or macOS CI run covers them ([known gaps](docs/handoff.md#known-gaps)) |
 | Interrupt | `sapphire` installs no Ctrl+C handler and never exits 130 |
+| Windows launchers | a launcher in front of ffmpeg, such as the Chocolatey shim, is ended on a timeout but the ffmpeg it started is not; point `FFMPEG` at the real `ffmpeg.exe` |
 | Pixel format table | its generator is not in the repository, so the table cannot be regenerated here |
 
 ## Documentation

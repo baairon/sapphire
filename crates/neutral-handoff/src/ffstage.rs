@@ -281,9 +281,11 @@ pub struct Caps {
 }
 
 impl Caps {
-    /// Whether this is the measured version.
+    /// Whether this is the measured version; a leading `n` (the git tag form of builds such as
+    /// `n9.0.2-...`) is read past, as twixtor's `tools/ffstage.py` does.
     pub fn verified(&self) -> bool {
-        self.version == MEASURED_VERSION || self.version.starts_with(&format!("{}-", MEASURED_VERSION))
+        let version = self.version.strip_prefix('n').unwrap_or(&self.version);
+        version == MEASURED_VERSION || version.starts_with(&format!("{}-", MEASURED_VERSION))
     }
 
     /// Read the three probe outputs.
@@ -619,6 +621,8 @@ mod tests {
         assert_eq!(caps.pix_fmts, ["rgba"]);
         assert_eq!(caps.filters, ["aap", "negate"]);
         assert!(!Caps { version: "8.1".into(), pix_fmts: vec![], filters: vec![] }.verified());
+        assert!(Caps { version: "n9.0.2-12-gabcdef0".into(), pix_fmts: vec![], filters: vec![] }.verified());
+        assert!(!Caps { version: "n9.0.1-3-gabcdef0".into(), pix_fmts: vec![], filters: vec![] }.verified());
     }
 
     #[test]

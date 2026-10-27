@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "A faithful independent Rust rewrite of Sapphire behavior: 2,702 functions in 964,659 bytes, most of them bundled library code.",
-  "bytes": 23306,
+  "bytes": 23486,
   "generated": false
  },
  {

@@ -368,18 +368,26 @@ fn first_sample(data: &[u8], word: usize, big: bool, float: bool) -> f64 {
     }
 }
 
-/// True when every pixel group of the plane equals the first one. When `edge_exempt` is
-/// set the last group of each row is not compared: swscale leaves the trailing chroma
-/// sample unwritten (zero) for some semi-planar formats when the width is odd.
-fn plane_is_uniform(plane: &[u8], p: &neutral_ffmpeg::PlaneLayout, edge_exempt: bool) -> Result<(), String> {
+/// True when every pixel group of the plane matches the first one, sample by sample, within
+/// 1/64 of the first group's value (at least one step). swscale rounds the last pixels of a row
+/// differently on some CPUs (gbrp 9x4 on arm64), while a wrong plane boundary, stride or byte
+/// order moves a sample by far more: the planes of the test color differ by 30% or more. When
+/// `edge_exempt` is set the last group of each row is not compared: swscale leaves the trailing
+/// chroma sample unwritten (zero) for some semi-planar formats when the width is odd.
+fn plane_is_uniform(plane: &[u8], p: &neutral_ffmpeg::PlaneLayout, edge_exempt: bool, word: usize, big: bool, float: bool) -> Result<(), String> {
     let step = p.group_bytes;
-    let first = &plane[..step];
+    let word = word.clamp(1, step);
+    let first: Vec<f64> = (0..step / word).map(|k| first_sample(&plane[k * word..], word, big, float)).collect();
     let groups = if edge_exempt && p.cols > 1 { p.cols - 1 } else { p.cols };
     for row in 0..p.rows {
         let line = &plane[row * p.stride..(row + 1) * p.stride];
         for g in 0..groups {
-            if &line[g * step..(g + 1) * step] != first {
-                return Err(format!("row {} group {} differs from the first group", row, g));
+            for (k, want) in first.iter().enumerate() {
+                let got = first_sample(&line[g * step + k * word..], word, big, float);
+                let slack = if float { (want.abs() / 64.0).max(1e-6) } else { (want.abs() / 64.0).max(1.0) };
+                if (got - want).abs() > slack {
+                    return Err(format!("row {} group {} sample {} is {}, the first group has {}", row, g, k, got, want));
+                }
             }
         }
     }
@@ -431,13 +439,15 @@ fn planar_formats_have_uniform_planes_and_the_right_byte_order() {
                 .push(format!("{} {}x{}: emitted {} bytes, layout {}", fmt, w, h, run.stdout.len(), layout.size()));
             return;
         }
+        let info = fmt.info();
+        let (word, big, float) = (info.sample_bytes as usize, info.endian == Endian::Big, fmt.name().contains("f32"));
         for (pi, p) in layout.planes().iter().enumerate() {
             if p.kind != PlaneKind::Samples {
                 continue;
             }
             let plane = &run.stdout[p.offset..p.offset + p.size];
             let exempt = w % p.group_width != 0;
-            if let Err(why) = plane_is_uniform(plane, p, exempt) {
+            if let Err(why) = plane_is_uniform(plane, p, exempt, word, big, float) {
                 failures.lock().unwrap().push(format!("{} {}x{} plane {}: {}", fmt, w, h, pi, why));
             }
         }
