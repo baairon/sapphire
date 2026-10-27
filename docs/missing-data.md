@@ -35,7 +35,7 @@ A `rel_to_end` below minus `CODE_N` points below the dump's first byte, into the
 | Kind | What it is | How the harness stands in |
 |---|---|---|
 | import | a call through an import stub (allocation, strings, streams, exceptions, system library functions); stub names in `docs/data/stub_names.tsv` | a trapped call with a seeded result ([assumptions: callee model](assumptions.md#callee-model)) |
-| const | a constant read from a data section (floating point constants, masks, tables) | a seeded word, the same in the original run and the port |
+| const | a constant read from a data section (floating point constants, masks, tables) | a seeded word, the same for the function and its port |
 | other | strings and other data references | a seeded word or pointer |
 | vtable | a virtual table address | an address in the world; calls through it are trapped |
 

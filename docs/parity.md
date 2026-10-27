@@ -1,18 +1,18 @@
 # Parity
 
-How many functions of the dump match the original machine code, and under which standard. The comparison itself is in [harness](harness.md).
+How many functions of the dump match the build they replace, and under which standard. The comparison itself is in [harness](harness.md).
 
 ## Terms
 
 | Term | Meaning |
 |---|---|
-| P1 | tier of a self-contained function whose port equals the emulated original bit for bit on its oracle vectors |
-| P2v | tier of a function that is not self-contained, compared with the original in worlds; status `done` means it passed the world check, `partial` that it did not |
+| P1 | tier of a self-contained function whose port equals the function it replaces bit for bit on its oracle vectors |
+| P2v | tier of a function that is not self-contained, compared with the function it replaces in worlds; status `done` means it passed the world check, `partial` that it did not |
 | P2 | tier of a port with the exact control flow and arithmetic whose missing references are placeholders; not compared, so not parity |
 | P2-std | tier of a recognised libc++ container, string or smart pointer instantiation mapped to the Rust std type |
 | P3 | tier of a function that needs data that cannot be guessed |
-| oracle vector | one recorded case of the emulated original: arguments, returns and final buffers |
-| world | a seeded model of everything the dump lacks, in which the original and the port both run |
+| oracle vector | one recorded case of the function a port replaces: arguments, returns and final buffers |
+| world | a seeded model of everything the dump lacks, in which the function and its port both run |
 | missing reference | data, an import or a constant the code uses that is not in the dump |
 | placeholder | the stand-in a port uses for a missing reference: an `Env` access by its `rel_to_end` (`data_va`, `stub_va`) |
 | `partial` | status of a row whose comparison did not pass; every `partial` row is unproven |
@@ -63,7 +63,7 @@ The code is the dump: the raw x86-64 code section of a build of the plugin. The 
 
 ## Anyworld rows
 
-The <!--f:ev_anyworld_fns-->3<!--/f--> `anyworld` rows are the difference between strict parity and strictest. Their ports matched the original in every compared world; open is whether every branch outcome was exercised in those worlds.
+The <!--f:ev_anyworld_fns-->3<!--/f--> `anyworld` rows are the difference between strict parity and strictest. Their ports matched the functions they replace in every compared world; open is whether every branch outcome was exercised in those worlds.
 
 <!--gen:anyworld-->
 | bank name | id | offset | bytes | audit verdict |
@@ -77,7 +77,7 @@ OPEN: the audit found branch outcomes that no compared world took and no sound r
 
 ## Unproven
 
-<!--f:unproven_fns-->7<!--/f--> functions never matched the original and are counted in no parity figure: <!--f:unproven_p2_fn-->5<!--/f--> are tier P2 (<!--f:unproven_p2_bytes-->24,785<!--/f--> bytes) and <!--f:unproven_p2v_fn-->2<!--/f--> are P2v rows with status `partial` (<!--f:unproven_p2v_bytes-->542<!--/f--> bytes). They remain in the crates. Matching them needs the archive ([reproduce](reproduce.md#what-needs-the-archive)).
+<!--f:unproven_fns-->7<!--/f--> functions never matched the build they replace and are counted in no parity figure: <!--f:unproven_p2_fn-->5<!--/f--> are tier P2 (<!--f:unproven_p2_bytes-->24,785<!--/f--> bytes) and <!--f:unproven_p2v_fn-->2<!--/f--> are P2v rows with status `partial` (<!--f:unproven_p2v_bytes-->542<!--/f--> bytes). They remain in the crates. Matching them needs the archive ([reproduce](reproduce.md#what-needs-the-archive)).
 
 <!--gen:unproven-->
 | bank name | id | offset | bytes | tier | status | origin | source |

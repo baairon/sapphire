@@ -9,7 +9,7 @@ How the Rust in the `lift-*` crates was produced from the dump, how the crates a
 | Dump | the raw x86-64 code section of a build of the plugin: <!--f:code_bytes-->964,659<!--/f--> bytes, <!--f:fn_total-->2,702<!--/f--> functions |
 | Content | code with its jump tables embedded; no symbols, strings, constant tables, vtables, import names or headers ([missing data](missing-data.md)) |
 | Origin | per the name bank, <!--f:origin_bundled-->1,983<!--/f--> functions are bundled library code, <!--f:origin_std-->514<!--/f--> std, <!--f:origin_undetermined-->136<!--/f--> undetermined and <!--f:origin_component-->69<!--/f--> component code ([names: origin](names.md#origin)) |
-| Location | archived with the other original dumps and the full disassembly listing; size and SHA-256 in `docs/data/PROVENANCE_sizes.tsv`; no byte of it is in this repository |
+| Location | archived with the other dumps and the full disassembly listing; size and SHA-256 in `docs/data/PROVENANCE_sizes.tsv`; no byte of it is in this repository |
 | Index | function boundaries, callers, callees, stub calls and data references: `docs/data/index_functions.jsonl`, `docs/data/index_edges.tsv` |
 
 ## Two routes
@@ -71,12 +71,12 @@ Each lift crate is a standalone library: its only dependencies are `neutral-worl
 | Symbol | `f_XXXXXXXX`, the 8 hex digits of the function's offset in the dump; never renamed ([names](names.md#rules)) |
 | First doc line | `/// parity: TIER @0xOFFSET size=N` in `p1` and `p2v` |
 | Safety | `#![forbid(unsafe_code)]` |
-| Struct pointers | raw byte views or plain `u64` pointers read at the original offsets, until a layout is established |
+| Struct pointers | raw byte views or plain `u64` pointers read at the offsets the function uses, until a layout is established |
 | Features | `cov` (coverage) and `trace` (prints pc and registers at every block), or `liftcheck` in `lift-a` |
 
 ## Copies of one function
 
-The crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions for the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once, in several crates or in several modules of one crate. Each copy is a separate port of the same machine code: no lift crate depends on another, nearly every call between functions goes through `Env` rather than into another port, every copy has its own test in its own crate against the stored vectors of its id, and most copies differ in their code (call helpers, coverage hooks, runtime).
+The crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions for the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once, in several crates or in several modules of one crate. Each copy is a separate port of the same function: no lift crate depends on another, nearly every call between functions goes through `Env` rather than into another port, every copy has its own test in its own crate against the stored vectors of its id, and most copies differ in their code (call helpers, coverage hooks, runtime).
 
 `docs/data/FUNCTION_MAP.tsv` names one copy per id in its `source` column: the first file, in path order, of the crate of the row's `owner` that defines the id; the row's tier, strict class, evidence and ledger note belong to that crate's ledger row, and the other copies count in no figure. In `lift-a` that first file is the `liftcheck` copy wherever one exists, not the hand port in `p1` or the world port in `p2v`.
 

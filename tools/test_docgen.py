@@ -128,7 +128,7 @@ class PagesTest(unittest.TestCase):
         self.assertEqual(self.block_bytes(page), self.column_bytes("effect_names.tsv"))
         self.assertEqual(len(self.block_bytes(page).split(b"\n")), STATE["data"].facts["effects_total"]["value"])
         self.assertEqual(gen_docs.disk(ROOT, "docs/generated/effects.md"), page)
-        self.assertIn("original names", page)
+        self.assertIn("verbatim and in bank order", page)
         self.assertIn("No effect is mapped to a function", page)
 
     def test_parameters_verbatim(self):

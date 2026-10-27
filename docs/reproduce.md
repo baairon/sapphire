@@ -18,10 +18,10 @@ Every figure in the documentation regenerates from `docs/data/`; `docs/data/MANI
 
 | Item | Used for |
 |---|---|
-| the original dumps, among them `original/neutral_3.text.bin`, and the full disassembly listing | the oracle and world generator run the dump in the emulator; the lift tests read it for reads of the code itself |
+| the dumps, among them `original/neutral_3.text.bin`, and the full disassembly listing | the oracle and world generator run the dump in the emulator; the lift tests read it for reads of the code itself |
 | stored vectors (`f_XXXXXXXX.vec`, `f_XXXXXXXX.world.vec`, `world2`, `world3`) | the `lift-*` tests |
 | specs (`f_XXXXXXXX.json`, `f_XXXXXXXX.world.json`) | generating vectors with new seeds |
-| the oracle and world generator (`archive:tools/oracle.py`, `archive:tools/world.py`) | running the original on a spec and recording its vectors |
+| the oracle and world generator (`archive:tools/oracle.py`, `archive:tools/world.py`) | running a function of the dump on a spec and recording its vectors |
 | the replay tools (`archive:tools/fuzz.py`, `archive:tools/aggr_run.py`, `archive:tools/mutate.py`, `archive:scripts/fullcov.py`) | coverage-guided P1 inputs, a crate's tests on fresh vectors, mutation checks, complete branch coverage |
 | the lifter, the abstract interpreter and the audit scripts | regenerating ports and audit verdicts |
 | the emulator | Unicorn 2.1.4 in a Python virtual environment; not a dependency of this repository |

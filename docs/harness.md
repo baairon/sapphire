@@ -1,6 +1,6 @@
 # Harness
 
-How a Rust port is compared with the original machine code. The original runs in the Unicorn emulator under the archived Python oracle and world generator; the Rust side is `crates/neutral-parity` (P1 vectors) and `crates/neutral-world` (world vectors), which parse the vector files, run the port on the same inputs and compare. The tiers this produces are in [parity](parity.md).
+How a Rust port is compared with the build it replaces. That build runs in the Unicorn emulator under the archived Python oracle and world generator; the Rust side is `crates/neutral-parity` (P1 vectors) and `crates/neutral-world` (world vectors), which parse the vector files, run the port on the same inputs and compare. The tiers this produces are in [parity](parity.md).
 
 ## Terms
 
@@ -9,8 +9,8 @@ How a Rust port is compared with the original machine code. The original runs in
 | oracle | the emulator run of one self-contained function on arguments generated from its spec |
 | spec | the JSON description of a function's entry, arguments, returns, call arities and declarations |
 | vector set | one vector file of a function; world sets are `world`, `world2`, `world3` and up, each with its own seeds |
-| compared world | a world whose case status is `ok`: the original ran to completion; only these are compared and counted |
-| skipped world | a world whose case status is not `ok` (the original faulted or timed out); not compared |
+| compared world | a world whose case status is `ok`: the function ran to completion; only these are compared and counted |
+| skipped world | a world whose case status is not `ok` (the function faulted or timed out); not compared |
 | branch outcome | one direction, taken or not taken, of one conditional branch |
 | call trace | target, integer arguments and float arguments of every call, in order |
 | opaque callee | a callee that is not executed: it writes nothing and returns seeded words |
@@ -23,7 +23,7 @@ How a Rust port is compared with the original machine code. The original runs in
 
 ## World
 
-A function that is not self-contained runs in seeded worlds from `archive:tools/world.py`: everything the dump lacks becomes an input drawn from the world seed, the same for the original and the port.
+A function that is not self-contained runs in seeded worlds from `archive:tools/world.py`: everything the dump lacks becomes an input drawn from the world seed, the same for the function and its port.
 
 | Element | Model |
 |---|---|
@@ -32,7 +32,7 @@ A function that is not self-contained runs in seeded worlds from `archive:tools/
 | Import stubs | the stub zone after the dump reads as `ret` bytes (0xc3) |
 | Calls | every call to a stub, to another function of the dump or to an indirect target is trapped, recorded in the call trace, and answered with seeded `rax`, `rdx` and `xmm0` from (seed, target, call index, normalised arguments); the callee writes no memory ([assumptions: callee model](assumptions.md#callee-model)) |
 | Fetch into a world page | with header `fetch=byte` only the target byte becomes `ret`; without it the whole page does |
-| Stack | the original runs on a zeroed stack; stack reads outside the port's own locals return zero; a stack address passed to a call is normalised to `STK` |
+| Stack | the function runs on a zeroed stack; stack reads outside the port's own locals return zero; a stack address passed to a call is normalised to `STK` |
 | Registers at entry | registers the harness never writes are 0; `rbx`, `rbp`, `r12` to `r15` hold fixed constants |
 | Call result override | `ovr TARGET ARG DELTA`: the declared callee returns normalised argument ARG plus DELTA in `rax` |
 | No-return call | a target declared `noreturn` ends the world (`x noreturn`); returns are not compared |

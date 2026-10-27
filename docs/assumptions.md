@@ -30,7 +30,7 @@ Callees that are not executed (import stubs, other functions of the dump, indire
 | Registers | caller-saved registers are clobbered; `rax`, `rdx` and `xmm0` come back as seeded words: a small value, a heap pointer or a random word, never a stack address |
 | Trace | target and arguments are recorded and compared |
 
-A real callee that fills a structure through a pointer, or returns a value the model never produces, could take the original down a path no world exercised. Rows that pass a stack address to a call and read the slot back are the clearest case; their ledger notes say "assumption: verified under opaque callees that write nothing through pointers".
+A real callee that fills a structure through a pointer, or returns a value the model never produces, could take the function down a path no world exercised. Rows that pass a stack address to a call and read the slot back are the clearest case; their ledger notes say "assumption: verified under opaque callees that write nothing through pointers".
 
 ## Declared callee results
 
@@ -38,15 +38,15 @@ A spec may declare that one callee returns one of its arguments plus a constant 
 
 ## Stub write models
 
-A spec may declare a write model for a stub whose role is rated high confidence (`"models": {"stub:0x7b1": "string_ctor"}`): the original run and the port apply the same model after the call, for example the libc++ layout of a short or long `std::string` built from a pointer and a length. The crates with a `models` module are `lift-4`, `lift-5` and `lift-6`.
+A spec may declare a write model for a stub whose role is rated high confidence (`"models": {"stub:0x7b1": "string_ctor"}`): the function and its port apply the same model after the call, for example the libc++ layout of a short or long `std::string` built from a pointer and a length. The crates with a `models` module are `lift-4`, `lift-5` and `lift-6`.
 
 ## Pinned words
 
-A spec may pin chosen 8-byte world words at chosen offsets from the anchor to fixed values (kinds `data`, `heap`, `int`) instead of seeded ones, so that a function reaches code that needs a specific table entry or flag. The original run and the port read the same pinned values before any store.
+A spec may pin chosen 8-byte world words at chosen offsets from the anchor to fixed values (kinds `data`, `heap`, `int`) instead of seeded ones, so that a function reaches code that needs a specific table entry or flag. The function and its port read the same pinned values before any store.
 
 ## Per-world overlays
 
-Some vector sets of the `lift-7` crate carry per-world values in their sidecar, applied to the original run and the port alike: `pinw` world words, `retw` call results and `woutc` callee writes into the stack frame after one call. A `woutc` line replaces the callee model's "writes nothing" for the one call it names.
+Some vector sets of the `lift-7` crate carry per-world values in their sidecar, applied to the function and its port alike: `pinw` world words, `retw` call results and `woutc` callee writes into the stack frame after one call. A `woutc` line replaces the callee model's "writes nothing" for the one call it names.
 
 ## No-return declarations
 

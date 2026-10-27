@@ -3,20 +3,20 @@
 > [!IMPORTANT]
 > The effects do not run yet. This repository holds the rewritten functions, their parity record and the frame handoff pipeline; no effect renders. Running the effects is the next phase.
 
-A faithful independent Rust rewrite of Sapphire behavior: <!--f:fn_total-->2,702<!--/f--> functions in <!--f:code_bytes-->964,659<!--/f--> bytes, most of them bundled library code. Each port was compared with the original machine code running in an emulator; <!--f:strict_fns-->2,695<!--/f--> match it on every compared input and <!--f:unproven_fns-->7<!--/f--> never did. The repository also carries the frame handoff pipeline shared with twixtor and ffmpeg: `sapphire` runs an ffmpeg decode, twixtor's `vfx`, stage commands of any tool and an ffmpeg encode as one pipe, and `tools/conformance.py` tests a tool against the convention.
+An independent open source reimplementation of Sapphire behaviour, function by function. It is not affiliated with or endorsed by any other company, product or library.
+
+The plugin's functions, written in Rust and paired with ffmpeg and twixtor. `tools/fn_info.py` looks up any function, `sapphire` runs an ffmpeg decode, twixtor's `vfx`, the stages of any tool and an ffmpeg encode as one pipe, `sapphire stage apply` runs this repository's stages on raw frames, and `tools/handoff.py` and `tools/conformance.py` hand tasks to twixtor and test a stage against the convention.
 
 Sources of truth, for agents and scripts:
 
 | Question | Ask |
 |---|---|
-| One function: bank name, offset, size, origin, tier, parity, evidence, name check, confirmation, crate file, callers, callees | `python -I tools/fn_info.py ID\|NAME\|OFFSET [--json]` |
-| Every function at once | `docs/index/functions.jsonl` (one JSON object a function, every field), `docs/data/FUNCTION_MAP.tsv` (tier, status, parity, evidence, crate file) |
+| One function: bank name, offset, size, origin, tier, parity, evidence, name check, confirmation, crate file, callers, callees | `python -I tools/fn_info.py ID\|NAME\|OFFSET [--json]`: the function by id, bank name or offset. |
+| Every function at once | `docs/index/functions.jsonl`: one JSON object a function, every field. |
 | Any figure quoted in a document | `docs/index/facts.json`: the value, text and source of every figure. |
-| The stages this repository provides | `target/release/sapphire stage list --json` |
-| Every stage of every registered tool, with a ready `--stage` string | `python -I tools/handoff.py stages --json` |
+| The stages this repository provides | `target/release/sapphire stage list --json`: the stage manifest. |
+| Every stage of sapphire and twixtor, with a ready stage command | `python -I tools/handoff.py stages --json`: each stage with the command line a wrapper takes. |
 | What a pipeline run will do | `target/release/sapphire INPUT [EFFECT] ... --dry-run`: the plan and every command, nothing written. |
-
-The text inside the figure markers, `docs/generated/` and `docs/index/` come from `python -I tools/gen_docs.py`; change `docs/data/` and regenerate.
 
 ## Contents
 
@@ -30,6 +30,7 @@ The text inside the figure markers, `docs/generated/` and `docs/index/` come fro
   - [Raw frame format](#raw-frame-format)
   - [Exit codes](#exit-codes)
   - [Python tools](#python-tools)
+- [Handoff](#handoff)
 - [Smoke test](#smoke-test)
 - [Tests](#tests)
 - [Limits](#limits)
@@ -39,20 +40,20 @@ The text inside the figure markers, `docs/generated/` and `docs/index/` come fro
 
 ## Parity
 
-Each function was compared with the original machine code running in an emulator: bit for bit on oracle vectors for self-contained functions (tier P1), and in seeded worlds for the rest (tier P2v) ([harness](docs/harness.md)). A world counts as compared when the original runs to completion in it. Parity is measured on these inputs, not proved for every input.
+1:1 parity with the build it replaces is the first priority of this project, ahead of speed, convenience and a cleaner design. When they conflict, parity wins.
+
+- **Output.** A port gives what the function it replaces gives on every compared input: bit for bit on oracle vectors (tier P1), and the same returns, memory writes and calls in every compared world (tier P2v) ([tiers](docs/parity.md#tiers)).
+- **Interface.** Each port keeps its function's offset in its symbol, `f_XXXXXXXX`, and the name bank gives that function's exact name.
+- **No near misses.** A port that differs on any compared input counts in no parity figure ([unproven](docs/parity.md#unproven)).
+- **Measured, not assumed.** Each function and its port run on the same generated inputs and every result is compared ([harness](docs/harness.md)); what the figures rest on is in [assumptions](docs/assumptions.md).
 
 | Standard | Functions | Share of code bytes |
 |---|---|---|
-| Strict parity: no mismatch on oracle vectors or in any compared world | <!--f:strict_fns-->2,695<!--/f--> of <!--f:fn_total-->2,702<!--/f--> | <!--f:strict_pct-->97.4<!--/f-->% |
-| of which bit exact on oracle vectors (tier P1) | <!--f:p1_fns-->549<!--/f--> | <!--f:p1_pct-->6.0<!--/f-->% |
-| of which exact in every compared world (tier P2v) | <!--f:p2v_exact_fns-->2,146<!--/f--> | <!--f:p2v_exact_pct-->91.4<!--/f-->% |
-| Strictest: P1, plus P2v rows with every branch outcome counted over compared worlds only | <!--f:strictest_fns-->2,692<!--/f--> | <!--f:strictest_pct-->96.9<!--/f-->% |
+| Strict parity: matched on every compared input | <!--f:strict_fns-->2,695<!--/f--> of <!--f:fn_total-->2,702<!--/f--> | <!--f:strict_pct-->97.4<!--/f-->% |
+| Strictest: strict, with every branch outcome counted over compared worlds only | <!--f:strictest_fns-->2,692<!--/f--> | <!--f:strictest_pct-->96.9<!--/f-->% |
 | Unproven: never matched | <!--f:unproven_fns-->7<!--/f--> | <!--f:unproven_pct-->2.6<!--/f-->% |
 
-- **Unproven offsets:** <!--f:unproven_offsets-->`0x1b438`, `0x2405b`, `0x24a39`, `0x30040`, `0x31780`, `0x56fa6`, `0x651c2`<!--/f--> ([unproven](docs/parity.md#unproven)).
-- **Callee model:** a callee that is not in the dump writes nothing through the pointers it receives and returns a seeded word ([callee model](docs/assumptions.md#callee-model)).
-- **Stub argument counts:** <!--f:stub_arity_sites-->48<!--/f--> call sites in <!--f:stub_arity_stubs-->12<!--/f--> stubs passed fewer arguments than the bank signatures, so those argument values were never compared ([stub argument counts](docs/assumptions.md#stub-argument-counts)).
-- **Missing references:** <!--f:missing_refs-->19,563<!--/f--> references point at data, imports and constants that are not in the dump; each is a named placeholder ([missing data](docs/missing-data.md)).
+Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn_total-->2,702<!--/f--> functions, most of them bundled library code.
 
 ## Names
 
@@ -166,11 +167,29 @@ A `--json` failure is the error object `{"ok": false, "contract", "error": {"cod
 
 | Tool | Does |
 |---|---|
-| `tools/handoff.py COMMAND` | packets between registered tools, stage listing, shared file sync, contract checks, `doctor` |
-| `tools/conformance.py` | the conformance suite of the handoff convention, levels L0 to L5, and the bench ([conformance](docs/stages.md#conformance)) |
 | `tools/fn_info.py ID\|NAME\|OFFSET` | one function's row from the map, the bank and the confirmation table, with callers, callees and stubs |
 | `tools/gen_docs.py` | regenerates `docs/generated/`, `docs/index/` and every marker; `--check` reports drift without writing |
 | `tools/check_docs.py` | regeneration drift, links, anchors, inline paths, ids, flag and exit code tables, ASCII, dashes, secrets, first person, claims, ffmpeg citations, archive citations, effect names |
+
+The handoff tools, `tools/handoff.py` and `tools/conformance.py`, are in [Handoff](#handoff).
+
+## Handoff
+
+sapphire runs twixtor's `vfx` and the stages of any tool inside its own pipeline and hands tasks to twixtor as packets, under the convention both repositories share ([handoff](docs/handoff.md)). It finds twixtor by twixtor's marker files: `--peer-dir twixtor=DIR`, else `HANDOFF_TWIXTOR_DIR`, else the one sibling folder that holds them.
+
+| Command | Does |
+|---|---|
+| `python -I tools/handoff.py stages --json` | Lists the stages of sapphire and twixtor, each with the command line a wrapper takes. |
+| `target/release/sapphire INPUT EFFECT --stage CMD` | Runs twixtor's `vfx` and a listed stage between an ffmpeg decode and encode; take CMD from `stages --json`. |
+| `python -I tools/handoff.py new --to twixtor --task TEXT --input PATH` | Writes a task packet into twixtor's `handoff/` folder; twixtor runs `accept ID` and `done ID --output PATH --run SPEC`, and `verify ID --other` checks the result from here. |
+| `python -I tools/handoff.py doctor` | Checks twixtor, ffmpeg, ffprobe, the `sapphire` binary, the contracts and the shared files. |
+| `python -I tools/conformance.py --quick` | Runs the covering conformance subset in about a minute; `--full` runs the whole matrix and `--stage CMD` one stage. |
+| `python -I tools/conformance.py --bench` | Times both wrappers on chained stages and rewrites `docs/handoff-bench.tsv`; run `sync` after it. |
+| `python -I tools/handoff.py sync --check` | Compares the shared files with twixtor's by SHA-256; `sync` copies sapphire's versions over. |
+
+The `shared` list of `contracts/tool.json` is byte equal in both repositories: the schemas in `contracts/`, `contracts/conformance/cases.json`, `docs/handoff.md`, `docs/handoff-bench.tsv`, `tools/handoff.py`, `tools/conformance.py` and their tests. Change one here, then run `sync`.
+
+sapphire's own stages are `selftest-invert` and `ffmpeg-filter` ([Stage commands](#stage-commands)); a new tool joins as in [stages](docs/stages.md).
 
 ## Smoke test
 
@@ -214,7 +233,7 @@ python -I tools/handoff.py doctor --conformance
 - **Default members.** `cargo test` runs `neutral-world`, `neutral-parity`, `neutral-ffmpeg` and `neutral-handoff`. The `lift-*` tests replay stored vector sets that are archived, not in the repository, and are marked `#[ignore]`; running them with the archive: [reproduce](docs/reproduce.md#re-creating-the-evidence).
 - **ffmpeg.** The live tests of `neutral-ffmpeg` and the pipeline tests need ffmpeg and ffprobe and print a `SKIPPED` line without them ([tests that need ffmpeg](docs/ffmpeg.md#tests-that-need-ffmpeg)). One `neutral-ffmpeg` test always prints `SKIPPED`, because the pixel format table generator is not in the repository.
 - **twixtor.** `crates/neutral-handoff/tests/cross_twixtor.rs` runs twixtor's `vfx` as a stage of this pipeline and this crate's `stage apply` inside twixtor's `tools/apply.py`, in every order; it skips with a printed reason when ffmpeg, `vfx`, Python or `apply.py` is missing.
-- **Conformance.** `tools/conformance.py --quick` is the covering subset of about a minute, `--full` the whole matrix, `--stage CMD` one stage command, and `--bench` writes the bench table `docs/handoff-bench.tsv`.
+- **Conformance.** `tools/conformance.py --quick` is the covering subset of about a minute; the other modes are in [Handoff](#handoff).
 
 **Continuous integration.** `.github/workflows/ci.yml` (Linux, macOS and Windows, Python 3.12) and `.forgejo/workflows/ci.yml` (Linux in the `node:24-bookworm` container, with Rust from rustup) install ffmpeg (a static 9.0 build on Linux), run `cargo test --release`, build `sapphire`, compile `tools/`, then run `test_handoff.py`, `test_conformance.py`, `conformance.py --quick --allow-absent-peer`, `test_docgen.py`, `gen_docs.py --check` and `check_docs.py`, on every push to `main` and every pull request, with a 60 minute limit. Both can also be started by hand. A new push to a pull request cancels its run in flight; each push to `main` keeps a run of its own. twixtor is not checked out in CI, so every part that needs it prints a `NOT RUN` line, and `--allow-absent-peer` lets only those parts through.
 
@@ -227,7 +246,7 @@ python -I tools/handoff.py doctor --conformance
 | Callees outside the dump | modelled as writing nothing and returning a seeded word |
 | Stub argument values | <!--f:stub_arity_sites-->48<!--/f--> call sites passed fewer arguments than the bank signatures; those values were never compared |
 | Missing references | data, imports and constants not in the dump; <!--f:missing_refs-->19,563<!--/f--> references are named placeholders |
-| Archived evidence | the original dumps, the full disassembly listing and the stored vector sets are archived, and without them the `lift-*` tests stay ignored ([reproduce](docs/reproduce.md#what-needs-the-archive)); the lift crates keep a comment of each machine instruction they lift (`// aa711 mov rbp,rsp`) |
+| Archived evidence | the dumps, the full disassembly listing and the stored vector sets are archived, and without them the `lift-*` tests stay ignored ([reproduce](docs/reproduce.md#what-needs-the-archive)) |
 | Effect behaviour | no sapphire effect is mapped to functions or rendered; effect names are strings only |
 | Name certainty | a name is the bank's assignment for its offset; the `twin` and `stub` levels cannot be decided by the code |
 | ffmpeg versions | 9.0.2 is the measured version; other versions run conformance live and are reported as unverified |
@@ -241,7 +260,7 @@ python -I tools/handoff.py doctor --conformance
 | File | Specifies |
 |---|---|
 | [`docs/parity.md`](docs/parity.md) | What parity means: the tiers, strict parity and strictest, the unproven functions, the caveats, the parity terms. |
-| [`docs/harness.md`](docs/harness.md) | The emulator oracle, worlds, the `Env` trait, vector sets, comparison, replay, mutation checks, the harness terms. |
+| [`docs/harness.md`](docs/harness.md) | The oracle, worlds, the `Env` trait, vector sets, comparison, replay, mutation checks, the harness terms. |
 | [`docs/lifting.md`](docs/lifting.md) | Mechanical lift and hand port, what the lifter writes, the crate layout with per-crate counts, the x86 rules the ports reproduce. |
 | [`docs/evidence.md`](docs/evidence.md) | The evidence classes, the audit, how to read an audit detail, the record behind each function's tier and status. |
 | [`docs/assumptions.md`](docs/assumptions.md) | Every assumption the parity figures rest on: callee model, pinned words, no-return declarations, landing pads, hand proofs, stub argument counts. |
@@ -249,22 +268,22 @@ python -I tools/handoff.py doctor --conformance
 | [`docs/reproduce.md`](docs/reproduce.md) | What reruns from this repository alone and what needs the archive. |
 | [`docs/names.md`](docs/names.md) | The name bank, origins, the name check, confirmation levels and the naming rules. |
 | [`docs/ffmpeg.md`](docs/ffmpeg.md) | How sapphire runs ffmpeg: lookup, the crate, raw frames, colour, rate and length, tests. |
-| [`docs/handoff.md`](docs/handoff.md) | The handoff convention shared with twixtor: contracts, errors, reports, discovery, geometry, the ffmpeg filter stage, packets, commands, platforms, known gaps. |
+| [`docs/handoff.md`](docs/handoff.md) | How sapphire, twixtor and ffmpeg pass raw frames to each other: contract versions, the frame contract, errors and exits, reports, discovery, geometry, the ffmpeg filter stage, packets, commands, platforms, known gaps. |
 | [`docs/stages.md`](docs/stages.md) | How a new provider offers stages and passes conformance. |
 | [`docs/generated/index.md`](docs/generated/index.md) | The generated reference: functions by offset range, classes, stubs, effects, parameters, tiers, evidence, crates, missing data. |
-| [`docs/handoff-bench.tsv`](docs/handoff-bench.tsv) | The bench table of `tools/conformance.py --bench`. |
+| [`docs/handoff-bench.tsv`](docs/handoff-bench.tsv) | The bench table of `tools/conformance.py --bench`: the wrappers timed on chained stages. |
 
-`docs/index/` holds the machine readable index: `facts.json` (every figure with its source), `functions.jsonl` (one row a function) and `pages.json` (every page with its title and size).
+`docs/index/` holds the machine readable index: `facts.json` (every figure with its source), `functions.jsonl` (one row a function) and `pages.json` (every page with its title and size). `docs/data/` holds the checked in evidence, among it the function map `docs/data/FUNCTION_MAP.tsv`; `docs/generated/`, `docs/index/` and the figures in every page are written from it by `python -I tools/gen_docs.py`, so change the data, then regenerate.
 
 ## Legal
 
-- **Independent work.** This project is a faithful independent Rust rewrite and contains none of the original binaries.
+- **Independent work.** This project is written independently and contains no binaries of the software it reimplements.
 - **No affiliation.** It is not affiliated with, endorsed by or sponsored by any other company, product or library.
 - **Trademarks.** Product and library names belong to their owners and appear here only to identify them.
-- **Interoperability.** Function, class, effect and parameter names follow the original so that the code can be matched with it.
+- **Interoperability.** Function, class, effect and parameter names follow the build it replaces, so that the code can be matched with it.
 - **No warranty.** Everything here is provided as is under the MIT License, without warranty of any kind and without liability.
 - **Your responsibility.** You need the rights to the media and the software you process, and you stay bound by the licences of any software you use alongside this project, ffmpeg included.
-- **Rights holders.** If you believe something here infringes your rights, email [hi@bairon.dev](mailto:hi@bairon.dev). Every concern gets a prompt answer in good faith.
+- **Rights holders.** If you believe something here infringes your rights, email [hi@bairon.dev](mailto:hi@bairon.dev) or [open an issue](https://github.com/baairon/sapphire/issues). Every concern gets a prompt answer in good faith.
 
 ## License
 

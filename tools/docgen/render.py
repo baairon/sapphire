@@ -278,13 +278,13 @@ class Generator:
         return {GEN_DIR + "/" + path: "\n".join(body)}
 
     def page_effects(self):
-        what = ("The {} effect names of the name bank, the original names, verbatim and in bank order, one per line. "
+        what = ("The {} effect names of the name bank, verbatim and in bank order, one per line. "
                 "No effect is mapped to a function, a class, a parameter or a behaviour.").format(self.t("effects_total"))
         return self._strings("effects.md", "Effect names", [r["name"] for r in self.d.effects], what)
 
     def page_params(self):
-        what = ("The {} parameter candidates of the name bank, verbatim and in bank order, one per line: strings of "
-                "the original binary, bound to no function or effect, and not confirmed parameters.").format(
+        what = ("The {} parameter candidates of the name bank, verbatim and in bank order, one per line: strings found in "
+                "the build it replaces, bound to no function or effect, and not confirmed parameters.").format(
                     self.t("params_total"))
         return self._strings("parameters.md", "Parameter candidates", [r["candidate"] for r in self.d.params], what)
 

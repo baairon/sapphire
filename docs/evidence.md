@@ -29,7 +29,7 @@ The files that record each function's tier, status and evidence, their columns, 
 
 ## Evidence classes
 
-Branch outcomes are counted over compared worlds only (worlds in which the original ran to completion), from complete outcome lists. A P2v row recorded before that rule enters the strictest standard only once a second check passes it. Counts and code shares per class are in [parity](parity.md#standards).
+Branch outcomes are counted over compared worlds only (worlds in which the function ran to completion), from complete outcome lists. A P2v row recorded before that rule enters the strictest standard only once a second check passes it. Counts and code shares per class are in [parity](parity.md#standards).
 
 | `evidence` | Meaning |
 |---|---|
@@ -93,10 +93,10 @@ Outcomes explained only by the stack protector rule (the guard slot keeps its va
 | Part | Example | Meaning |
 |---|---|---|
 | route | `mechanically lifted from the x86` or `machine-lifted` | a mechanical lift ([lift crates](lifting.md#two-routes)) |
-| world counts | `worlds=1200 compared=922 skipped=278` or `1089 worlds ok of 1576` | worlds generated, compared (the original ran to completion), skipped (the original faulted) |
+| world counts | `worlds=1200 compared=922 skipped=278` or `1089 worlds ok of 1576` | worlds generated, compared (the function ran to completion), skipped (the function faulted) |
 | branches | `branches 32/32` or `branches 0/0 seen both ways` | conditional branches with both outcomes seen, of all |
 | coverage | `insn coverage 100.0% (0 uncovered outside landing pads)` | instructions executed, landing pads counted apart |
 | landing pads | `landing pads unverified: 2 blocks at 0x14ec3,0x14ed2` | blocks reachable only through unwind tables ([assumptions](assumptions.md#landing-pads)) |
 | assumption | `assumption: verified under opaque callees that write nothing through pointers` | the row's check rests on a stated assumption |
 | seed | `seed 7` | world seed of the vector set |
-| behaviour | `Getter: returns the qword at +0x20.` | what the machine code computes |
+| behaviour | `Getter: returns the qword at +0x20.` | what the function computes |

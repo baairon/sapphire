@@ -9,7 +9,7 @@ Reference pages generated from `docs/data/` and a scan of `crates/`.
 |---|---|---|
 | [classes.md](classes.md) | Classes | 1,822 |
 | [crates.md](crates.md) | Crates | 9,675 |
-| [effects.md](effects.md) | Effect names | 4,012 |
+| [effects.md](effects.md) | Effect names | 3,992 |
 | [evidence.md](evidence.md) | Evidence | 1,626 |
 | [functions-0x000000.md](functions-0x000000.md) | Functions 0x0 to 0xc404 | 65,048 |
 | [functions-0x00c422.md](functions-0x00c422.md) | Functions 0xc422 to 0x11bf1 | 64,565 |
@@ -26,7 +26,7 @@ Reference pages generated from `docs/data/` and a scan of `crates/`.
 | [functions-0x0e49f0.md](functions-0x0e49f0.md) | Functions 0xe49f0 to 0xeb7b0 | 33,694 |
 | [missing-data.md](missing-data.md) | Missing data | 2,217 |
 | [names.md](names.md) | Names | 2,608 |
-| [parameters.md](parameters.md) | Parameter candidates | 12,920 |
+| [parameters.md](parameters.md) | Parameter candidates | 12,928 |
 | [stubs-0x0001.md](stubs-0x0001.md) | Stubs 0x1 to 0x41b | 64,354 |
 | [stubs-0x0421.md](stubs-0x0421.md) | Stubs 0x421 to 0x703 | 65,125 |
 | [stubs-0x0709.md](stubs-0x0709.md) | Stubs 0x709 to 0xab7 | 19,881 |

@@ -1,6 +1,6 @@
 # neutral-world
 
-The Rust side of the world harness: a deterministic pseudo-random model of everything the dump lacks (data sections, heap, imports, callees), the `Env` trait every lifted function is written against, the world vector parser, and the comparison of a port with the recorded behaviour of the original machine code. std only, no dependencies. The harness as a whole: [harness](../../docs/harness.md#world).
+The Rust side of the world harness: a deterministic pseudo-random model of everything the dump lacks (data sections, heap, imports, callees), the `Env` trait every lifted function is written against, the world vector parser, and the comparison of a port with the recorded behaviour of the function it replaces. std only, no dependencies. The harness as a whole: [harness](../../docs/harness.md#world).
 
 ## API
 

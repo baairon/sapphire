@@ -2,8 +2,8 @@
  {
   "path": "README.md",
   "title": "sapphire",
-  "line": "A faithful independent Rust rewrite of Sapphire behavior: 2,702 functions in 964,659 bytes, most of them bundled library code.",
-  "bytes": 23486,
+  "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
+  "bytes": 24885,
   "generated": false
  },
  {
@@ -31,14 +31,14 @@
   "path": "crates/neutral-world/README.md",
   "title": "neutral-world",
   "line": "The Rust side of the world harness: a deterministic pseudo-random model of everything the dump lacks (data sections, heap, imports, callees), the `Env` trait every lifted function is written agains...",
-  "bytes": 2565,
+  "bytes": 2564,
   "generated": false
  },
  {
   "path": "docs/assumptions.md",
   "title": "Assumptions and limits",
   "line": "What the parity figures rest on, and how many rows depend on each assumption.",
-  "bytes": 6495,
+  "bytes": 6483,
   "generated": false
  },
  {
@@ -66,7 +66,7 @@
   "path": "docs/evidence.md",
   "title": "Evidence and audit",
   "line": "The files that record each function's tier, status and evidence, their columns, the ledger note grammar, and the audit of the older P2v rows.",
-  "bytes": 7299,
+  "bytes": 7295,
   "generated": false
  },
  {
@@ -93,8 +93,8 @@
  {
   "path": "docs/generated/effects.md",
   "title": "Effect names",
-  "line": "The 272 effect names of the name bank, the original names, verbatim and in bank order, one per line.",
-  "bytes": 4012,
+  "line": "The 272 effect names of the name bank, verbatim and in bank order, one per line.",
+  "bytes": 3992,
   "generated": true
  },
  {
@@ -219,8 +219,8 @@
  {
   "path": "docs/generated/parameters.md",
   "title": "Parameter candidates",
-  "line": "The 1,040 parameter candidates of the name bank, verbatim and in bank order, one per line: strings of the original binary, bound to no function or effect, and not confirmed parameters.",
-  "bytes": 12920,
+  "line": "The 1,040 parameter candidates of the name bank, verbatim and in bank order, one per line: strings found in the build it replaces, bound to no function or effect, and not confirmed parameters.",
+  "bytes": 12928,
   "generated": true
  },
  {
@@ -261,22 +261,22 @@
  {
   "path": "docs/harness.md",
   "title": "Harness",
-  "line": "How a Rust port is compared with the original machine code.",
-  "bytes": 8499,
+  "line": "How a Rust port is compared with the build it replaces.",
+  "bytes": 8493,
   "generated": false
  },
  {
   "path": "docs/lifting.md",
   "title": "Lift crates",
   "line": "How the Rust in the `lift-*` crates was produced from the dump, how the crates are laid out, and the x86 rules the ports reproduce.",
-  "bytes": 7510,
+  "bytes": 7506,
   "generated": false
  },
  {
   "path": "docs/missing-data.md",
   "title": "Missing data",
   "line": "The data, imports and constants the ported code reads that are not in the dump (missing references), how they are addressed, and how the harness stands in for them.",
-  "bytes": 2905,
+  "bytes": 2902,
   "generated": false
  },
  {
@@ -289,15 +289,15 @@
  {
   "path": "docs/parity.md",
   "title": "Parity",
-  "line": "How many functions of the dump match the original machine code, and under which standard.",
-  "bytes": 7586,
+  "line": "How many functions of the dump match the build they replace, and under which standard.",
+  "bytes": 7629,
   "generated": false
  },
  {
   "path": "docs/reproduce.md",
   "title": "Reproduce",
   "line": "What reruns from this repository alone, what needs the archive `sapphire_archive.zip`, and how the parity evidence is re-created from it.",
-  "bytes": 3410,
+  "bytes": 3411,
   "generated": false
  },
  {
