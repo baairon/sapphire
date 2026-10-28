@@ -18,6 +18,8 @@ EVIDENCE_LABEL = OrderedDict([
     ("p1", "P1: oracle vectors, bit exact"),
     ("second", "P2v: PASS from a second check, separate from the row's own ledger entry"),
     ("owner", "P2v: the row's own ledger entry, exact branch counts over compared worlds"),
+    ("audit2", "P2v: PASS from the independent audit of the last seven rows, with its own coverage recompute"),
+    ("assumed", "P2v: PASS from the same audit, resting on labelled assumptions the maintainer accepted"),
     ("anyworld", "P2v: older any-world accounting, not yet audited"),
     ("-", "none: never matched (unproven)"),
 ])
@@ -133,6 +135,8 @@ class Data:
         self.params = read_tsv(self.p("param_candidates.tsv"))
         self.exact_audit = read_tsv(self.p("EXACT_AUDIT.tsv"))
         self.audit_final = read_tsv(self.p("audit_final.tsv"))
+        self.audit_close = read_tsv(self.p("audit_close.tsv"))
+        self.close_sets = read_tsv(self.p("close_sets.tsv"))
         self.pipeline = read_tsv(self.p("pipeline_parity.tsv"))
         self.risks = read_tsv(self.p("RISKS.tsv"))
         self.manifest = read_tsv(self.p("MANIFEST.tsv"))
@@ -258,7 +262,8 @@ class Data:
             ("strict", lambda r: r["strict"] in ("p1", "exact"), "strict in {p1, exact}"),
             ("p1", lambda r: r["tier"] == "P1", "tier P1"),
             ("p2v_exact", lambda r: r["strict"] == "exact", "strict exact"),
-            ("strictest", lambda r: r["evidence"] in ("p1", "second", "owner"), "evidence in {p1, second, owner}"),
+            ("strictest", lambda r: r["evidence"] in ("p1", "second", "owner", "audit2"),
+             "evidence in {p1, second, owner, audit2}"),
             ("unproven", lambda r: r["strict"] == "unproven", "strict unproven"),
         ]:
             c, b = sel(pred)
@@ -269,6 +274,8 @@ class Data:
         put("ev_second_fns", ev["second"], FM + " evidence second")
         put("ev_owner_fns", ev["owner"], FM + " evidence owner")
         put("ev_anyworld_fns", ev["anyworld"], FM + " evidence anyworld")
+        put("ev_audit2_fns", ev["audit2"], FM + " evidence audit2")
+        put("ev_assumed_fns", ev["assumed"], FM + " evidence assumed")
         put("partial_fns", sum(r["status"] == "partial" for r in self.fm), FM + " status partial")
         unp = [r["offset"] for r in self.fm if r["strict"] == "unproven"]
         put("unproven_offsets", unp, FM + " strict unproven", ", ".join("`{}`".format(o) for o in unp))
@@ -401,6 +408,31 @@ class Data:
             AF + ", rows mentioning 'callee writes'")
         put("assume_write_nothing_rows", sum("write nothing through pointers" in l for l in self.ledger_lines),
             "docs/data/ledger_digest.tsv note, 'write nothing through pointers'")
+        AC = "docs/data/audit_close.tsv"
+        ac = self.audit_close
+        size = {r["id"]: r["size"] for r in self.rows}
+        labelled = [r for r in ac if r["labels"] != "-"]
+        lbytes = sum(size[r["symbol"]] for r in labelled)
+        put("close_rows", len(ac), AC + " rows")
+        put("close_pass_rows", sum(r["verdict"] == "PASS" for r in ac), AC + " verdict PASS")
+        put("close_labelled_rows", len(labelled), AC + " rows with a label other than -")
+        put("close_labelled_bytes", lbytes, AC + " rows with a label other than -, sum of size")
+        put("close_labelled_pct", float(fmt_pct(lbytes, total_b)), AC + " rows with a label other than -, share of code bytes",
+            fmt_pct(lbytes, total_b))
+        put("close_compared", sum(int(r["compared"]) for r in ac), AC + " sum of compared")
+        put("close_outcomes", sum(int(r["outcomes"]) for r in ac), AC + " sum of outcomes")
+        put("close_seen", sum(int(r["seen"]) for r in ac), AC + " sum of seen")
+        put("close_explained", sum(int(r["explained"]) for r in ac), AC + " sum of explained")
+        put("close_landing_outcomes", sum(int(r["landing_pads"]) for r in ac), AC + " sum of landing_pads")
+        put("close_landing_rows", sum(int(r["landing_pads"]) > 0 for r in ac), AC + " rows with landing_pads above 0")
+        for label in ("F", "PN", "P2", "A1"):
+            rs = [r for r in ac if label in r["labels"].split(",")]
+            counts = [dict(kv.split("=") for kv in r["label_outcomes"].split(";") if "=" in kv) for r in rs]
+            put("close_rows_" + label, len(rs), AC + " rows whose labels include " + label)
+            put("close_out_" + label, sum(int(c.get(label, 0)) for c in counts), AC + " label_outcomes " + label)
+        CS = "docs/data/close_sets.tsv"
+        put("close_sets_rows", len(self.close_sets), CS + " rows")
+        put("close_sets_pins", sum(int(r["pins"]) for r in self.close_sets), CS + " sum of pins")
         put("stub_arity_fns", len(set(r["function"] for r in self.stub_arity)), SA + " distinct function")
         CF = "docs/data/name_confirmation.tsv level"
         lv = Counter(r["level"] for r in self.confirmation.values())

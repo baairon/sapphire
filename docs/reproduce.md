@@ -19,7 +19,7 @@ Every figure in the documentation regenerates from `docs/data/`; `docs/data/MANI
 | Item | Used for |
 |---|---|
 | the dumps, among them `original/neutral_3.text.bin`, and the full disassembly listing | the oracle and world generator run the dump in the emulator; the lift tests read it for reads of the code itself |
-| stored vectors (`f_XXXXXXXX.vec`, `f_XXXXXXXX.world.vec`, `world2`, `world3`) | the `lift-*` tests |
+| stored vectors (`f_XXXXXXXX.vec`, `f_XXXXXXXX.world.vec`, `world2`, `world3` and up) | the `lift-*` tests; the sets of the last seven functions are listed with their SHA-256 in `docs/data/close_sets.tsv` |
 | specs (`f_XXXXXXXX.json`, `f_XXXXXXXX.world.json`) | generating vectors with new seeds |
 | the oracle and world generator (`archive:tools/oracle.py`, `archive:tools/world.py`) | running a function of the dump on a spec and recording its vectors |
 | the replay tools (`archive:tools/fuzz.py`, `archive:tools/aggr_run.py`, `archive:tools/mutate.py`, `archive:scripts/fullcov.py`) | coverage-guided P1 inputs, a crate's tests on fresh vectors, mutation checks, complete branch coverage |

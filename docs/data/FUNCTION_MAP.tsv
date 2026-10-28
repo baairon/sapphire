@@ -688,12 +688,12 @@ offset	name	size	group	tier	status	owner	strict	source	evidence
 0x1b0d2	f_0001b0d2	290	A	P2v	done	fleet-4	exact	crates/lift-4/src/p2v/v006.rs	second
 0x1b1f4	f_0001b1f4	290	B	P2v	done	port-b	exact	crates/lift-b/src/p2v/g004.rs	second
 0x1b316	f_0001b316	290	A	P2v	done	fleet-4	exact	crates/lift-4/src/p2v/v006.rs	second
-0x1b438	f_0001b438	12884	A	P2	partial	fleet-1	unproven	crates/lift-1/src/p2v/b3.rs	-
+0x1b438	f_0001b438	12884	A	P2v	done	fleet-1	exact	crates/lift-1/src/p2v/b3.rs	assumed
 0x1e68c	f_0001e68c	9545	A	P2v	done	fleet-6	exact	crates/lift-6/src/p2v/s6c.rs	second
 0x20bd5	f_00020bd5	5753	A	P2v	done	fleet-5	exact	crates/lift-5/src/p2v/k5_001.rs	second
 0x2224e	f_0002224e	7693	A	P2v	done	fleet-6	exact	crates/lift-6/src/p2v/s6b.rs	second
-0x2405b	f_0002405b	2526	A	P2	partial	fleet-3	unproven	crates/lift-3/src/p2v/u11001.rs	-
-0x24a39	f_00024a39	4371	A	P2	partial	fleet-3	unproven	crates/lift-3/src/p2v/u11001.rs	-
+0x2405b	f_0002405b	2526	A	P2v	done	fleet-3	exact	crates/lift-3/src/p2v/u11001.rs	assumed
+0x24a39	f_00024a39	4371	A	P2v	done	fleet-3	exact	crates/lift-3/src/p2v/u11001.rs	assumed
 0x25b4c	f_00025b4c	104	B	P2v	done	port-b	exact	crates/lift-b/src/p2v/g002.rs	second
 0x25bb4	f_00025bb4	90	A	P1	done	port-a	p1	crates/lift-a/src/liftcheck/c07.rs	p1
 0x25c0e	f_00025c0e	80	A	P2v	done	fleet-4	exact	crates/lift-4/src/p2v/v006.rs	second
@@ -957,7 +957,7 @@ offset	name	size	group	tier	status	owner	strict	source	evidence
 0x2f84c	f_0002f84c	1220	A	P2v	done	fleet-6	exact	crates/lift-6/src/p2v/p005.rs	second
 0x2fd10	f_0002fd10	200	A	P2v	done	fleet-3	exact	crates/lift-3/src/p2v/u4001.rs	second
 0x2fdd8	f_0002fdd8	616	A	P2v	done	fleet-5	exact	crates/lift-5/src/p2v/k3_001.rs	second
-0x30040	f_00030040	1570	A	P2	partial	fleet-3	unproven	crates/lift-3/src/p2v/u10001.rs	-
+0x30040	f_00030040	1570	A	P2v	done	fleet-3	exact	crates/lift-3/src/p2v/u10001.rs	audit2
 0x30662	f_00030662	294	A	P2v	done	fleet-3	exact	crates/lift-3/src/p2v/u5001.rs	second
 0x30788	f_00030788	2198	A	P2v	done	fleet-5	exact	crates/lift-5/src/p2v/k5_001.rs	second
 0x3101e	f_0003101e	148	B	P2v	done	fleet-7	exact	crates/lift-7/src/p2v/q008.rs	second
@@ -973,7 +973,7 @@ offset	name	size	group	tier	status	owner	strict	source	evidence
 0x316ba	f_000316ba	26	A	P1	done	port-a	p1	crates/lift-a/src/liftcheck/c03.rs	p1
 0x316d4	f_000316d4	118	A	P2v	done	fleet-4	exact	crates/lift-4/src/p2v/v006.rs	second
 0x3174a	f_0003174a	54	B	P2v	done	port-b	exact	crates/lift-b/src/p2v/g013.rs	second
-0x31780	f_00031780	268	A	P2v	partial	fleet-5	unproven	crates/lift-5/src/p2v/w003.rs	-
+0x31780	f_00031780	268	A	P2v	done	fleet-5	exact	crates/lift-5/src/p2v/w003.rs	assumed
 0x3188c	f_0003188c	20	B	P1	done	port-b	p1	crates/lift-b/src/p1/b003.rs	p1
 0x318a0	f_000318a0	20	A	P1	done	port-a	p1	crates/lift-a/src/liftcheck/c03.rs	p1
 0x318b4	f_000318b4	20	B	P1	done	port-b	p1	crates/lift-b/src/p1/b003.rs	p1
@@ -1252,7 +1252,7 @@ offset	name	size	group	tier	status	owner	strict	source	evidence
 0x56744	f_00056744	28	A	P2v	done	port-a	exact	crates/lift-a/src/p2v/w003.rs	second
 0x56760	f_00056760	76	A	P2v	done	port-a	exact	crates/lift-a/src/p2v/w003.rs	second
 0x567ac	f_000567ac	2042	A	P2v	done	fleet-7	exact	crates/lift-7/src/p2v/q002.rs	second
-0x56fa6	f_00056fa6	3434	A	P2	partial	fleet-3	unproven	crates/lift-3/src/p2v/u11001.rs	-
+0x56fa6	f_00056fa6	3434	A	P2v	done	fleet-3	exact	crates/lift-3/src/p2v/u11001.rs	assumed
 0x57d10	f_00057d10	58	B	P2v	done	port-b	exact	crates/lift-b/src/p2v/g002.rs	second
 0x57d4a	f_00057d4a	914	A	P2v	done	fleet-8	exact	crates/lift-8/src/p2v/h002.rs	second
 0x580dc	f_000580dc	132	A	P2v	done	fleet-3	exact	crates/lift-3/src/p2v/u3001.rs	second
@@ -1449,7 +1449,7 @@ offset	name	size	group	tier	status	owner	strict	source	evidence
 0x64ef8	f_00064ef8	64	A	P2v	done	fleet-5	exact	crates/lift-5/src/p2v/w002.rs	owner
 0x64f38	f_00064f38	348	A	P2v	done	fleet-7	exact	crates/lift-7/src/p2v/q006.rs	second
 0x65094	f_00065094	302	A	P2v	done	fleet-4	exact	crates/lift-4/src/p2v/q002.rs	second
-0x651c2	f_000651c2	274	A	P2v	partial	fleet-5	unproven	crates/lift-5/src/p2v/w003.rs	-
+0x651c2	f_000651c2	274	A	P2v	done	fleet-5	exact	crates/lift-5/src/p2v/w003.rs	assumed
 0x652d4	f_000652d4	54	A	P2v	done	fleet-4	exact	crates/lift-4/src/p2v/v005.rs	second
 0x6530a	f_0006530a	114	B	P2v	done	port-b	exact	crates/lift-b/src/p2v/g023.rs	second
 0x6537c	f_0006537c	394	A	P2v	done	fleet-4	exact	crates/lift-4/src/p2v/r001.rs	second

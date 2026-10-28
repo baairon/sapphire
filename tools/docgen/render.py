@@ -123,7 +123,15 @@ class Generator:
         rows = [[code(r["bank_name"]), r["id"], r["offset"], fmt_int(r["size"]), r["tier"], r["status"], r["origin"],
                  code(r["source"] + (":{}".format(r["line"]) if r["line"] else ""))]
                 for r in d.rows if r["strict"] == "unproven"]
-        b["unproven"] = table(["bank name", "id", "offset", "bytes", "tier", "status", "origin", "source"], rows)
+        b["unproven"] = (table(["bank name", "id", "offset", "bytes", "tier", "status", "origin", "source"], rows)
+                         if rows else ["None."])
+        close = {r["symbol"]: r for r in d.audit_close}
+        rows = [[code(r["bank_name"]), r["id"], r["offset"], fmt_int(r["size"]), code(r["evidence"]),
+                 code(close[r["id"]]["labels"]), fmt_int(int(close[r["id"]]["compared"])),
+                 "{} of {}".format(close[r["id"]]["seen"], close[r["id"]]["outcomes"])]
+                for r in d.rows if r["id"] in close]
+        b["close_rows"] = table(["bank name", "id", "offset", "bytes", "evidence", "labels", "compared worlds",
+                                 "outcomes seen"], rows)
         kinds = ["method", "std", "function", "destructor", "constructor", "initialiser"]
         cnt = Counter((r["origin"], r["kind"]) for r in d.names.values())
         rows = []
@@ -368,7 +376,8 @@ class Generator:
                                      fmt_int(len(d.audit_final)), self.t("audit_pass"), self.t("audit_open"),
                                      self.t("exact_audit_rows"), self.t("p1_vectors"), self.t("p1_vector_fns")), ""]
         body += table(["OPEN row", "offset"], opens) + ["", "## Older any-world accounting", ""]
-        body += table(["id", "offset", "bank name"], anyw) + [""]
+        body += table(["id", "offset", "bank name"], anyw) + ["", "## The last seven rows", ""]
+        body += b["close_rows"] + [""]
         return {GEN_DIR + "/evidence.md": "\n".join(body)}
 
     def page_crates(self, b):

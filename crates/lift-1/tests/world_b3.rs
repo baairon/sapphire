@@ -9,6 +9,15 @@ fn code() -> Vec<u8> {
     std::fs::read(p).unwrap()
 }
 
+/// Vector sets replayed for a function: the stock three, and for the functions below the later sets
+/// ("4" and up) that the parity record counts. A set whose file is absent is skipped.
+fn sets(name: &str) -> &'static [&'static str] {
+    match name {
+        "f_0001b438" => &["", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"],
+        _ => &["", "2", "3"],
+    }
+}
+
 fn run(name: &str, f: impl FnMut(&mut neutral_world::World, &neutral_world::WCase) -> Vec<u128>) {
     let mut f = f;
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("vectors");
@@ -17,7 +26,7 @@ fn run(name: &str, f: impl FnMut(&mut neutral_world::World, &neutral_world::WCas
     let mut mism: Vec<String> = Vec::new();
     let only = std::env::var("DBG_SET").ok();
     let min: usize = std::env::var("WORLD_MIN").ok().and_then(|v| v.parse().ok()).unwrap_or(900);
-    for set in ["", "2", "3"] {
+    for &set in sets(name) {
         if let Some(o) = &only { if o != set { continue; } }
         let path = dir.join(format!("{}.world{}.vec", name, set));
         if !path.exists() { assert!(!set.is_empty(), "missing vector file {}", path.display()); continue; }

@@ -12,18 +12,18 @@
    "source": "docs/data/FUNCTION_MAP.tsv sum of size"
   },
   "strict_fns": {
-   "value": 2695,
-   "text": "2,695",
+   "value": 2702,
+   "text": "2,702",
    "source": "docs/data/FUNCTION_MAP.tsv strict in {p1, exact}"
   },
   "strict_bytes": {
-   "value": 939332,
-   "text": "939,332",
+   "value": 964659,
+   "text": "964,659",
    "source": "docs/data/FUNCTION_MAP.tsv strict in {p1, exact}"
   },
   "strict_pct": {
-   "value": 97.4,
-   "text": "97.4",
+   "value": 100.0,
+   "text": "100.0",
    "source": "docs/data/FUNCTION_MAP.tsv strict in {p1, exact}, share of code bytes"
   },
   "p1_fns": {
@@ -42,48 +42,48 @@
    "source": "docs/data/FUNCTION_MAP.tsv tier P1, share of code bytes"
   },
   "p2v_exact_fns": {
-   "value": 2146,
-   "text": "2,146",
+   "value": 2153,
+   "text": "2,153",
    "source": "docs/data/FUNCTION_MAP.tsv strict exact"
   },
   "p2v_exact_bytes": {
-   "value": 881254,
-   "text": "881,254",
+   "value": 906581,
+   "text": "906,581",
    "source": "docs/data/FUNCTION_MAP.tsv strict exact"
   },
   "p2v_exact_pct": {
-   "value": 91.4,
-   "text": "91.4",
+   "value": 94.0,
+   "text": "94.0",
    "source": "docs/data/FUNCTION_MAP.tsv strict exact, share of code bytes"
   },
   "strictest_fns": {
-   "value": 2692,
-   "text": "2,692",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner}"
+   "value": 2693,
+   "text": "2,693",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2}"
   },
   "strictest_bytes": {
-   "value": 935056,
-   "text": "935,056",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner}"
+   "value": 936626,
+   "text": "936,626",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2}"
   },
   "strictest_pct": {
-   "value": 96.9,
-   "text": "96.9",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner}, share of code bytes"
+   "value": 97.1,
+   "text": "97.1",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2}, share of code bytes"
   },
   "unproven_fns": {
-   "value": 7,
-   "text": "7",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv strict unproven"
   },
   "unproven_bytes": {
-   "value": 25327,
-   "text": "25,327",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv strict unproven"
   },
   "unproven_pct": {
-   "value": 2.6,
-   "text": "2.6",
+   "value": 0.0,
+   "text": "0.0",
    "source": "docs/data/FUNCTION_MAP.tsv strict unproven, share of code bytes"
   },
   "ev_second_fns": {
@@ -101,22 +101,24 @@
    "text": "3",
    "source": "docs/data/FUNCTION_MAP.tsv evidence anyworld"
   },
+  "ev_audit2_fns": {
+   "value": 1,
+   "text": "1",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence audit2"
+  },
+  "ev_assumed_fns": {
+   "value": 6,
+   "text": "6",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence assumed"
+  },
   "partial_fns": {
-   "value": 7,
-   "text": "7",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv status partial"
   },
   "unproven_offsets": {
-   "value": [
-    "0x1b438",
-    "0x2405b",
-    "0x24a39",
-    "0x30040",
-    "0x31780",
-    "0x56fa6",
-    "0x651c2"
-   ],
-   "text": "`0x1b438`, `0x2405b`, `0x24a39`, `0x30040`, `0x31780`, `0x56fa6`, `0x651c2`",
+   "value": [],
+   "text": "",
    "source": "docs/data/FUNCTION_MAP.tsv strict unproven"
   },
   "p1_vectors": {
@@ -400,8 +402,8 @@
    "source": "crates/lift-* folders"
   },
   "tests_scan_total": {
-   "value": 5653,
-   "text": "5,653",
+   "value": 5658,
+   "text": "5,658",
    "source": "text scan of crates/ (#[test] lines), not a test run"
   },
   "tests_scan_lift_1": {
@@ -470,8 +472,8 @@
    "source": "text scan of crates/ (#[test] lines), not a test run"
   },
   "tests_scan_neutral_world": {
-   "value": 12,
-   "text": "12",
+   "value": 17,
+   "text": "17",
    "source": "text scan of crates/ (#[test] lines), not a test run"
   },
   "lift_defs_total": {
@@ -495,23 +497,23 @@
    "source": "docs/data/FUNCTION_MAP.tsv evidence anyworld"
   },
   "unproven_p2v_fn": {
-   "value": 2,
-   "text": "2",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv strict unproven, tier P2v"
   },
   "unproven_p2v_bytes": {
-   "value": 542,
-   "text": "542",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv strict unproven, tier P2v"
   },
   "unproven_p2_fn": {
-   "value": 5,
-   "text": "5",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv strict unproven, tier P2"
   },
   "unproven_p2_bytes": {
-   "value": 24785,
-   "text": "24,785",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv strict unproven, tier P2"
   },
   "group_a_fn": {
@@ -588,6 +590,111 @@
    "value": 8,
    "text": "8",
    "source": "docs/data/ledger_digest.tsv note, 'write nothing through pointers'"
+  },
+  "close_rows": {
+   "value": 7,
+   "text": "7",
+   "source": "docs/data/audit_close.tsv rows"
+  },
+  "close_pass_rows": {
+   "value": 1,
+   "text": "1",
+   "source": "docs/data/audit_close.tsv verdict PASS"
+  },
+  "close_labelled_rows": {
+   "value": 6,
+   "text": "6",
+   "source": "docs/data/audit_close.tsv rows with a label other than -"
+  },
+  "close_labelled_bytes": {
+   "value": 23757,
+   "text": "23,757",
+   "source": "docs/data/audit_close.tsv rows with a label other than -, sum of size"
+  },
+  "close_labelled_pct": {
+   "value": 2.5,
+   "text": "2.5",
+   "source": "docs/data/audit_close.tsv rows with a label other than -, share of code bytes"
+  },
+  "close_compared": {
+   "value": 15116,
+   "text": "15,116",
+   "source": "docs/data/audit_close.tsv sum of compared"
+  },
+  "close_outcomes": {
+   "value": 216,
+   "text": "216",
+   "source": "docs/data/audit_close.tsv sum of outcomes"
+  },
+  "close_seen": {
+   "value": 151,
+   "text": "151",
+   "source": "docs/data/audit_close.tsv sum of seen"
+  },
+  "close_explained": {
+   "value": 65,
+   "text": "65",
+   "source": "docs/data/audit_close.tsv sum of explained"
+  },
+  "close_landing_outcomes": {
+   "value": 20,
+   "text": "20",
+   "source": "docs/data/audit_close.tsv sum of landing_pads"
+  },
+  "close_landing_rows": {
+   "value": 1,
+   "text": "1",
+   "source": "docs/data/audit_close.tsv rows with landing_pads above 0"
+  },
+  "close_rows_F": {
+   "value": 2,
+   "text": "2",
+   "source": "docs/data/audit_close.tsv rows whose labels include F"
+  },
+  "close_out_F": {
+   "value": 2,
+   "text": "2",
+   "source": "docs/data/audit_close.tsv label_outcomes F"
+  },
+  "close_rows_PN": {
+   "value": 1,
+   "text": "1",
+   "source": "docs/data/audit_close.tsv rows whose labels include PN"
+  },
+  "close_out_PN": {
+   "value": 1,
+   "text": "1",
+   "source": "docs/data/audit_close.tsv label_outcomes PN"
+  },
+  "close_rows_P2": {
+   "value": 3,
+   "text": "3",
+   "source": "docs/data/audit_close.tsv rows whose labels include P2"
+  },
+  "close_out_P2": {
+   "value": 12,
+   "text": "12",
+   "source": "docs/data/audit_close.tsv label_outcomes P2"
+  },
+  "close_rows_A1": {
+   "value": 1,
+   "text": "1",
+   "source": "docs/data/audit_close.tsv rows whose labels include A1"
+  },
+  "close_out_A1": {
+   "value": 4,
+   "text": "4",
+   "source": "docs/data/audit_close.tsv label_outcomes A1"
+  },
+  "close_sets_rows": {
+   "value": 48,
+   "text": "48",
+   "source": "docs/data/close_sets.tsv rows"
+  },
+  "close_sets_pins": {
+   "value": 16,
+   "text": "16",
+   "source": "docs/data/close_sets.tsv sum of pins"
   },
   "stub_arity_fns": {
    "value": 17,
@@ -675,6 +782,7 @@
  "blocks": [
   "anyworld",
   "audit_verdicts",
+  "close_rows",
   "confirmation",
   "confirmation_levels",
   "crates",

@@ -10,23 +10,27 @@ use neutral_world::Env;
 /// memory and calls through Env).
 pub fn f_0001b438<E: Env>(env: &mut E, ri: [u64; 6], fx: [u64; 8], st: &[u64]) -> Ret {
     let mut m = Mem::new(env, st);
-    let mut rax: u64 = 0;
-    let mut rcx: u64 = ri[3];
-    let mut rdx: u64 = ri[2];
-    let mut rbx: u64 = SAVED_RBX;
-    let mut rbp: u64 = SAVED_RBP;
-    let mut rsi: u64 = ri[1];
-    let mut rdi: u64 = ri[0];
-    let mut r8: u64 = ri[4];
-    let mut r9: u64 = ri[5];
-    let mut r10: u64 = 0;
-    let mut r11: u64 = 0;
-    let mut r12: u64 = SAVED_R12;
-    let mut r13: u64 = SAVED_R13;
-    let mut r14: u64 = SAVED_R14;
-    let mut r15: u64 = SAVED_R15;
-    let mut rsp: u64 = RSP0 - 8;
-    let mut x0: u128 = fx[0] as u128;
+    f_0001b438_rec(&mut m, [0, ri[3], ri[2], SAVED_RBX, RSP0 - 8, SAVED_RBP, ri[1], ri[0], ri[4], ri[5], 0, 0, SAVED_R12, SAVED_R13, SAVED_R14, SAVED_R15], [fx[0] as u128, fx[1] as u128, fx[2] as u128, fx[3] as u128, fx[4] as u128, fx[5] as u128, fx[6] as u128, fx[7] as u128])
+}
+
+fn f_0001b438_rec<E: Env>(m: &mut Mem<'_, E>, rin: [u64; 16], xin: [u128; 8]) -> Ret {
+    let mut rax: u64 = rin[0];
+    let mut rcx: u64 = rin[1];
+    let mut rdx: u64 = rin[2];
+    let mut rbx: u64 = rin[3];
+    let mut rbp: u64 = rin[5];
+    let mut rsi: u64 = rin[6];
+    let mut rdi: u64 = rin[7];
+    let mut r8: u64 = rin[8];
+    let mut r9: u64 = rin[9];
+    let mut r10: u64 = rin[10];
+    let mut r11: u64 = rin[11];
+    let mut r12: u64 = rin[12];
+    let mut r13: u64 = rin[13];
+    let mut r14: u64 = rin[14];
+    let mut r15: u64 = rin[15];
+    let mut rsp: u64 = rin[4];
+    let mut x0: u128 = xin[0];
     let mut fl = Fl::default();
     let mut pc: u32 = 0x1b438;
     loop {
@@ -77,7 +81,7 @@ pub fn f_0001b438<E: Env>(env: &mut E, ri: [u64; 6], fx: [u64; 8], st: &[u64]) -
             // 1b469 mov rdx,QWORD PTR [rbp-0x138]
             rdx = m.r64(rbp.wrapping_add(0xffff_ffff_ffff_fec8)) as u64;
             // 1b470 call 0x1b438
-            { let r = { let t = m.env.code_va(0x1b438); m.call(t, &[rdi, rsi, rdx], &[]) }; rax = r.rax; rdx = r.rdx; x0 = (r.xmm0_lo as u128) | ((r.xmm0_hi as u128) << 64); rcx = POISON; rsi = POISON; rdi = POISON; r8 = POISON; r9 = POISON; r10 = POISON; r11 = POISON;  }
+            { let return_pc = m.env.code_va(0x1b475); m.w64(rsp.wrapping_sub(8), return_pc); let r = f_0001b438_rec(m, [rax, rcx, rdx, rbx, rsp.wrapping_sub(8), rbp, rsi, rdi, r8, r9, r10, r11, r12, r13, r14, r15], [x0, 0, 0, 0, 0, 0, 0, 0]); rax = r.rax; rdx = r.rdx; x0 = r.xmm0; rcx = POISON; rsi = POISON; rdi = POISON; r8 = POISON; r9 = POISON; r10 = POISON; r11 = POISON;  }
             // 1b475 mov r15,rbx
             r15 = rbx;
             pc = 0x1b478;
@@ -136,7 +140,7 @@ pub fn f_0001b438<E: Env>(env: &mut E, ri: [u64; 6], fx: [u64; 8], st: &[u64]) -
             // 1b4fa mov rdx,QWORD PTR [rbp-0x138]
             rdx = m.r64(rbp.wrapping_add(0xffff_ffff_ffff_fec8)) as u64;
             // 1b501 call 0x1b438
-            { let r = { let t = m.env.code_va(0x1b438); m.call(t, &[rdi, rsi, rdx], &[]) }; rax = r.rax; rdx = r.rdx; x0 = (r.xmm0_lo as u128) | ((r.xmm0_hi as u128) << 64); rcx = POISON; rsi = POISON; rdi = POISON; r8 = POISON; r9 = POISON; r10 = POISON; r11 = POISON;  }
+            { let return_pc = m.env.code_va(0x1b506); m.w64(rsp.wrapping_sub(8), return_pc); let r = f_0001b438_rec(m, [rax, rcx, rdx, rbx, rsp.wrapping_sub(8), rbp, rsi, rdi, r8, r9, r10, r11, r12, r13, r14, r15], [x0, 0, 0, 0, 0, 0, 0, 0]); rax = r.rax; rdx = r.rdx; x0 = r.xmm0; rcx = POISON; rsi = POISON; rdi = POISON; r8 = POISON; r9 = POISON; r10 = POISON; r11 = POISON;  }
             // 1b506 add rbx,0xf8
             { let (r, f) = add::<64>(rbx, 0xf8u64);
               rbx = r;

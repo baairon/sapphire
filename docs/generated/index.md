@@ -8,16 +8,16 @@ Reference pages generated from `docs/data/` and a scan of `crates/`.
 | page | title | bytes |
 |---|---|---|
 | [classes.md](classes.md) | Classes | 1,822 |
-| [crates.md](crates.md) | Crates | 9,675 |
+| [crates.md](crates.md) | Crates | 9,872 |
 | [effects.md](effects.md) | Effect names | 3,992 |
-| [evidence.md](evidence.md) | Evidence | 1,626 |
+| [evidence.md](evidence.md) | Evidence | 3,569 |
 | [functions-0x000000.md](functions-0x000000.md) | Functions 0x0 to 0xc404 | 65,048 |
 | [functions-0x00c422.md](functions-0x00c422.md) | Functions 0xc422 to 0x11bf1 | 64,565 |
-| [functions-0x011c65.md](functions-0x011c65.md) | Functions 0x11c65 to 0x25d00 | 64,759 |
+| [functions-0x011c65.md](functions-0x011c65.md) | Functions 0x11c65 to 0x25d00 | 64,771 |
 | [functions-0x025d62.md](functions-0x025d62.md) | Functions 0x25d62 to 0x2ec36 | 64,967 |
-| [functions-0x02ed06.md](functions-0x02ed06.md) | Functions 0x2ed06 to 0x49316 | 64,825 |
-| [functions-0x04990e.md](functions-0x04990e.md) | Functions 0x4990e to 0x64996 | 65,071 |
-| [functions-0x064a17.md](functions-0x064a17.md) | Functions 0x64a17 to 0xb11b6 | 64,810 |
+| [functions-0x02ed06.md](functions-0x02ed06.md) | Functions 0x2ed06 to 0x49316 | 64,831 |
+| [functions-0x04990e.md](functions-0x04990e.md) | Functions 0x4990e to 0x64996 | 65,075 |
+| [functions-0x064a17.md](functions-0x064a17.md) | Functions 0x64a17 to 0xb11b6 | 64,813 |
 | [functions-0x0b11c0.md](functions-0x0b11c0.md) | Functions 0xb11c0 to 0xb796e | 64,965 |
 | [functions-0x0b799c.md](functions-0x0b799c.md) | Functions 0xb799c to 0xc39ec | 65,112 |
 | [functions-0x0c39fa.md](functions-0x0c39fa.md) | Functions 0xc39fa to 0xc548e | 64,271 |
@@ -30,7 +30,7 @@ Reference pages generated from `docs/data/` and a scan of `crates/`.
 | [stubs-0x0001.md](stubs-0x0001.md) | Stubs 0x1 to 0x41b | 64,354 |
 | [stubs-0x0421.md](stubs-0x0421.md) | Stubs 0x421 to 0x703 | 65,125 |
 | [stubs-0x0709.md](stubs-0x0709.md) | Stubs 0x709 to 0xab7 | 19,881 |
-| [tiers.md](tiers.md) | Tiers | 2,743 |
+| [tiers.md](tiers.md) | Tiers | 908 |
 
 ## Machine readable
 

@@ -62,7 +62,7 @@ scripts/extra_sets.tsv	file	.agents/inputs/engine_src/audit.py:156	2
 scripts/extrun.py	file	.agents/inputs/engine_src/reval.py:175	1
 scripts/fullcov.py	file	.agents/inputs/fleet8_SUMMARY.md:14	1
 scripts/fxpatch.py	file	.agents/inputs/fleet8_SUMMARY.md:14	1
-scripts/lift.py	file	docs/data/EXACT_AUDIT.tsv:2	3744
+scripts/lift.py	file	docs/data/EXACT_AUDIT.tsv:2	3738
 scripts/lift2.py	file	docs/data/ledger_digest.tsv:1385	6
 scripts/lift_main.py	file	.agents/inputs/lifter_src/lift_main.py:164	2
 scripts/make_contract.py	file	docs/data/RISKS.tsv:34	3

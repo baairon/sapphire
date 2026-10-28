@@ -35,6 +35,7 @@ A function that is not self-contained runs in seeded worlds from `archive:tools/
 | Stack | the function runs on a zeroed stack; stack reads outside the port's own locals return zero; a stack address passed to a call is normalised to `STK` |
 | Registers at entry | registers the harness never writes are 0; `rbx`, `rbp`, `r12` to `r15` hold fixed constants |
 | Call result override | `ovr TARGET ARG DELTA`: the declared callee returns normalised argument ARG plus DELTA in `rax` |
+| Pinned word | `pin ADDR VALUE` in a case: the world word at the aligned address ADDR reads as VALUE before any store ([assumptions](assumptions.md#pinned-world-words-in-the-case-line)) |
 | No-return call | a target declared `noreturn` ends the world (`x noreturn`); returns are not compared |
 
 A P2v row passes with at least 900 compared worlds, no mismatch, no Rust fault, and every branch outcome seen in a compared world or soundly explained ([evidence](evidence.md)).
@@ -72,6 +73,7 @@ Both formats are plain text, one token line per item. P1 files start with `# ora
 |---|---|
 | `world NAME entry=0x.. n=0x.. seed=0x.. ptrn=N ...` | header; also `anchor`, `stub_zone`, `heap=aligned`, `fetch=byte` |
 | `ovr TARGET ARG DELTA` | call result override |
+| `pin 0xADDR 0xVALUE` | after `case`: the world word at ADDR reads as VALUE in this case; absent in every vector set before set 8 of `f_00056fa6` |
 | `case ...` | world status and seed |
 | `a ...` | arguments, with buffer pointers |
 | `r ...` | expected returns |
@@ -109,9 +111,11 @@ The tests of each lift crate (`crates/lift-*/tests/`) replay the stored vector s
 | `DBG_SET` | replay one set only: empty for `world`, `2` for `world2`, and so on |
 | `DBG_CASE` | replay one world, by index |
 
+Each test names the sets it replays. The stock list is `world`, `world2` and `world3`; `lift-4` and `lift-5` list sets up to 16 and 12, and the tests of the last seven functions list their later sets per function through a `sets(name)` function (`crates/lift-1/tests/world_b3.rs`: sets 4 to 14; `crates/lift-3/tests/world_u11001.rs` and `crates/lift-3/tests/world_u10001.rs`: sets 4 to 8 and 4 to 7). A set whose file is absent is skipped, so a list that stops short of a stored set ignores it without a message.
+
 ## Synthetic cross check
 
-`crates/neutral-world/tests/synthetic.rs` replays vectors that `archive:tools/world.py` produced for small synthetic functions (`crates/neutral-world/tests/fixtures/`, not dump bytes) and checks that the Rust world model reproduces the Python one: data reads, stub calls, opaque callees, indirect calls, pointer chasing, heap writes, fetch then read, no-return calls and call result overrides. It runs in every `cargo test`.
+`crates/neutral-world/tests/synthetic.rs` replays vectors that `archive:tools/world.py` produced for small synthetic functions (`crates/neutral-world/tests/fixtures/`, not dump bytes) and checks that the Rust world model reproduces the Python one: data reads, stub calls, opaque callees, indirect calls, pointer chasing, heap writes, fetch then read, no-return calls and call result overrides. It runs in every `cargo test`. `crates/neutral-world/tests/pin.rs` parses an inline vector and checks that a `pin` line sets the word it names for its own case only.
 
 ## Aggressive replay and mutation checks
 

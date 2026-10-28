@@ -28392,7 +28392,7 @@ pub fn f_00056fa6<E: Env>(env: &mut E, ri: [u64; 6], fx: [u64; 8], st: &[u64]) -
             // block 57c1d
             #[cfg(feature = "trace")] eprintln!("f_00056fa6 pc 57c1d rax {:x} rcx {:x} rdx {:x} rbx {:x} rsi {:x} rdi {:x} r12 {:x} r15 {:x}", rax, rcx, rdx, rbx, rsi, rdi, r12, r15);
             // 57c1d call 0xec194
-            { let r = { let t = m.env.stub_va(0x961); m.call(t, &[], &[]) }; rax = r.rax; rdx = r.rdx; x0 = (r.xmm0_lo as u128) | ((r.xmm0_hi as u128) << 64); rcx = POISON; rsi = POISON; rdi = POISON; r8 = POISON; r9 = POISON; r10 = POISON; r11 = POISON;  }
+            { let _ = { let t = m.env.stub_va(0x961); m.call(t, &[], &[]) }; return Ret::default(); }
             // 57c22 mov rbx,rax
             rbx = rax;
             // 57c25 lea rdi,[rbp-0x1c0]
@@ -35361,7 +35361,7 @@ pub fn f_00024a39<E: Env>(env: &mut E, ri: [u64; 6], fx: [u64; 8], st: &[u64]) -
             // 25318 mov BYTE PTR [rbp-0x159],0x1
             m.w8(rbp.wrapping_add(0xffff_ffff_ffff_fea7), (0x1u64) as u8);
             // 2531f jmp rax
-            { let r = { let t = rax; m.call(t, &[rdi, rsi, rdx], &[]) }; return Ret::from_call(r); }
+            pc = rax.wrapping_sub(m.env.code_va(0)) as u32; continue;
         }
         0x25321 => {
             // block 25321

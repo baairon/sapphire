@@ -59,7 +59,7 @@ Each lift crate is a standalone library: its only dependencies are `neutral-worl
 | Module | Content |
 |---|---|
 | `p1` | hand ports of P1 functions (`lift-a`, `lift-b`; empty in the other crates) |
-| `p2v` | mechanical lifts of every P2v and P2 function, including all <!--f:unproven_fns-->7<!--/f--> unproven ones |
+| `p2v` | mechanical lifts of every P2v and P2 function, including the last <!--f:close_rows-->7<!--/f--> rows to match ([evidence](evidence.md#the-last-seven-rows)) |
 | `liftcheck` (`lift-a`, feature `liftcheck`) | mechanical lifts of functions that also have a hand port in `p1` |
 | `p2`, `dup`, `missing` | no ports; `missing` declares the placeholder names `stub_<hex rel>` and `UNKNOWN_<hex rel>`, which no port uses ([missing data](missing-data.md)) |
 | `x86rt` or `lift_rt` | register, flag and stack runtime of the lifted code |

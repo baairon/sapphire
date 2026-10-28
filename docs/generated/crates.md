@@ -18,8 +18,8 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | `neutral-ffmpeg` | Bridge to ffmpeg that runs it as a separate process and moves raw frames over pipes. | 23 | 22 | 130 |
 | `neutral-handoff` | Pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. | 28 | 28 | 199 |
 | `neutral-parity` | Replays oracle test vectors against ported functions. | 1 | 1 | 4 |
-| `neutral-world` | Rust side of the world-parametric parity harness. | 2 | 2 | 12 |
-| **total** |  | 490 | 293 | 5,653 |
+| `neutral-world` | Rust side of the world-parametric parity harness. | 3 | 3 | 17 |
+| **total** |  | 491 | 294 | 5,658 |
 
 ## lift-1
 
@@ -132,4 +132,5 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | file | header (first sentence) |
 |---|---|
 | `crates/neutral-world/src/lib.rs` | Rust side of the world-parametric parity harness. |
+| `crates/neutral-world/tests/pin.rs` | The pin ADDR VALUE case line: a pinned world word reads as its value, every other word is unchanged, and a case without pin lines reads exactly as before. |
 | `crates/neutral-world/tests/synthetic.rs` | Cross-implementation check: vectors produced by tools/world.py (Unicorn) for five synthetic functions must be reproduced exactly by ports written against the... |

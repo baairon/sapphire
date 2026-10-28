@@ -54,12 +54,14 @@ pub struct Layout {
     pub ptrn: u64,
     /// Address of heap slot 0. Old vectors use anchor + HEAP_REL; vectors with `heap=aligned` use a page-aligned base.
     pub heap_base: u64,
+    /// Per case pinned world words (aligned address, value); empty in every earlier vector set.
+    pub pins: Vec<(u64, u64)>,
 }
 
 impl Layout {
     pub fn new(n: u64, stub_zone: u64, ptrn: u64) -> Layout {
         let anchor = A0 + n;
-        Layout { n, anchor, stub_end_abs: anchor + stub_zone, world_hi: anchor + WABOVE, world_lo: A0 - HDR, ptrn, heap_base: anchor + HEAP_REL }
+        Layout { n, anchor, stub_end_abs: anchor + stub_zone, world_hi: anchor + WABOVE, world_lo: A0 - HDR, ptrn, heap_base: anchor + HEAP_REL, pins: Vec::new() }
     }
 
     /// Page-aligned heap base, so heap objects and pointer-like words are aligned like real heap blocks.
@@ -77,6 +79,11 @@ impl Layout {
     }
 
     pub fn word(&self, seed: u64, a8: u64) -> u64 {
+        for &(pa, pv) in &self.pins {
+            if pa == a8 {
+                return pv;
+            }
+        }
         let h = mix(seed, a8.wrapping_sub(self.anchor));
         let sel = h & 15;
         let p = self.ptrn;
@@ -226,6 +233,8 @@ pub struct WCase {
     pub trace: Vec<TraceEv>,
     /// The original never returned (a declared noreturn call ended the run): return values are undefined.
     pub noreturn: bool,
+    /// `pin ADDR VALUE` lines of the case: the world word at ADDR reads as VALUE.
+    pub pins: Vec<(u64, u64)>,
 }
 
 impl WCase {
@@ -329,6 +338,7 @@ pub fn parse(text: &str) -> Result<WorldVec, String> {
                     writes: Vec::new(),
                     trace: Vec::new(),
                     noreturn: false,
+                    pins: Vec::new(),
                 });
             }
             "a" => {
@@ -379,6 +389,10 @@ pub fn parse(text: &str) -> Result<WorldVec, String> {
             "x" => {
                 cur.as_mut().ok_or_else(|| at("x outside case".into()))?.noreturn = toks.get(1) == Some(&"noreturn");
             }
+            "pin" => {
+                let c = cur.as_mut().ok_or_else(|| at("pin outside case".into()))?;
+                c.pins.push((hex(toks[1]).map_err(at)? as u64, hex(toks[2]).map_err(at)? as u64));
+            }
             "end" => cases.push(cur.take().ok_or_else(|| at("end outside case".into()))?),
             other => return Err(at(format!("unknown tag {}", other))),
         }
@@ -411,6 +425,7 @@ impl<'a> World<'a> {
         if h.aligned_heap {
             lay = lay.with_aligned_heap();
         }
+        lay.pins = c.pins.clone();
         let mut bufs = Vec::new();
         for a in &c.args {
             if let WArg::Buf { size, ptr, data, .. } = a {

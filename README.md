@@ -49,9 +49,11 @@ Sources of truth, for agents and scripts:
 
 | Standard | Functions | Share of code bytes |
 |---|---|---|
-| Strict parity: matched on every compared input | <!--f:strict_fns-->2,695<!--/f--> of <!--f:fn_total-->2,702<!--/f--> | <!--f:strict_pct-->97.4<!--/f-->% |
-| Strictest: strict, with every branch outcome counted over compared worlds only | <!--f:strictest_fns-->2,692<!--/f--> | <!--f:strictest_pct-->96.9<!--/f-->% |
-| Unproven: never matched | <!--f:unproven_fns-->7<!--/f--> | <!--f:unproven_pct-->2.6<!--/f-->% |
+| Strict parity: matched on every compared input | <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f-->, of which <!--f:close_labelled_rows-->6<!--/f--> rest on labelled assumptions | <!--f:strict_pct-->100.0<!--/f-->% (<!--f:close_labelled_pct-->2.5<!--/f-->% of the code rests on labelled assumptions) |
+| Strictest: strict, with every branch outcome counted over compared worlds only | <!--f:strictest_fns-->2,693<!--/f--> | <!--f:strictest_pct-->97.1<!--/f-->% |
+| Unproven: never matched | <!--f:unproven_fns-->0<!--/f--> | <!--f:unproven_pct-->0.0<!--/f-->% |
+
+The <!--f:close_labelled_rows-->6<!--/f--> rows on labelled assumptions are strict, not strictest: F (an outcome that only faulting executions take, <!--f:close_rows_F-->2<!--/f--> rows), PN (an outcome seen only in worlds with a pinned word and a no-return call, <!--f:close_rows_PN-->1<!--/f-->), P2 (stores through the function's own frame never hit the record array, <!--f:close_rows_P2-->3<!--/f-->) and A1 (the sorted range is a whole number of 248 byte records, <!--f:close_rows_A1-->1<!--/f-->, the same function as one P2 row). Each is defined in [assumptions](docs/assumptions.md#summary) and listed in [evidence](docs/evidence.md#the-last-seven-rows).
 
 Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn_total-->2,702<!--/f--> functions, most of them bundled library code.
 
@@ -90,7 +92,7 @@ Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, 
 
 | Member | Builds | Owns | Key modules (`src/`) | Tests (`#[test]` lines, scan) |
 |---|---|---|---|---|
-| `crates/neutral-world` | library | The Rust side of the world harness: the seeded model of everything outside the dump, the `Env` trait every lifted function is written against, world replay and comparison | `lib.rs` (`Env`, `World`, `check`, `Report`) | <!--f:tests_scan_neutral_world-->12<!--/f-->; `tests/synthetic.rs` |
+| `crates/neutral-world` | library | The Rust side of the world harness: the seeded model of everything outside the dump, the `Env` trait every lifted function is written against, world replay and comparison | `lib.rs` (`Env`, `World`, `check`, `Report`) | <!--f:tests_scan_neutral_world-->17<!--/f-->; `tests/synthetic.rs`, `tests/pin.rs` |
 | `crates/neutral-parity` | library | Replay of oracle vectors against ported functions | `lib.rs` (`parse`, `check`, `Report`) | <!--f:tests_scan_neutral_parity-->4<!--/f--> |
 | `crates/neutral-ffmpeg` | library | ffmpeg and ffprobe as child processes: decoder, encoder, filter graph, probe, pixel format table | `decoder.rs`, `encoder.rs`, `filter.rs`, `probe.rs`, `pixfmt.rs` with `pixfmt_table.rs`, `locate.rs`, `process.rs` | <!--f:tests_scan_neutral_ffmpeg-->130<!--/f-->; `tests/*_live.rs` need ffmpeg |
 | `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->199<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
@@ -241,7 +243,7 @@ python -I tools/handoff.py doctor --conformance
 
 | Not covered | What it means |
 |---|---|
-| The <!--f:unproven_fns-->7<!--/f--> unproven functions | never matched; their ports are in the crates but carry no parity claim |
+| The <!--f:close_labelled_rows-->6<!--/f--> rows on labelled assumptions | strict only under F, PN, P2 or A1 ([assumptions](docs/assumptions.md#summary)); a world that breaks the assumption was not compared |
 | Inputs outside the seeded worlds | parity is measured on seeded inputs, not proved for every input ([caveats](docs/parity.md#caveats)) |
 | Callees outside the dump | modelled as writing nothing and returning a seeded word |
 | Stub argument values | <!--f:stub_arity_sites-->48<!--/f--> call sites passed fewer arguments than the bank signatures; those values were never compared |

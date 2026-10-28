@@ -17,9 +17,10 @@ How many functions of the dump match the build they replace, and under which sta
 | placeholder | the stand-in a port uses for a missing reference: an `Env` access by its `rel_to_end` (`data_va`, `stub_va`) |
 | `partial` | status of a row whose comparison did not pass; every `partial` row is unproven |
 | strict parity | P1 rows, plus P2v rows with status `done` |
-| strictest | strict parity with every branch outcome counted over compared worlds only: evidence `p1`, `second` or `owner` |
+| strictest | strict parity with every branch outcome counted over compared worlds only: evidence `p1`, `second`, `owner` or `audit2` |
+| labelled assumption | one of F, PN, P2 and A1 ([assumptions](assumptions.md#summary)): a stated condition the maintainer accepted for named rows; a row that rests on one has evidence `assumed`, is strict, and is not strictest |
 | `anyworld` | evidence class of the P2v rows whose branch outcomes were counted over all worlds, skipped ones included; strict parity but not strictest |
-| unproven | a function that never matched; counted in no parity figure |
+| unproven | a function that never matched; counted in no parity figure; none remains |
 
 ## Tiers
 
@@ -35,8 +36,8 @@ Every function has exactly one tier. What each tier compared ([harness: comparis
 | tier | functions | bytes | share of code | of which partial |
 |---|---|---|---|---|
 | P1 | 549 | 58,078 | 6.0 | 0 |
-| P2v | 2,148 | 881,796 | 91.4 | 2 |
-| P2 | 5 | 24,785 | 2.6 | 5 |
+| P2v | 2,153 | 906,581 | 94.0 | 0 |
+| P2 | 0 | 0 | 0.0 | 0 |
 | P2-std | 0 | 0 | 0.0 | 0 |
 | P3 | 0 | 0 | 0.0 | 0 |
 <!--/gen:tiers-->
@@ -45,9 +46,12 @@ Every function has exactly one tier. What each tier compared ([harness: comparis
 
 | Standard | Functions | Bytes | Share of code bytes |
 |---|---|---|---|
-| strict parity | <!--f:strict_fns-->2,695<!--/f--> of <!--f:fn_total-->2,702<!--/f--> | <!--f:strict_bytes-->939,332<!--/f--> of <!--f:code_bytes-->964,659<!--/f--> | <!--f:strict_pct-->97.4<!--/f-->% |
-| strictest | <!--f:strictest_fns-->2,692<!--/f--> | <!--f:strictest_bytes-->935,056<!--/f--> | <!--f:strictest_pct-->96.9<!--/f-->% |
-| unproven | <!--f:unproven_fns-->7<!--/f--> | <!--f:unproven_bytes-->25,327<!--/f--> | <!--f:unproven_pct-->2.6<!--/f-->% |
+| strict parity | <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f--> | <!--f:strict_bytes-->964,659<!--/f--> of <!--f:code_bytes-->964,659<!--/f--> | <!--f:strict_pct-->100.0<!--/f-->% |
+| of which resting on labelled assumptions | <!--f:close_labelled_rows-->6<!--/f--> | <!--f:close_labelled_bytes-->23,757<!--/f--> | <!--f:close_labelled_pct-->2.5<!--/f-->% |
+| strictest | <!--f:strictest_fns-->2,693<!--/f--> | <!--f:strictest_bytes-->936,626<!--/f--> | <!--f:strictest_pct-->97.1<!--/f-->% |
+| unproven | <!--f:unproven_fns-->0<!--/f--> | <!--f:unproven_bytes-->0<!--/f--> | <!--f:unproven_pct-->0.0<!--/f-->% |
+
+Strict parity is not an unqualified full match of every input: <!--f:close_labelled_rows-->6<!--/f--> of the <!--f:fn_total-->2,702<!--/f--> strict rows rest on a labelled assumption (F <!--f:close_rows_F-->2<!--/f--> rows, PN <!--f:close_rows_PN-->1<!--/f-->, P2 <!--f:close_rows_P2-->3<!--/f-->, A1 <!--f:close_rows_A1-->1<!--/f-->; `f_0001b438` carries both P2 and A1). They are listed with their worlds and outcomes in [evidence: the last seven rows](evidence.md#the-last-seven-rows), and each assumption is defined in [assumptions](assumptions.md#summary). The other row of that group, `f_00030040`, rests on the accepted harness assumptions alone and counts as strictest.
 
 The code is the dump: the raw x86-64 code section of a build of the plugin. The `evidence` column of `docs/data/FUNCTION_MAP.tsv` gives each row's class ([evidence](evidence.md#evidence-classes)):
 
@@ -57,13 +61,15 @@ The code is the dump: the raw x86-64 code section of a build of the plugin. The 
 | `p1` | P1: oracle vectors, bit exact | 549 | 58,078 | 6.0 |
 | `second` | P2v: PASS from a second check, separate from the row's own ledger entry | 1,945 | 827,551 | 85.8 |
 | `owner` | P2v: the row's own ledger entry, exact branch counts over compared worlds | 198 | 49,427 | 5.1 |
+| `audit2` | P2v: PASS from the independent audit of the last seven rows, with its own coverage recompute | 1 | 1,570 | 0.2 |
+| `assumed` | P2v: PASS from the same audit, resting on labelled assumptions the maintainer accepted | 6 | 23,757 | 2.5 |
 | `anyworld` | P2v: older any-world accounting, not yet audited | 3 | 4,276 | 0.4 |
-| `-` | none: never matched (unproven) | 7 | 25,327 | 2.6 |
+| `-` | none: never matched (unproven) | 0 | 0 | 0.0 |
 <!--/gen:evidence-->
 
 ## Anyworld rows
 
-The <!--f:ev_anyworld_fns-->3<!--/f--> `anyworld` rows are the difference between strict parity and strictest. Their ports matched the functions they replace in every compared world; open is whether every branch outcome was exercised in those worlds.
+The <!--f:ev_anyworld_fns-->3<!--/f--> `anyworld` rows and the <!--f:ev_assumed_fns-->6<!--/f--> `assumed` rows ([evidence](evidence.md#the-last-seven-rows)) are the difference between strict parity and strictest. The ports of the `anyworld` rows matched the functions they replace in every compared world; open is whether every branch outcome was exercised in those worlds. For the `assumed` rows every outcome is seen or explained, under their labelled assumptions.
 
 <!--gen:anyworld-->
 | bank name | id | offset | bytes | audit verdict |
@@ -77,19 +83,7 @@ OPEN: the audit found branch outcomes that no compared world took and no sound r
 
 ## Unproven
 
-<!--f:unproven_fns-->7<!--/f--> functions never matched the build they replace and are counted in no parity figure: <!--f:unproven_p2_fn-->5<!--/f--> are tier P2 (<!--f:unproven_p2_bytes-->24,785<!--/f--> bytes) and <!--f:unproven_p2v_fn-->2<!--/f--> are P2v rows with status `partial` (<!--f:unproven_p2v_bytes-->542<!--/f--> bytes). They remain in the crates. Matching them needs the archive ([reproduce](reproduce.md#what-needs-the-archive)).
-
-<!--gen:unproven-->
-| bank name | id | offset | bytes | tier | status | origin | source |
-|---|---|---|---|---|---|---|---|
-| `void std::__1::__sort<bool (*&)(NTV2DeviceInfo const&, NTV2DeviceInfo const&), NTV2DeviceInfo*>(NTV2DeviceInfo*, NTV2DeviceInfo*, bool (*&)(NTV2DeviceInfo const&, NTV2DeviceInfo const&))` | f_0001b438 | 0x1b438 | 12,884 | P2 | partial | std | `crates/lift-1/src/p2v/b3.rs:11` |
-| `void std::__1::__insertion_sort_3<bool (*&)(NTV2DeviceInfo const&, NTV2DeviceInfo const&), NTV2DeviceInfo*>(NTV2DeviceInfo*, NTV2DeviceInfo*, bool (*&)(NTV2DeviceInfo const&, NTV2DeviceInfo const&))` | f_0002405b | 0x2405b | 2,526 | P2 | partial | std | `crates/lift-3/src/p2v/u11001.rs:9022` |
-| `bool std::__1::__insertion_sort_incomplete<bool (*&)(NTV2DeviceInfo const&, NTV2DeviceInfo const&), NTV2DeviceInfo*>(NTV2DeviceInfo*, NTV2DeviceInfo*, bool (*&)(NTV2DeviceInfo const&, NTV2DeviceInfo const&))` | f_00024a39 | 0x24a39 | 4,371 | P2 | partial | std | `crates/lift-3/src/p2v/u11001.rs:34415` |
-| `CNTV2AxiSpiFlash::Write(unsigned int, std::__1::vector<unsigned char, std::__1::allocator<unsigned char> >, unsigned int)` | f_00030040 | 0x30040 | 1,570 | P2 | partial | std | `crates/lift-3/src/p2v/u10001.rs:886` |
-| `void std::__1::vector<unsigned char, std::__1::allocator<unsigned char> >::__push_back_slow_path<unsigned char const&>(unsigned char const&)` | f_00031780 | 0x31780 | 268 | P2v | partial | std | `crates/lift-5/src/p2v/w003.rs:5124` |
-| `DeviceMap::CheckDriverVersion(unsigned int)` | f_00056fa6 | 0x56fa6 | 3,434 | P2 | partial | bundled_library | `crates/lift-3/src/p2v/u11001.rs:26808` |
-| `void std::__1::vector<unsigned short, std::__1::allocator<unsigned short> >::__push_back_slow_path<unsigned short>(unsigned short&&)` | f_000651c2 | 0x651c2 | 274 | P2v | partial | std | `crates/lift-5/src/p2v/w003.rs:5395` |
-<!--/gen:unproven-->
+<!--f:unproven_fns-->0<!--/f--> functions are unproven: each of the <!--f:fn_total-->2,702<!--/f--> matched the build it replaces in every compared world. Seven were unproven until a closing round matched them in new world sets and an independent audit re-checked them ([evidence: the last seven rows](evidence.md#the-last-seven-rows)); their rows carry the assumptions they rest on. A function that stopped matching would return here and count in no parity figure.
 
 ## Caveats
 

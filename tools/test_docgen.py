@@ -110,6 +110,44 @@ class FactsTest(unittest.TestCase):
         self.assertEqual(set(defs), {r["id"] for r in STATE["data"].rows})
 
 
+class CloseRowsTest(unittest.TestCase):
+    """docs/data/audit_close.tsv and docs/data/close_sets.tsv against the map and the ledger."""
+
+    def setUp(self):
+        self.d = STATE["data"]
+        self.by = {r["id"]: r for r in self.d.rows}
+        self.ledger = {l.split("\t")[0]: l.split("\t") for l in self.d.ledger_lines if l}
+
+    def test_rows_agree_with_map_ledger_and_sets(self):
+        self.assertEqual(len(self.d.audit_close), 7)
+        for r in self.d.audit_close:
+            row, led = self.by[r["symbol"]], self.ledger[r["symbol"]]
+            self.assertEqual((row["tier"], row["status"], row["strict"]), ("P2v", "done", "exact"), r["symbol"])
+            self.assertEqual(row["evidence"], "audit2" if r["labels"] == "-" else "assumed", r["symbol"])
+            self.assertEqual(led[3:7], ["P2v", "done", "exact", row["evidence"]], r["symbol"])
+            self.assertEqual(led[7], "{}/{}".format(r["compared"], r["worlds"]), r["symbol"])
+            self.assertGreaterEqual(int(r["compared"]), 900)
+            self.assertEqual(int(r["seen"]) + int(r["explained"]), int(r["outcomes"]), r["symbol"])
+            sets = [s for s in self.d.close_sets if s["function"] == r["symbol"]]
+            self.assertEqual(sum(int(s["compared"]) for s in sets), int(r["compared"]), r["symbol"])
+            self.assertEqual(sum(int(s["cases"]) for s in sets), int(r["worlds"]), r["symbol"])
+            for label in r["labels"].split(","):
+                if label != "-":
+                    self.assertIn(label, led[8], r["symbol"])
+                    self.assertIn(label + "=", r["label_outcomes"], r["symbol"])
+
+    def test_counts_and_standards(self):
+        f = {k: v["value"] for k, v in self.d.facts.items()}
+        self.assertEqual(f["close_labelled_rows"], f["ev_assumed_fns"])
+        self.assertEqual(f["close_pass_rows"], f["ev_audit2_fns"])
+        self.assertEqual(f["close_pass_rows"] + f["close_labelled_rows"], f["close_rows"])
+        strictest = sum(1 for r in self.d.fm if r["evidence"] in ("p1", "second", "owner", "audit2"))
+        self.assertEqual(f["strictest_fns"], strictest)
+        self.assertEqual(f["strict_fns"] - f["strictest_fns"], f["ev_anyworld_fns"] + f["ev_assumed_fns"])
+        self.assertTrue(all(len(s["vec_sha256"]) == 64 for s in self.d.close_sets))
+        self.assertEqual(f["close_sets_pins"], sum(int(s["pins"]) for s in self.d.close_sets))
+
+
 class PagesTest(unittest.TestCase):
     @staticmethod
     def column_bytes(name):
@@ -388,7 +426,7 @@ class MarkerTest(unittest.TestCase):
         self.assertEqual(unknown, ["f:no_such_key"])
 
     def test_blocks_both_closings_and_crlf(self):
-        src = "x\r\n<!--gen:tiers-->\r\nold\r\n<!--/gen-->\r\ny\r\n<!--gen:unproven-->\r\n<!--/gen:unproven-->\r\n"
+        src = "x\r\n<!--gen:tiers-->\r\nold\r\n<!--/gen-->\r\ny\r\n<!--gen:anyworld-->\r\n<!--/gen:anyworld-->\r\n"
         text, unknown = self.gen.fill(src)
         self.assertEqual(unknown, [])
         self.assertNotIn("old", text)
