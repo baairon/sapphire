@@ -1,7 +1,7 @@
 # sapphire
 
 > [!IMPORTANT]
-> The effects do not run yet. This repository holds the rewritten functions, their parity record and the frame handoff pipeline; no effect renders. Running the effects is the next phase.
+> Ten of the plugin's effects run as native code: `fx_run` (built from `crates/effects/fx_exec`) renders them, and each matches the original plugin bit for bit on every case it was compared on, as judged in an emulator. The status of each effect, how to build and run them and what is not claimed are in [docs/effects.md](docs/effects.md). Running them needs the optional data bundle (the program texts and lookup tables taken from the original plugin, kept out of the main files); without it the code builds and its tests pass, but no effect renders. The other effects do not run, and no stage of the `sapphire` pipeline calls the ten yet.
 
 An independent open source reimplementation of Sapphire behaviour, function by function. It is not affiliated with or endorsed by any other company, product or library.
 
@@ -69,7 +69,7 @@ The name bank is the source of truth for every name; the code keeps its `f_XXXXX
 | `docs/data/effect_names.tsv` | <!--f:effects_total-->272<!--/f--> | effect names |
 | `docs/data/param_candidates.tsv` | <!--f:params_total-->1,040<!--/f--> | parameter candidate strings, bound to no function |
 
-**Effect names.** The <!--f:effects_total-->272<!--/f--> effect names are strings only: none is mapped to functions, classes, parameters or behaviour, and this repository renders no sapphire effect. They are listed verbatim in [docs/generated/effects.md](docs/generated/effects.md), the parameter candidates in `docs/generated/parameters.md`; a candidate is not a confirmed parameter.
+**Effect names.** The <!--f:effects_total-->272<!--/f--> effect names are strings only: none is mapped to functions, classes, parameters or behaviour, and the ten effects of [docs/effects.md](docs/effects.md) are rebuilt separately as native code. They are listed verbatim in [docs/generated/effects.md](docs/generated/effects.md), the parameter candidates in `docs/generated/parameters.md`; a candidate is not a confirmed parameter.
 
 **Origin.** The bank classes <!--f:origin_bundled-->1,983<!--/f--> functions as bundled library code (the class `CNTV2Card` alone has <!--f:cntv2card_fns-->906<!--/f-->), <!--f:origin_std-->514<!--/f--> as std, <!--f:origin_undetermined-->136<!--/f--> as undetermined and <!--f:origin_component-->69<!--/f--> as component.
 
@@ -97,6 +97,8 @@ Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, 
 | `crates/neutral-ffmpeg` | library | ffmpeg and ffprobe as child processes: decoder, encoder, filter graph, probe, pixel format table | `decoder.rs`, `encoder.rs`, `filter.rs`, `probe.rs`, `pixfmt.rs` with `pixfmt_table.rs`, `locate.rs`, `process.rs` | <!--f:tests_scan_neutral_ffmpeg-->130<!--/f-->; `tests/*_live.rs` need ffmpeg |
 | `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->199<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
 | `crates/lift-a`, `crates/lift-b`, `crates/lift-1` to `crates/lift-8` | library | The ported functions. The <!--f:lift_crates-->10<!--/f--> lift crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions of the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once; the per-crate detail is in [lifting](docs/lifting.md#crate-layout) | `p1/`, `p2v/`, `missing.rs` (placeholders), `dup.rs`, `x86rt.rs` (`lift_rt.rs` in `lift-a`); `liftcheck/` in `lift-a` (feature `liftcheck`) | per crate in `docs/generated/crates.md`; `#[ignore]` without the stored vector sets |
+
+The effect crates are under `crates/effects` (the evaluator `fx_eval`, the executor and `fx_run` in `fx_exec`, the kernel crates they call, and the test helpers `effects_vecdir` and `effects_rtdata`); they are workspace members, and the ones whose tests need no stored data are default members ([effects](docs/effects.md)).
 
 Each `neutral-*` crate has a readme in its folder. Outside the workspace: `contracts/` (JSON schemas of the handoff convention and `contracts/conformance/cases.json`), `tools/` (Python 3.12 standard library: `handoff.py`, `conformance.py`, `gen_docs.py` with `docgen/`, `check_docs.py`, `fn_info.py`, `confirm_names.py` and their tests) and `docs/`.
 
@@ -249,7 +251,7 @@ python -I tools/handoff.py doctor --conformance
 | Stub argument values | <!--f:stub_arity_sites-->48<!--/f--> call sites passed fewer arguments than the bank signatures; those values were never compared |
 | Missing references | data, imports and constants not in the dump; <!--f:missing_refs-->19,563<!--/f--> references are named placeholders |
 | Archived evidence | the dumps, the full disassembly listing and the stored vector sets are archived, and without them the `lift-*` tests stay ignored ([reproduce](docs/reproduce.md#what-needs-the-archive)) |
-| Effect behaviour | no sapphire effect is mapped to functions or rendered; effect names are strings only |
+| Effect behaviour | only the ten effects of [docs/effects.md](docs/effects.md) are rebuilt and rendered, as native code outside the function record; no effect name is mapped to a function, and the other effect names are strings only |
 | Name certainty | a name is the bank's assignment for its offset; the `twin` and `stub` levels cannot be decided by the code |
 | ffmpeg versions | 9.0.2 is the measured version; other versions run conformance live and are reported as unverified |
 | POSIX | the process group branches have not run yet; the first Linux or macOS CI run covers them ([known gaps](docs/handoff.md#known-gaps)) |
@@ -272,6 +274,7 @@ python -I tools/handoff.py doctor --conformance
 | [`docs/ffmpeg.md`](docs/ffmpeg.md) | How sapphire runs ffmpeg: lookup, the crate, raw frames, colour, rate and length, tests. |
 | [`docs/handoff.md`](docs/handoff.md) | How sapphire, twixtor and ffmpeg pass raw frames to each other: contract versions, the frame contract, errors and exits, reports, discovery, geometry, the ffmpeg filter stage, packets, commands, platforms, known gaps. |
 | [`docs/stages.md`](docs/stages.md) | How a new provider offers stages and passes conformance. |
+| [`docs/effects.md`](docs/effects.md) | The ten native effects: status, report wording, how to build and run `fx_run`, the runtime data, the tests and the limits they share. |
 | [`docs/generated/index.md`](docs/generated/index.md) | The generated reference: functions by offset range, classes, stubs, effects, parameters, tiers, evidence, crates, missing data. |
 | [`docs/handoff-bench.tsv`](docs/handoff-bench.tsv) | The bench table of `tools/conformance.py --bench`: the wrappers timed on chained stages. |
 
