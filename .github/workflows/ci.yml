@@ -79,6 +79,15 @@ jobs:
       # The stage provider that the handoff and conformance suites drive.
       - run: cargo build --release -p neutral-handoff
 
+      # The 15 effect crates outside the default members (docs/effects): fx_run builds, and their tests that need no stored data run;
+      # the ones that need the original-derived data print NOT RUN.
+      # Linux only: the macOS and Windows results of these crates have not been measured.
+      - name: Build fx_run and run the tests of the non-default effect crates that need no stored data
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release -p fx_exec
+          cargo test --release -p fx_eval -p fx_exec -p esh2_job -p esh3_jobs -p esh5_core -p esh5b_passjobs -p esh6_driver -p esh8_exec -p sharpen -p wpg1_glue -p make_mipmap -p rotate -p interp -p effects_rtdata -p effects_vecdir
+
       # The Python tools need no packages beyond the standard library to
       # compile, so a syntax slip anywhere in them fails here.
       - run: python -m compileall -q tools
