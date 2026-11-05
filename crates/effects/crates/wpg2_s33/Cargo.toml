@@ -1,0 +1,12 @@
+
+[package]
+name = "wpg2_s33"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "WPG2 crate: class warp slot 33 (over, parallel_for, callback / AVX2 body, tile partition)."
+
+[dependencies]
+
+[lib]
+path = "src/lib.rs"

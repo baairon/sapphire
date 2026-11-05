@@ -1,0 +1,13 @@
+
+[package]
+name = "convert_pair"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+mutants = []
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

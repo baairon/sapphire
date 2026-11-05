@@ -1,0 +1,41 @@
+//! fx_exec: native f32 executor of the compiled effect plan (piece NV-5).
+//!
+//! Label: EVALUATOR-UNCHECKED until E-PARITY (the compiler `fx_eval` is EVALUATOR-PLAN-PARITY on 24 dumps).
+//! Std only apart from the read-only path dependencies (the builtin crates and `fx_eval`).
+//!
+//! Entry for NV-6: `execute(program, binding, inputs, host_frames) -> ExecOutput` (module `exec`), or
+//! `execute_compiled` on a plan you compiled yourself; `cmds::execute_commands` runs an EP-3 text plan.
+
+pub mod aspect;
+pub mod cmds;
+pub mod downsampled;
+pub mod exec;
+pub mod twframe;
+pub mod hostconv;
+/// INT9: the 'ae32' source route (FMT3a readers), TABLE-NULL-ON-ROUTE, destination refused until FMT3c
+pub mod hostconv14;
+/// INT10 (BCX1 PATCH 2): class postdivide, slot 53, copy_alpha < 0 route (T2 against the emulated original: wave_s9/int10_merge/t2pd)
+pub mod postdiv;
+/// INT12 (Batch 47 rule 4, W380): PDV2's owner arm with the Opacity loop (copy of pdv2_owner_arm/owner_arm/owner_arm.rs, SHA-256 in ../../../stage/PDV2_COPIED.sha256)
+pub mod owner_loop;
+/// INT30 step H (W576): HPT1's render history (KEEP or RESTART per render), RENDER-HISTORY-PORTED
+pub mod history;
+/// INT26 step OP (W558 (a)): OPC1's Opacity conversion (host checkout integer to the loop value), OPACITY-CONVERT-PORTED
+pub mod opacity_conv;
+pub mod mode_select;
+pub mod srcindep;
+pub mod kernels;
+/// INT24 (W526 (a), W533 (d)): OPS_SCALAR_PAIRS census rows, the OPS-ARITH-SCALAR-SCALAR-UNJUDGED tripwire, program-text node paths
+pub mod ops_census;
+pub mod kernels2;
+pub mod input_class;
+pub mod selector;
+/// INT17 (Batch 49 step 5): STYLE-SELECT (INT16 stage/s7/style.rs)
+pub mod style;
+pub mod types;
+pub mod judge_keys;
+
+pub use hostconv::{dest_for_host, host_to_image, image_to_host, HostConvert};
+pub use exec::{execute_ae32, execute_ae32_const, Ae32ExecOutput, execute_host, HostExecOutput, compile_for, execute, execute_compiled, unsupported_classes, Binding, ExecOutput, HostFrames, Inputs, RunRec};
+pub use selector::Tables;
+pub use types::{xy_grid, xy_pixel_centre, Arg, ExecError, Geom, GeomMode, Image, KParams, MipImage, Val};

@@ -1,0 +1,9 @@
+
+[package]
+name = "bwb_bodya"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bwb_p1 = { path = "../../p1" }
+bwb_libm = { path = "../../libm" }

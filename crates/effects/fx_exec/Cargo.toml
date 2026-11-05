@@ -1,0 +1,134 @@
+
+[package]
+name = "fx_exec"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Native f32 executor of the compiled effect plan (piece NV-5): selector over the real combo tables, builtin crates as kernels, HOST-FRAMES inputs"
+
+[lib]
+name = "fx_exec"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fx_exec_cli"
+path = "src/main.rs"
+
+[dependencies]
+effects_rtdata = { path = "../rtdata" }
+fx_eval = { path = "../fx_eval" }
+convert_pair = { path = "../crates/convert_pair" }
+# INT9 (Batch 43 rule 1): FMT3a format-14 source readers R4, R3, R1
+readers14 = { path = "../crates/readers14" }
+# INT10 (coordinator, FMT3c report): code-14 destination zero-arm bodies and the row copier (14, 14), R-PARITY (FLOOR PENDING)
+c14 = { path = "../crates/c14" }
+# INT10 (FMT3e, Batch 44 rule 1): variant-B format-14 readers, R-PARITY (FLOOR PENDING second reader)
+readers14b = { path = "../crates/readers14b" }
+plane_service = { path = "../ext/wave_s5/rebuild_plane_service/port" }
+hue_shift = { path = "../ext/wave_s3/rebuild_hueshift/port" }
+sat_scale = { path = "../ext/wave_s3/rebuild_satscale/port" }
+hue_shift_preserve_luma = { path = "../ext/wave_s6/rebuild_hue_shift_preserve_luma/port" }
+v3_to_v4_if4 = { path = "../ext/wave_s6/rebuild_v3_to_v4_if4/port" }
+ops_arith = { path = "../ext/wave_s6/rebuild_ops_arith/port" }
+ops_minmax = { path = "../ext/wave_s6/rebuild_ops_minmax/port" }
+ops_if = { path = "../ext/wave_s6/rebuild_ops_if/port" }
+comp_rgba = { path = "../ext/wave_s6/rebuild_comp_rgba/port" }
+one_minus = { path = "../ext/wave_s6/rebuild_one_minus/port" }
+screen_super = { path = "../ext/wave_s6/rebuild_screen_super_if_needed/port" }
+ops_element = { path = "../ext/wave_s6/rebuild_ops_element/port" }
+ops_vec = { path = "../ext/wave_s6/rebuild_ops_vec/port" }
+diff = { path = "../ext/wave_s9/in2_clamp_diff/diff" }
+clamp = { path = "../ext/wave_s9/in2_clamp_diff/clamp" }
+interp = { path = "../ext/wave_s9/in1_interp/port" }
+dissolve = { path = "../ext/wave_s2/rebuild_dissolve" }
+sharpen = { path = "../crates/sharpen" }
+add_rgb = { path = "../crates/add_rgb" }
+masked_blur = { path = "../ext/wave_s1/rebuild_masked_blur" }
+comp_premult = { path = "../crates/comp_premult" }
+copy_slot52 = { path = "../crates/copy_slot52" }
+grad = { path = "../crates/grad" }
+wpg1_glue = { path = "../crates/wpg1_glue" }
+wpg2_s33 = { path = "../crates/wpg2_s33" }
+monochrome_a = { path = "../monochrome_a" }
+scale_rgb = { path = "../ext/wave_s8/floor_hsb/scale_rgb" }
+
+make_mipmap = { path = "../ext/wave_s6/rebuild_make_mipmap/port" }
+blur_warp = { path = "../ext/wave_s6/rebuild_blur_warp/port" }
+warp_rel = { path = "../ext/wave_s1/rebuild_warp/warp_rel/port" }
+warp_f1 = { path = "../ext/wave_s1/rebuild_shared_warp/f1" }
+static2 = { path = "../ext/wave_s6/rebuild_static2/port" }
+monochrome = { path = "../ext/wave_s6/rebuild_monochrome/port" }
+rotate = { path = "../ext/wave_s6/rebuild_rotate/port" }
+ops_coerce = { path = "../ext/wave_s6/rebuild_ops_coerce/port" }
+blur = { path = "../ext/wave_glow_blur/rebuild_blur/blur" }
+esh8_exec = { path = "../crate/esh8_exec" }
+fx_common = { path = "../ext/rebuild_common" }
+
+[features]
+# SVB1 (W744 (b)): the class-3 VB4 path read through R4, and the wrong lanes handed over; each must fail the dsoc1rec line
+svb1_r4_mut = []
+svb1_lane_mut = []
+# NSS1 (W726 (d)): the two-lane host route with the width fixed at 64; must fail K_50x7 (and every 50x7 and 49x9 row with a shift)
+nss1_w64_mut = []
+# FLD3-FORM (W666 (d) 2): wrong candidate forms and the classifier kept refusing; each must fail t_fld3_form
+fld3_form_kept_mut = ["fx_eval/fld3_form_kept_mut"]
+fld3_bcast_mut = ["fx_eval/fld3_bcast_mut"]
+fld3m_kept_mut = ["fx_eval/fld3m_kept_mut"]
+fld3m_onelane_mut = ["fx_eval/fld3m_onelane_mut"]
+fld3m_bcast4_mut = ["fx_eval/fld3m_bcast4_mut"]
+fld3m_product_mut = ["fx_eval/fld3m_product_mut"]
+fld3m_swapped_mut = ["fx_eval/fld3m_swapped_mut"]
+fld3_ownzeros_mut = ["fx_eval/fld3_ownzeros_mut"]
+fld3_concat_mut = ["fx_eval/fld3_concat_mut"]
+fld3_product_mut = ["fx_eval/fld3_product_mut"]
+# step DX2 (W603, W620 (b)): Output at the minimal-context default on the 'ae32' route; must fail t_dx2_claim_d64
+dx2_output_default_mut = []
+dx2_owncount_mut = ["fx_eval/dx2_owncount_mut"]
+dx2v2_allroutes_mut = ["fx_eval/dx2v2_allroutes_mut"]
+dx2v2_norefuse_mut = ["fx_eval/dx2v2_norefuse_mut"]
+# INT31 step AL (W600 (a)): the alias mutant (the alias falls to the constant default path); must fail int31_alias_tests
+al_const_mut = []
+# ENVFENCE mutants (INT36, W630 (h) 5); each must fail t_envfence
+envfence_dropname_mut = []
+envfence_tail_mut = []
+envfence_nv3e_mut = []
+# INT31 step L2 (W595): the opacity mutants; each must fail int31_l2_tests
+l2_textconv_mut = []
+l2_nominus_mut = []
+l2_hostignored_mut = []
+# step L2b (W616 (c)): the output_opacity mutants; each must fail the l2b tests in int31_l2_tests
+l2b_outset_taken_mut = []
+l2b_value_eq_mut = []
+l2b_cset_input_as_opacity_mut = []
+# POPUP-ANSWER-OUT-OF-RANGE mutants (INT36, W630 (b)); each must fail g2_popup_tests and t_popup_range
+popup_range_off_mut = []
+popup_range_zero_based_mut = []
+popup_range_nolow_mut = []
+popup_range_nohigh_mut = []
+# INT30 step H (HPT1, W576 (a)): history mutants; each must fail its discriminating test
+hpt1_always_keep_mut = []
+hpt1_always_restart_mut = []
+hpt1_unfused_mut = []
+# OWNER-OPACITY-DERIVED note mutant (INT36, W630 (d)): the old condition; must fail t_owner_note
+owner_note_set_mut = []
+brd2_lane0_mut = ["fx_eval/brd2_lane0_mut"]
+brd2_wide_mut = ["fx_eval/brd2_wide_mut"]
+int23_a1last_mut = ["fx_eval/int23_a1last_mut"]
+int24_lane0v_mut = ["fx_eval/int24_lane0v_mut"]
+# record lane-bits feed mutants (INT36, W638 (d) 4); each must fail g2_lane_tests
+lane_bits_masked_mut = []
+lane_negzero_folded_mut = []
+mutants = ["convert_pair/mutants"]
+drw2_mut = ["grad/mutants"]
+# INT12 (W377 (e)): CST1's RAW variant for the 33-original gate's discrimination half; never in a shipped build
+cst1_raw_cp = []
+# INT12 (Batch 48 rule 6 gate control): the fill-with-0 mutant; must fail the 33-original gate
+fill0_mut = []
+# INT21 step G3R (W476 (d) 4, W170): the routing mutant, R3 read by the variant-B line; must fail t35_r3_dr2h_rows
+g3r_mut_r3b = []
+# step M3P2 (W666 (d) 3): the refusal kept at mode 3 with 1 plane; the 3-plane body at 1 plane; each must fail the m3p2 tests
+m3p2_refusal_kept_mut = []
+m3p2_threeplane_body_mut = []
+
+[dev-dependencies]
+effects_vecdir = { path = "../vecdir" }

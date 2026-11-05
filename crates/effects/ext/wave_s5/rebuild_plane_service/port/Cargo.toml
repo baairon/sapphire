@@ -1,0 +1,15 @@
+
+[package]
+name = "plane_service"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the host plane service with its fill (AVX2 route), descriptor and flat copy paths."
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+mutants = []
+
+[dependencies]

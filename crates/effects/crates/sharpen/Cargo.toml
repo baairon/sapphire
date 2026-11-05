@@ -1,0 +1,21 @@
+
+[package]
+name = "sharpen"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the sharpen class: wrapper (flag 0), combine job (AVX2) and driver arithmetic."
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = ["blur"]
+blur = ["dep:blur"]
+
+[dependencies]
+blur = { path = "../../ext/wave_glow_blur/rebuild_blur/blur", optional = true }
+fx_common = { path = "../../ext/rebuild_common" }
+
+[dev-dependencies]
+effects_vecdir = { path = "../../vecdir" }

@@ -1,0 +1,11 @@
+
+[package]
+name = "blur_warp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bwb_bodya = { path = "../../../wave_s1/rebuild_bwb/bodyA/port" }
+bwb_bodyb = { path = "../../../wave_s1/rebuild_bwb/bodyB/port" }
+bwb_bodyc = { path = "../../../wave_s1/rebuild_bwb/bodyC/port" }
+bwb_bodyd = { path = "../../../wave_s1/rebuild_bwb/bodyD/port" }

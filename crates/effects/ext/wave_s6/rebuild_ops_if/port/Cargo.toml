@@ -1,0 +1,8 @@
+
+[package]
+name = "ops_if"
+version = "0.1.0"
+edition = "2021"
+description = "OP3: native port of the select operators if+ and if> (slot 52 AVX2 bodies)"
+
+[dependencies]

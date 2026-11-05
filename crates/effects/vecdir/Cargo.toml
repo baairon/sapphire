@@ -1,0 +1,8 @@
+[package]
+name = "effects_vecdir"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Locates the stored effect data (VEC_DIR) for the tests of the effect crates, and the scratch folder their outputs go to."
+
+[dependencies]

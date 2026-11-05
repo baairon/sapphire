@@ -1,0 +1,14 @@
+
+[package]
+name = "warp_f2"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the second warp sampler F2, AVX2 body of dispatcher."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+warp_f1 = { path = "../../../rebuild_shared_warp/f1" }
+bwb_libm = { path = "../../../rebuild_bwb/libm" }
