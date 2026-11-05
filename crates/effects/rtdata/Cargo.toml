@@ -1,0 +1,8 @@
+[package]
+name = "effects_rtdata"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Run-time lookup tables of the effect crates, read from the data folder named by EFFECTS_DATA_DIR."
+
+[dependencies]

@@ -1,0 +1,12 @@
+
+[package]
+name = "monochrome_a"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the builtin class monochrome_a (slot 53, AVX2 body): luma plane plus the last-channel (alpha) plane through the host plane service."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

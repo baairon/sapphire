@@ -1,0 +1,20 @@
+
+[package]
+name = "wpg1_glue"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "WPG1 glue: slot 52 wrappers of classes perspective and perspective_alpha (dispatchers over their AVX2 bodies) and slot 53 of class warp (over the driver)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+perspective = { path = "../../ext/wave_s1/rebuild_perspective/main/port" }
+perspective_alpha = { path = "../../ext/wave_s1/rebuild_perspective/alpha/port" }
+warp_driver = { path = "../../ext/wave_s1/rebuild_warp/driver" }
+warp_f1 = { path = "../../ext/wave_s1/rebuild_shared_warp/f1" }
+
+[dev-dependencies]
+effects_vecdir = { path = "../../vecdir" }
+fx_common = { path = "../../ext/rebuild_common" }

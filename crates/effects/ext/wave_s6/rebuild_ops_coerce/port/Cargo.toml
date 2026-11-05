@@ -1,0 +1,16 @@
+
+[package]
+name = "ops_coerce"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the builtin classes coerce_up, coerce_to_alpha, coerce_to and coerce_up_a1: their shared member pass functions, plane assembly through the host plane service."
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+mutants = []
+
+[dependencies]
+plane_service = { path = "../../../wave_s5/rebuild_plane_service/port" }

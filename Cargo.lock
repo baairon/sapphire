@@ -3,6 +3,294 @@
 version = 4
 
 [[package]]
+name = "add_rgb"
+version = "0.1.0"
+
+[[package]]
+name = "blur"
+version = "0.0.0"
+dependencies = [
+ "blur_coef",
+ "blur_rows",
+ "blur_rows_y",
+ "fx_common",
+]
+
+[[package]]
+name = "blur_coef"
+version = "0.0.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "blur_rows"
+version = "0.0.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "blur_rows_y"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "blur_warp"
+version = "0.1.0"
+dependencies = [
+ "bwb_bodya",
+ "bwb_bodyb",
+ "bwb_bodyc",
+ "bwb_bodyd",
+]
+
+[[package]]
+name = "bwb_bodya"
+version = "0.1.0"
+dependencies = [
+ "bwb_libm",
+ "bwb_p1",
+]
+
+[[package]]
+name = "bwb_bodyb"
+version = "0.1.0"
+dependencies = [
+ "bwb_bodya",
+ "bwb_libm",
+ "bwb_p1",
+]
+
+[[package]]
+name = "bwb_bodyc"
+version = "0.1.0"
+dependencies = [
+ "bwb_bodya",
+ "bwb_libm",
+ "bwb_p1",
+]
+
+[[package]]
+name = "bwb_bodyd"
+version = "0.1.0"
+dependencies = [
+ "bwb_bodya",
+ "bwb_libm",
+ "bwb_p1",
+]
+
+[[package]]
+name = "bwb_libm"
+version = "0.1.0"
+
+[[package]]
+name = "bwb_p1"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "c14"
+version = "0.1.0"
+
+[[package]]
+name = "clamp"
+version = "0.1.0"
+dependencies = [
+ "ops_arith",
+]
+
+[[package]]
+name = "comp_premult"
+version = "0.1.0"
+
+[[package]]
+name = "comp_rgba"
+version = "0.1.0"
+dependencies = [
+ "plane_service",
+]
+
+[[package]]
+name = "convert_pair"
+version = "0.1.0"
+
+[[package]]
+name = "copy_slot52"
+version = "0.1.0"
+
+[[package]]
+name = "diff"
+version = "0.1.0"
+dependencies = [
+ "ops_arith",
+]
+
+[[package]]
+name = "dissolve"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "effects_rtdata"
+version = "0.1.0"
+
+[[package]]
+name = "effects_vecdir"
+version = "0.1.0"
+
+[[package]]
+name = "esh2_job"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+]
+
+[[package]]
+name = "esh3_jobs"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+]
+
+[[package]]
+name = "esh4_powf"
+version = "0.0.0"
+
+[[package]]
+name = "esh5_core"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+]
+
+[[package]]
+name = "esh5b_passjobs"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+]
+
+[[package]]
+name = "esh6_driver"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+ "esh2_job",
+ "esh3_jobs",
+ "esh4_powf",
+ "esh5_core",
+ "esh5b_passjobs",
+]
+
+[[package]]
+name = "esh8_exec"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+ "esh3_jobs",
+ "esh6_driver",
+]
+
+[[package]]
+name = "fx_common"
+version = "0.0.0"
+
+[[package]]
+name = "fx_eval"
+version = "0.1.0"
+dependencies = [
+ "effects_rtdata",
+ "effects_vecdir",
+ "tickmap",
+]
+
+[[package]]
+name = "fx_exec"
+version = "0.1.0"
+dependencies = [
+ "add_rgb",
+ "blur",
+ "blur_warp",
+ "c14",
+ "clamp",
+ "comp_premult",
+ "comp_rgba",
+ "convert_pair",
+ "copy_slot52",
+ "diff",
+ "dissolve",
+ "effects_rtdata",
+ "effects_vecdir",
+ "esh8_exec",
+ "fx_common",
+ "fx_eval",
+ "grad",
+ "hue_shift",
+ "hue_shift_preserve_luma",
+ "interp",
+ "make_mipmap",
+ "masked_blur",
+ "monochrome",
+ "monochrome_a",
+ "one_minus",
+ "ops_arith",
+ "ops_coerce",
+ "ops_element",
+ "ops_if",
+ "ops_minmax",
+ "ops_vec",
+ "plane_service",
+ "readers14",
+ "readers14b",
+ "rotate",
+ "sat_scale",
+ "scale_rgb",
+ "screen_super",
+ "sharpen",
+ "static2",
+ "v3_to_v4_if4",
+ "warp_f1",
+ "warp_rel",
+ "wpg1_glue",
+ "wpg2_s33",
+]
+
+[[package]]
+name = "grad"
+version = "0.0.0"
+dependencies = [
+ "blur",
+ "effects_vecdir",
+ "fx_common",
+]
+
+[[package]]
+name = "hue_shift"
+version = "0.1.0"
+
+[[package]]
+name = "hue_shift_preserve_luma"
+version = "0.1.0"
+
+[[package]]
+name = "interp"
+version = "0.1.0"
+
+[[package]]
+name = "libm_sincos"
+version = "0.1.0"
+dependencies = [
+ "effects_rtdata",
+]
+
+[[package]]
 name = "lift_1"
 version = "0.1.0"
 dependencies = [
@@ -83,6 +371,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "make_mipmap"
+version = "0.1.0"
+
+[[package]]
+name = "masked_blur"
+version = "0.0.0"
+dependencies = [
+ "blur",
+ "fx_common",
+]
+
+[[package]]
+name = "monochrome"
+version = "0.1.0"
+
+[[package]]
+name = "monochrome_a"
+version = "0.0.0"
+
+[[package]]
 name = "neutral-ffmpeg"
 version = "0.1.0"
 
@@ -99,4 +407,167 @@ version = "0.1.0"
 
 [[package]]
 name = "neutral-world"
+version = "0.1.0"
+
+[[package]]
+name = "one_minus"
+version = "0.1.0"
+
+[[package]]
+name = "ops_arith"
+version = "0.1.0"
+
+[[package]]
+name = "ops_coerce"
+version = "0.0.0"
+dependencies = [
+ "plane_service",
+]
+
+[[package]]
+name = "ops_element"
+version = "0.1.0"
+dependencies = [
+ "plane_service",
+]
+
+[[package]]
+name = "ops_if"
+version = "0.1.0"
+
+[[package]]
+name = "ops_minmax"
+version = "0.1.0"
+dependencies = [
+ "ops_arith",
+]
+
+[[package]]
+name = "ops_vec"
+version = "0.0.0"
+dependencies = [
+ "plane_service",
+]
+
+[[package]]
+name = "perspective"
+version = "0.0.0"
+dependencies = [
+ "libm_sincos",
+]
+
+[[package]]
+name = "perspective_alpha"
+version = "0.0.0"
+dependencies = [
+ "fx_common",
+ "libm_sincos",
+]
+
+[[package]]
+name = "plane_service"
+version = "0.0.0"
+
+[[package]]
+name = "readers14"
+version = "0.1.0"
+
+[[package]]
+name = "readers14b"
+version = "0.1.0"
+
+[[package]]
+name = "rotate"
+version = "0.0.0"
+dependencies = [
+ "effects_rtdata",
+ "libm_sincos",
+]
+
+[[package]]
+name = "sat_scale"
+version = "0.1.0"
+
+[[package]]
+name = "scale_rgb"
+version = "0.1.0"
+
+[[package]]
+name = "screen_super"
+version = "0.1.0"
+
+[[package]]
+name = "sharpen"
+version = "0.0.0"
+dependencies = [
+ "blur",
+ "effects_vecdir",
+ "fx_common",
+]
+
+[[package]]
+name = "static2"
+version = "0.0.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "tickmap"
+version = "0.1.0"
+
+[[package]]
+name = "v3_to_v4_if4"
+version = "0.0.0"
+dependencies = [
+ "plane_service",
+]
+
+[[package]]
+name = "warp_driver"
+version = "0.0.0"
+dependencies = [
+ "bwb_libm",
+ "fx_common",
+ "warp_f1",
+]
+
+[[package]]
+name = "warp_f1"
+version = "0.0.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "warp_f2"
+version = "0.0.0"
+dependencies = [
+ "bwb_libm",
+ "warp_f1",
+]
+
+[[package]]
+name = "warp_rel"
+version = "0.0.0"
+dependencies = [
+ "bwb_libm",
+ "warp_f1",
+ "warp_f2",
+]
+
+[[package]]
+name = "wpg1_glue"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+ "fx_common",
+ "perspective",
+ "perspective_alpha",
+ "warp_driver",
+ "warp_f1",
+]
+
+[[package]]
+name = "wpg2_s33"
 version = "0.1.0"

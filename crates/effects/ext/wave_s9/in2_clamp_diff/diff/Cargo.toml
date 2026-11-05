@@ -1,0 +1,9 @@
+
+[package]
+name = "diff"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# OP1 (finished, READ-ONLY): Operand, OpError, ONE are reused as they are.
+ops_arith = { path = "../../../wave_s6/rebuild_ops_arith/port" }

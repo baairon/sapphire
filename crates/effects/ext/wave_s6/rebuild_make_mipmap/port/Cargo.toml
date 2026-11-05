@@ -1,0 +1,10 @@
+
+[package]
+name = "make_mipmap"
+version = "0.1.0"
+edition = "2021"
+description = "Native port of the make_mipmap pyramid builder (driver, kernels), emulator parity"
+publish = false
+
+[lib]
+path = "src/lib.rs"

@@ -192,6 +192,13 @@ class Generator:
         b["missing"] = [l for l in d.missing_md.split("\n") if l.startswith("|")]
         rows = [[code("docs/data/" + r["path"]), fmt_int(int(r["bytes"])), code(r["sha256"][:16])] for r in d.manifest]
         b["data_files"] = table(["file", "bytes", "sha256 (first 16)"], rows)
+        rows = []
+        for r in d.effects_status:
+            rows.append(["`" + r["effect"] + "`", r["registered_styles"].replace("; ", ", "), fmt_int(int(r["counted_rows"])),
+                         fmt_int(int(r["frozen_members"])), fmt_int(int(r["landing_rerun_units"]))])
+        b["effects_status"] = table(["effect", "registered styles", "counted rows", "frozen members", "re-run units"], rows)
+        rows = [["`" + r["effect"] + "`", "`" + r["paragraph_sha256"] + "`"] for r in d.effects_status]
+        b["effects_paragraph_sha"] = table(["effect", "SHA-256 of its paragraph"], rows)
         return b
 
     # ---- generated pages ----------------------------------------------

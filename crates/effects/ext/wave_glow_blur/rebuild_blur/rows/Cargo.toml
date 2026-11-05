@@ -1,0 +1,15 @@
+
+[package]
+name = "blur_rows"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the blur core horizontal row kernel K1 (AVX2 body)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
+fx_common = { path = "../../../rebuild_common" }

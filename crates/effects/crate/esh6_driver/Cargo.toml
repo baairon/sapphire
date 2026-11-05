@@ -1,0 +1,20 @@
+
+[package]
+name = "esh6_driver"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Std-only port of edge_aware_sharpen slot 52 (flag 0 route) calling the ESH2 to ESH5b piece crates."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+esh2_job = { path = "../esh2_job" }
+esh3_jobs = { path = "../esh3_jobs" }
+esh4_powf = { path = "../esh4b_powf_fma" }
+esh5_core = { path = "../esh5_core" }
+esh5b_passjobs = { path = "../esh5b_passjobs" }
+
+[dev-dependencies]
+effects_vecdir = { path = "../../vecdir" }

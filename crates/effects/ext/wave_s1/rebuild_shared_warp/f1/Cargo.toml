@@ -1,0 +1,13 @@
+
+[package]
+name = "warp_f1"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the shared sampler, AVX2 variant."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+fx_common = { path = "../../../rebuild_common" }

@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 25807,
+  "bytes": 26940,
   "generated": false
  },
  {
@@ -60,6 +60,13 @@
   "title": "Name check summary (2026-10-26)",
   "line": "Source tables: namecheck_classes.tsv, namecheck_rest.tsv, namecheck_stubs.tsv, namecheck_fingerprints.tsv, namecheck_checks.tsv.",
   "bytes": 971,
+  "generated": false
+ },
+ {
+  "path": "docs/effects.md",
+  "title": "Effects",
+  "line": "Ten of the plugin's effects are rebuilt in this repository as native Rust code.",
+  "bytes": 29601,
   "generated": false
  },
  {

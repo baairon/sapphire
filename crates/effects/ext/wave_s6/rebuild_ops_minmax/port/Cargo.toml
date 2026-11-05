@@ -1,0 +1,9 @@
+
+[package]
+name = "ops_minmax"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# OP1 (finished, READ-ONLY): Operand, Params, OpError, ONE are reused as they are.
+ops_arith = { path = "../../rebuild_ops_arith/port" }

@@ -1,0 +1,17 @@
+
+[package]
+name = "tickmap"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "TICKMAP: native port of the host-fetch mapping part of the original routine (tick map, checkout call shape, 16.16 conversion, sign flags, lane loop, both selector paths)"
+
+[lib]
+name = "tickmap"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tickmap_case"
+path = "src/main.rs"
+
+[dependencies]
