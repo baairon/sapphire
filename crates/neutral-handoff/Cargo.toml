@@ -24,3 +24,4 @@ path = "src/bin/fake_vfx.rs"
 
 [dependencies]
 neutral-ffmpeg = { path = "../neutral-ffmpeg" }
+fx_exec = { path = "../effects/fx_exec" }

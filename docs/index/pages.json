@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 31400,
+  "bytes": 31415,
   "generated": false
  },
  {
@@ -276,7 +276,7 @@
   "path": "docs/guide.md",
   "title": "Using the effects",
   "line": "This page shows how to run the ten native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match.",
-  "bytes": 11000,
+  "bytes": 10853,
   "generated": false
  },
  {
@@ -346,7 +346,7 @@
   "path": "docs/stages.md",
   "title": "Adding a provider",
   "line": "A provider is a program that offers stages over raw frames; twixtor's `vfx` and `sapphire` are two.",
-  "bytes": 19477,
+  "bytes": 19683,
   "generated": false
  }
 ]

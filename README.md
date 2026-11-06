@@ -46,7 +46,7 @@ On a Windows machine without the MSVC linker the GNU toolchain builds the same c
 | Binary | Path (`.exe` added on Windows) | Used by |
 |---|---|---|
 | `sapphire` | `target/release/sapphire` | the pipeline, the stage provider of `contracts/tool.json`, `tools/handoff.py doctor`, `tools/conformance.py` |
-| `fx_run` | `target/release/fx_run` | the 13 effect stages, which look for it beside `sapphire` (or at `SAPPHIRE_FX_RUN`) |
+| `fx_run` | `target/release/fx_run` | the command line of the effect runner; the 13 effect stages use the same library inside `sapphire` |
 | `fake-vfx` | `target/release/fake-vfx` | the pipeline tests, as a stand in for twixtor's `vfx` |
 
 `CARGO_TARGET_DIR` moves the binaries; `SAPPHIRE_PATH` points the Python tools at another build. The pipeline and the `neutral-ffmpeg` tests need ffmpeg and ffprobe ([finding ffmpeg](docs/ffmpeg.md#finding-ffmpeg)).
