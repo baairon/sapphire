@@ -87,17 +87,36 @@ target/release/sapphire clip.mp4 --depth 32 --stage-timeout 0 --stage "@transfor
 | `auto` | The first usable GPU, else the CPU. |
 
 ```sh
-target/release/sapphire stage apply sharpen_best_quality_autogen --device auto --width 1920 --height 1080 --depth 32 --fps 24 < clip.f32 > out.f32
+ffmpeg -v error -i clip.mp4 -f rawvideo -pix_fmt gbrapf32le clip.f32
+target/release/sapphire stage apply sharpen_best_quality_autogen --device auto --width 160 --height 96 --depth 32 --fps 24 < clip.f32 > out.f32
 ```
 
 The OpenCL library is opened at run time, so a machine without one still builds and renders on the CPU. A device is used only after two checks:
 
-- **Probe.** The device must offer double precision floats, correctly rounded single precision divide and square root, denormals and round to nearest, the full OpenCL profile and OpenCL C 1.2. A device that fails is refused with the reasons; `gpu` and `gpu=N` then render on the CPU and `auto` does so silently.
+- **Probe.** The device must offer double precision floats, correctly rounded single precision divide and square root, denormals and round to nearest, the full OpenCL profile and OpenCL C 1.2. A device that fails is refused with the reasons; `gpu` and `gpu=N` then render on the CPU with a notice (below) and `auto` does so silently. Apple Silicon GPUs have no double precision, so the probe refuses them and a Mac renders on the CPU.
 - **Self-check.** Before an operation runs on the device, its kernel is run on a set of adversarial inputs (subnormals, negative zero, infinities, NaN, exact ties, odd frame sizes) and compared bit for bit with the CPU kernel. An operation that differs is not used on the device.
 
 The device output is the same bytes as the CPU output. An operation without a device kernel, one the kernel declines for a given shape or value, and any node whose output holds a NaN all run on the CPU for that node, so a partly supported plan still renders. `SAPPHIRE_DEVICE_REPORT=1` prints how many nodes of each operation ran on the device and how many fell back, with the reason.
 
-The self-check costs about 9 s the first time a device and driver are used. The passes are then kept in the user cache directory (`~/.cache/sapphire` on Linux, `~/Library/Caches/sapphire` on macOS, `%LOCALAPPDATA%\sapphire` on Windows), keyed on the device name, the driver version and a digest of the kernel sources, and a later process skips them (0.07 s). A new driver or a changed kernel makes the entry unreadable and the checks run again. `SAPPHIRE_DEVICE_CHECK_CACHE=0` turns the cache off and `SAPPHIRE_CACHE_DIR` moves it. Compiled kernels are cached separately in the temporary directory.
+**Notices.** An explicit `--device gpu` or `--device gpu=N` that ends on the CPU (no OpenCL library, no usable device, no device number N, or a failed self-check of the whole device) prints one line on standard error, `device: <reason>; rendering on the CPU`, and renders on the CPU. The exit code is unchanged. `auto` prints nothing unless the report is on. `sapphire stage apply` forwards every `device: ` line to its standard error, on success and on failure.
+
+**Confirming that a device was used.** `SAPPHIRE_DEVICE_REPORT=1` prints the device report on standard error, also through `sapphire stage apply`: the device chosen, the nodes that ran on the device by operation and the fallbacks with their reasons. A run that reports no nodes on the device rendered on the CPU.
+
+```sh
+SAPPHIRE_DEVICE_REPORT=1 target/release/sapphire stage apply blur_color_autogen --device gpu --width 160 --height 96 --depth 32 --fps 24 < clip.f32 > dev.f32
+```
+
+The first line names the device and the result of its self-check. After each frame a line follows with the running count of nodes per operation on the device and of the fallbacks, for example `device: blur 2, postdivide 2; fallback: none`. A stage whose operations have no device kernel, such as `hue_sat_bright_autogen`, reports `device: none`.
+
+**Requiring a device.** `SAPPHIRE_REQUIRE_DEVICE=1` turns a missing device into an error: a `--device` other than `cpu` that installs no device refuses the run instead of rendering on the CPU: `sapphire stage apply` prints a `device: DEVICE-REQUIRED-UNAVAILABLE ...` line and exits with code 3 (`fx_run` exits with code 2). Use it in checks and CI, where a silent fallback would let a device test pass without a device.
+
+**Caches.** The self-check costs about 9 s the first time a device and driver are used. The passes are then kept in the user cache folder (`$XDG_CACHE_HOME/sapphire` or `~/.cache/sapphire` on Linux, `~/Library/Caches/sapphire` on macOS, `%LOCALAPPDATA%\sapphire` on Windows), and a later process skips them (0.07 s). The entry is keyed on the build (a digest of the running executable, which holds the CPU kernels, the device glue and the corpus), the device name, the driver version, the digest of the kernel sources, the build options and the digest of the loaded program binary. A new build, a new driver, a changed kernel or a replaced program binary makes the entry unreadable and the checks run again. Compiled OpenCL programs are cached in `opencl-programs` under the same folder. Deleting the folder is always safe: both caches are rebuilt on the next run. `SAPPHIRE_DEVICE_CHECK_CACHE=0` turns the self-check cache off and `SAPPHIRE_CACHE_DIR` moves the folder.
+
+**Platform notes.**
+
+- Kernels with a double precision path (monochrome, satscale) may run slower on consumer GPUs, whose double precision rate is a fraction of the single precision rate. INFERRED.
+- A long kernel can hit the Windows GPU watchdog (TDR), which resets the driver after a few seconds. INFERRED.
+- Apple Silicon GPUs have no double precision and are refused by the probe.
 
 A clip of a few frames can cost more on the device than on the CPU, because of the one time setup. Speedups on a real GPU are INFERRED until measured on one; the figures in [Speed](#speed) for a device are PoCL, an OpenCL runtime on the CPU, and show correctness, not GPU speed.
 
@@ -174,13 +193,14 @@ Wall time of one 1920x1080 frame through `sapphire stage apply`, MEASURED on a 1
 | `blur_motion_curves_no_transform_autogen` | 52.84 / 51.09 | 1.08 / 1.14 | 0.74 / 0.72 |
 | `diffuse_autogen` | 3.02 / 2.90 | 1.90 / 2.34 | 0.72 / 0.69 |
 | `distort_rgb_autogen` | 8.48 / 7.57 | 1.73 / 1.87 | 2.14 / 1.95 |
-| `@drop_shadow` | 1.84 / 1.74 | 1.52 / 1.73 | 0.72 / 0.71 |
+| `stage apply drop_shadow` | 1.84 / 1.74 | 1.52 / 1.73 | 0.72 / 0.71 |
 | `hue_sat_bright_autogen` | 0.84 / 0.84 | 0.47 / 0.51 | 0.54 / 0.59 |
 | `sharpen_best_quality_autogen` | 2.79 / 2.71 | 2.40 / 2.38 | 0.86 / 0.88 |
 | `sharpen_fast_autogen` | 1.18 / 1.10 | 0.66 / 0.73 | 0.64 / 0.69 |
 | `time_warp_rgb_autogen` | 1.44 / 1.31 | 0.78 / 0.73 | 0.88 / 0.81 |
 | `trails_autogen` | 1.26 / 1.16 | 0.85 / 0.75 | 0.85 / 0.88 |
 | `warp_perspective_autogen` | 3.87 / 3.49 | 1.37 / 1.31 | 1.44 / 1.46 |
+
 - `before PR 4` is the previous build: one `fx_run` process per frame and a full ripmap plane copy per row in the warp kernels.
 - `after, CPU` is the default `--device cpu`, with the warp copies removed, the render in process and the parallel-safe kernels on all cores (`SAPPHIRE_THREADS=1` runs them on one).
 - `after, PoCL device` runs with the device path on PoCL, an OpenCL runtime on the same CPU. It shows that the device path is byte identical and what the path costs on this machine; it is CPU OpenCL and is never GPU speed. Speedups on a real GPU are INFERRED until one is measured.

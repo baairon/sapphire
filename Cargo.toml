@@ -86,7 +86,9 @@ members = [
     "crates/effects/vecdir",
 ]
 # The lifted crates (lift-1 to lift-8, lift-a, lift-b) test against stored vectors that are not in
-# the repository, so a plain `cargo test` covers only the four crates that run on their own.
+# the repository, so a plain `cargo test` runs the tests of the four crates below (plus the effect crates listed after them) and none
+# of those. neutral-handoff depends on fx_exec for the in-process effect stages, so building it also builds fx_exec and its
+# dependencies, but the fx_exec tests are not part of the default run.
 default-members = [
     "crates/neutral-world",
     "crates/neutral-parity",

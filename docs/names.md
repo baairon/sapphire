@@ -107,7 +107,7 @@ A twin is a function the name check flagged as interchangeable with a differentl
 | `calls` | a caller or callee of the same class, or one sharing a rare type or identifier with the name |
 | `stubs` | an import stub target sharing a rare identifier with the name |
 | `consts` | constants shared with a named partner: index tables, sibling registers, string or device id constants |
-| `shape` | the body shape fits the name: constructor, destructor, getter, setter, predicate, string builder or static initialiser |
+| `shape` | the body shape fits the name: constructor, destructor, getter, setter, predicate, string assembler or static initialiser |
 | `deep` | a deep read found the name aligned, at high or medium confidence |
 | `know` | knowledge of a library the bank names, not evidence from the repository; counts toward `consistent` only, and <!--f:conf_consistent_know_only-->69<!--/f--> `consistent` rows rest on it alone |
 | `-` | none |

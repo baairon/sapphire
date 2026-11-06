@@ -46,7 +46,7 @@ output file, verified against the input, then moved into place
 |---|---|---|---|
 | `selftest-invert` | frame, preserve | `invert_alpha` (checkbox, default off) | `src/stage.rs`: the conformance stage; inverting twice returns the input |
 | `ffmpeg-filter` | frame, declared | `graph` (one input, one output, default `null`), `expect` (`preserve` or `declared`), `unsafe` (`1` runs filters outside the safe list) | `src/ffstage.rs` on `neutral_ffmpeg::Filter` |
-| 13 effect stages | frame, preserve (two temporal) | per stage from `data/fx_params.tsv` | `src/fxstage.rs`: a child process per frame over `fx_run`, tables in `data/`; see [Effects provider](../../docs/stages.md#effects-provider) |
+| 13 effect stages | frame, preserve, temporal | per stage from `data/fx_params.tsv` | `src/fxstage.rs`: rendered in process through the `fx_exec` library, tables in `data/`; see [Effects provider](../../docs/stages.md#effects-provider) |
 
 | `ffmpeg-filter` rule | Detail |
 |---|---|
@@ -82,7 +82,7 @@ In the pipeline, `--stage @selftest-invert` runs that stage in process; `--stage
 
 ## Tests
 
-`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->216<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
+`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->220<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
 
 | File | Checks | Needs |
 |---|---|---|
