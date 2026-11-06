@@ -1,6 +1,6 @@
 # Effects
 
-Ten of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program text, a size and the input planes, once the optional data bundle is in place ([Build and run](#build-and-run)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)).
+Ten of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program name, a size and the input planes, with no external data ([Build and run](#build-and-run)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)).
 
 Effects rebuilt: <!--f:effects_rebuilt-->10<!--/f--> of <!--f:effects_listed-->10<!--/f--> listed here, the first milestone of the effect rebuild. The other effects of the plugin are not rebuilt; their names are strings only ([names](../README.md#names)).
 
@@ -100,26 +100,37 @@ cargo build --release --offline -p fx_exec
 This builds `target/release/fx_run`. The call is
 
 ```sh
-fx_run PROGRAMS.TSV PROGRAM --size WxH --out PREFIX [--synth SEED] [options]
+fx_run PROGRAM --size WxH --out PREFIX [--synth SEED] [options]
 ```
 
-- `PROGRAMS.TSV` is the table of effect program texts of the plugin. It comes with the optional data bundle (the file `programs.tsv` in the bundle's folder) and is not part of the main files of this repository.
+- No program table is passed: the effect graphs are built into the tool (see [No external data](#no-external-data)). A programs table in the first place is an optional override for tests, read from the stored test data.
 - `PROGRAM` is the registered program, for example the wrapper program of a style (see the table above).
 - Planes are raw little endian `f32`, planar. `--in Name=path` binds an input plane, `--synth SEED` fills every unbound input with a fixed pseudo random plane, `--set name=v1,v2` sets a parameter. The output is `PREFIX.dest.f32` with `PREFIX.dest.meta.txt`, which lists the run and every label the run carries. The full option list is the header of `crates/effects/fx_exec/src/bin/fx_run.rs`.
 - The host context is part of the call: options such as `--ctx-time`, `--ctx-word2` and `--bound-mask` are required and have no default, and a call that omits one is refused with a message that names it. The calls the evidence was made with are recorded per member in the recovery workspace.
 - The tool refuses what it does not reproduce and says so by name, for example an input class or a parameter value outside the recorded cases.
 
-### Runtime data
+### No external data
 
-Running an effect needs the optional data bundle: its `programs.tsv` as the programs argument and its tables through `EFFECTS_DATA_DIR`. The bundle holds data taken from the original plugin, the program texts and a set of lookup and class tables, and it comes with a list of their sources. It is kept out of the repository's main files. `EFFECTS_DATA_DIR` names the folder that holds the tables; when it is unset the folder is `runtime_data` beside the effect crates. When a table is absent `fx_run` stops with exit code 2 and a message that names the table and the folder.
+The effects need no external data. Nothing is read from the original plugin or from a copied file at run time: `fx_run` takes no table argument and reads only the input planes and the output path it is given.
 
-Without the bundle the product builds and its tests pass, but no effect renders: the tests that need the tables or the stored data print a `NOT RUN` line and pass. Tables that carry only text written for the project are part of the source.
+- **Effect graphs.** The programs of the thirteen styles are built by Rust constructor code in `fx_eval` (`programs_native`). That code is a tool-made translation of the plugin's program rows into Rust: a development tool produced it from the parsed program structure. It holds no program text and reads no table.
+- **Parameter and class facts.** The registered parameters, ranges, input indices, class flags and combination tables that the thirteen programs need are Rust definitions in the crate `effects_rtdata`. A definition is kept only if it is keyed by one of the 25 programs of the styles, by a class they name, or by a builtin they call. A lookup that has no row misses, as it did with the tables.
+- **Sin and cos tables.** The sin and cos routines of the effects need four tables. None is stored; all are computed from their mathematical definition at first use, with a small fixed-point big number (320 bit, written for this repository, no crate):
+
+- The sincosf table has 64 entries: the correctly rounded (sin, cos) of k pi/32, exact 0 and 1 at the axes.
+- The double sincos table has 64 entries of eight words: the correctly rounded sin and cos, their rounding tails rounded to 24 bits, cos and -sin rounded to one bit, and the exact remainders of cos and -sin against those.
+- The pair region of the scalar sin and cos routine (SVML style): pair j of 0 to 64 is cos(j pi/128) h^3/6 and sin(j pi/128) h^2/2 with h = pi/128; the cos table reads the same pairs from the other end. Two constants are 2/h^2 and 6/h^2.
+- The 15 chunks of 1/pi of that routine: frac(2^p/pi)/2^(p-7) with p = 7 + 8(m-2), cut into 29 bits, up to 42 bits, and the rest.
+
+Known limit: none for these tables. Bytes of the original 2304 byte tables that no reader touches are not reproduced.
+
+Tests that compare the definitions or the computed tables with copies of the plugin's tables, or sweep whole tables, read those copies from the stored test data under `VEC_DIR` (`effects/rtdata/` and `effects/native_tables/`) and print a `NOT RUN` line when it is absent. No copy is part of the repository.
 
 ## Tests
 
-- `cargo test --release` runs the effect crates whose tests need no stored data and no runtime tables, with the other default members.
+- `cargo test --release` runs the effect crates whose tests need no stored data, with the other default members.
 - `cargo test --release -p fx_eval -p fx_exec` runs the rest of the evaluator and the executor. A test that needs stored data from the original (recorded plans, emulator rows, the program corpus) prints a `NOT RUN` line and passes, the way the lift crates' vector tests stay out of a plain `cargo test`.
-- `VEC_DIR` names a folder that holds an `effects` folder with the stored data, laid out with the relative paths the tests print in their `NOT RUN` line; with it and the runtime tables every test runs. Tests write their files to the system temporary folder, never into the source tree.
+- `VEC_DIR` names a folder that holds an `effects` folder with the stored data, laid out with the relative paths the tests print in their `NOT RUN` line; with it every test runs. Tests write their files to the system temporary folder, never into the source tree.
 
 ## Limits common to the ten effects
 

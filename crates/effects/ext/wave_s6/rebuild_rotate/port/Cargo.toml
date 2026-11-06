@@ -12,5 +12,3 @@ path = "src/lib.rs"
 [dependencies]
 libm_sincos = { path = "../../../wave_s4/rebuild_sincos/port" }
 
-[dev-dependencies]
-effects_rtdata = { path = "../../../../rtdata" }

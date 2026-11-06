@@ -4,7 +4,7 @@
 //!   time_frames ([pinfo]) is not in the file: fx_run fills it from --host-frame ([ctx], INFERRED to be the same field)
 //!   `value <param> <index> <tick> <step> <scale> <status> <raw>` one checkout answer per key; status 0 = success; raw = the int32 at pd
 //!   `point <param> <field> <value>`  the recorded point fields of one parameter (step PW); every field in POINT_FIELDS is required, none is defaulted
-//! The parameter record fields come from data/TICKMAP_PARAM_RECORDS.tsv (BR4 MEASURED); a parameter without a row is refused by name.
+//! The parameter record fields are defined in effects_rtdata (styles/<style>.rs, field `tickmap`; BR4 MEASURED); a parameter without a row is refused by name.
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default)]
@@ -59,8 +59,6 @@ impl HostCurveValues {
     }
 }
 
-pub static RECORDS: effects_rtdata::Table = effects_rtdata::Table::new("data/TICKMAP_PARAM_RECORDS.tsv");
-
 struct PtHost {
     px: i32,
     py: i32,
@@ -102,28 +100,48 @@ impl<'a> tickmap::Host for HcvHost<'a> {
 
 /// The claim-route fold of `get_curve_val p t`: `cur` = the lanes of argument 0 (the node cells), `n` = their count. Returns the folded lanes, or pushes refusals.
 pub fn fold(prog: &str, pname: &str, t: f32, cur: &[f32], n: usize, hcv: &HostCurveValues, diags: &mut Vec<String>) -> Option<Vec<f32>> {
-    fold_with_table(&RECORDS, prog, pname, t, cur, n, hcv, diags)
+    fold_with_row(record_of(prog, pname), prog, pname, t, cur, n, hcv, diags)
 }
 
-/// Step TPR (W645 (a) 1): the table lookup fold uses, by program and parameter (the row's nine fields as text).
+/// The nine fields of a parameter record, as `[ptype, nlanes, kind_byte, subtype_byte, flags_a_byte, flags_b_byte, index]`.
+pub type RecFields = [i64; 7];
+
+/// The defined parameter record of PROG's parameter PNAME.
+pub fn record_of(prog: &str, pname: &str) -> Option<effects_rtdata::TickmapRecord> {
+    effects_rtdata::tickmap_record(prog, pname).copied()
+}
+
+fn fields_of(r: &effects_rtdata::TickmapRecord) -> RecFields {
+    [r.ptype, r.nlanes, r.kind_byte, r.subtype_byte, r.flags_a_byte, r.flags_b_byte, r.index]
+}
+
+/// Step TPR (W645 (a) 1), tests: the row of a record table given as TSV text, by program and parameter (the row's nine fields as text).
 pub fn table_row<'a>(table: &'a str, prog: &str, pname: &str) -> Option<Vec<&'a str>> {
     table.lines().skip(1).map(|l| l.split('\t').collect::<Vec<_>>()).find(|f| f.len() == 9 && f[0] == prog && f[1] == pname)
 }
 
-/// Step TPR (W645 (a) 3): `fold` with the parameter record table given as text; `fold` passes the shipped table, so the claim path is
+/// Step TPR (W645 (a) 3), tests: `fold` with the parameter record table given as TSV text; `fold` uses the defined records, so the claim path is
 /// unchanged. Tests use it to keep the index-check refusal on a constructed table.
 pub fn fold_with_table(table: &str, prog: &str, pname: &str, t: f32, cur: &[f32], n: usize, hcv: &HostCurveValues, diags: &mut Vec<String>) -> Option<Vec<f32>> {
+    let row = table_row(table, prog, pname).map(|f| {
+        let g = |i: usize| f[i + 1].parse::<i64>().unwrap_or(0);
+        [g(1), g(2), g(3), g(4), g(5), g(6), g(7)]
+    });
+    fold_with_row(row.map(|r| effects_rtdata::TickmapRecord { program: "", param: "", ptype: r[0], nlanes: r[1], kind_byte: r[2], subtype_byte: r[3], flags_a_byte: r[4], flags_b_byte: r[5], index: r[6] }), prog, pname, t, cur, n, hcv, diags)
+}
+
+/// The fold with the parameter record given (None: the program has no record for the parameter).
+pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pname: &str, t: f32, cur: &[f32], n: usize, hcv: &HostCurveValues, diags: &mut Vec<String>) -> Option<Vec<f32>> {
     let refuse = |d: &mut Vec<String>, m: String| {
         d.push(m);
         None::<Vec<f32>>
     };
     // parameter record
-    let row = table_row(table, prog, pname);
-    let f = match row {
+    let f = match row.as_ref().map(fields_of) {
         Some(f) => f,
         None => return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (parameter record of {}: {}: ptype, nlanes, kind_byte, subtype_byte, flags_a_byte, flags_b_byte, index)", prog, pname)),
     };
-    let g = |i: usize| f[i + 1].parse::<i64>().unwrap_or(0);
+    let g = |i: usize| f[i - 1];
     if g(2) as usize != n {
         return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (nlanes: record {} lanes, program node {} lanes for {})", g(2), n, pname));
     }

@@ -282,9 +282,6 @@ mod tests {
 
     #[test]
     fn hand_quarter_turn_about_origin() {
-    if !effects_rtdata::have_tables() {
-        return;
-    }
         // (1, 0) turned a quarter turn (angle 0.25 turns): x' = c*1 ~ -4.37e-8, y' = s*1 = 1
         let vx = [1.0f32];
         let vy = [0.0f32];
@@ -305,9 +302,6 @@ mod tests {
 
     #[test]
     fn half_turn_about_centre() {
-    if !effects_rtdata::have_tables() {
-        return;
-    }
         // half turn about (1, 1): (3, 1) -> (-1, 1) up to the sin(pi) residue
         let (ox, oy) = run(Vec2::Const(3.0, 1.0), Angle::Plane(&[0.5]), Vec2::Const(1.0, 1.0), 1);
         assert!((ox[0] + 1.0).abs() < 1e-5 && (oy[0] - 1.0).abs() < 1e-5);
@@ -315,9 +309,6 @@ mod tests {
 
     #[test]
     fn all_seven_paths_agree_within_rounding() {
-    if !effects_rtdata::have_tables() {
-        return;
-    }
         let n = 5;
         let ang: Vec<f32> = (0..n).map(|i| 0.07 * i as f32 - 0.1).collect();
         let vx: Vec<f32> = (0..n).map(|i| 0.5 + i as f32).collect();
@@ -358,9 +349,6 @@ mod tests {
 
     #[test]
     fn degenerate_sizes_and_all_const() {
-    if !effects_rtdata::have_tables() {
-        return;
-    }
         let mut ox = [1.0f32; 4];
         let mut oy = [2.0f32; 4];
         assert!(render(Vec2::Const(1.0, 2.0), Angle::Const(0.1), Vec2::Const(0.0, 0.0), 0, &mut ox, &mut oy).is_ok());
@@ -372,9 +360,6 @@ mod tests {
 
     #[test]
     fn nan_inf_and_determinism() {
-    if !effects_rtdata::have_tables() {
-        return;
-    }
         let vx = [f32::NAN, f32::INFINITY, -f32::INFINITY, 1.0];
         let vy = [0.0f32, 1.0, f32::NAN, 2.0];
         let (a1, b1) = run(Vec2::Planes(&vx, &vy), Angle::Const(0.3), Vec2::Const(0.0, 0.0), 4);
@@ -391,9 +376,6 @@ mod tests {
 
     #[test]
     fn fused_chain_differs_from_unfused_somewhere() {
-    if !effects_rtdata::have_tables() {
-        return;
-    }
         // each FMA site must be observable (T1 mirror of the mutation test)
         let n = 64;
         let ang: Vec<f32> = (0..n).map(|i| 0.0137 * i as f32 + 0.011).collect();

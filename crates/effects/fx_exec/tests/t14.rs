@@ -18,7 +18,7 @@ fn img(ch: usize, n: usize) -> Image {
 }
 fn run(class: &str, args: &[Arg], w: usize, h: usize) -> Image {
     let c: Vec<i32> = args.iter().map(|a| a.count()).collect();
-    let t = Tables::embedded().select_counts(class, &c);
+    let t = Tables::from_tsv(effects_rtdata::text("fx_exec/data/COMBOS_EXEC.tsv")).select_counts(class, &c);
     assert!(t > 0, "no combo for {} {:?}", class, c);
     match run_any(class, t, args, w * h, (w, h), &KParams::standin()).unwrap() {
         Out::Img(i) => i,
@@ -143,7 +143,7 @@ fn round_refuses_two_constants() {
         return;
     }
     let args = [cst(&[1.5]), cst(&[0.5])];
-    let t = Tables::embedded().select_counts("round", &[1, 1]);
+    let t = Tables::from_tsv(effects_rtdata::text("fx_exec/data/COMBOS_EXEC.tsv")).select_counts("round", &[1, 1]);
     let e = run_any("round", t, &args, 15, (5, 3), &KParams::standin()).unwrap_err();
     assert!(matches!(e, ExecError::Unsupported { .. }));
 }

@@ -1,6 +1,8 @@
 //! Step TPR (W644 (b), W645 (a)): the six claim-style rows of data/TICKMAP_PARAM_RECORDS.tsv carry the claim harness's parameter
 //! records (BMR1 PATCH.md 1, MEASURED at every 0x71c720 entry of BMR1's records); core-program and center rows are unchanged.
-use fx_eval::hostcurve::{fold, table_row, HostCurveValues, RECORDS};
+use fx_eval::hostcurve::{fold, table_row, HostCurveValues};
+static RECORDS: effects_rtdata::Table = effects_rtdata::Table::new("data/TICKMAP_PARAM_RECORDS.tsv");
+
 
 const STYLES: [&str; 2] = ["Transform_and_Blur_Autogen", "Blur_Motion_Curves_No_Transform_Autogen"];
 // (param, ptype, nlanes, kind_byte, subtype_byte, flags_a_byte, flags_b_byte, index)

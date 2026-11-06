@@ -103,11 +103,24 @@ fn class_flag_words_slot49() {
     if !effects_rtdata::have_tables() {
         return;
     }
-    assert!(class_flags().len() >= 300);
+    // the full stored table (test data): the flag words of all classes; the product holds the classes the 13 styles use and agrees on them
+    let mut full = std::collections::HashMap::new();
+    for l in effects_rtdata::text("fx_eval/data/CLASS_FLAGS.tsv").lines().skip(1) {
+        let f: Vec<&str> = l.split('\t').collect();
+        full.entry(f[0].to_string()).or_insert(u32::from_str_radix(f[1].trim_start_matches("0x"), 16).unwrap());
+    }
+    assert!(full.len() >= 300);
+    let ff = |p: &str| full[p.strip_suffix("_if_needed").unwrap_or(p)];
+    assert_eq!(ff("*"), 0x34);
+    assert_eq!(ff("comp_rgba"), 0x30);
+    assert_eq!(ff("blur") & 0x2000, 0x2000);
+    assert_eq!(ff("blur") & 0x4, 0x4);
+    assert_eq!(ff("make_mipmap") & 0x4, 0);
+    assert_eq!(ff("screen_super_if_needed") & 0x4, 0x4);
+    for (name, f) in class_flags() {
+        assert_eq!(full[name], *f, "{}", name);
+        assert_eq!(flags_of(name), *f, "{}", name);
+    }
     assert_eq!(flags_of("*"), 0x34);
-    assert_eq!(flags_of("comp_rgba"), 0x30);
     assert_eq!(flags_of("blur") & 0x2000, 0x2000);
-    assert_eq!(flags_of("blur") & 0x4, 0x4);
-    assert_eq!(flags_of("make_mipmap") & 0x4, 0);
-    assert_eq!(flags_of("screen_super_if_needed") & 0x4, 0x4);
 }

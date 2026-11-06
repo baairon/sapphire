@@ -1,7 +1,9 @@
 //! Step TPU2b (W746 (b), CURVE-PARAM-DIRECT-READ): a host curve parameter's value at the current time, through hostcurve::fold at t = 0,
 //! equals the original's parameter record lane by f32 bits for every bound value in BMR1's records (FEED_RULES.tsv, 30 of 30 records,
 //! params_after_loop): rotate lane = -host Rotate, z_dist lane = host Z Dist. The Blur_Only centre row is present (W746 (a)).
-use fx_eval::hostcurve::{fold, table_row, HostCurveValues, RECORDS};
+use fx_eval::hostcurve::{fold, table_row, HostCurveValues};
+static RECORDS: effects_rtdata::Table = effects_rtdata::Table::new("data/TICKMAP_PARAM_RECORDS.tsv");
+
 
 const HOST: &str = "host effect_ref 1592590336\nhost time_mult 1\nhost time_scale 24\nhost double_flag 0\nhost global 1\nhost selector 0\n";
 

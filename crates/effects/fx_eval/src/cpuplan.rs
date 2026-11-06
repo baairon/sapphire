@@ -73,37 +73,19 @@ pub fn ds_factor(cp: &CompiledProgram) -> u32 {
     1
 }
 
-pub static IMG_ONLY_TSV: effects_rtdata::Table = effects_rtdata::Table::new("fx_eval/data/IMG_ONLY_ARGS.tsv");
-
-pub static INT_TYPED_TSV: effects_rtdata::Table = effects_rtdata::Table::new("fx_eval/data/INT_TYPED_ARGS.tsv");
-
 /// FLD1 (INFERRED from DSW4's set_arg_const read and the -0 into blur_warp argument 6 of rc and bc): a constant lane bound to an INTEGER
 /// typed class argument ([desc] = 1) is stored as cvttss2si(lane) (truncation toward zero; -0 becomes +0), so the plan shows the truncated integer.
-/// Table data/INT_TYPED_ARGS.tsv from the descriptor dumps (tools/mk_inttyped.py). Switch (mixed typing between instances) is excluded by the table.
+/// The pairs are defined in effects_rtdata::classes::INT_TYPED_ARGS (from the descriptor dumps). Switch (mixed typing between instances) is excluded by the table.
 pub fn int_typed_arg(prim: &str, k: usize) -> bool {
     if std::env::var_os("FLD1_NO_INTTYPE").is_some() {
         return false;
     }
-    static T: std::sync::OnceLock<std::collections::HashSet<(String, usize)>> = std::sync::OnceLock::new();
-    let t = T.get_or_init(|| {
-        INT_TYPED_TSV.lines().skip(1).filter_map(|l| {
-            let mut it = l.split('\t');
-            Some((it.next()?.to_string(), it.next()?.trim().parse::<usize>().ok()?))
-        }).collect()
-    });
-    t.contains(&(prim.strip_suffix("_if_needed").unwrap_or(prim).to_string(), k))
+    effects_rtdata::int_typed_arg(prim.strip_suffix("_if_needed").unwrap_or(prim), k)
 }
 
 /// DSW4: argument `k` of `prim` is image only (descriptor kind field = 1, constant field = 0)
 pub fn image_only_arg(prim: &str, k: usize) -> bool {
-    static T: std::sync::OnceLock<std::collections::HashSet<(String, usize)>> = std::sync::OnceLock::new();
-    let t = T.get_or_init(|| {
-        IMG_ONLY_TSV.lines().skip(1).filter_map(|l| {
-            let mut it = l.split('\t');
-            Some((it.next()?.to_string(), it.next()?.trim().parse::<usize>().ok()?))
-        }).collect()
-    });
-    t.contains(&(prim.strip_suffix("_if_needed").unwrap_or(prim).to_string(), k))
+    effects_rtdata::img_only_arg(prim.strip_suffix("_if_needed").unwrap_or(prim), k)
 }
 
 pub fn nonlinewise(prim: &str) -> bool {

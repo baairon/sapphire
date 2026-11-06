@@ -67,7 +67,8 @@ fn table_is_embedded_and_complete() {
     if !effects_rtdata::have_tables() {
         return;
     }
-    let t = RangeTable::builtin();
+    // the copy of the full table (test data); the defined rows are compared with it in t_native_defs.rs
+    let t = RangeTable::parse(effects_rtdata::text("fx_eval/data/PARAM_RANGES.tsv"));
     assert_eq!(t.rows.len(), 437, "RNG1 236 rows (REC values for three Warp_Perspective_Autogen layout rows) plus SHE2 74 Sharpen rows");
     assert_eq!(t.programs(), vec!["Hue_Sat_Bright_Autogen", "Diffuse_Autogen", "Trails_Autogen", "Time_Warp_RGB_Autogen", "Transform_and_Blur_Autogen", "Blur_Motion_Curves_No_Transform_Autogen", "Blur_Color_Autogen", "Blur_Mono_Autogen", "Distort_RGB_Autogen", "Warp_Perspective_Autogen", "Drop_Shadow", "Hue_Sat_Bright", "Diffuse", "Trails", "Time_Warp_RGB", "Transform_and_Blur", "Blur_Motion_Curves_No_Transform", "Sharpen_Fast_Autogen", "Sharpen_Fast", "Sharpen_Best_Quality", "Sharpen_Best_Quality_Autogen"]);
     // INT6 (Batch 36 rule 5): the default table is REAL: Drop_Shadow shift is unbounded (min * in the layout text)
@@ -76,7 +77,7 @@ fn table_is_embedded_and_complete() {
     let r = t.lookup("Drop_Shadow", "fg_opacity").unwrap();
     assert_eq!((r.min, r.max), (0.0, 1.0));
     // DSW2: Drop_Shadow rows (REC-HARNESS table = the harness record ranges, MEASURED from the PREC rows of the original plan dumps)
-    let t = RangeTable::parse(&fx_eval::ranges::PARAM_RANGES_REC_TSV);
+    let t = RangeTable::parse(effects_rtdata::text("fx_eval/data/PARAM_RANGES_REC.tsv"));
     assert_eq!(fx_eval::ranges::row_label("Diffuse").as_deref(), Some("RANGE-ROWS-CORE-COPY"));
     assert_eq!(fx_eval::ranges::row_label("Sharpen_Fast").as_deref(), Some("RANGE-ROWS-CORE-BY-TEXT"));
     let r = t.lookup("Drop_Shadow", "shift").unwrap();

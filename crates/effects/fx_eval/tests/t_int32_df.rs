@@ -2,8 +2,10 @@
 //! of the text default d for parameters outside the normalize_scale table; bound values are taken as given (the harness's snap_16_16);
 //! the normalize_scale path is unchanged; a negative off-grid default refuses PARAM-DEFAULT-OFFGRID-NEGATIVE. Mutants (fx_eval features):
 //! df_round_mut, df_f32text_mut, df_bound_mut, df_ns_mut; each fails at least one test here. Also TICKMAP-INDEX-NOT-REGISTERED (W553, W608 (h)).
-use fx_eval::hostcurve::{fold, fold_with_table, HostCurveValues, RECORDS};
-use fx_eval::units::{ns_of, snap_16_16, style_param_row, STYLE_PARAM_INDEX};
+use fx_eval::hostcurve::{fold, fold_with_table, HostCurveValues};
+use fx_eval::units::{ns_of, snap_16_16, style_param_row};
+static RECORDS: effects_rtdata::Table = effects_rtdata::Table::new("data/TICKMAP_PARAM_RECORDS.tsv");
+static STYLE_PARAM_INDEX: effects_rtdata::Table = effects_rtdata::Table::new("data/STYLE_PARAM_INDEX.tsv");
 use fx_eval::*;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -109,7 +111,7 @@ fn offgrid_negative_default_refused_on_constructed_text() {
 /// registered value bits are recorded, the native's unbound lane x 65536 equals the bits.
 #[test]
 fn table_unbound_lane_equals_registered_bits() {
-    if !effects_vecdir::have_all(&["record_extract/programs/programs.tsv", "fx_eval/data"]) {
+    if !effects_rtdata::have_tables() || !effects_vecdir::have_all(&["record_extract/programs/programs.tsv", "fx_eval/data"]) {
         return;
     }
     let c = corpus();

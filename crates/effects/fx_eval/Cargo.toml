@@ -46,6 +46,7 @@ df_ns_mut = []
 
 [dependencies]
 effects_rtdata = { path = "../rtdata" }
+libm_sincos = { path = "../ext/wave_s4/rebuild_sincos/port" }
 tickmap = { path = "../crates/tickmap" }
 
 [dev-dependencies]

@@ -101,7 +101,7 @@ fn selector_reproduces_every_choices_row() {
     if !effects_rtdata::have_tables() || !effects_vecdir::have_all(&["fx_exec/data/CHOICES.tsv"]) {
         return;
     }
-    let t = Tables::embedded();
+    let t = Tables::from_tsv(effects_rtdata::text("fx_exec/data/COMBOS_EXEC.tsv"));
     let text = std::fs::read_to_string(effects_vecdir::path("fx_exec/data/CHOICES.tsv")).unwrap();
     let (mut rows, mut equal, mut diffs) = (0, 0, Vec::new());
     for (i, line) in text.lines().enumerate() {

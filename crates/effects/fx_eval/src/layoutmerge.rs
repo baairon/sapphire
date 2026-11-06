@@ -144,7 +144,11 @@ pub fn header_names(items: &[Sx]) -> Vec<String> {
 }
 
 pub fn read_layout(text: &str) -> Result<LayoutInfo, String> {
-    let items = parse_layout(text)?;
+    read_layout_sx(parse_layout(text)?)
+}
+
+/// The layout reader on an already built token tree (the items of the row's outer list).
+pub fn read_layout_sx(items: Vec<Sx>) -> Result<LayoutInfo, String> {
     if items.first() != Some(&Sx::Atom("layout_effect".into())) {
         return Err("not a layout_effect row".into());
     }
@@ -479,6 +483,14 @@ pub fn names_tsv(g: &Genotype) -> String {
 
 /// LYM3: the layout row registered for `prog` in a corpus (None for a core program or a program without a row).
 pub fn resolve_layout(c: &crate::Corpus, prog: &str) -> Result<Option<LayoutInfo>, String> {
+    if !c.layout_sx.is_empty() {
+        let rows: Vec<&Vec<Sx>> = c.layout_sx.iter().filter(|r| header_names(r).last().map(|x| x == prog).unwrap_or(false)).collect();
+        return match rows.len() {
+            0 => Ok(None),
+            1 => read_layout_sx(rows[0].clone()).map(Some).map_err(|e| format!("LAYOUT-ROW-UNREADABLE {}: {}", prog, e)),
+            n => Err(format!("LAYOUT-ROW-AMBIGUOUS: {} layout rows are registered for {}", n, prog)),
+        };
+    }
     let rows = find_layout_text(c.layout_texts.iter().map(|x| x.1.as_str()), prog);
     match rows.len() {
         0 => Ok(None),

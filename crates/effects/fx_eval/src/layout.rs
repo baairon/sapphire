@@ -18,22 +18,9 @@ use crate::compile::CompiledProgram;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
-static FLAGS_TSV: effects_rtdata::Table = effects_rtdata::Table::new("fx_eval/data/CLASS_FLAGS.tsv");
-
 pub fn class_flags() -> &'static HashMap<String, u32> {
     static M: OnceLock<HashMap<String, u32>> = OnceLock::new();
-    M.get_or_init(|| {
-        let mut m = HashMap::new();
-        for l in FLAGS_TSV.lines().skip(1) {
-            let f: Vec<&str> = l.split('\t').collect();
-            if f.len() >= 2 {
-                if let Ok(v) = u32::from_str_radix(f[1].trim_start_matches("0x"), 16) {
-                    m.entry(f[0].to_string()).or_insert(v);
-                }
-            }
-        }
-        m
-    })
+    M.get_or_init(|| effects_rtdata::classes::CLASS_FLAGS.iter().map(|(n, f)| (n.to_string(), *f)).collect())
 }
 
 /// NV-3g rule A (RULE-FITTED, evidence tools/argprop.py): a marked `monochrome` does not pass the command-flag mark on to its

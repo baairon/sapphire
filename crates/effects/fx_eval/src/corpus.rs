@@ -25,6 +25,8 @@ pub struct Corpus {
     pub layout_rows: usize,
     /// LYM1: the layout_effect rows (va, text), kept for the registered-program merge (layoutmerge.rs)
     pub layout_texts: Vec<(String, String)>,
+    /// the native layout rows (programs_native), as the layout reader's token tree
+    pub layout_sx: Vec<Vec<crate::layoutmerge::Sx>>,
     pub dup_effects: Vec<String>,
     pub dup_defuns: Vec<String>,
 }

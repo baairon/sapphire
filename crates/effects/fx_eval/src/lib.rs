@@ -22,6 +22,8 @@ pub mod corpus;
 /// LYM1: the registered program text as the original's parser sees it (layout row with its :extra), W225 (b), LAY1
 pub mod layoutmerge;
 pub mod parse;
+/// Native builders of the programs the thirteen styles reach (no program text is read)
+pub mod programs_native;
 pub mod svml_trig;
 /// INT9 (Batch 41 rule 3): the per-argument column of record (PGM1 argcol_rs with ARGCOL-VACUOUS and the two tie-break guards), report-only
 pub mod argcol;

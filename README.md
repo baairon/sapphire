@@ -6,7 +6,7 @@ The plugin's functions, written in Rust and paired with ffmpeg and twixtor. `too
 
 ## Status
 
-Ten effects run today as native Rust, each matching the original bit for bit on every compared case; the list and what each claim covers are in [docs/effects.md](docs/effects.md). They render through `fx_run`. Rendering needs the optional data bundle; without it everything builds and the tests pass, but nothing renders. The goal is 20 effects, the ten done plus the ten of [docs/roadmap.md](docs/roadmap.md); the other names in the plugin are not planned.
+Ten effects run today as native Rust, each matching the original bit for bit on every compared case; the list and what each claim covers are in [docs/effects.md](docs/effects.md). They render through `fx_run`. The effects need no external data: they render from code in this repository alone. The goal is 20 effects, the ten done plus the ten of [docs/roadmap.md](docs/roadmap.md); the other names in the plugin are not planned.
 
 ## Contents
 
@@ -56,14 +56,14 @@ On a Windows machine without the MSVC linker the GNU toolchain builds the same c
 
 ### Run one effect
 
-An effect renders through `fx_run`, built from `crates/effects/fx_exec`. It needs the optional data bundle ([runtime data](docs/effects.md#runtime-data)); the full call and options are in [Build and run](docs/effects.md#build-and-run).
+An effect renders through `fx_run`, built from `crates/effects/fx_exec`. It needs no external data ([no external data](docs/effects.md#no-external-data)); the full call and options are in [Build and run](docs/effects.md#build-and-run).
 
 ```sh
 cargo build --release --offline -p fx_exec
-target/release/fx_run PROGRAMS.TSV PROGRAM --size WxH --out PREFIX --synth SEED [options]
+target/release/fx_run PROGRAM --size WxH --out PREFIX --synth SEED [options]
 ```
 
-`PROGRAMS.TSV` is the bundle's `programs.tsv`, `PROGRAM` is a registered program of [docs/effects.md](docs/effects.md), and the output is `PREFIX.dest.f32` with `PREFIX.dest.meta.txt`. Some host context options are required and have no default; a call that omits one is refused with a message that names it.
+`PROGRAM` is a registered program of [docs/effects.md](docs/effects.md), and the output is `PREFIX.dest.f32` with `PREFIX.dest.meta.txt`. Some host context options are required and have no default; a call that omits one is refused with a message that names it.
 
 ## Parity
 
@@ -293,7 +293,7 @@ python -I tools/handoff.py doctor
 | [`docs/ffmpeg.md`](docs/ffmpeg.md) | How sapphire runs ffmpeg: lookup, the crate, raw frames, colour, rate and length, tests. |
 | [`docs/handoff.md`](docs/handoff.md) | How sapphire, twixtor and ffmpeg pass raw frames to each other: contract versions, the frame contract, errors and exits, reports, discovery, geometry, the ffmpeg filter stage, packets, commands, platforms, known gaps. |
 | [`docs/stages.md`](docs/stages.md) | How a new provider offers stages and passes conformance. |
-| [`docs/effects.md`](docs/effects.md) | The ten native effects: status, report wording, how to build and run `fx_run`, the runtime data, the tests and the limits they share. |
+| [`docs/effects.md`](docs/effects.md) | The ten native effects: status, report wording, how to build and run `fx_run`, the data the effects carry, the tests and the limits they share. |
 | [`docs/roadmap.md`](docs/roadmap.md) | The 20 effects the project aims for: the ten done and the ten planned, in order. |
 | [`docs/generated/index.md`](docs/generated/index.md) | The generated reference: functions by offset range, classes, stubs, effects, parameters, tiers, evidence, crates, missing data. |
 | [`docs/handoff-bench.tsv`](docs/handoff-bench.tsv) | The bench table of `tools/conformance.py --bench`: the wrappers timed on chained stages. |

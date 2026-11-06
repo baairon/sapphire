@@ -93,7 +93,7 @@ default-members = [
     "crates/neutral-handoff",
     # The effect crates whose tests need no stored vectors and no data taken from the original, pass on x86_64 and (under qemu) on
     # aarch64, and call no platform libm function: 52 of the 67 effect crates. The others (fx_eval, fx_exec and the crates whose tests
-    # read stored data or the optional runtime data bundle) stay out, like the lift crates; docs/effects.md gives their test command.
+    # read stored test data) stay out, like the lift crates; docs/effects.md gives their test command.
     "crates/effects/crate/esh4b_powf_fma",
     "crates/effects/crates/add_rgb",
     "crates/effects/crates/c14",
