@@ -1,6 +1,6 @@
 # Harness
 
-How a Rust port is compared with the build it replaces. That build runs in the Unicorn emulator under the archived Python oracle and world generator; the Rust side is `crates/neutral-parity` (P1 vectors) and `crates/neutral-world` (world vectors), which parse the vector files, run the port on the same inputs and compare. The tiers this produces are in [parity](parity.md).
+How a Rust port is compared with the build it replaces. That build runs in the Unicorn emulator under the archived Python oracle and world generator; the Rust side is `crates/neutral-parity` (P1 vectors) and `crates/neutral-world` (world vectors), which parse the vector files, run the port on the same inputs and compare. The [tiers](glossary.md#tier) this produces are in [parity](parity.md), and the terms are defined in the [glossary](glossary.md).
 
 ## Terms
 
@@ -9,9 +9,9 @@ How a Rust port is compared with the build it replaces. That build runs in the U
 | oracle | the emulator run of one self-contained function on arguments generated from its spec |
 | spec | the JSON description of a function's entry, arguments, returns, call arities and declarations |
 | vector set | one vector file of a function; world sets are `world`, `world2`, `world3` and up, each with its own seeds |
-| compared world | a world whose case status is `ok`: the function ran to completion; only these are compared and counted |
+| [compared world](glossary.md#compared-world) | a world whose case status is `ok`: the function ran to completion; only these are compared and counted |
 | skipped world | a world whose case status is not `ok` (the function faulted or timed out); not compared |
-| branch outcome | one direction, taken or not taken, of one conditional branch |
+| [branch outcome](glossary.md#branch-outcome) | one direction, taken or not taken, of one conditional branch |
 | call trace | target, integer arguments and float arguments of every call, in order |
 | opaque callee | a callee that is not executed: it writes nothing and returns seeded words |
 | Rust fault | a `Fault` or panic raised while the port runs; counts as a failure |
@@ -19,12 +19,12 @@ How a Rust port is compared with the build it replaces. That build runs in the U
 
 ## Harness rules HR-P2 and HR-FP
 
-Two rules of the harness model, named and dated 2026-11-05 at the maintainer's decision. They let the strictest standard count an outcome as explained under the model; a function that reaches strictest only through them takes the evidence class `audit3` ([evidence](evidence.md#evidence-classes)).
+Two rules of the [harness model](glossary.md#harness-model), in force since 2026-11-05. They let the [strictest](glossary.md#strictest) standard count an outcome as explained under the model; a function that reaches strictest only through them takes the evidence class `audit3` ([evidence](evidence.md#evidence-classes)).
 
 | Rule | Statement | Replaces |
 |---|---|---|
-| HR-P2, frame disjointness | A buffer argument never lies in the function's own frame; every buffer argument has its own page region. This is how the world generator builds worlds and the rule the abstract interpreter already applies. An outcome that no world satisfying HR-P2 can take is unreachable inside the model, which needs a proof that every execution taking it has a buffer argument inside the function's own frame, re-derived independently | the labelled assumption P2 |
-| HR-FP, fault parity | A branch outcome that only faulting executions can take counts as explained when (1) a proof shows every execution taking it faults, and (2) the port faults with the same fault class at the same access in every world where the original takes it and faults, measured over the stored and new sets. Zero such worlds is never taken as parity | the labelled assumption F |
+| HR-P2, frame disjointness | A buffer argument never lies in the function's own frame; every buffer argument has its own page region. This is how the world generator builds worlds and the rule the abstract interpreter already applies. An outcome that no world satisfying HR-P2 can take is unreachable inside the model, which needs a proof that every execution taking it has a buffer argument inside the function's own frame, re-derived independently | the label P2 |
+| HR-FP, fault parity | A branch outcome that only faulting executions can take counts as explained when (1) a proof shows every execution taking it faults, and (2) the port faults with the same fault class at the same access in every world where the original takes it and faults, measured over the stored and new sets. Zero such worlds is never taken as parity | the label F |
 
 Worlds that violate HR-P2 are outside the model. Measured port differences in such worlds are listed in [parity](parity.md#known-port-divergences-outside-the-harness-model).
 

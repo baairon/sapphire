@@ -1,4 +1,4 @@
-//! Batch 007: larger set predicates with signed splits, wrappers around the constant-zero stub f_0004eeb4,
+//! larger set predicates with signed splits, wrappers around the constant-zero stub f_0004eeb4,
 //! 16-bit byte swapping, struct equality and a pointer-swapping exchange.
 use crate::cov::br;
 use crate::p1::b001;

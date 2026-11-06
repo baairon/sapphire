@@ -1,12 +1,12 @@
-//! INT9 (Batch 43 rules 1 to 4, W341 to W343): the After Effects 32-bpc source route ('ae32', HOST-PIXEL-FORMAT: memory A,R,G,B f32, 16 bytes
+//! INT9: the After Effects 32-bpc source route ('ae32', HOST-PIXEL-FORMAT: memory A,R,G,B f32, 16 bytes
 //! per pixel, descriptor format 14 in). The format-14 source readers are FMT3a's port (crate readers14: R4, R3, R1,
-//! variant A with stack word 0; "R-PARITY and FLOOR-MET", W341). Which reader body runs is NOT chosen here: the caller passes the reader head the
+//! variant A with stack word 0; "R-PARITY and FLOOR-MET"). Which reader body runs is NOT chosen here: the caller passes the reader head the
 //! counted run's head hooks recorded for each source; a head other than R4, R3 or R1 (the stack-word twins, variant B
 //! variant-B stack-word, the code-13 source arm, or any other) is refused by name
 //! (READER-BODY-NOT-PORTED: ported and floored by FMT3e first; it blocks END-TO-END).
 //! LOOP-SHAPE-EQUIVALENT: the plain loop shape is used (block = false); the CPU-flag word is a recorded cell of the run, not an input here.
 //! CONTRACT-LIMIT READER-COUNT-RANGE: a line above 2^31 - 16 pixels is refused by name.
-//! TABLE-NULL-ON-ROUTE (W342 (d), W343): the curve table at is NULL on the route and the stack-word globals,
+//! TABLE-NULL-ON-ROUTE: the curve table at is NULL on the route and the stack-word globals,
 //!  are 0, so the code-13 curve writers (FMT3b) are off route and are not reachable from this module: a destination request on the
 //! 'ae32' route with a nonzero stack word is refused as HOST-GATED. INT10: the code-14 destination bodies (DEST-ROUTE, FMT3c's crate c14,
 //! R-PARITY (FLOOR PENDING)) answer convert-to-dest on the 'ae32' route (`ae32_dest`); the format-16 writer never stands in.
@@ -17,11 +17,11 @@ use readers14::{read1, read3, read4, ReadErr};
 use readers14b::{gate_is_b, read1b, read3b, read4b};
 
 /// Reader heads with a ported, floored body (FMT3a), by listing address.
-/// The heads Batch 43 rule 1 lists that have no ported body here.
-/// INT10 (FMT3e, Batch 44 rule 1): the variant-B stack-word-zero bodies, "R-PARITY (FLOOR PENDING second reader)" (FMT3e: 593,680 floats,
+/// The heads lists that have no ported body here.
+/// INT10 (FMT3e): the variant-B stack-word-zero bodies, "R-PARITY (FLOOR PENDING second reader)" (FMT3e: 593,680 floats,
 /// 0 differing; 20 equivalent survivors with one reader's proofs, RDR3 outstanding). Variant B does not multiply by alpha.
 
-/// SVB1 (W744 (b)): the class-3 hand-over of the variant-B 4-plane head . The head reads four planes (read4b: R, G, B, then the alpha
+/// SVB1: the class-3 hand-over of the variant-B 4-plane head. The head reads four planes (read4b: R, G, B, then the alpha
 /// lane); the class-3 body takes the three colour lanes, so the first three planes are handed over and the alpha lane is dropped. Only for a
 /// source whose record head is VB4_HEAD; every other head keeps its plane count (a mismatch is refused by ae32_to_image).
 pub fn class3_vb4_lanes(s: &Ae32Source, w: usize, h: usize) -> Result<Image, ExecError> {
@@ -49,7 +49,7 @@ pub struct SourceGate {
     pub ctx_gate_b: u32,
 }
 
-/// INT11 (Batch 46 rule 5, W371): the inputs of the owner arm, recorded at setup ("OWNER-ARM-RECORDED" until PDV2 derives them).
+/// INT11: the inputs of the owner arm, recorded at setup ("OWNER-ARM-RECORDED" until PDV2 derives them).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OwnerArm {
     /// [owner] != 0
@@ -58,7 +58,7 @@ pub struct OwnerArm {
     pub owner_arm_bit2: bool,
     /// the mode-byte-2 exit: no setup arm runs and the constructor defaults stand 
     pub mode_byte_exit: bool,
-    /// INT12 (Batch 47 rule 4, W380): the f32 bits of the checked-out record value of the program's kind-4 parameter named "opacity" or
+    /// INT12: the f32 bits of the checked-out record value of the program's kind-4 parameter named "opacity" or
     /// "input_opacity", None when the program registers none. A recorded input (OWNER-ARM-RECORDED).
     pub opacity_bits: Option<u32>,
     /// LYM1: the record value of the program's parameter named "output_opacity" (branch), None when the program has none (Time_Warp_RGB's layout `:extra`)
@@ -73,16 +73,16 @@ pub struct ArmCells {
     pub ctx_postdiv_cell: u32,
 }
 
-/// INT11 (Batch 46 rule 5): every setup arm writes [owner] = [owner] = v and bit 3 of the definition byte = not v (listing
+/// INT11: every setup arm writes [owner] = [owner] = v and bit 3 of the definition byte = not v (listing
 /// ), v = 1 iff [owner] != 0 and bit 2 of [owner] is clear; 
 /// copies them to (ctx) = (v, not v, v). The mode-byte-2 exit leaves the constructor defaults (0, 1, 1).
 /// So the source variant is B iff v = 0 and the postdivide primitive is inserted iff v = 1 (PDV1: iff ctx != 0).
 ///
-/// INT12 (Batch 47 rule 4, W380): the setup body on the recorded routes (test) is followed by the parameter loop from
+/// INT12: the setup body on the recorded routes (test) is followed by the parameter loop from
 /// a kind-4 parameter "opacity" / "input_opacity" with m = trunc(0.5 + record) (0.5) gives m = 0: [owner] = 3
 /// and bit 3 set; m = 1 with bit 2 of [owner] clear: v = 1 . Ported as PDV2's owner_loop::setup_arm;
 ///  copies (bit 3) to (ctx). Last store wins, in parameter order.
-/// INT12 (PDV2 PATCH 4, coordinator note): there is no mode-byte-2 early exit (rejoins, so always writes the three
+/// INT12 (PDV2 PATCH 4): there is no mode-byte-2 early exit (rejoins, so always writes the three
 /// cells); an input claiming that exit is refused by name (MODE-BYTE2-EXIT-WITHDRAWN) instead of giving the constructor defaults.
 pub fn try_owner_arm(a: &OwnerArm) -> Result<ArmCells, ExecError> {
     if a.mode_byte_exit {
@@ -133,7 +133,7 @@ impl SourceGate {
 }
 
 /// The reader head the native selects for a plane count and gate (stack word 0 on the route). The head hooks' record is a check, never the input.
-/// INT11 (Batch 46 rule 4, W370): the gate state (ctx, ctx) = (0, 0) makes the variant depend on [row], whose writer is
+/// INT11: the gate state (ctx, ctx) = (0, 0) makes the variant depend on [row], whose writer is
 /// not located: refused by name (SOURCE-GATE-ROW58-UNRESOLVED), never defaulted. The owner arm never gives (0, 0).
 pub fn derived_head(planes: usize, g: &SourceGate) -> Result<u64, ExecError> {
     if g.ctx_gate_a == 0 && g.ctx_gate_b == 0 {
@@ -173,9 +173,9 @@ pub const READER_COUNT_MAX: usize = (i32::MAX as usize) - 15;
 pub struct Ae32Source {
     /// host memory, raw u32 words, rows of `width` pixels, A,R,G,B per pixel (16 bytes)
     pub words: Vec<u32>,
-    /// the reader head recorded by the head hooks for this source (Batch 43 rule 1)
+    /// the reader head recorded by the head hooks for this source
     pub reader_head: u64,
-    /// the plane count recorded for this source (Batch 42 rule 6: no plane-count default)
+    /// the plane count recorded for this source (no plane-count default)
     pub planes: usize,
 }
 
@@ -216,7 +216,7 @@ pub fn ae32_to_image(s: &Ae32Source, w: usize, h: usize) -> Result<Image, ExecEr
         return Err(ExecError::Shape(format!("reader head {} writes {} planes, the record gives {}", head_name(s.reader_head), want, s.planes)));
     }
     let vb = matches!(s.reader_head, VB4_HEAD | VB3_HEAD | VB1_HEAD);
-    // INT21 step G3R (W476 (d) 4, W170): the routing mutant g3r_mut_r3b sends R3 to the variant-B line; never in a shipped build
+    // INT21 step G3R: the routing mutant g3r_mut_r3b sends R3 to the variant-B line; never in a shipped build
     let vb = vb || (cfg!(feature = "g3r_mut_r3b") && s.reader_head == R3_HEAD);
     let mut out: Vec<Vec<u32>> = vec![vec![0u32; w * h]; want];
     for y in 0..h {
@@ -259,7 +259,7 @@ pub fn ae32_to_image(s: &Ae32Source, w: usize, h: usize) -> Result<Image, ExecEr
     Image::from_planes(out.into_iter().map(|p| p.into_iter().map(f32::from_bits).collect()).collect())
 }
 
-/// INT10: what the run's record says about the destination convert (Batch 42 rule 6, Batch 43 rules 2, 5 and 12). No Default.
+/// INT10: what the run's record says about the destination convert. No Default.
 #[derive(Clone, Debug)]
 pub struct Ae32Dest {
     /// the plane count at the destination head (recorded; must equal the root image's channels)

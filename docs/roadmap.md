@@ -1,6 +1,6 @@
 # Roadmap
 
-The goal is 20 effects ported to native Rust: the ten that run today plus the ten below. The other names in the plugin are not planned. This page is hand-written and holds no measured figure; the status of each finished effect is in [effects](effects.md).
+The goal is 20 effects in native Rust: the ten that run today and the ten below. The other effect names of the plugin are not planned. This page holds no measured figure; the status of each finished effect is in [effects](effects.md).
 
 ## Done
 
@@ -34,4 +34,4 @@ The order follows how much code already ported each effect can reuse, cheapest f
 | 9 | `S_DigitalDamage` | Digital glitch and corruption. |
 | 10 | `S_LensFlare` | Lens flare, the plugin's best-known light effect. |
 
-`Shake`, like `BlurMoCurves`, is a host effect of the plugin whose name string is not in the name bank, so both are written here without the bank's prefix.
+`Shake`, like `BlurMoCurves`, is a host effect of the plugin whose name string is not in the [name bank](glossary.md#name-bank), so both are written here without the bank's prefix.

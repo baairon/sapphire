@@ -177,7 +177,7 @@ pub struct CompiledProgram {
     pub labels: Vec<&'static str>,
     pub folds: Vec<String>,
     pub node_state: Vec<NodeState>,
-    /// DSW5: clone nodes made by the pass (one rule, see `clone_pass`); only their folded lanes are observable in the W113 bits comparison
+    /// DSW5: clone nodes made by the pass (one rule, see `clone_pass`); only their folded lanes are observable in bits comparison
     pub clones: Vec<NodeState>,
     /// NZ1: the node cells of this compile (genotype node index -> lane bits) of every parameter node, to be passed as `CompileOptions::history` to the next compile of the same instance
     pub cells: BTreeMap<usize, Vec<u32>>,
@@ -185,7 +185,7 @@ pub struct CompiledProgram {
     pub ctx_word2: bool,
     /// STK2: has-data flags [owner+i] as bits (bit j + 3 = declared input j), read by the model of preserve.rs
     pub ctx_has_data: u32,
-    /// XWP2 (W746): per node id (CNode id = PlanNode gid) computed by the model of BEFORE the fold (planner order READ:
+    /// XWP2: per node id (CNode id = PlanNode gid) computed by the model of BEFORE the fold (planner order READ:
     /// ); read by preserve.rs only when `xy_place` is set
     pub fx_eval_pres_a_pre: HashMap<usize, bool>,
     /// XWP2: the xy placement model is on (preserve.rs: the xy clones are not frame dependent, from `fx_eval_pres_a_pre`)
@@ -194,13 +194,13 @@ pub struct CompiledProgram {
 
 #[derive(Debug, Clone, Default)]
 pub struct CompileOptions {
-    /// XWP2 (W746): skip the Special sharing call 2 of (one xy clone per consumer slot survives); used by xyplace::compile_placed only
+    /// XWP2: skip the Special sharing call 2 of (one xy clone per consumer slot survives); used by xyplace::compile_placed only
     pub xy_unshared: bool,
     /// XWP2: the xy placement model (see `CompiledProgram::xy_place`)
     pub xy_place: bool,
     /// XWP2: preserve group ids by node id, given to the group pass of the sharing step (READ: runs, before)
     pub xy_pres_keys: Option<HashMap<usize, i64>>,
-    /// parameter overrides (name -> lanes); anything absent takes the PROGRAM-DEFAULT (W83)
+    /// parameter overrides (name -> lanes); anything absent takes the PROGRAM-DEFAULT
     pub overrides: BTreeMap<String, Vec<f32>>,
     /// element count per input name; absent: Source-like inputs 4, `xy` 2 (INFERRED)
     pub input_elnum: BTreeMap<String, i32>,
@@ -212,40 +212,40 @@ pub struct CompileOptions {
     pub const_inputs: BTreeMap<String, Vec<f32>>,
     /// host getter lanes (get_frame_number, get_curve_val); absent = zeros
     pub host: BTreeMap<String, Vec<f32>>,
-    /// NV3b HOST-CONTEXT-MINIMAL binding (M2, W112): every input with a declared default is bound to that
+    /// NV3b HOST-CONTEXT-MINIMAL binding (M2): every input with a declared default is bound to that
     /// constant, parameters flagged `default_to_1_if_postdiv` default to 1 (M11), Source has 3 channels for
     /// `no_alpha_only` programs (the original rejects 4). Off by default (NV-5 binds real images).
     pub minimal_context: bool,
     /// MASK1: inputs that stay real images in the minimal context (name -> channel count); the default constant binding is skipped for them
     pub bound_elnum: BTreeMap<String, i32>,
-    /// DSW5 (W215 (c), W216 (d)): the bound-input mask of the compile context ([ctx]); bit k set = input k is bound. EXPLICIT: input 0 is never implied.
+    /// DSW5: the bound-input mask of the compile context ([ctx]); bit k set = input k is bound. EXPLICIT: input 0 is never implied.
     /// Default 0 = the plan harness's zero-filled compile context. Inputs named in `bound_elnum` (MASK1 bindings) set their bit (position in the declared input list) in addition.
-    /// A parameter whose record input index (`data/PARAM_INPUTS.tsv`) is >= 0 and whose bit is clear is NOT clamped . No environment override (INT6, Batch 36 rule 1).
+    /// A parameter whose record input index (`data/PARAM_INPUTS.tsv`) is >= 0 and whose bit is clear is NOT clamped. No environment override (INT6).
     pub bound_input_mask: u32,
     /// DSW3: turn the unbound-input exception (no clamp for a parameter whose record input is unbound) off (also: env DSW3_UNBOUND_OFF)
     pub unbound_exception_off: bool,
-    /// SHE4 (W215 b): host mocha data present ([this] non-null); the native compiler errors when set (MOCHA-OFF)
+    /// SHE4: host mocha data present ([this] non-null); the native compiler errors when set (MOCHA-OFF)
     pub mocha_data_present: bool,
     /// HOST-CURVES (CV1-A1): an unkeyed host curve value is the parameter's own current cells, so
     /// `get_curve_val p ..` folds to the lanes of its first argument. Off: zeros (the EP-3 harness read zeros).
     pub host_curves_unkeyed: bool,
-    /// HCK1 (W275, Batch 36 rule 6): HOST-CURVES keyed per (curve name, requested time). Key = (parameter name of the first argument of
+    /// HCK1: HOST-CURVES keyed per (curve name, requested time). Key = (parameter name of the first argument of
     /// `get_curve_val`, f32 bits of the time argument); value = the answer lanes the host gave. `Some(map)` is the keyed input: a request the map does not
     /// answer (no entry, or a non-constant time argument) is a compile error "HC-KEYED-MISSING" and no default exists. `None` leaves the earlier
     /// interfaces (the unkeyed state A `host_curves_unkeyed`, or zeros). The keyed input takes precedence over both.
     pub host_keyed: Option<BTreeMap<(String, u32), Vec<f32>>>,
-    /// W479/W490 (TMR1, step T): HOST-CURVE-VALUES, the claimed get_curve_val input. When set, the fold calls tickmap::map_param (hostcurve.rs). The keyed and unkeyed modes are test interfaces and are refused together with it.
+    /// (TMR1, step T): HOST-CURVE-VALUES, the claimed get_curve_val input. When set, the fold calls tickmap::map_param (hostcurve.rs). The keyed and unkeyed modes are test interfaces and are refused together with it.
     pub host_curve_values: Option<crate::hostcurve::HostCurveValues>,
-    /// INT8 (Batch 40 rule 4, W310) HC-NO-INTERFACE: a get_curve_val request with neither `host_keyed` nor `host_curves_unkeyed` set is a compile error.
+    /// INT8 HC-NO-INTERFACE: a get_curve_val request with neither `host_keyed` nor `host_curves_unkeyed` set is a compile error.
     /// `hc_zero_legacy` is the named option HC-ZERO-LEGACY (the zero fold the EP-3 state A harness read) for the definitions of state A suites that need it;
-    /// never in counted runs or frozen predictions. No environment switch.
+    /// never in counted runs or stored predictions. No environment switch.
     pub hc_zero_legacy: bool,
     /// NEG-2 RANGES-OFF: do not clamp the bound parameter values with the range table (also: env NEG2_RANGES_OFF)
     pub ranges_off: bool,
     /// NZ1 COMPILE-HISTORY: the node cells left by the previous compile of this program instance (`CompiledProgram::cells`); None = a fresh instance after the setup commands
     /// (the cell is the program-text default). Explicit, no default other than None.
     pub history: Option<BTreeMap<usize, Vec<u32>>>,
-    /// INT9 (Batch 41 rule 4, W323; WPG15 PATCH 2) INPUT-PRESENCE-MASK: the byte [H] (H = [ctx]; bit j = declared input j has a host layer and data,
+    /// INT9 (WPG15 PATCH 2) INPUT-PRESENCE-MASK: the byte [H] (H = [ctx]; bit j = declared input j has a host layer and data,
     /// writer) as ONE native input. Both readers are derived from it: the range pass (`bt [owner], input_index`input_index = record
     /// field = declared position j) and the bind pass (`bt byte [compiler], r8d` with r8d = node field minus 3; the node
     /// index of declared input j is j + 3, INFERRED from the same r8 indexing the program's per-input tables and and from EP-3b's "Source =
@@ -264,12 +264,12 @@ pub struct CompileOptions {
     pub ctx_word2: bool,
     /// STK2: has-data flags (see `CompiledProgram::ctx_has_data`)
     pub ctx_has_data: u32,
-    /// step DX2 v2 (W652 (d)): a v3_to_v4_if4 node takes its bound image argument's count (the count the route records) only when true;
+    /// step DX2 v2: a v3_to_v4_if4 node takes its bound image argument's count (the count the route records) only when true;
     /// fx_run sets it on the 'ae32' route only; every other route keeps the node's own count and the earlier compile
     pub v3_bound_count: bool,
 }
 
-/// INT9 (Batch 41 rule 4): the per-program bit-order rows of the INPUT-PRESENCE-MASK: (declared position j, input name, declared default, bind-pass node
+/// INT9: the per-program bit-order rows of the INPUT-PRESENCE-MASK: (declared position j, input name, declared default, bind-pass node
 /// index j + 3 (INFERRED), bind-pass bit j, range-pass bit j). Inputs past position 7 have no bit in the byte.
 pub fn presence_bit_rows(g: &Genotype) -> Vec<(usize, String, String, usize, Option<usize>, Option<usize>)> {
     g.inputs
@@ -394,7 +394,7 @@ fn all_lanes(a: &ArgView, b: Option<&ArgView>, t: f32, cmp: &dyn Fn(f32, f32) ->
     })
 }
 
-/// INT18 (W422 (c), Batch 51 rule 8): the lane-count scan. Each eq_const or eq_const_int call with two constant operands counts one call;
+/// INT18: the lane-count scan. Each eq_const or eq_const_int call with two constant operands counts one call;
 /// a call whose operand counts differ counts one row (the listing reads b past its count where the native pads). Read and reset by
 /// eq_const_scan_take; fx_run prints the totals as a label and plan_dump as an EQCONST line. Observe only: no result changes.
 static EQ_SCAN_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -414,8 +414,8 @@ pub fn eq_const_scan_take() -> (usize, usize) {
     (EQ_SCAN_CALLS.swap(0, Relaxed), EQ_SCAN_DIFF.swap(0, Relaxed))
 }
 
-/// INT21 step Q (W491, W487 (e)): if_neq_const nodes whose second argument is not constant natively (EQC1's c7 form, unprobed). fx_run refuses
-/// them on the claim route as IFNEQ-CONST-ARG1-NONCONST. Read and reset by ifneq_arg1_nonconst_take.
+/// INT21 step Q: if_neq_const nodes whose second argument is not constant natively (EQC1's c7 form, unprobed). fx_run refuses
+/// them on the verified render path as IFNEQ-CONST-ARG1-NONCONST. Read and reset by ifneq_arg1_nonconst_take.
 static IFNEQ_ARG1_NONCONST: std::sync::Mutex<Vec<usize>> = std::sync::Mutex::new(Vec::new());
 
 /// The node ids noted since the last take.
@@ -423,7 +423,7 @@ pub fn ifneq_arg1_nonconst_take() -> Vec<usize> {
     std::mem::take(&mut *IFNEQ_ARG1_NONCONST.lock().unwrap())
 }
 
-/// INT25 (W503 (b), INT21-A2): every if_neq_const decision of a compile, observe only: (node id, argument 0 constant flag, argument 1 constant
+/// INT25 (INT21-A2): every if_neq_const decision of a compile, observe only: (node id, argument 0 constant flag, argument 1 constant
 /// flag, argument 0 count, argument 1 count, arm kept or None). The flags and counts are the operand views prune_arm reads (the cells
 /// [this], [this], [this], [this] of, EQC1). Nothing here changes a plan. Read and reset by ifneq_trace_take.
 pub type IfneqTrace = (usize, bool, bool, usize, usize, Option<usize>);
@@ -441,7 +441,7 @@ fn eq_const(a: &ArgView, b: &ArgView) -> bool {
     eq_scan_note(a, b);
     (0..a.n).all(|i| {
         let (x, y) = (a.lanes[i.min(3)] as f64, b.lanes[i.min(3)] as f64);
-        // INT17 (Batch 52 rule 12, W435 (b) 6): the listing order and form, `b + eps > a` then `a > b - eps`, in f64
+        // INT17: the listing order and form, `b + eps > a` then `a > b - eps`, in f64
         y + EQ_EPS > x && x > y - EQ_EPS
     })
 }
@@ -465,7 +465,7 @@ fn eq_const_int(a: &ArgView, b: &ArgView) -> bool {
     eq_scan_note(a, b);
     (0..a.n).all(|i| {
         let (x, y) = (cvtt_i32(a.lanes[i.min(3)]) as f32 as f64, cvtt_i32(b.lanes[i.min(3)]) as f32 as f64);
-        // INT17 (Batch 52 rule 12, W435 (b) 6): the listing order and form, `b + eps > a` then `a > b - eps`, in f64
+        // INT17: the listing order and form, `b + eps > a` then `a > b - eps`, in f64
         y + EQ_EPS > x && x > y - EQ_EPS
     })
 }
@@ -519,8 +519,8 @@ pub fn prune_arm(class: &str, a: &[ArgView2]) -> Option<usize> {
                 return None;
             }
             // EQC1 : the original calls only when the flag byte [this] is nonzero and the
-            // dword [this] equals [this] (MEASURED EQC1 W487: argument 0 constant flag, operand counts of arguments 0 and 1).
-            // INT21 step Q: the feature eqc1_mut_nocount is the W170 mutant without the count conjunct (never in a shipped build).
+            // dword [this] equals [this] (MEASURED EQC1 argument 0 constant flag, operand counts of arguments 0 and 1).
+            // INT21 step Q: the feature eqc1_mut_nocount is mutant without the count conjunct (never in a shipped build).
             if v[0].is_const && (cfg!(feature = "eqc1_mut_nocount") || v[0].n == v[1].n) && v[1].is_const && eq_const(&v[0], &v[1]) {
                 Some(3)
             } else {
@@ -565,7 +565,7 @@ pub struct ArgView2 {
     pub elnum: Option<i32>,
 }
 
-/// The node's lanes from its program-text default. INT32 step DF (W605 (a)): an unbound fixed-slider (host type 2) parameter outside the
+/// The node's lanes from its program-text default. INT32 step DF: an unbound fixed-slider (host type 2) parameter outside the
 /// normalize_scale table reads its registered 16.16 default, f32(trunc(d x 65536) / 65536) of each text default lane d
 /// (STYLE_PARAM_INDEX.tsv names the type); bound values replace these lanes as given (the harness's snap_16_16). The mutant df_bound_mut
 /// (at the override below) applies the rule to bound values too.
@@ -660,7 +660,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
     // DSW3: parameters whose record input is UNBOUND take the copy-default path of (no clamp). The bound-input mask is explicit (`bound_input_mask`default 0; input 0 is not implied);
     // inputs named in `bound_elnum` are bound too. INFERRED: the input index is the position in the declared input list.
     let mut noclamp: std::collections::HashSet<String> = std::collections::HashSet::new();
-    // step TPU2 (W708 (e)): a host point parameter fed from the run's point lines (fx_run's TPU2 block) is the point arm's stored result;
+    // step TPU2: a host point parameter fed from the run's point lines (fx_run's TPU2 block) is the point arm's stored result;
     // the original's plan carries it unclamped (TB_R1's recorded plan: '- xy [ 0.5625 -1.0625 ]' with the record's min 0), so the range
     // clamp pass does not apply to it.
     if let Some(h) = opt.host_curve_values.as_ref() {
@@ -675,7 +675,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
             if let Some(k) = crate::ranges::param_input_index(&g.name, &p.name) {
                 // LYM3: PARAM_INPUTS.tsv is measured in the def's input order; a merged input group is translated by input name (an input the layout row
                 // does not carry has no position: 99, unbound)
-                // INT28 step PI (W563): a row confirmed by a record's input index cell is already the registered program's index
+                // INT28 step PI: a row confirmed by a record's input index cell is already the registered program's index
                 let k = if g.def_input_order.is_empty() || crate::ranges::param_input_recorded(&g.name, &p.name) { k } else { g.def_input_order.get(k).and_then(|n| g.inputs.iter().position(|i| &i.name == n)).unwrap_or(99) };
                 let bm = opt.bound_input_mask; // INT6 rule 1: no environment override (DSW5_BOUND_MASK removed)
                 let bound = (k < 32 && (bm >> k) & 1 == 1) || g.inputs.get(k).map(|i| opt.bound_elnum.contains_key(&i.name)).unwrap_or(false);
@@ -810,7 +810,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                     }
                     // NZ1 (nz1_negzero_clamp PATCH 2; node store): the clamp pass writes the node cell only where old and new differ as floats; equal under == (+0 vs -0) keeps the OLD bits.
                     // old = the previous compile's cell (opt.history) or, for a fresh instance, the program-text default. COMPILE-HISTORY is the caller's statement.
-                    // INT8 (Batch 41 rule 5, W325 (d)): every record the range pass visits, not only rows that applied (NODE-STORE-PARTIAL closed); `row_applied` is kept for reading only.
+                    // INT8: every record the range pass visits, not only rows that applied (NODE-STORE-PARTIAL closed); `row_applied` is kept for reading only.
                     let _ = row_applied;
                     if !ranges_off {
                         let old: Vec<f32> = match opt.history.as_ref().and_then(|h| h.get(&gn.index)) {
@@ -927,20 +927,20 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                 .collect();
             let if_family = COND_CLASSES.contains(&name.as_str());
             if name == "if_neq_const" && nodes[id].args.len() >= 2 {
-                // EQC1 (W480 (c)): the compare uses the clamped counts; outside 1..4 the original's dword is unmeasured, so refuse.
+                // EQC1: the compare uses the clamped counts; outside 1..4 the original's dword is unmeasured, so refuse.
                 let raw = |c: usize| nodes[c].elnum.unwrap_or(nodes[c].nlanes as i32);
                 let (n0, n1) = (raw(nodes[id].args[0]), raw(nodes[id].args[1]));
                 if !(1..=4).contains(&n0) || !(1..=4).contains(&n1) {
                     ifneq_refusal.borrow_mut().get_or_insert(format!("IFNEQ-CONST-COUNT-OUT-OF-RANGE ({}: node {}: {}, {})", g.name, id, n0, n1));
                     continue;
                 }
-                // INT21 step Q (W491): a non-constant second argument is noted for fx_run's claim-route refusal; no result changes here
+                // INT21 step Q: a non-constant second argument is noted for fx_run's claim-route refusal; no result changes here
                 if !views[1].is_const {
                     IFNEQ_ARG1_NONCONST.lock().unwrap().push(id);
                 }
             }
             let cond_arm = if if_family { prune_arm(&name, &views) } else { None }.filter(|&a| a < nodes[id].args.len());
-            // INT25 (W503 (b)): observe-only trace of the if_neq_const operand views and the arm
+            // INT25: observe-only trace of the if_neq_const operand views and the arm
             if name == "if_neq_const" && views.len() >= 2 {
                 IFNEQ_TRACE.lock().unwrap().push((id, views[0].is_const, views[1].is_const, views[0].n, views[1].n, cond_arm));
             }
@@ -972,8 +972,8 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                 diags.push(format!("Node {} (prim {}): untyped argument", id, name));
             }
             // R5 / R5b (slot 38): the class decides the collapse
-            // DCP1 (W603 DX2): a v3_to_v4_if4 node takes the element count of its bound image argument for the collapse and the fold
-            // step DX2 v2 (W652 (d)): A RULE THAT TAKES A RECORDED COUNT APPLIES ONLY ON THE ROUTE THAT RECORDS IT
+            // DCP1 (DX2): a v3_to_v4_if4 node takes the element count of its bound image argument for the collapse and the fold
+            // step DX2 v2: A RULE THAT TAKES A RECORDED COUNT APPLIES ONLY ON THE ROUTE THAT RECORDS IT
             let v3_route = opt.v3_bound_count || cfg!(feature = "dx2v2_allroutes_mut");
             let v3cnt: Option<i32> = if name == "v3_to_v4_if4" && v3_route && !cfg!(feature = "dx2_owncount_mut") {
                 match crate::fold::v3_count(&views) {
@@ -1029,12 +1029,12 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                         })
                         .collect();
                     let _ = FoldKind::Host;
-                    // W215 (d) (1): a blur with a constant zero opacity and an EVEN combo tag is an error until the writer of [this] is read
-                    // W262 (b) READ RULE (EVT1: blur [this] = argument 0's bound count, written by the value setter; OPERAND MEASURED,
+                    // a blur with a constant zero opacity and an EVEN combo tag is an error until the writer of [this] is read
+                    // READ RULE (EVT1: blur [this] = argument 0's bound count, written by the value setter; OPERAND MEASURED,
                     // 8 calls in 4 compiles): fold.rs reads the count of argument 0 for the test "tag odd, or tag = [this]". The error stays only as a TRIPWIRE where the
                     // count the native binds to argument 0 differs from an even tag (by the combo table this does not occur when a row matches). SHE4_OFF=blur_ac is the named
-                    // off option of the W236 (b) ablation (the even-tag fold is then not taken and the tripwire is not applied).
-                    // Batch 38 (INT5-A5): the clause "constant zero opacity" is not a separate condition: the compare of the tag with [this] is reached only after the opacity-zero test at
+                    // off option of ablation (the even-tag fold is then not taken and the tripwire is not applied).
+                    // (INT5-A5): the clause "constant zero opacity" is not a separate condition: the compare of the tag with [this] is reached only after the opacity-zero test at
                     //  (fold.rs, DSW3 READ), so the tripwire fires for every even tag that reaches the compare with [this] different. Cited, kept as the reach condition; UNREACHABLE-BY-CONSTRUCTION.
                     if !crate::fold::off("blur_ac") && name == "blur" && views.len() >= 4 && crate::fold::is_zero(&views[3]) && nodes[id].elnum.map(|t| t & 1 == 0).unwrap_or(false) && views[0].elnum != nodes[id].elnum {
                         diags.push(format!("BLUR-EVEN-TAG-OPEN: blur node {} has a constant zero opacity and even combo tag {:?} but argument 0 has count {:?} (W262 tripwire; [this] = argument 0's bound count, setter)", id, nodes[id].elnum, views[0].elnum));
@@ -1071,13 +1071,13 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                             }
                         }
                         if name == "get_curve_val" && !hcv_used && !opt.host_curves_unkeyed && opt.host_keyed.is_none() && !opt.hc_zero_legacy {
-                            // INT8 HC-NO-INTERFACE (Batch 40 rule 4): same request population as HCK1's HC-KEYED-MISSING (the fold site of get_curve_val)
+                            // INT8 HC-NO-INTERFACE: same request population as HCK1's HC-KEYED-MISSING (the fold site of get_curve_val)
                             diags.push(format!("HC-NO-INTERFACE\tnode {}\tget_curve_val with neither the keyed nor the unkeyed host-curve interface set; HC-ZERO-LEGACY is the named state A option", id));
                         }
                         let hv = if own.is_empty() { opt.host.get(&name).map(|v| v.as_slice()) } else { Some(own.as_slice()) };
                         if let Some(l) = fold_lanes(&name, &views, oe, hv) {
                             if name == "v3_to_v4_if4" {
-                                // INT22 step B (W509 (b), W521 (a)): census and the claim-route refusal of unmeasured forms (fx_run reads v3_take)
+                                // INT22 step B: census and the claim-route refusal of unmeasured forms (fx_run reads v3_take)
                                 crate::fold::v3_note(id, &views, oe, &l);
                             }
                             if name.starts_with("coerce") && std::env::var("FX1_TRACE").is_ok() {
@@ -1095,7 +1095,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
             }
         }
     };
-    // XWP2 (W746): before the fold (model of, READ: kind 4 input = has-data byte, kind 2 = class flag or 0x80 or any child,
+    // XWP2: before the fold (model of, READ: kind 4 input = has-data byte, kind 2 = class flag or 0x80 or any child,
     // kind 1 = parameter record bits & 0xc0, ASSUMED 0 as in preserve.rs); the xy clones (Special) are not frame dependent (INFERRED from the
     // recorded plans: xy - centre is a preserve head in 33 Transform_and_Blur and 13 Blur_Only records)
     let fx_eval_pres_a_pre: HashMap<usize, bool> = {
@@ -1177,7 +1177,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
         None => flags.contains("dynamic"),
     };
     let do_pd = mk(&mut nodes, "", Some("do_postdiv"), vec![], Some(if do_pd_on { 1.0 } else { 0.0 }));
-    // DCP1 (W588 (a), W603): the tail's copy_alpha constant is 0 in the 3-channel (class-3) compile and -1 otherwise (MEASURED by
+    // DCP1: the tail's copy_alpha constant is 0 in the 3-channel (class-3) compile and -1 otherwise (MEASURED by
     // DCP1's write watch on Distort, Hue_Sat_Bright and Blur_Color; the host rule that picks it is not read, INFERRED from the root count).
     let ca_val: f32 = if nodes[root].elnum == Some(3) { 0.0 } else { -1.0 };
     let copy_alpha = mk(&mut nodes, "", Some("copy_alpha"), vec![], Some(ca_val));

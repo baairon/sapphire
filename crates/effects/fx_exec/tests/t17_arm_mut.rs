@@ -1,7 +1,7 @@
 //! DRW4: sweeps that judge the arm mutants 23, 24, 33, 34 of `grad_k`. Each sweep prints a digest line `DIGEST <name> <fnv64>`; a driver script runs this test
 //! in the switch build (feature drw2_mut) once per mutant id (COV_MUT) and compares digests with the base run. A digest that differs from the base KILLS the
 //! mutant on that sweep; equal digests mean the mutant is not observable on the sweep (equivalent on that domain).
-//! These sweeps are NATIVE specification checks: they do not by themselves count as emulator-judged kills (W217 b); the judge for each sweep is named in MUT_TABLE.tsv.
+//! These sweeps are NATIVE specification checks: they do not by themselves count as emulator-judged kills; the judge for each sweep is named in MUT_TABLE.tsv.
 use fx_exec::kernels::run_any;
 use fx_exec::kernels2::Out;
 use fx_exec::*;

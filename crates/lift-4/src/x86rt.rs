@@ -8,7 +8,7 @@
 use neutral_world::{CallRet, Env, STK};
 
 thread_local! {
-    /// Exact extents [start, end) of the argument buffers of the case being run (fleet-4). `None` until a test calls
+    /// Exact extents [start, end) of the argument buffers of the case being run. `None` until a test calls
     /// [`set_exact`]: then the whole argument arena counts as in range.
     static EXACT: std::cell::RefCell<Option<Vec<(u64, u64)>>> = const { std::cell::RefCell::new(None) };
 }
@@ -147,14 +147,14 @@ impl<'a, E: Env> Mem<'a, E> {
         self.call_r(target, iargs, fargs, raw)
     }
 
-    /// Like [`Mem::call`] with the six integer argument registers as they are at the call (fleet-4): the out-parameter rules read the
+    /// Like [`Mem::call`] with the six integer argument registers as they are at the call: the out-parameter rules read the
     /// object they write through from the register, whatever arity the trace compares.
     pub fn call_r(&mut self, target: u64, iargs: &[u64], fargs: &[u64], raw: [u64; 6]) -> CallRet {
         let ia: Vec<u64> = iargs.iter().map(|v| norm(*v)).collect();
         let mut r = self.env.call_f(target, &ia, fargs);
         let indres = crate::models::indres();
         if !indres.is_empty() {
-            // fleet-4: result of a call picked from the values the spec declares for its key (two extra slots keep the seeded result)
+            // Result of a call picked from the values the spec declares for its key (two extra slots keep the seeded result)
             let anchor = self.env.data_va(0);
             let zone = crate::models::stub_zone();
             for (key, vals, fixed) in indres {
@@ -245,14 +245,14 @@ impl<'a, E: Env> Mem<'a, E> {
 
     fn m_ok(&self, a: u64, n: u64) -> bool {
         let anchor = self.env.data_va(0);
-        // fleet-4: no wrap-around (the python side uses unbounded integers): a range that wraps past 2^64 is not readable
+        // No wrap-around (the python side uses unbounded integers): a range that wraps past 2^64 is not readable
         let end = match a.checked_add(n) {
             Some(e) => e,
             None => return false,
         };
         (a >= 0x7ff0_0000 && end <= 0x8000_0000)
             || (a >= anchor + 0x10000 && end <= anchor + neutral_world::WABOVE - 64)
-            || arena_ok(a, end) // argument buffers (fleet-4): the world faults outside the exact extent, the python side skips it
+            || arena_ok(a, end) // argument buffers: the world faults outside the exact extent, the python side skips it
     }
 
     fn m_rd(&mut self, a: u64, n: u64) -> Vec<u8> {
@@ -693,7 +693,7 @@ impl Ret {
     }
 }
 
-// ---- SSE2 packed integer and shuffle helpers (fleet-6) ------------------------------------------------------------
+// ---- SSE2 packed integer and shuffle helpers ------------------------------------------------------------
 
 #[inline(always)]
 fn dw(x: u128, i: u32) -> u32 {

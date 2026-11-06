@@ -1,5 +1,5 @@
-//! TMR1 (W479/W490 step T): unit tests of the wired fold. Doubling (T2 family D shape), global 0 and 1 give equal answers (W490 (e) 2),
-//! the global refusal on the claim route, the failing-checkout initial lanes (W490 (g)), and the refusals by name.
+//! TMR1 (step T): unit tests of the wired fold. Doubling (T2 family D shape), global 0 and 1 give equal answers,
+//! the global refusal on the verified render path, the failing-checkout initial lanes, and the refusals by name.
 use fx_eval::hostcurve::{fold, HostCurveValues};
 
 const P: &str = "Blur_Motion_Curves_No_Transform";
@@ -33,7 +33,7 @@ fn no_doubling_without_flag() {
     assert_eq!(fold(P, "z_dist", 0.0, &[1.0], 1, &h, &mut d), Some(vec![2.0]), "{:?}", d);
 }
 
-/// W490 (e) 2: by the tick rule (doubling only at global 4) global 0 and 1 give the same tick and the same lanes, over a grid of times, multipliers and flags.
+/// by the tick rule (doubling only at global 4) global 0 and 1 give the same tick and the same lanes, over a grid of times, multipliers and flags.
 #[test]
 fn global_0_and_1_equal() {
     if !effects_rtdata::have_tables() {
@@ -73,7 +73,7 @@ fn global_refused_on_claim_route() {
     assert_eq!(fold(P, "z_dist", 0.0, &[1.0], 1, &h, &mut d), Some(vec![1.0]), "{:?}", d);
 }
 
-/// W490 (g) B4: a failing checkout leaves the lane unwritten, so the fold returns the node's cells for that lane (the harness guard words of TICKMAP's T2 mark unwritten lanes;
+/// B4: a failing checkout leaves the lane unwritten, so the fold returns the node's cells for that lane (the harness guard words of TICKMAP's T2 mark unwritten lanes;
 /// crate lib.rs: "a non-zero status leaves the lane unwritten"). Constructed from T2's family F shape (status per index), not read from the T2 stored rows.
 #[test]
 fn failing_checkout_keeps_cells() {

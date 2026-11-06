@@ -1,4 +1,4 @@
-//! T25 (INT11 s2, Batch 46 rules 4 and 5): the owner-arm function and the native postdivide insertion test against PDV1's 8 original plans
+//! T25 (INT11 s2): the owner-arm function and the native postdivide insertion test against PDV1's 8 original plans
 //! (fixtures/pdv1/PLAN_ORIG_*: the original compiler 0x13370 run in the emulator at ctx+0x774 = 0 and 1, plain and SMART stacks; PDV1).
 use fx_eval::cpuplan::{plan_text_mode, PlanMode};
 use fx_eval::{build_effect, compile, CompileOptions, Corpus};
@@ -99,7 +99,7 @@ fn t25_postdivide_insertion_matches_pdv1_plans() {
     assert_eq!(checked, 8);
 }
 
-/// INT12 (Batch 47 rule 4, W380; INT12 amendment item 1): the Opacity loop. BCJ2's Blur_Color records rcD 64x32 and 50x7 (and PDV2's pdBC):
+/// INT12 (INT12 amendment item 1): the Opacity loop. BCJ2's Blur_Color records rcD 64x32 and 50x7 (and PDV2's pdBC):
 /// [owner+0x13e0] = 0, [owner+0x1260] = 18 (bit 2 clear), Opacity record 1.0 (popup answer 2, the default), ctx+0x774 = 1 and owner cells
 /// (1354, 1358, 1398, 139c) = (1, 0, 1, 1). The arm with the loop must give the recorded ctx cell; INT11's arm without it must not.
 #[test]

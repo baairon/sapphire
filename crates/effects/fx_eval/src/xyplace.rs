@@ -1,4 +1,4 @@
-//! XWP2 (W746): default-xy writer placement, as the original's word 2 = 1 plans place it.
+//! XWP2: default-xy writer placement, as the original's word 2 = 1 plans place it.
 //!
 //! RULE (pass order READ in the planner of neutral_1.asm, listing offsets; each step is the ported pass of this crate):
 //! 1. (called): every function-node argument slot whose child is a kind 4 node (Special or Input) gets a fresh clone, one per slot
@@ -211,7 +211,7 @@ pub fn compile_placed(g: &Genotype, ct: &ComboTable, opt: &CompileOptions) -> Re
     let text = crate::cpuplan::plan_text_mode(&cp, crate::cpuplan::PlanMode::CpuDriver);
     let ws = writers_of_text(&text);
     let mut out = Vec::new();
-    // W953: DS1's hoist duplicates the xy variable: a full-size writer for the hoisted nodes, then the body writer at the small size (plan order)
+    // DS1's hoist duplicates the xy variable: a full-size writer for the hoisted nodes, then the body writer at the small size (plan order)
     let dup = crate::cpuplan::ds_dup_rid(&cp);
     let hoist: Vec<usize> = if crate::cpuplan::ds_factor(&cp) > 1 { crate::cpuplan::ds_hoist(&cp) } else { Vec::new() };
     let has_dup = ws.iter().any(|w| w.0 == dup);

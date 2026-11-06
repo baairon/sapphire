@@ -1,4 +1,4 @@
-//! FLD3-FORM (W666 (d) 2, W678 (c)): the folded v3_to_v4_if4 node with n = 3, a one-lane argument 0 and a one-lane argument 1 is
+//! FLD3-FORM: the folded v3_to_v4_if4 node with n = 3, a one-lane argument 0 and a one-lane argument 1 is
 //! [a0 a0 a0 a1]: argument 0 broadcast to lanes 0 to 2, argument 1 in lane 3. MEASURED by BCJ5's FLD3 records (Blur_Color_Autogen node 67,
 //! literal read from the original compiler's plan in the emulator): brightness 1.0 with scale_opacity 1.0 gives [1 1 1 1]; 1.21 (bits 3f9ae180)
 //! with 1.0 gives [1.21 1.21 1.21 1]; 1.21 with 0.6875 gives [1.21 1.21 1.21 0.6875]. The wrong candidate forms (broadcast with lane 3 = 1,

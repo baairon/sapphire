@@ -59,32 +59,32 @@
   "strictest_fns": {
    "value": 2697,
    "text": "2,697",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2} (the earlier definition, audit3 not counted)"
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, ledger, audit2} (the earlier definition, audit3 not counted)"
   },
   "strictest_bytes": {
    "value": 944336,
    "text": "944,336",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2} (the earlier definition, audit3 not counted)"
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, ledger, audit2} (the earlier definition, audit3 not counted)"
   },
   "strictest_pct": {
    "value": 97.9,
    "text": "97.9",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2} (the earlier definition, audit3 not counted), share of code bytes"
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, ledger, audit2} (the earlier definition, audit3 not counted), share of code bytes"
   },
   "strictest_rev_fns": {
    "value": 2701,
    "text": "2,701",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2, audit3} (the revised standard of 2026-11-05)"
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, ledger, audit2, audit3} (the revised standard of 2026-11-05)"
   },
   "strictest_rev_bytes": {
    "value": 951775,
    "text": "951,775",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2, audit3} (the revised standard of 2026-11-05)"
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, ledger, audit2, audit3} (the revised standard of 2026-11-05)"
   },
   "strictest_rev_pct": {
    "value": 98.7,
    "text": "98.7",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2, audit3} (the revised standard of 2026-11-05), share of code bytes"
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, ledger, audit2, audit3} (the revised standard of 2026-11-05), share of code bytes"
   },
   "unproven_fns": {
    "value": 0,
@@ -106,10 +106,10 @@
    "text": "1,945",
    "source": "docs/data/FUNCTION_MAP.tsv evidence second"
   },
-  "ev_owner_fns": {
+  "ev_ledger_fns": {
    "value": 198,
    "text": "198",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence owner"
+   "source": "docs/data/FUNCTION_MAP.tsv evidence ledger"
   },
   "ev_anyworld_fns": {
    "value": 0,
@@ -796,7 +796,7 @@
   "exact_bytes": "strictest_bytes",
   "exact_pct": "strictest_pct",
   "second_fn": "ev_second_fns",
-  "owner_fn": "ev_owner_fns",
+  "ledger_fn": "ev_ledger_fns",
   "anyworld_fns": "anyworld_fn",
   "unproven_fn": "unproven_fns",
   "names_fn": "names_total",
@@ -832,7 +832,6 @@
   "confirmation_levels",
   "crates",
   "data_files",
-  "effects_paragraph_sha",
   "effects_status",
   "evidence",
   "generated_pages",

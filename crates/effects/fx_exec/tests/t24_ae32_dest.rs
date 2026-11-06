@@ -66,7 +66,7 @@ fn t24_variant_b_gate_derived() {
     let a = SourceGate::from_owner(true, false, 0);
     assert_eq!(derived_head(4, &a).unwrap(), R4_HEAD);
     assert_eq!(derived_head(4, &SourceGate::from_owner(true, true, 0)).unwrap(), VB4_HEAD);
-    // INT11 (Batch 46 rule 4, W370): the (0, 0) state is refused by name instead of reading [row+0x58]
+    // INT11: the (0, 0) state is refused by name instead of reading [row+0x58]
     let e00 = derived_head(4, &SourceGate { row_gate_cell: 1, ctx_gate_a: 0, ctx_gate_b: 0 }).unwrap_err();
     assert!(format!("{:?}", e00).contains("SOURCE-GATE-ROW58-UNRESOLVED"));
     let e = derived_source(vec![0; 8], 4, &g, Some(R4_HEAD)).unwrap_err();

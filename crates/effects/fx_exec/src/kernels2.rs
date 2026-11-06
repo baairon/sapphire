@@ -1,5 +1,5 @@
 //! NV-9 wiring: the builtin classes NV-5 left as `Unsupported{class}`, each called through the crate's own slot-function entry
-//! (or the member pass entry for the coerce family, W98) with the explicit parameters the plan binds. Assumption prefix NV9-.
+//! (or the member pass entry for the coerce family) with the explicit parameters the plan binds. Assumption prefix NV9-.
 //!
 //! Argument-to-record mapping (NV9-A7, INFERRED from the combo tables' lane counts and the record offsets read by each slot
 //! function; the programs' argument order is the plan's order): blur_warp (mip, p1 [2], p2 [2], two cells, modes [2],
@@ -47,7 +47,7 @@ pub fn geom_of(kp: &KParams, w: usize, h: usize) -> Geom {
 
 /// The default `xy` plane when the caller binds none (NV9B-A4): an explicit geometry keeps NV-9's `xy_grid` of it; otherwise Dump
 /// binds the pixel-centre identity plane and Nv9Old the NV-9 grid (NV9-GEOM-OLD).
-/// INT19 S1 (XY-HEAD-MODE, W452 (c)): the head mode derived from the plan's xy shape. PerRow when the program's xy variable reaches a
+/// INT19 S1 (XY-HEAD-MODE): the head mode derived from the plan's xy shape. PerRow when the program's xy variable reaches a
 /// perspective or perspective_alpha primitive (those take the xy plane whole, so the plan allocates an x plane indexed by row: WPE3's record);
 /// OneHead otherwise (the xy rows stream through element ops into one x row buffer: XYB1 part 2's record). The derivation from the primitive set
 /// is this closer's reading of "the plan's xy allocation shape" (INT19-A1).
@@ -84,7 +84,7 @@ fn const_lane(a: &Arg, i: usize, class: &str, what: &str) -> Result<f32, ExecErr
     Ok(a.f32s()[i.min(3)])
 }
 
-/// INT18 (W414 (c) step 7): warp_rel's argument 3 is integer-typed; the footprint path is taken when cvttss2si(flag) != 0 (a fractional flag
+/// INT18: warp_rel's argument 3 is integer-typed; the footprint path is taken when cvttss2si(flag) != 0 (a fractional flag
 /// such as 0.5 truncates to 0 and does not take it; NaN gives 0x80000000 and does). The earlier test was the float compare `flag != 0.0`.
 pub fn footprint_taken(flag_arg: f32, const_coords: bool) -> bool {
     cvt_i32(flag_arg) != 0 && !const_coords
@@ -243,7 +243,7 @@ fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resul
         Arg::Img(i) if i.channels() == 2 => (false, 0.0, 0.0, i.planes[0].clone(), i.planes[1].clone()),
         _ => return Err(unsupported("warp_rel", "coordinate operand must be a 2 lane constant or a 2 channel image")),
     };
-    // INT3 step 9b (coordinator addendum 2): warp_rel's vtable slot 33 is the same function as class warp's (vtables/class_vtable_pairs.tsv), so WPG2's slot33_warp serves
+    // INT3 step 9b: warp_rel's vtable slot 33 is the same function as class warp's (vtables/class_vtable_pairs.tsv), so WPG2's slot33_warp serves
     // the footprint path here too (argument 3 nonzero with image coordinates). Same labels as warp_k: WPG2-A9 ([P] = the flag lane, INFERRED), WPG2-A10 (ctx STAND-IN).
     let n = w * h;
     let mut c1_arr = vec![0.0f32; n];
@@ -256,7 +256,7 @@ fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resul
         let mut c1b = vec![wpg2_s33::SENT; n];
         let mut c2b = vec![wpg2_s33::SENT; n];
         let prim33 = wpg2_s33::Prim33 { n: cvt_i32(flag_arg), cc: 0 };
-        let (assumption_f, assumption_g, assumption_h) = (-0.5f32, w as f32 - 0.5, (h as f32 - w as f32) / 2.0 - 0.5); let geom33_a = assumption_h + w as f32; if kp.host_aspect != 1.0 { return Err(unsupported("warp_rel", "slot 33 geometry cells ctx measured only at host aspect 1.0 (WPG3 A10, W198)")); } // W198 A10: the measured cells replace the withdrawn WPG2 stand-in
+        let (assumption_f, assumption_g, assumption_h) = (-0.5f32, w as f32 - 0.5, (h as f32 - w as f32) / 2.0 - 0.5); let geom33_a = assumption_h + w as f32; if kp.host_aspect != 1.0 { return Err(unsupported("warp_rel", "slot 33 geometry cells ctx measured only at host aspect 1.0 (WPG3 A10, W198)")); } // A10: the measured cells replace the withdrawn WPG2 stand-in
         let rec33 = wpg2_s33::Rec33 { gate: 0, w: w as i32, h: h as i32, assumption_f: assumption_f.to_bits(), assumption_g: assumption_g.to_bits(), assumption_h: assumption_h.to_bits(), geom33_a: geom33_a.to_bits() };
         let mut pool = wpg2_s33::Pool::default();
         let th = wpg2_s33::Threads { nthr: 1, nthr2: 1, tid: 0 };
@@ -471,7 +471,7 @@ fn sharpen_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result
 /// ESM1 (ESH8 PATCH 2): edge_aware_sharpen slot 52 (flag 0 route) through `esh8_exec::run`. Argument order (ESH7 MAPPING.md
 /// section 1): 0 Source, 1 Mask (image = plane, constant = scalar), 2 blur_type, 3 deriv_io (2 lanes), 4 levels, 5 tiny_detail_size,
 /// 6 edge_threshold, 7 sigmoid_scale (4 lanes), 8 rel_chan (3 lanes), 9 show_1 (unused by the slot driver). No default fills a missing
-/// cell. Compile context: tag = combo tag = nch; flag 0 (the claimed route, ESM1-A1); ctx[0x20] = frame width (as the blur wiring);
+/// cell. Compile context: tag = combo tag = nch; flag 0 (the verified render path, ESM1-A1); ctx[0x20] = frame width (as the blur wiring);
 /// the ctx width and height cells = w, h; the ctx aspect cell = host aspect cell (kp.host_aspect, 1.0 INFERRED, ESM1-A2). The sigmoid lanes 4..6 are the stale
 /// entry cells of the ESH7 record (4.2e-45, 1.4e-45, 0.0), read only by iteration counts above 4 (ESM1-A3).
 fn edge_aware_sharpen_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Image, ExecError> {
@@ -560,13 +560,13 @@ fn monochrome_a_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Imag
     Ok(Image { n, planes })
 }
 
-/// DRW1-W1: class `grad` (slot 52 flag 0, crate `grad` of GR1, R-PARITY at the W63 floor). Operands (program order, INFERRED from the
+/// DRW1-W1: class `grad` (slot 52 flag 0, crate `grad` of GR1, R-PARITY at floor). Operands (program order, INFERRED from the
 /// Distort_RGB text `(grad (monochrome Lens) blur_lens scale 1)` and GR1's field map): argument 0 = the source plane (one channel, combo row
 /// (1,1,1,1)), argument 1 = this (amount, parameter 0), argument 2 = this (gain multiplier, parameter 1), argument 3 = this
 /// (subpixel, parameter 2). Output channel 0 = dx, channel 1 = dy (selector tag 2; INFERRED, DRW1 reads the binding in the README). The blurred
 /// plane (aux) is scratch and dropped. Width 1 frames are refused (GR-A3 / HIGH-STAKES 3 CONTRACT-LIMIT until Opus decides).
 fn grad_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Image, ExecError> {
-    // DRW2 MUTANT-SWITCH (W187 e): `mu(id)` is a constant false unless the build has the feature `drw2_mut`; then COV_MUT=id selects one edit at run time.
+    // DRW2 MUTANT-SWITCH: `mu(id)` is a constant false unless the build has the feature `drw2_mut`; then COV_MUT=id selects one edit at run time.
     #[cfg(feature = "drw2_mut")]
     let mu = |id: u32| grad::mu(id);
     #[cfg(not(feature = "drw2_mut"))]
@@ -582,7 +582,7 @@ fn grad_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     if src_owned.n != w * h || src_owned.channels() < 1 {
         return Err(ExecError::Shape("grad: source smaller than the frame".into()));
     }
-    // DRW4 (W213 a): the aspect block is the port of set_aspect (aspect.rs, T2-checked against the emulated original); a value outside the
+    // DRW4: the aspect block is the port of set_aspect (aspect.rs, T2-checked against the emulated original); a value outside the
     // callers' range (double a > 1e-4 and a < 1e4, NaN included) never reaches set_aspect in the original (the callers substitute 1.0): class S, error.
     // DRW5 (INT6): HOST-ASPECT-FALLBACK. The final aspect value a goes through the tail of the caller block : outside (1e-4 as double, 1e4 as float) or NaN
     // the original calls set_aspect(1.0f). T2 582 cases 0 differing (DRW5 t2/emu_caller.tsv, tests/t18_caller.rs). The refusal HOST-ASPECT-RANGE is withdrawn.
@@ -609,7 +609,7 @@ fn grad_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
         // DRW1: at host_aspect 1.0 the values are aspect flag 0 and info = 0 (MEASURED in the E1 runs, README). The derivation for other aspects
         // (set_aspect : = (a != 1.0), = 1/a, = ((double)a > 1.6)) is INFERRED: the E1 write-watch did not see set_aspect write this info object.
         aspect: if asp_blk.aspect_block_b != 0 || mu(32) { Some(f32::from_bits(asp_blk.aspect_block_d)) } else { None },
-        // INT8 (W314 (f)): one source, the plugin's derivation (DRW4 set_aspect aspect_block_e); KParams.kparams_a is a checked test interface
+        // INT8: one source, the plugin's derivation (DRW4 set_aspect aspect_block_e); KParams.kparams_a is a checked test interface
         info_aspect_set: (asp_blk.aspect_block_e != 0) != mu(31),
         flag_1: if mu(30) { 0 } else { 1 },
         past_end: if mu(35) { 1.0 } else { 0.0 },
@@ -634,7 +634,7 @@ fn grad_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     Ok(Image { n, planes: vec![dx, dy] })
 }
 
-/// IN7-W2: `round` (slot 53, AVX2 body, `scale_rgb::round_snap`K-PARITY at the W63 floor, FL1) and `scale_rgb` (slot 53
+/// IN7-W2: `round` (slot 53, AVX2 body, `scale_rgb::round_snap`K-PARITY at floor, FL1) and `scale_rgb` (slot 53
 /// `scale_rgb::scale_rgb`K-PARITY). Both read the same two-record object (this: operand channel count, constant flag,
 /// constant lanes, plane array), so the operand mapping is shared: argument 0 = record 0 (n_in, flag_a, in_p, src planes), argument 1 =
 /// record 1 (n_out, flag_b, out_p, aux planes). The channel-count getter [vtable] is the selector tag (as for hue/sat, INFERRED, IN7-A2).
@@ -747,7 +747,7 @@ fn masked_blur_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Re
     Ok(Image { n: w * h, planes: outv })
 }
 
-/// DSW1-W1: `comp_premult` (slot 53, AVX2 body, crate `comp_premult` from CPM1: K-PARITY at the W63 floor, R-PARITY for
+/// DSW1-W1: `comp_premult` (slot 53, AVX2 body, crate `comp_premult` from CPM1: K-PARITY at floor, R-PARITY for
 /// the 10 measured combo rows, ROUTE AVX2-ONLY). Argument 0 = A (this), argument 1 = B (0x70 .), argument 2 =
 /// T, the alpha (0xa0 ...). `tag` (the combo row's output tag) is the class count getter (virtual slot 31) = number of output channels
 /// (DSW1-A1, INFERRED from CPM1's SPEC section 7 and the rows (4,4,1)->4 ... (3,4,1)->4, as for round_k). The crate fills a constant-only
@@ -755,7 +755,7 @@ fn masked_blur_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Re
 fn comp_premult_k(args: &[Arg], tag: i32, n: usize) -> Result<Image, ExecError> {
     need(args, 3, "comp_premult")?;
     let (pa, pb, pt) = (args[0].planes(), args[1].planes(), args[2].planes());
-    // INT12 (Batch 48 rule 6): MOC2's rep1 is removed; constant lanes arrive filled by exec.rs const_val (the original's set_arg_const binding,
+    // INT12: MOC2's rep1 is removed; constant lanes arrive filled by exec.rs const_val (the original's set_arg_const binding,
     // R-PARITY, CST2, CST3); comp_premult reads them raw as the original does .
     let rep1 = |a: &Arg| -> [f32; 4] { a.f32s() };
     let oa = comp_premult::Operand { count: args[0].count(), is_const: args[0].is_const(), consts: rep1(&args[0]), planes: &pa };
@@ -1053,7 +1053,7 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     let g = geom_of(kp, w, h);
     let mx = cvt_i32(const_lane(&args[2], 0, "warp", "wrap")?);
     let my = cvt_i32(const_lane(&args[2], 1, "warp", "wrap")?);
-    // INT8 (WPG13, W316): slot 53 driver entry mode assertion. The registered popup `wrap` is 0..2 (No, Tile, Reflect); the driver tests 1 and 2 only
+    // INT8 (WPG13): slot 53 driver entry mode assertion. The registered popup `wrap` is 0..2 (No, Tile, Reflect); the driver tests 1 and 2 only
     // so another value is outside the contract: refused by name, never run.
     if !(0..=2).contains(&mx) || !(0..=2).contains(&my) {
         return Err(kerr("warp", format!("WARP-MODE-OUT-OF-CONTRACT: mode lanes mx {} my {} outside the registered popup range 0..2 of wrap (OUT-OF-CONTRACT by input value, WPG13 MODE.md)", mx, my)));
@@ -1080,7 +1080,7 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
         let mut c1b = vec![wpg2_s33::SENT; n];
         let mut c2b = vec![wpg2_s33::SENT; n];
         let prim33 = wpg2_s33::Prim33 { n: cvt_i32(filter), cc: 0 };
-        let (assumption_f, assumption_g, assumption_h) = (-0.5f32, w as f32 - 0.5, (h as f32 - w as f32) / 2.0 - 0.5); let geom33_a = assumption_h + w as f32; if kp.host_aspect != 1.0 { return Err(unsupported("warp", "slot 33 geometry cells ctx measured only at host aspect 1.0 (WPG3 A10, W198)")); } // W198 A10: the measured cells replace the withdrawn WPG2 stand-in
+        let (assumption_f, assumption_g, assumption_h) = (-0.5f32, w as f32 - 0.5, (h as f32 - w as f32) / 2.0 - 0.5); let geom33_a = assumption_h + w as f32; if kp.host_aspect != 1.0 { return Err(unsupported("warp", "slot 33 geometry cells ctx measured only at host aspect 1.0 (WPG3 A10, W198)")); } // A10: the measured cells replace the withdrawn WPG2 stand-in
         let rec33 = wpg2_s33::Rec33 { gate: 0, w: w as i32, h: h as i32, assumption_f: assumption_f.to_bits(), assumption_g: assumption_g.to_bits(), assumption_h: assumption_h.to_bits(), geom33_a: geom33_a.to_bits() };
         let mut pool = wpg2_s33::Pool::default(); // captured state: g_cell_b = 0, serial callback
         let th = wpg2_s33::Threads { nthr: 1, nthr2: 1, tid: 0 };
@@ -1144,7 +1144,7 @@ fn postdivide_k(args: &[Arg], tag: i32, n: usize) -> Result<Image, ExecError> {
     let sref: Vec<&[u32]> = bits.iter().map(|v| v.as_slice()).collect();
     let nout = tag.clamp(0, 4) as usize;
     let mut out = vec![vec![0u32; n]; nout];
-    // INT32 step DX (PDA1 PATCH 2, W604): the copy-alpha arm on the recorded route only (copy_alpha 0, elnum 3, nout 3), checked before the
+    // INT32 step DX (PDA1 PATCH 2): the copy-alpha arm on the recorded route only (copy_alpha 0, elnum 3, nout 3), checked before the
     // alpha is fetched; every other copy_alpha >= 0 route reaches postdiv_into below and keeps POSTDIV-COPY-ALPHA-SOURCE in its error text.
     let route = crate::postdiv::CopyAlphaRoute { copy_alpha, elnum: e, nout: tag };
     if copy_alpha == crate::postdiv::ROUTE_COPY_ALPHA && e == crate::postdiv::ROUTE_ELNUM && tag == crate::postdiv::ROUTE_NOUT {

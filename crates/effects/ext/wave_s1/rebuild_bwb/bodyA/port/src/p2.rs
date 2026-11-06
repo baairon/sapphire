@@ -20,7 +20,7 @@ impl Plane {
     }
 }
 
-/// Host statics (W44): edge flag bytes ..2b and the float .
+/// Host statics: edge flag bytes ..2b and the float.
 #[derive(Clone, Copy, Debug)]
 pub struct Host {
     pub port_blk_a: u8,

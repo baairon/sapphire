@@ -1,4 +1,4 @@
-//! VPS-only check: the computed tables against the copies of the plugin's tables.
+//! Check that needs the stored copies under VEC_DIR: the computed tables against the copies of the plugin's tables.
 //! The copies live under `VEC_DIR/effects/native_tables/` (`stab_file.hex`, `dtab_file.hex`); when absent the test prints NOT RUN.
 use libm_sincos::tables;
 

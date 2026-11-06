@@ -1,4 +1,4 @@
-//! Batch 013: a prefix-sum search over an entry table, 8-bit repacking with null checks, BGR to 10-bit YCbCr.
+//! a prefix-sum search over an entry table, 8-bit repacking with null checks, BGR to 10-bit YCbCr.
 use crate::cov::br;
 use crate::*;
 

@@ -18,7 +18,7 @@ pub const SCALE: f32 = f32::from_bits(0x3980_0000);
 /// Additive constant of the seed (`lea ecx,[rax+rcx*1]`).
 pub const SEED_BIAS: u32 = 0x8235;
 
-/// Explicit inputs of the slot (no Default, W65/W83): the three host record fields the slot reads. The host producers of these fields are
+/// Explicit inputs of the slot (no Default): the three host record fields the slot reads. The host producers of these fields are
 /// NOT MEASURED (ST1-A1): they are record fields the evaluator must feed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Params {
@@ -147,7 +147,7 @@ pub fn render_mut(t: &HashTable, p: &Params, out0: &mut [f32], out1: &mut [f32],
     Ok(())
 }
 
-/// Port of slot 53 : fills `out0[0..n]` and `out1[0..n]`n <= 0 is a successful no-op (W94). `t` is the hash table built by .
+/// Port of slot 53: fills `out0[0..n]` and `out1[0..n]`n <= 0 is a successful no-op. `t` is the hash table built by.
 pub fn render(t: &HashTable, p: &Params, out0: &mut [f32], out1: &mut [f32]) -> Result<(), Error> {
     render_mut(t, p, out0, out1, Mut::None)
 }

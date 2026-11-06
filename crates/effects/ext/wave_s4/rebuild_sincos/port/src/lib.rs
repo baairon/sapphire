@@ -10,7 +10,7 @@
 //!
 //! Tables: the sincosf table (64 entries of (sin, cos) of k pi/32) and the double table (64 entries of 64 bytes) are computed at
 //! first use from their mathematical definition (module `exact`: 320 bit fixed point, Machin's pi, Taylor series). No file and no
-//! captured value is read. A VPS-only check (tests/vs_copy.rs, copies under VEC_DIR) compares all 128 entries with the plugin's
+//! captured value is read. A check that needs the stored copies (tests/vs_copy.rs, copies under VEC_DIR) compares all 128 entries with the plugin's
 //! tables bit for bit. All other constants are captured.
 
 pub mod exact;

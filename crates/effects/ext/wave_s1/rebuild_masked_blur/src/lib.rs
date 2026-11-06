@@ -93,7 +93,7 @@ pub struct MaskedBlurParams {
     pub aspect: Option<f32>,
     /// Constant used by the combine job (MB-A1, STD-007). MEASURED-DYLIB: the value the original uses is [`MASK_THRESHOLD`]
     /// (2^-13, bytes 00 00 00 39 in the approved plugin file, RR1). The field stays an explicit parameter with no default and no
-    /// constructor or `Default` impl fills it (PC-1, W65a); callers that mean the original pass `MASK_THRESHOLD`. Live range: the compared mask
+    /// constructor or `Default` impl fills it (PC-1); callers that mean the original pass `MASK_THRESHOLD`. Live range: the compared mask
     /// is clamped to [0,1], so pixels with m <= thr (or NaN) keep the source; any thr below 1 changes outputs, thr >= 1 keeps every pixel.
     pub mask_threshold: f32,
 }

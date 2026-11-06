@@ -5,7 +5,7 @@
 //!   out[ch][i] = cond(i) ? x[ch][i] : y[ch][i]       (bit copies, no arithmetic)
 //! with cond = (c > 0) for `if+ c x y` and (a > b) for `if> a b x y`, an ordered compare (NaN gives false, so the y arm).
 //! Operands are an image (planes of `n` floats) or a constant (4 floats), exactly as the host fills the object.
-//! Std only, no unsafe, no Default on parameters (W65). Assumption prefix OP3-.
+//! Std only, no unsafe, no Default on parameters. Assumption prefix OP3-.
 
 pub const PREFIX: &str = "OP3-";
 /// Output planes start filled with this NaN pattern in the harness (img_oracle SENTINEL_BITS).

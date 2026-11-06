@@ -1,4 +1,4 @@
-//! LYM1: the registered program as the original's parser sees it (LAY1, W225 (b)): the layout_effect row ALONE is handed to the parser
+//! LYM1: the registered program as the original's parser sees it (LAY1): the layout_effect row ALONE is handed to the parser
 //!  (stores rec[0] verbatim when the extra string rec[0] is empty); the row names the def_effect and carries
 //! `:extra` (new parameters appended to the program's parameter array: PDV3's builder appends every record the parser
 //! builds, unconditionally), `:modify` (flags and renames of def parameters) and `:hardcode`.
@@ -91,15 +91,15 @@ pub enum LItem {
     /// a bare name: the def parameter of that name
     Bare(String),
     /// `( :modify NAME [CANON] [= VALUE] ( flags ) )`: canonical name = CANON or NAME (the def parameter); `value` true when the item carries `= VALUE`
-    /// INT24 (W518 (c)): `text` the raw item text; `value_text` the VALUE of a `NAME = VALUE` item (None when the reader cannot separate them)
+    /// INT24: `text` the raw item text; `value_text` the VALUE of a `NAME = VALUE` item (None when the reader cannot separate them)
     Modify { name: String, canon: String, value: bool, flags: Vec<String>, text: String, value_text: Option<String> },
     Extra(Extra),
     Hardcode { name: String, value: f64 },
-    /// INT21 step L (W473 (b)): `:hardcode NAME = [ ... ]`: the lanes as the genotype reader gives a def vector literal of the same text
+    /// INT21 step L: `:hardcode NAME = [ ... ]`: the lanes as the genotype reader gives a def vector literal of the same text
     HardcodeVec { name: String, lanes: Vec<f64>, text: String },
 }
 
-/// INT21 step L (W473 (b)): the label of the three registered rows that carry a vector `:hardcode` (printed with the LYM2_REPORT line).
+/// INT21 step L: the label of the three registered rows that carry a vector `:hardcode` (printed with the LYM2_REPORT line).
 pub const LAYOUT_HARDCODE_VECTOR_LABEL: &str = "LAYOUT-HARDCODE-VECTOR (Mosaic_Autogen wrap: the value node takes the hardcode's lanes and type; Texture_Chroma_Spiral_Autogen shift (def 1 lanes, hardcode 2; behind LAYOUT-MODIFY-VALUE-UNSUPPORTED on the same row) and Dissolve_Zap bg_rel_color (def 1 lanes, hardcode 3) are refused LAYOUT-HARDCODE-LANES-MISMATCH, MEASURED INT21 t34; these programs' merged plans are not compared with an original; no claimed style carries a vector hardcode, MEASURED LYM2 TEXTS.tsv; the rule INFERRED from the layout item hook and set_hardcoded_arg)";
 
 /// One layout input: `Name` or `( Name Canonical [required] )`.
@@ -229,7 +229,7 @@ pub fn read_layout_sx(items: Vec<Sx>) -> Result<LayoutInfo, String> {
                         info.hardcodes.push((n.clone(), v.clone()));
                         info.items.push(LItem::Hardcode { name: n.clone(), value });
                     } else {
-                        // INT21 step L (W473 (b)): a vector literal VALUE goes through the genotype reader's own vector-literal path
+                        // INT21 step L: a vector literal VALUE goes through the genotype reader's own vector-literal path
                         let text = l[3..].iter().map(flat).collect::<Vec<_>>().join(" ");
                         let prog = info.header.last().cloned().unwrap_or_default();
                         let lanes = if text.starts_with('[') { crate::parse::read_vector_literal(&text).ok() } else { None };
@@ -310,7 +310,7 @@ pub struct MergeReport {
 ///   constant 0; `:modify` rows in the 13 texts carry no value);
 /// * check_layout_consistency (proto 165): a def parameter missing from the layout is a parse error.
 /// So the merged array = the layout items in order: def parameters (by canonical name), `:extra` parameters at their layout position, minus the hardcoded ones.
-/// INT24 (W518 (c)): the LAYOUT-MODIFY-VALUE-UNSUPPORTED refusal text; `what` is ":modify NAME = VALUE" or the raw item text.
+/// INT24: the LAYOUT-MODIFY-VALUE-UNSUPPORTED refusal text; `what` is ":modify NAME = VALUE" or the raw item text.
 pub fn modify_value_refusal(program: &str, what: &str) -> String {
     format!("LAYOUT-MODIFY-VALUE-UNSUPPORTED ({}: {} in the layout row; the original's handling of a :modify value is not ported; no claimed program carries one, MEASURED IFNEQ_AFTER_Q.tsv against STYLE_MAP.tsv; W518)", program, what)
 }
@@ -334,7 +334,7 @@ pub fn merge_layout(g: &mut Genotype, info: &LayoutInfo) -> Result<MergeReport, 
                 rep.modify_count += 1;
                 if *value {
                     rep.modify_values += 1;
-                    // INT24 (W518 (c)): the refusal prints the name and the value (LYM2's reader took the value text as the name), or the raw row text
+                    // INT24: the refusal prints the name and the value (LYM2's reader took the value text as the name), or the raw row text
                     let what = match value_text {
                         Some(v) => format!(":modify {} = {}", name, v),
                         None => text.clone(),
@@ -371,7 +371,7 @@ pub fn merge_layout(g: &mut Genotype, info: &LayoutInfo) -> Result<MergeReport, 
                 rep.hardcoded.push((name.clone(), *value as f32));
             }
             LItem::HardcodeVec { name, lanes, text } => {
-                // INT21 step L (W473 (b)): the target value node takes all the hardcode's lanes and its type (the layout item hook copies the VALUE
+                // INT21 step L: the target value node takes all the hardcode's lanes and its type (the layout item hook copies the VALUE
                 // node's value and value_type; set_hardcoded_arg copies the byte [node field] cells, a count-driven copy)
                 let p = take(&mut def, name).ok_or_else(|| format!("LAYOUT-HARDCODE-UNKNOWN: {} is not a parameter of {}", name, g.name))?;
                 let ni = p.node.ok_or_else(|| format!("LAYOUT-HARDCODE-NO-NODE: {}", name))?;

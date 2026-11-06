@@ -3,7 +3,7 @@
 use std::fmt;
 use std::rc::Rc;
 
-/// A planar f32 image: `planes.len()` channels of `n` floats each (whole frame, one tile: ROI-FULLFRAME, W84).
+/// A planar f32 image: `planes.len` channels of `n` floats each (whole frame, one tile: ROI-FULLFRAME).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Image {
     pub n: usize,
@@ -99,7 +99,7 @@ pub enum ExecError {
     Shape(String),
     Kernel { class: String, msg: String },
     BadPlan(String),
-    /// W211 (e): the convert pair at a band cell other than 1 (the stepped writer is not ported or judged)
+    /// the convert pair at a band cell other than 1 (the stepped writer is not ported or judged)
     CellGt1NotClaimed(usize),
 }
 
@@ -120,7 +120,7 @@ impl fmt::Display for ExecError {
 
 impl std::error::Error for ExecError {}
 
-/// Explicit parameters the builtin crates require (no defaults inside the crates, W65). Every field is an
+/// Explicit parameters the builtin crates require (no defaults inside the crates). Every field is an
 /// assumption of this executor (NV5-A3, NV5-A4) and is listed in the README.
 #[derive(Clone, Copy, Debug)]
 pub struct KParams {
@@ -145,21 +145,21 @@ pub struct KParams {
     /// FX-1 (replaces NV9-A6 wrong default 1): blur render scale = [info] = ctx = the FRAME WIDTH (TR1: scale W + mirror edge is 8192 of 8192 bit equal, scale 1, 2, 32 is 0 of 8192).
     /// A value <= 0 means "bind the frame width" (the default); a positive value is used as given. NV9-BLUR-SCALE-OLD: env NV9_BLUR_SCALE_OLD=1 makes the standin default 1 again.
     pub blur_render_scale: i32,
-    /// NV10-P2 / W175 (c): scalar head count of the original xy ramp (see `x_ramp`), an explicit per-run host input = (32 - (p & 31)) / 4 for the host's row pointer p (0 when p is 32 byte aligned); default 0 (HOST-ALLOC); -1 = the closed-form pixel-centre plane of NV-9b, an explicit non-host option
+    /// NV10-P2 / scalar head count of the original xy ramp (see `x_ramp`), an explicit per-run host input = (32 - (p & 31)) / 4 for the host's row pointer p (0 when p is 32 byte aligned); default 0 (HOST-ALLOC); -1 = the closed-form pixel-centre plane of NV-9b, an explicit non-host option
     pub xy_head: i32,
-    /// INT19 S1 (W444 (b), W452 (c)): XY-HEAD-MODE. OneHead (the pre-WPE3 form: the head `xy_head` for every row) or PerRow (WPE3: row r's head from
+    /// INT19 S1: XY-HEAD-MODE. OneHead (the pre-WPE3 form: the head `xy_head` for every row) or PerRow (WPE3: row r's head from
     /// the row pointer phase0 + r * W * 4). fx_run derives it from the plan's xy shape (kernels2::xy_head_mode_of); the state A constructor keeps OneHead.
     pub xy_head_mode: XyHeadMode,
-    /// WPH (W634 (b)): base phase mod 32 of the perspective out2 / perspective_alpha out1 planes as per-run host inputs (-1 = not given), and the host cells
+    /// WPH: base phase mod 32 of the perspective out2 / perspective_alpha out1 planes as per-run host inputs (-1 = not given), and the host cells
     /// [[rec]] (i32), (f64) of perspective_alpha (None = not given); state A tests may still read the WPG1_* env knobs
     pub persp_base: i32,
     pub palpha_base: i32,
-    /// XWP2b (W746 (e) part 2, W773): the perspective out2 / perspective_alpha out1 destination is a row buffer in the counted plan (allocated in the
+    /// XWP2b (part 2): the perspective out2 / perspective_alpha out1 destination is a row buffer in the counted plan (allocated in the
     /// line list of the exec block that writes it): every row is written at the same pointer, so every row takes the base phase (false = a plane:
     /// rows at base + row x W x 4, the WPE3 form). Set only on the --xy-base-list route from the placement model's plan text.
     pub persp_rowbuf: bool,
     pub palpha_rowbuf: bool,
-    /// WPH2 (W665 (d) 3): base phase mod 32 of the u plane as its producer writes it (-1 = not given: the geom branch)
+    /// WPH2: base phase mod 32 of the u plane as its producer writes it (-1 = not given: the geom branch)
     pub xy_base: i32,
     pub palpha_cells: Option<(i32, i32, f64)>,
     /// DS1: destination plane base address modulo 32 (bytes) of the small planes of exec-downsampled (picks the alignment peel of the down kernel); MEASURED 0 in the emulator runs, a host allocator value otherwise
@@ -167,7 +167,7 @@ pub struct KParams {
     /// DS1-OFF: skip the exec-downsampled model (the executor then runs the body at full size, the pre-DS1 behaviour)
     pub ds_off: bool,
     /// GR1 / INT3-A: `info != 0` of the image object read by class grad . PARAM-UNCAPTURED in GR1 (GR-A1); an explicit input with a labelled STAND-IN default of false (no value was chosen by GR1; false is the value DRW1 measured at host aspect 1.0 in its E1 runs, DRW1 unfinished)
-    /// INT8 (W314 (f)): test interface only. The executor's info_aspect is the plugin's derivation (set_aspect aspect_block_e, DRW4); Some(v) different from it is an error.
+    /// INT8: test interface only. The executor's info_aspect is the plugin's derivation (set_aspect aspect_block_e, DRW4); Some(v) different from it is an error.
     pub kparams_a: Option<bool>,
     /// SHE3 HOST-COUNT (ctx, ROUTE W x H): the element count of sharpen's combine job. None makes the sharpen arm fail; the executor graph loop fills W x H.
     pub sharpen_count: Option<usize>,
@@ -377,7 +377,7 @@ pub fn xy_ramp(w: usize, h: usize, head: usize) -> Image {
     xy_ramp_mode(w, h, head, XyHeadMode::OneHead)
 }
 
-/// INT19 S1: the xy head mode of `variable 2`'s x writer (XY-HEAD-MODE, W452 (c)).
+/// INT19 S1: the xy head mode of `variable 2`'s x writer (XY-HEAD-MODE).
 /// OneHead: the plan writes one x row buffer, the head is applied once to that buffer's pointer and every row repeats it (XYB1 part 2, XY-ONE-ROW,
 /// MEASURED for Transform_and_Blur 63x33 at Full and Half). PerRow: the plan allocates an x plane indexed by row and row r's head comes from that
 /// row's pointer (WPE3, MEASURED by the record for Warp_Perspective).

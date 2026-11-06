@@ -8,7 +8,7 @@ pub use ops_arith::{OpError, Operand, ONE};
 /// Scalar abs mask, CAPTURED : low lane 0x7fffffff (lookup_ops.tsv of OP2).
 pub const ABS_MASK: u32 = 0x7fff_ffff;
 
-/// Explicit parameters. `nout` = result of virtual slot 31 (hooked count getter, W69). `n` = [info].
+/// Explicit parameters. `nout` = result of virtual slot 31 (hooked count getter). `n` = [info].
 /// `vec_one` = STD-002 (8 lanes, MEASURED-DYLIB 1.0f), `vec_mask` = OP2-A3 (8 lanes,
 /// MEASURED-DYLIB 0x7fffffff); both uncovered in the captured image, no default. `dst3_phase_bytes` = (address of output plane 3) & 0x1f (ALIGN-DEPENDENT).
 pub struct Params {
@@ -266,7 +266,7 @@ fn vec_kernel(d: &mut [f32], src: &[f32], n: usize, phase: u32, w: usize, thr: u
     }
 }
 
-/// Every stand-in of this port with its tier (W65 / W104 wording).
+/// Every stand-in of this port with its tier.
 pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
         ("IN2D-A1", "CAPTURED", "ONE 1.0f and the scalar abs mask 0x7fffffff (low lane of): bytes read by lookup.py (OP2 gate/lookup_ops.tsv)"),

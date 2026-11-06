@@ -1,15 +1,15 @@
 # Effects
 
-Ten of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program name, a size and the input planes, with no external data ([Build and run](#build-and-run)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)).
+Ten of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program name, a size and the input planes, with no external data ([Build and run](#build-and-run)). Each registered style of the ten effects is also offered as a stage of `sapphire stage apply`, which reads and writes raw video frames ([Adding a provider](stages.md#effects-provider)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)).
 
-Effects rebuilt: <!--f:effects_rebuilt-->10<!--/f--> of <!--f:effects_listed-->10<!--/f--> listed here, the first milestone of the effect rebuild. The other effects of the plugin are not rebuilt; their names are strings only ([names](../README.md#names)).
+Effects rebuilt: <!--f:effects_rebuilt-->10<!--/f--> of <!--f:effects_listed-->10<!--/f--> listed here, the first milestone of the effect rebuild. The other effects of the plugin are not rebuilt; their names are strings only ([names](../README.md#names)). A new effect follows the conventions of [Adding an effect](adding-an-effect.md).
 
 ## What rebuilt means
 
-An effect counts as rebuilt when every one of its registered styles passes the project's seven checks on the final binary: identity of the program text, the builtin classes it calls, the data it reads, its literals, the compiled plan, the combination tables and the execution itself. Every comparison was made against the original plugin's code running in an emulator that follows Intel's specification, not on silicon. The outputs of the final binary are recorded as predictions and checked by full SHA-256. No result of native execution of the original code is used.
+An effect counts as rebuilt when every one of its registered styles passes seven checks on the final binary: identity of the program text, the builtin classes it calls, the data it reads, its literals, the compiled plan, the combination tables and the execution itself. Every comparison was made against the original plugin's code running in an emulator that follows Intel's specification, not on silicon. The outputs of the final binary are recorded and checked by full SHA-256. No result of native execution of the original code is used.
 
 <!--gen:effects_status-->
-| effect | registered styles | counted rows | frozen members | re-run units |
+| effect | registered styles | verified comparisons | recorded renders | re-rendered units |
 |---|---|---|---|---|
 | `S_Blur` | Blur_Color_Autogen, Blur_Mono_Autogen | 7 | 52 | 52 |
 | `BlurMoCurves` | Transform_and_Blur_Autogen, Blur_Motion_Curves_No_Transform_Autogen | 41 | 69 | 69 |
@@ -23,71 +23,340 @@ An effect counts as rebuilt when every one of its registered styles passes the p
 | `S_WarpPerspective` | Warp_Perspective_Autogen | 19 | 256 | 256 |
 <!--/gen:effects_status-->
 
-*Counted rows* are the booked comparison rows of the original's emulator runs against the native code that count for the effect: <!--f:effects_counted_rows-->425<!--/f--> in all. *Frozen members* are the recorded native predictions of the final binary: <!--f:effects_frozen_members-->989<!--/f--> in all. *Re-run units* are the same members run again with the binary built from this repository, with a second render for the multi-render rows: <!--f:effects_rerun_units-->1,039<!--/f--> units, every one byte identical to its frozen prediction by full SHA-256 in the three output files (`ae32`, `dest` and `src0`). `BlurMoCurves` is listed by the name of its host record; that string is not in the name bank's list of effect names.
+*Verified comparisons* are the comparisons between the original's emulator runs and the native code that count toward the effect: <!--f:effects_counted_rows-->425<!--/f--> in all. *Recorded renders* are the outputs of the final binary, recorded as the expected result of each case: <!--f:effects_frozen_members-->989<!--/f--> in all. A few of them are controls, recorded and not counted; the rest are the *counted* recorded renders. *Re-rendered units* are the same cases rendered again with the binary built from this repository, with a second render for the cases that render twice: <!--f:effects_rerun_units-->1,039<!--/f--> units, every one byte identical to its recorded render by full SHA-256 in the three output files (`ae32`, `dest` and `src0`). `BlurMoCurves` is listed by the name of its host record; that string is not in the [name bank](glossary.md#name-bank)'s list of effect names.
 
-## Report wording
+The *verified render path* of an effect is the host arrangement its verified comparisons used: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state, 32-bit float images and the effect's own host settings. The stages of `sapphire stage apply` run each style on that path (see [Adding a provider](stages.md#effects-provider)).
 
-The text each effect is reported with, copied verbatim from its paragraph in the full report. The wording is kept exactly as hashed below, so labels in it such as row, run and certificate codes name the evidence runs and are not explained here.
+## Using the effects
+
+Every effect below is run the same way: build `sapphire` and `fx_run`, write some raw frames at depth 32 and pipe them through the stage. The commands are run from the repository root.
+
+```sh
+cargo build --release --offline -p fx_exec -p neutral-handoff
+ffmpeg -f lavfi -i testsrc=size=64x32:rate=25 -frames:v 3 -f rawvideo -pix_fmt gbrapf32le in.raw
+```
+
+`sapphire` finds `fx_run` beside itself in `target/release`. Each section gives one worked command that reads `in.raw` and writes `out.raw`. The parameter values in the commands are values the verified comparisons used.
+
+The parameter tables list each stage's parameters as `sapphire stage list --json` prints them: the option that sets it, the stage type and the number of lanes of the value `V`. A parameter with more than one lane is passed as comma separated numbers, for example `--param blur_rel=0.5,1.25`. A parameter that is not passed keeps its registered default. The defaults and valid ranges are printed by `fx_run --describe-params PROGRAM`, for example `target/release/fx_run --describe-params Trails_Autogen`; the stage refuses a value outside the range with exit 3.
+
+Parameters whose names contain `mocha` belong to the mask controls of the original. They are offered because verified comparisons set them, but mask tracking data is not part of the rebuild ([Limits common to the ten effects](#limits-common-to-the-ten-effects)).
+
+Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. Of the opacity choices only Normal (`2`) renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED). `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items.
+
+See [Driving the effect parameters](parameters-guide.md) for every stage parameter, how to write its value and the values verified against recorded renders.
 
 ### `S_Blur`
 
-```text
-S_Blur (Blur_Color_Autogen and Blur_Mono_Autogen, the two registered styles selected by the Effect popup) is rebuilt in native Rust from the original plugin's code and data. Every building block of its programs matches the original code bit for bit when both run on the same inputs in an emulator, our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen, and the whole effect produces the same pixels as the original CPU render path on test images: 48 counted compare rows END-TO-END EQUAL, plus 4 inert controls (the Blur_Color_BM and Blur_Mono_BM rows under MOCHA-PARAMS-NOT-CLAIMED), also END-TO-END EQUAL: 52 of 52 booked compare rows EQUAL, all 52 booked FINAL (Blur_Color and Blur_Mono at 64x32 and 50x7, including the Opacity answer 1 and 3 rows)(1). The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ slightly on real CPUs (AUD4 B1: 0 rcp or rsqrt entries among the builtin entries of the route classes). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state as set by the test harness, which answered three of the plugin's licence-family routines with fixed values instead of running them (LICENCE-GATES-FORCED), f32 images, a disconnected host whose licence client finds no licence server (DISCONNECTED-HOST, HOST-LICENCE-UNREACHABLE), and the other named limits below. Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed. If the harness arrangement named LICENCE-GATES-FORCED is changed by Ale's decision, this result is re-run under the new arrangement before it is reported, or withdrawn. Licence, activation, trial and machine-identity code of the original is not rebuilt and not analysed beyond the judge-side gate answers of W130.
+Blurs the image. The amount sets the blur radius, and a relative amount per axis makes the blur wider in one direction than in the other. Brightness, an offset for dark values, an opacity scale and a mix with the source shape the result after the blur. The two styles are the two choices of the effect's style popup: a colour blur and a mono blur.
+
+| style | stage |
+|---|---|
+| Blur_Color_Autogen | `stage apply blur_color_autogen` |
+| Blur_Mono_Autogen | `stage apply blur_mono_autogen` |
+
+Both stages offer the same parameters:
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param blur_amount=V` | float | 1 |
+| `--param shift_mocha_mask=V` | text | 2 |
+| `--param blur_rel=V` | text | 2 |
+| `--param brightness=V` | float | 1 |
+| `--param scale_opacity=V` | float | 1 |
+| `--param mix_with_source=V` | float | 1 |
+| `--param subpixel=V` | float | 1 |
+| `--param offset_darks=V` | float | 1 |
+| `--param filter=V` | float | 1 |
+| `--param combine_masks=V` | float | 1 |
+| `--param mocha_mask_opacity=V` | float | 1 |
+| `--param invert_mocha_mask=V` | float | 1 |
+| `--param resize_mocha_mask=V` | float | 1 |
+| `--param resize_mocha_rel_x=V` | float | 1 |
+| `--param resize_mocha_rel_y=V` | float | 1 |
+| `--param bypass_mocha_mask=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+
+```sh
+target/release/sapphire stage apply blur_color_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param blur_amount=4.2183990478515625 --param blur_rel=0.573104858,1.25630188 --param brightness=1.36999512 --param mix_with_source=0.337097168 < in.raw > out.raw
 ```
+
+Parity: 7 verified comparisons, 52 recorded renders and 52 re-rendered units, all equal. No approximate reciprocal instruction is used on the verified render path (MEASURED). Through each stage, 18 of the style's 24 counted recorded renders are re-checked: the ones that match the stage's host arrangement.
 
 ### `BlurMoCurves`
 
-```text
-S_BlurMoCurves (two registered styles: Transform_and_Blur, run by Transform_and_Blur_Autogen, and Blur_Only, run by Blur_Motion_Curves_No_Transform_Autogen) is rebuilt in native Rust from the original plugin's code and data. Every building block of its programs matches the original code bit for bit when both run on the same inputs in an emulator, our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen, and the whole effect produces the same pixels as the original CPU render path on test images: 41 counted rows END-TO-END EQUAL on fx_run_s32_g4 (24 Transform_and_Blur and 17 Blur_Only, at the claim sizes 64x32 and 50x7), with 1 inert control and 10 history rows not counted (BOOKED.tsv). The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ slightly on real CPUs (APPROX-MODEL, INFERRED for this effect: the BMC route listing file AUDIT_BUILTINS_LISTING_BMC.tsv covers the entry stubs of the 7 route classes, 14 slot entries, and shows 0 rcp or rsqrt instructions in them (MEASURED by AUD10); the kernel bodies behind the stubs have no BMC listing file on record, so whether an approximate instruction is reached on this route is not measured here and no ulp figure is stated; another effect's figure is not used as evidence, W1018 (c)). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units with curve values supplied by the host stand-in HC-KEYED-LINEAR, one thread, the licensed state as set by the test harness (the W130 gate answers), f32 images, and the other named limits below. Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed. Licence, activation, trial and machine-identity code of the original is not rebuilt and not analysed beyond the judge-side gate answers of W130.
+Motion blur along a path. The host supplies a motion curve per frame (rotation, shift, depth distance and centre), and the effect averages the image over the shutter interval along that motion. Transform_and_Blur also applies the transform of the curve to the image; Blur_Only blurs along the motion and leaves the image in place. Shutter duration and shift set the interval, exposure bias weights it, and the blur resolution sets how many samples are taken.
+
+| style | stage |
+|---|---|
+| Transform_and_Blur_Autogen | `stage apply transform_and_blur_autogen` |
+| Blur_Motion_Curves_No_Transform_Autogen | `stage apply blur_motion_curves_no_transform_autogen` |
+
+Both stages offer the same parameters:
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param shutter_duration=V` | float | 1 |
+| `--param scale_result=V` | float | 1 |
+| `--param subpixel=V` | checkbox | 1 |
+| `--param cset_opacity=V` | int | 1 |
+| `--param exposure_bias=V` | float | 1 |
+| `--param shutter_shift=V` | float | 1 |
+| `--param blur_res=V` | int | 1 |
+| `--param wrap=V` | text | 2 |
+| `--param host_curve_values=V` | text | a file path |
+
+`host_curve_values` names a curve file in the recorded format. Without it the stage writes an identity curve (no rotation, no shift, depth distance 1, centred) and adds every sample `fx_run` asks for across the whole shutter interval, so any `shutter_duration` runs (MEASURED). A sample that neither a given curve file nor the identity curve can serve ends exit 3 with `HOST-CURVE-SAMPLE-UNSERVED` (MEASURED).
+
+```sh
+target/release/sapphire stage apply transform_and_blur_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param scale_result=0.765625 < in.raw > out.raw
 ```
+
+Parity: 41 verified comparisons (24 for Transform_and_Blur and 17 for Blur_Only), 69 recorded renders and 69 re-rendered units, all equal. The entry code of the route's builtins uses no approximate reciprocal instruction (MEASURED); the kernel bodies behind it were not listed, so whether one is reached is not measured (INFERRED to be none). The curve values come from a stand-in for the host. Of the counted recorded renders, 13 of 35 (Transform_and_Blur) and 13 of 32 (Blur_Only) match the stage's host arrangement.
 
 ### `S_Diffuse`
 
-```text
-S_Diffuse (Diffuse_Autogen, its only registered style) is rebuilt in native Rust from the original plugin's code and data. Every building block of its program matches the original code bit for bit when both run on the same inputs in an emulator, our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen, and the whole effect produces the same pixels as the original CPU render path on test images: 40 of 40 compare rows END-TO-END EQUAL (31 booked FINAL: 20 list runs, mocha 11; 6 inert controls (GB1, REACH and ZRB at both sizes, W792); the 3 IMB rows compared and recorded, not booked as branch sets, Batch 52)(1)(2). The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ slightly on real CPUs (APPROX-MODEL: the one approximate site reached on this route, rcpps 0xb77c93 in the plugin's log 0xb78140, changes the level counts and the log result bits by 0 under W49's bound, so the output change is 0 ulp; see item 8). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state as set by the test harness, which answered three of the plugin's licence-family routines with fixed values instead of running them (LICENCE-GATES-FORCED), f32 images, a disconnected host whose licence client finds no licence server (DISCONNECTED-HOST, HOST-LICENCE-UNREACHABLE), and the other named limits below. Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed. If the harness arrangement named LICENCE-GATES-FORCED is changed by Ale's decision, this result is re-run under the new arrangement before it is reported, or withdrawn. Licence, activation, trial and machine-identity code of the original is not rebuilt and not analysed beyond the judge-side gate answers of W130.
+Scatters the pixels of the image: each output pixel takes its value from a nearby position chosen by a fixed pseudo random pattern, so edges break up into grain. The amount sets how far pixels move, a relative amount per axis stretches the scatter, and the wrap setting chooses what happens at the image border.
+
+| style | stage |
+|---|---|
+| Diffuse_Autogen | `stage apply diffuse_autogen` |
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param diffuse_amount=V` | float | 1 |
+| `--param blur_mocha_mask=V` | float | 1 |
+| `--param shift_mocha_mask=V` | text | 2 |
+| `--param rel_amount=V` | text | 2 |
+| `--param wrap=V` | text | 2 |
+| `--param diffuse_amount_host=V` | float | 1 |
+| `--param blur_mocha_mask_host=V` | float | 1 |
+| `--param bypass_mocha_mask=V` | float | 1 |
+| `--param combine_masks=V` | float | 1 |
+| `--param invert_mocha_mask=V` | float | 1 |
+| `--param mocha_mask_opacity=V` | float | 1 |
+| `--param resize_mocha_mask=V` | float | 1 |
+| `--param resize_mocha_rel_x=V` | float | 1 |
+| `--param resize_mocha_rel_y=V` | float | 1 |
+| `--param show_mocha_mask_only=V` | float | 1 |
+
+`diffuse_amount` and `blur_mocha_mask` are the values as the host passes them; `diffuse_amount_host` and `blur_mocha_mask_host` set the same parameters in the effect's own units.
+
+```sh
+target/release/sapphire stage apply diffuse_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param diffuse_amount=48 --param rel_amount=1,1 --param wrap=2,2 < in.raw > out.raw
 ```
+
+Parity: 31 verified comparisons, 54 recorded renders and 54 re-rendered units, all equal. One approximate reciprocal instruction is reached, inside a logarithm; its effect on the output is 0 ulp under the emulator's bound (MEASURED). 31 of 42 counted recorded renders match the stage's host arrangement.
 
 ### `S_DistortRGB`
 
-```text
-S_DistortRGB (Distort_RGB, effect Distort_RGB_Autogen on the claim route) is rebuilt in native Rust from the original plugin's code and data. Every building block of its program matches the original code bit for bit when both run on the same inputs in an emulator, our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen, and the whole effect produces the same pixels as the original CPU render path on test images: 30 of 30 counted rows END-TO-END EQUAL (28 byte-EQUAL by full SHA-256 and 2 EQUAL BY NAN CLASS with payloads not claimed, ALPHA-SPECIAL-RUN; 30 of 30 BOOKED-FINAL; CMP_COUNTED.tsv and BOOKED.tsv of drc1_distort_e2e). The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ slightly on real CPUs (no approximate instruction on this route: 0 rcp or rsqrt ops in the 42 listing entries of the 21 route classes, aud3_distort_audit/AUDIT_BUILTINS_LISTING_DISTORT.tsv, MEASURED by AUD3). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state, f32 images, and the other named limits below. Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed.
+Bends the image through a distortion field, with a different strength for the red, green and blue channels, so colours split apart at the distorted edges. The field comes from a blurred lens image: the optional `Lens` layer, or the source itself. Amount and its relative amount per axis set the strength, the per-channel warp values set each channel's share, and the warp direction can be rotated.
+
+| style | stage |
+|---|---|
+| Distort_RGB_Autogen | `stage apply distort_rgb_autogen` |
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param amount=V` | float | 1 |
+| `--param amount_rel=V` | text | 2 |
+| `--param warp_red=V` | float | 1 |
+| `--param warp_green=V` | float | 1 |
+| `--param warp_blue=V` | float | 1 |
+| `--param blur_lens=V` | float | 1 |
+| `--param wrap=V` | text | 2 |
+| `--param filter=V` | float | 1 |
+| `--param rotate_warp_dir=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+
+```sh
+target/release/sapphire stage apply distort_rgb_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param amount=1.3125 --param amount_rel=1.1875,0.8125 --param warp_red=0.9375 --param warp_green=0.4375 --param warp_blue=0.1875 --param blur_lens=44 < in.raw > out.raw
 ```
+
+Parity: 30 verified comparisons, 30 recorded renders and 30 re-rendered units, all equal. 28 are byte identical; in 2 the output holds NaN values, which are equal as NaN values while their payload bits are not compared. No approximate reciprocal instruction is used on the verified render path (MEASURED). 26 of 30 counted recorded renders match the stage's host arrangement. No verified comparison used the `Lens` layer.
 
 ### `S_DropShadow`
 
-```text
-S_DropShadow (Drop_Shadow, registered without an Autogen wrapper) is rebuilt in native Rust from the original plugin's code and data. Every building block of its program matches the original code bit for bit when both run on the same inputs in an emulator, our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen, and the whole effect produces the same pixels as the original CPU render path on test images: 24 of 24 booked rows END-TO-END EQUAL in both renders (BOOKED_G2E.tsv, MEASURED; by size 13 at 64x32, 10 at 50x7, 1 at 49x9, plus 3 POSTHOC-SEEN, 3 MISS-50x7-FEED and 3 inert controls named as limits). The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ slightly on real CPUs (no approximate instruction reached on this route: the 11 approximate sites in the cited ranges are not entered (aud5_dropshadow_audit/APPROX_DS.md line 3; the log sites INFERRED from the plan constants, not hooked)) (W1018 (c)). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state as set by the test harness, which answered three of the plugin's licence-family routines with fixed values instead of running them (LICENCE-GATES-FORCED), f32 images, a disconnected host whose licence client finds no licence server (DISCONNECTED-HOST, HOST-LICENCE-UNREACHABLE), and the other named limits below. Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed.
+Casts a shadow of the image. The shadow is made from the image's alpha, blurred, shifted, coloured and given its own opacity, then placed under the foreground, whose opacity can be set as well. The optional `Background` layer is composited under the result and the optional `Matte` layer limits it. `comp_premult` chooses how the layers are combined with respect to premultiplied alpha.
+
+| style | stage |
+|---|---|
+| Drop_Shadow | `stage apply drop_shadow` |
+
+This effect has no wrapper program; the stage runs its registered program, Drop_Shadow.
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param shadow_blur=V` | float | 1 |
+| `--param color=V` | text | 3 |
+| `--param shadow_opacity=V` | float | 1 |
+| `--param shift=V` | text | 2 |
+| `--param fg_opacity=V` | float | 1 |
+| `--param comp_premult=V` | checkbox | 1 |
+| `--param combine_masks=V` | int | 1 |
+| `--param mocha_mask_opacity=V` | float | 1 |
+| `--param shift_host=V` | text | 2 |
+| `--param cset_opacity=V` | int | 1 |
+
+`shift` is the offset in the effect's own units; `shift_host` passes it as the host does.
+
+```sh
+target/release/sapphire stage apply drop_shadow --width 64 --height 32 --depth 32 --fps 25/1 --param shadow_blur=0.291702271 --param color=0.356862754,0.713725507,0.184313729 --param shadow_opacity=0.679092407 --param shift=0.00299692154,-0.00117826462 --param fg_opacity=0.736099243 --param comp_premult=1 < in.raw > out.raw
 ```
+
+Parity: 24 verified comparisons, 26 recorded renders and 26 re-rendered units, all equal in both renders. None of the approximate reciprocal instructions in the effect's code is reached on the verified render path (MEASURED for 11 sites; the logarithm sites INFERRED from the plan constants). 20 of 24 counted recorded renders match the stage's host arrangement. No verified comparison used a layer.
 
 ### `S_HueSatBright`
 
-```text
-S_HueSatBright (Hue_Sat_Bright_Autogen, its only registered style) is rebuilt in native Rust from the original plugin's code and data. Every building block of its program matches the original code bit for bit when both run on the same inputs in an emulator (the six run primitives of the claim route, hue_shift, hue_shift_preserve_luma, sat_scale, `*`, `+` and dissolve, by their cited labels on the pinned tree, W494; blur runs only at a non-default Blur Mocha, which is not claimed, W792, W802), our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen (196 of 196 certificate rows of the booked runs W418-ROW EQUAL, CERT_R.tsv), and the whole effect produces the same pixels as the original CPU render path on test images: 130 of 130 counted runs END-TO-END EQUAL in all four slots (CMP_R.tsv rows of the 130 counted runs by PAR2's own counting rule, w802_restate.py, equal to AUD1M's count; the 66 inert controls are also END-TO-END EQUAL and are named, not counted: listed in HSB_INERT66.json; W786 block rule 6, W802), 196 booked rows, one per binding and size (130 counted and 66 inert controls, W792, W802), every one END-TO-END EQUAL and every frozen prediction PRE-REPREDICT-EQUAL on the claim binary. The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ on real CPUs (APPROX-SENSITIVE: hue_shift_preserve_luma, worst measured change within the SDM bound 25,244 ulp, the flag test at 0x34dcfa NOT ENTERED on the claim route). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state as set by the test harness, which answered three of the plugin's licence-family routines with fixed values instead of running them (LICENCE-GATES-FORCED), f32 images with a three-plane class-3 source and the destination alpha taken from the host source row (DEST-ALPHA-FROM-SOURCE-ROW), an in-place host for the mode-3 branch (MODE3-CLASS3-ROUTED; whether a real After Effects host renders a SmartFX in place is not claimed), a disconnected host whose licence client finds no licence server (DISCONNECTED-HOST, HOST-LICENCE-UNREACHABLE), and the other named limits below. The host serial number field reads 0 in the claim host model and a real host's value is not claimed (HOST-SERIAL-ZERO). Host values outside a parameter's registered valid range are not claimed; the one counted-pass binding outside it (h2BG5, Brightness -0.25) is kept as information (BINDING-OUT-OF-RANGE). Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed. If the harness arrangement named LICENCE-GATES-FORCED is changed by Ale's decision, this result is re-run under the new arrangement before it is reported, or withdrawn.
+Adjusts colour: rotates the hue, scales the saturation, scales the brightness and offsets the dark values. With `preserve_luma` the hue rotation keeps each pixel's luma. `scale_colors` scales the red, green and blue channels separately.
+
+| style | stage |
+|---|---|
+| Hue_Sat_Bright_Autogen | `stage apply hue_sat_bright_autogen` |
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param brightness=V` | float | 1 |
+| `--param bypass_mocha_mask=V` | float | 1 |
+| `--param hue_shift=V` | float | 1 |
+| `--param offset_darks=V` | float | 1 |
+| `--param preserve_luma=V` | checkbox | 1 |
+| `--param saturation=V` | float | 1 |
+| `--param mocha_mask_opacity=V` | float | 1 |
+| `--param scale_colors=V` | text | 3 |
+
+```sh
+target/release/sapphire stage apply hue_sat_bright_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param hue_shift=0.419998169 --param saturation=1.1499939 --param brightness=0.800003052 --param preserve_luma=1 < in.raw > out.raw
 ```
+
+Parity: 130 verified comparisons, 196 recorded renders and 196 re-rendered units, all equal. The hue rotation with preserved luma uses an approximate reciprocal instruction, so it may differ on real CPUs; the largest change measured stays within Intel's stated bound, 25,244 ulp. The source has three planes and the output alpha is taken from the source. A brightness outside the registered range is not verified. 118 of 130 counted recorded renders match the stage's host arrangement.
 
 ### `S_Sharpen`
 
-```text
-S_Sharpen (Sharpen_Best_Quality_Autogen and Sharpen_Fast_Autogen, its two registered styles) is rebuilt in native Rust from the original plugin's code and data. Every building block of its program matches the original code bit for bit when both run on the same inputs in an emulator, our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen, and the whole effect produces the same pixels as the original CPU render path on test images: 43 booked rows (35 ordinary and 8 Opacity rows) END-TO-END EQUAL in both renders by full SHA-256, with 51 certificates PLAN-EQUAL (BOOKED.tsv, CERT_RESULTS.tsv); 18 inert controls (the W749 mocha rows) and 8 POSTHOC-SEEN rows are recorded and not counted; the 1018 rows of FEED_NATIVE_JOIN.tsv over the booked rows reconcile with the 975 float-lane comparisons (932 EQUAL plus 43 INERT-UNFETCHED; the 43 OUTPUT-INERT-OR-OWNER-ARM rows are the owner-arm opacity rows, compared through EQUAL-VIA-OWNER-ARM). The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ slightly on real CPUs (APPROX-SENSITIVE: the edge_aware_sharpen core of the Best style is classed APPROX-SENSITIVE with a 6 ulp bound by W92 (esh5_core/CHECKPOINT.md, INFERRED class), and its heap legs hBN_64x32 and hFN_64x32 give byte identical outputs under --cxxarena 0 (HEAP-LEG-TAG-ONLY, AUD9); the Fast route lists no approximate class, AUD9 ITEMS.tsv W757-A13b, INFERRED). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state as set by the test harness, which answered three of the plugin's licence-family routines with fixed values instead of running them (LICENCE-GATES-FORCED), f32 images, a disconnected host whose licence client finds no licence server (DISCONNECTED-HOST, HOST-LICENCE-UNREACHABLE), and the other named limits below (MOCHA-PARAMS-NOT-CLAIMED, HOST-INPLACE-NOT-CLAIMED, MASK-NS-PARAMS-AT-DEFAULT, HOST-ASPECT-SQUARE, FRAME-CACHE-FRESH, HOST-FRAMES, HOST-HEAP-PHASE-MODELLED, MODE-BODY-NOT-PORTED, HOST-SERIAL-ZERO, LICENCE-FAMILY-CELLS-LEFT-OUT). Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed. If the harness arrangement named LICENCE-GATES-FORCED is changed by Ale's decision, this result is re-run under the new arrangement before it is reported, or withdrawn. Licence, activation, trial and machine-identity code of the original is not rebuilt and not analysed beyond the judge-side gate answers of W130.
+Sharpens the image. Best Quality separates the image into detail bands (tiny, small, medium and large), scales each band and sharpens along edges, leaving areas below the edge threshold alone. Fast uses a single sharpening width. In both, the amount can be set overall, for luma and chroma, and per channel.
+
+| style | stage |
+|---|---|
+| Sharpen_Best_Quality_Autogen | `stage apply sharpen_best_quality_autogen` |
+| Sharpen_Fast_Autogen | `stage apply sharpen_fast_autogen` |
+
+`sharpen_best_quality_autogen`:
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param small_detail_size=V` | float | 1 |
+| `--param edge_threshold=V` | float | 1 |
+| `--param scale_tiny_details=V` | float | 1 |
+| `--param scale_small_details=V` | float | 1 |
+| `--param scale_medium_details=V` | float | 1 |
+| `--param scale_large_details=V` | float | 1 |
+| `--param sharpen_amp=V` | float | 1 |
+| `--param sharpen_luma=V` | float | 1 |
+| `--param sharpen_chroma=V` | float | 1 |
+| `--param sharpen_red=V` | float | 1 |
+| `--param sharpen_green=V` | float | 1 |
+| `--param sharpen_blue=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+
+`sharpen_fast_autogen`:
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param sharpen_width=V` | float | 1 |
+| `--param sharpen_amp=V` | float | 1 |
+| `--param sharpen_luma=V` | float | 1 |
+| `--param sharpen_chroma=V` | float | 1 |
+| `--param sharpen_red=V` | float | 1 |
+| `--param sharpen_green=V` | float | 1 |
+| `--param sharpen_blue=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+
+```sh
+target/release/sapphire stage apply sharpen_fast_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param sharpen_width=100 --param sharpen_amp=0 --param sharpen_luma=0.5 --param sharpen_chroma=1.5 < in.raw > out.raw
 ```
+
+Parity: 43 verified comparisons, 114 recorded renders and 114 re-rendered units, all equal in both renders. The edge-aware core of Best Quality is sensitive to approximate reciprocals, with a bound of 6 ulp (INFERRED); Fast uses none (INFERRED). Of the counted recorded renders, 19 of 42 (Best Quality) and 16 of 36 (Fast) match the stage's host arrangement.
 
 ### `S_TimeWarpRGB`
 
-```text
-S_TimeWarpRGB (Time_Warp_RGB, with Time_Warp_RGB_Autogen on the claim route) is rebuilt in native Rust from the original plugin's code and data. Every building block of its program matches the original code bit for bit when both run on the same inputs in an emulator, our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen, and the whole effect produces the same pixels as the original CPU render path on test images: 22 of 22 counted rows END-TO-END EQUAL by full SHA-256 of the compared render, 22 of 22 booked on fx_run_s32_g1t with 22 of 22 W418 certificates and 22 of 22 control builds EQUAL (BOOKED.tsv, CERT_TW.tsv, control_g1t/CONTROL.tsv). The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ slightly on real CPUs (no approximate instruction on this route: 24 listing entries of the route's builtins, 0 rcp or rsqrt, AUD6 A9, aud6_timewarp_audit/README.md and AUDIT_BUILTINS_LISTING_TW.tsv, MEASURED). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state as set by the test harness, which answered three of the plugin's licence-family routines with fixed values instead of running them (LICENCE-GATES-FORCED), f32 images, a disconnected host whose licence client finds no licence server (DISCONNECTED-HOST, HOST-LICENCE-UNREACHABLE), one effect instance per process (HOST-ONE-INSTANCE), a fresh frame cache per render or fractional parts shared across a sequence (CONTRACT-LIMIT FRAME-CACHE-FRESH), and the other named limits below. Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed. If the harness arrangement named LICENCE-GATES-FORCED is changed by Ale's decision, this result is re-run under the new arrangement before it is reported, or withdrawn.
+Shifts the red, green and blue channels in time: each channel is taken from a frame a set number of frames earlier or later, so moving objects get coloured fringes. The chroma clamp (`--param clamp_chroma=V`) limits the colour difference the shift may create.
+
+| style | stage |
+|---|---|
+| Time_Warp_RGB_Autogen | `stage apply time_warp_rgb_autogen` |
+
+The stage is temporal: it reads frames before and after the current one.
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param clamp_chroma=V` | float | 1 |
+| `--param shift_frames_blue=V` | int | 1 |
+| `--param shift_frames_green=V` | int | 1 |
+| `--param shift_frames_red=V` | int | 1 |
+| `--param cset_output_opacity=V` | int | 1 |
+| `--param cset_input_opacity=V` | int | 1 |
+
+```sh
+target/release/sapphire stage apply time_warp_rgb_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param shift_frames_red=2 --param shift_frames_green=-2 --param shift_frames_blue=1 --param clamp_chroma=0.5 < in.raw > out.raw
 ```
+
+Parity: 22 verified comparisons, 22 recorded renders and 22 re-rendered units, all equal. No approximate reciprocal instruction is used on the verified render path (MEASURED). One effect instance runs per process, with a fresh frame cache per render. 10 of 22 counted recorded renders match the stage's host arrangement.
 
 ### `S_Trails`
 
-```text
-S_Trails (Trails_Autogen, its only registered style) is rebuilt in native Rust from the original plugin's code and data. Every building block of its program matches the original code bit for bit when both run on the same inputs in an emulator, our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen, and the whole effect produces the same pixels as the original CPU render path on test images: 78 of 78 booked rows END-TO-END EQUAL in both renders by full SHA-256 (42 base rows, 34 ADD-H KEEP bindings, 2 SZN size-change rows; COUNTS_FINAL.tsv, BOOKED.tsv); 18 base and 8 ADD-H inert controls (mocha family, W749, W756) and the 6 default-binding duplicates are information and not counts. The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ slightly on real CPUs (no approximate instruction on this route: 0 rcp or rsqrt ops, MEASURED for all ten route classes of the Trails plans (W1018 (d)): approx_recip_ops is 0 in the 14 entries of min, *, +, blur, hue_shift, dissolve and postdivide at slots 38 and 49, aud2_hsb_audit/AUDIT_BUILTINS_LISTING.tsv rows 2 to 49 (48 of 48 rows 0), and 0 rcp or rsqrt ops in each entry of get_prev_dest, save_prev_dest, screen_super, hue_shift and min by address, aud8_trails_audit/CLOSE_RESIDUES_W9.md section A9). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state as set by the test harness, which answered three of the plugin's licence-family routines with fixed values instead of running them, f32 images, and the other named limits (HOST-ONE-INSTANCE, HOST-ASPECT-SQUARE, HOST-SERIAL-ZERO, HOST-CLOCK, DATE-GATE, HOST-COLOUR-ALPHA-FF, LICENCE-FAMILY-CELLS-LEFT-OUT, FRAME-CACHE-FRESH, MASK-NS-PARAMS-AT-DEFAULT, MOCHA-PARAMS-NOT-CLAIMED, DROPPED-MASK-ONLY, ALPHA-MODE-HOST). Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed. Licence, activation, trial and machine-identity code of the original is not rebuilt and not analysed beyond the judge-side gate answers of W130.
+Leaves trails behind moving content: each output frame blends the current frame with the previous output, which fades toward a colour and can be blurred and hue shifted on every step. The new frame's colour and opacity, the fade, the fade colour and the way the two are combined set the look.
+
+| style | stage |
+|---|---|
+| Trails_Autogen | `stage apply trails_autogen` |
+
+The stage is temporal: it reads the whole clip before it writes.
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param blur_amount=V` | float | 1 |
+| `--param invert_mocha_mask=V` | float | 1 |
+| `--param mocha_mask_opacity=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+| `--param blur_rel=V` | text | 2 |
+| `--param combine=V` | float | 1 |
+| `--param fade=V` | float | 1 |
+| `--param fade_color=V` | text | 3 |
+| `--param new_color=V` | text | 3 |
+| `--param new_opacity=V` | float | 1 |
+| `--param prev_hue_shift=V` | float | 1 |
+
+```sh
+target/release/sapphire stage apply trails_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param blur_amount=1.5625 --param mocha_mask_opacity=0.5 < in.raw > out.raw
 ```
+
+Parity: 78 verified comparisons, 170 recorded renders and 220 re-rendered units, all equal in both renders. No approximate reciprocal instruction is used on the verified render path (MEASURED). 70 of 120 counted recorded renders match the stage's host arrangement; trails longer than the recorded histories are INFERRED.
 
 ### `S_WarpPerspective`
 
-```text
-S_WarpPerspective (Warp_Perspective, with Warp_Perspective_Autogen on the claim route) is rebuilt in native Rust from the original plugin's code and data. Every building block of its program matches the original code bit for bit when both run on the same inputs in an emulator, our evaluator produces the same execution plan as the original compiler on parameter sets it had never seen, and the whole effect produces the same pixels as the original CPU render path on test images: 19 counted rows (9 at 64x32 and 10 at 50x7, booked on fx_run_s32_g2f) each EQUAL in render 1 and render 2 by full SHA-256 to the frozen member its own record selects, with certificate and control (BOOKED.tsv; the 2 void OP1Z rows are information and not counted). The judge is an emulator that follows Intel's specification, not real silicon, so vector sections that use approximate reciprocals may differ slightly on real CPUs (APPROX-SENSITIVE: perspective out1 6 ulp, out2 12,972 ulp (cancellation near zero, 6.82 x 2^-24 of operand scale), W179 and W92, DECISIONS_20261030.md line 827; CONTRACT-LIMIT for F1 above n = 4 is named (W179, line 827; label CONTRACT-LIMIT); the route's six approximate-reciprocal sites are listed in APPROX_SITES.md, accepted at DECISIONS_20261030.md line 1027). The After Effects host side is modelled, not rebuilt: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state as set by the test harness, which answered three of the plugin's licence-family routines with fixed values instead of running them (LICENCE-GATES-FORCED), f32 images, a disconnected host whose licence client finds no licence server (DISCONNECTED-HOST, HOST-LICENCE-UNREACHABLE), 64x32 and 50x7 as the only claim sizes (CLAIM-SIZES), the word 2 = 0 certificates not claimed at 50x7 (WORD2-XY-SPLIT), the rows lost to named limits (MISS-FEED-SIGN, MISS-50x7-OPEN, MISS-RENDER2-PHASE), the alpha mode derived by the dump's rule from the host fields (ALPHA-MODE-HOST), and the other named limits below. Behaviour inside a real host, keyframed animation, GPU rendering and 8 or 16 bit formats is not claimed.
+Places the image on a plane seen in perspective. Swing, roll and latitude turn the plane, the depth distance and the lens width set the camera, and the wrap settings choose what fills the area outside the image and above the horizon.
+
+| style | stage |
+|---|---|
+| Warp_Perspective_Autogen | `stage apply warp_perspective_autogen` |
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param filter=V` | float | 1 |
+| `--param z_dist=V` | float | 1 |
+| `--param tele_lens_width=V` | float | 1 |
+| `--param swing=V` | float | 1 |
+| `--param roll=V` | float | 1 |
+| `--param latitude=V` | float | 1 |
+| `--param wrap_above_horizon=V` | float | 1 |
+| `--param wrap=V` | text | 2 |
+| `--param cset_opacity=V` | int | 1 |
+
+```sh
+target/release/sapphire stage apply warp_perspective_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param z_dist=2.5 --param latitude=80 --param tele_lens_width=1.6000061 --param filter=1 < in.raw > out.raw
 ```
+
+Parity: 19 verified comparisons, 256 recorded renders and 256 re-rendered units, all equal in both renders. The perspective uses approximate reciprocals, so it may differ on real CPUs: by up to 6 ulp in its first output and 12,972 ulp in its second, where values near zero cancel. The verified sizes are 64x32 and 50x7. 10 of 224 counted recorded renders match the stage's host arrangement.
 
 ## Build and run
 
@@ -106,7 +375,8 @@ fx_run PROGRAM --size WxH --out PREFIX [--synth SEED] [options]
 - No program table is passed: the effect graphs are built into the tool (see [No external data](#no-external-data)). A programs table in the first place is an optional override for tests, read from the stored test data.
 - `PROGRAM` is the registered program, for example the wrapper program of a style (see the table above).
 - Planes are raw little endian `f32`, planar. `--in Name=path` binds an input plane, `--synth SEED` fills every unbound input with a fixed pseudo random plane, `--set name=v1,v2` sets a parameter. The output is `PREFIX.dest.f32` with `PREFIX.dest.meta.txt`, which lists the run and every label the run carries. The full option list is the header of `crates/effects/fx_exec/src/bin/fx_run.rs`.
-- The host context is part of the call: options such as `--ctx-time`, `--ctx-word2` and `--bound-mask` are required and have no default, and a call that omits one is refused with a message that names it. The calls the evidence was made with are recorded per member in the recovery workspace.
+- `fx_run --describe-params PROGRAM` prints the parameters of a program as JSON: name, type, lanes, valid range and registered default.
+- The host context is part of the call: options such as `--ctx-time`, `--ctx-word2` and `--bound-mask` are required and have no default, and a call that omits one is refused with a message that names it. The stages of `sapphire stage apply` fill them in for the verified render path.
 - The tool refuses what it does not reproduce and says so by name, for example an input class or a parameter value outside the recorded cases.
 
 ### No external data
@@ -136,30 +406,16 @@ Tests that compare the definitions or the computed tables with copies of the plu
 
 - Every result is judged by the emulator, which follows Intel's specification (SDM), not by real CPU silicon.
 - `ROUTE AVX2-ONLY`: the original selects one of several code tiers from the CPU's features. The native code reproduces the tier that runs on CPUs with AVX2 and FMA; on CPUs without them the original runs other tiers with different rounding, and those results are not reproduced.
-- Where an operation has an approximate class (APPROX-SENSITIVE), the effect's paragraph states its bound in ulps.
-- Not claimed: a real host application (its parameter units, keyframed animation, multi band and multi threaded rendering, real frame fetches), GPU rendering, 8 and 16 bit formats, trial or unlicensed rendering, mocha with tracking data, and NaN payload and sign bits.
+- Where an operation is sensitive to approximate reciprocals, the effect's section states its bound in ulps.
+- The host side is modelled, not rebuilt: the verified render path described above. In the test harness, three of the plugin's licence-family routines were answered with fixed values instead of being run, and the host's licence client found no licence server.
+- Not verified: a real host application (its parameter units, keyframed animation, multi band and multi threaded rendering, real frame fetches), GPU rendering, 8 and 16 bit formats, trial or unlicensed rendering, mocha with tracking data, and NaN payload and sign bits.
 - Licence, activation, trial and machine identity code of the original is not rebuilt.
-- Each paragraph adds its own named limits and the rows it does not count.
+- Cases outside an effect's verified comparisons, such as other sizes and parameter values, run the same code and are INFERRED.
 
 ## Evidence
 
-The native code was written by reading the original plugin's machine code and data. Whether it may be published or distributed, and under what licence, is the owner's decision; see [Legal](../README.md#legal).
+The native code was written by reading the original plugin's machine code and data. For publication and licensing, see [Legal](../README.md#legal).
 
-The full report, the ten paragraphs with their exclusion tables and the runs behind them are kept outside this repository. This page carries their SHA-256 so that a copy can be checked.
+The full report, with a paragraph per effect, its exclusion tables and the runs behind it, is kept outside this repository. Its SHA-256 lets a copy be checked:
 
 The full report: `b7ee202da80faf7ce31f95ea5cced46badf3f1b7dacdbec8dc1ea8b865e2910c`
-
-<!--gen:effects_paragraph_sha-->
-| effect | SHA-256 of its paragraph |
-|---|---|
-| `S_Blur` | `39687d0d49bc354ecb98dc37ac834b6e4d7b64ce366b1c3f06cdbc1843089149` |
-| `BlurMoCurves` | `6be5fcc826a4c3cdae20361637b34a77c05282ea3002f65db671e08771668c5d` |
-| `S_Diffuse` | `195b220b283f4b16e5fac72fe44f32e16375f00c0f34ba81d900f190c99c2487` |
-| `S_DistortRGB` | `63981f3f11e5d17a82d1946b3b0163f365e2782af76195565a72e07b803e5051` |
-| `S_DropShadow` | `f994afc72cba6a0c7c11d4edd30a81d8546dfc63b8559c26cdad81cb993180bb` |
-| `S_HueSatBright` | `28493c431fea7a9190bd1fe64d051a8eba4a6680f056a2807d88b6269edb1e43` |
-| `S_Sharpen` | `86756d4638788e9dc53ffaa18db5111c9a71ffa153f70832c39d2f3f56694a66` |
-| `S_TimeWarpRGB` | `efe10cebfd7407fc2a850037ed9e8c5bda4196e0604a5960d65a623e307fceba` |
-| `S_Trails` | `1686f74200f7b49bd08158b98e7f107912f91ca893d369bbed22e1c225044959` |
-| `S_WarpPerspective` | `6a4be1cc4983091115367861f832ea0806fd663b687b33ac4fe82f8b2dcc425b` |
-<!--/gen:effects_paragraph_sha-->

@@ -15,17 +15,17 @@ pub struct HostConvert {
     pub mode: AlphaMode,
     /// the destination memory before the pair runs (height * width * 4 floats): what mode 0 leaves untouched
     pub dest_prefill: Vec<f32>,
-    /// the band cell of the converts ([[ctx]]); only cell 1 is claimed (W211 (e), CELL-GT1-NOT-CLAIMED)
+    /// the band cell of the converts ([[ctx]]); only cell 1 is claimed (CELL-GT1-NOT-CLAIMED)
     pub cell: usize,
-    /// the edge margin count of the converted view; only 0 is claimed (W211 (e), W216 (a))
+    /// the edge margin count of the converted view; only 0 is claimed
     pub margin: usize,
-    /// INT9 (Batch 43 rule 1): the 'ae32' route (memory A,R,G,B f32, format 14 in) with the recorded reader head and plane count per source;
+    /// INT9: the 'ae32' route (memory A,R,G,B f32, format 14 in) with the recorded reader head and plane count per source;
     /// None = the format-16 state A route above. Some: convert-from-source reads `ae32.sources`, convert-to-dest is refused until FMT3c.
     pub ae32: Option<crate::hostconv14::Ae32Route>,
 }
 
 impl HostConvert {
-    /// W211 (e): a cell other than 1 is CELL-GT1-NOT-CLAIMED, a margin count above 0 is an error.
+    /// a cell other than 1 is CELL-GT1-NOT-CLAIMED, a margin count above 0 is an error.
     pub fn check_claim(&self) -> Result<(), ExecError> {
         if self.margin > 0 {
             return Err(ExecError::Shape(format!("convert: margin count {} above 0 is outside the claim (W211 e)", self.margin)));

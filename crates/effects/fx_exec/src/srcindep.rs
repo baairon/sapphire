@@ -1,4 +1,4 @@
-//! INT27 step SI (SIP1 outcome A, W552 (b), W561): the 'ae32' route of a compiled plan that has no Source input and is a single folded
+//! INT27 step SI (SIP1 outcome A): the 'ae32' route of a compiled plan that has no Source input and is a single folded
 //! constant node (out_ch 3). The original's plans at G0, GC, GD, GN with Source at 3 channels are command 0 = allocate 3 / constant / convert-to-dest,
 //! with no Source and no convert-from-source (SIP1, MEASURED in the emulator). The native renders the constant lanes through the destination
 //! convert, the host Source world given and its planes unread, ONLY when the derived Source class is 3 with 3 planes. Every other plan without a

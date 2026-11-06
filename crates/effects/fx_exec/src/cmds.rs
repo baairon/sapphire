@@ -172,7 +172,7 @@ impl<'a> St<'a> {
                 let idx: usize = l.get(1).and_then(atom).and_then(|a| a.parse().ok()).ok_or_else(|| ExecError::BadPlan("convert-from-source index".into()))?;
                 let r = refname(l.get(2).ok_or_else(|| ExecError::BadPlan("convert-from-source ref".into()))?)?;
                 if let Some(ae) = self.hc.and_then(|hc| hc.ae32.as_ref()) {
-                    // INT9 (Batch 43 rule 1): the 'ae32' route, the recorded reader head and plane count of this source (FMT3a readers)
+                    // INT9: the 'ae32' route, the recorded reader head and plane count of this source (FMT3a readers)
                     let s = ae.sources.get(idx).ok_or_else(|| ExecError::MissingInput(format!("'ae32' host source {}", idx)))?;
                     let im = crate::hostconv14::ae32_to_image(s, self.w, self.h)?;
                     self.refs.insert(r, Val::Img(Rc::new(im)));
@@ -291,7 +291,7 @@ impl<'a> St<'a> {
             if tag < 0 {
                 return Err(ExecError::NoCombo { class: c, operands });
             }
-            // SHE3 (INT5): HOST-COUNT = W x H as an explicit value (STATE-A-COUNT: the writer is, [ctx] = W x H, cited by Batch 38 INT5-A1; the executor derives it, there is no per-run input); the alias flag is the plan's own: dest ref = first source ref
+            // SHE3 (INT5): HOST-COUNT = W x H as an explicit value (STATE-A-COUNT: the writer is, [ctx] = W x H, cited by INT5-A1; the executor derives it, there is no per-run input); the alias flag is the plan's own: dest ref = first source ref
             let mut kpe = *self.kp;
             if kpe.sharpen_count.is_none() {
                 kpe.sharpen_count = Some(n);

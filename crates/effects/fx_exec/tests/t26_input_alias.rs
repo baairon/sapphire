@@ -1,4 +1,4 @@
-//! ALS1: INPUT-DEFAULT-ALIAS (W353 (e), W414 (d)). An unbound input whose text default names another input binds that input's planes;
+//! ALS1: INPUT-DEFAULT-ALIAS. An unbound input whose text default names another input binds that input's planes;
 //! an unbound input without such a default is still refused. Runs the fx_run binary on Distort_RGB (Lens defaults to Source).
 use std::process::Command;
 

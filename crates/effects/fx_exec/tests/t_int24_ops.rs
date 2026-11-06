@@ -1,4 +1,4 @@
-//! INT24 (W526 (a) 2): the claim-route tripwire OPS-ARITH-SCALAR-SCALAR-UNJUDGED and the OPS_SCALAR_PAIRS census rows.
+//! INT24: the claim-route tripwire OPS-ARITH-SCALAR-SCALAR-UNJUDGED and the OPS_SCALAR_PAIRS census rows.
 //! Constructed rows for the tripwire text and its trigger set; one real compile (Hue_Sat_Bright_Autogen, state A defaults as plan_dump) for the rows.
 use fx_exec::ops_census::{census_line, ops_rows, scalar_scalar_tripwire, OpsRow};
 
@@ -22,7 +22,7 @@ fn tripwire_silent_on_judged_pairs_and_dissolve() {
     for p in [[true, true], [true, false], [false, true]] {
         assert!(scalar_scalar_tripwire("P", &[row("+", p), row("*", p)]).is_none());
     }
-    // dissolve is a census column (W526 (b) 4), not a tripwire class
+    // dissolve is a census column, not a tripwire class
     assert!(scalar_scalar_tripwire("P", &[row("dissolve", [false, false])]).is_none());
 }
 

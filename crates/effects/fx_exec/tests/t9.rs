@@ -155,7 +155,7 @@ fn warp_rel_by_hand_zero_and_one_pixel_shifts() {
             assert_eq!(dy.planes[0][y * 8 + x], src.planes[0][sy * 8 + x], "dy at {},{}", x, y);
         }
     }
-    // INT3 step 9b/9c: the footprint path (argument 3 nonzero with an image) now takes c1/c2 from the WPG2 slot 33 crate (OPERAND-MAP-INFERRED, W198 A9; wiring evidence only):
+    // INT3 step 9b/9c: the footprint path (argument 3 nonzero with an image) now takes c1/c2 from the WPG2 slot 33 crate (OPERAND-MAP-INFERRED A9; wiring evidence only):
     // the old assertion (typed Unsupported, "NOT REBUILT") described the state this step replaces, so the call must now complete
     let coords = Image { n: 16, planes: vec![vec![0.0; 16], vec![0.0; 16]] };
     let e = run_any("warp_rel", 1, &[Arg::Mip(&mip), Arg::Img(&coords), cst(&[2.0, 2.0]), cst(&[1.0])], 16, (8, 2), &kp());

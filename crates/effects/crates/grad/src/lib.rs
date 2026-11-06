@@ -11,7 +11,7 @@
 use blur::{blur_core, Edge};
 pub use fx_common::plane::{FxError, Plane, PlaneMut};
 
-// DRW2: MUTANT-SWITCH (W187 e). With `--features mutants` the mutant id is read at RUN time from the env var COV_MUT (one binary, SHA recorded);
+// DRW2: MUTANT-SWITCH. With `--features mutants` the mutant id is read at RUN time from the env var COV_MUT (one binary, SHA recorded);
 // every `mu(id)` that is true also bumps a reach counter, printed by `reach_report()`. Without the feature `mu` is the constant false, so the
 // shipped build is GR1's T2 source (the only difference to GR1's crate is this block).
 #[cfg(feature = "mutants")]

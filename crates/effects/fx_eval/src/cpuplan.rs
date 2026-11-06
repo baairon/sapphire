@@ -34,7 +34,7 @@ use std::collections::HashMap;
 pub enum PlanMode {
     /// compile r8 = 1, driver (EP-3 EP-4 plans)
     GpuFirst,
-    /// compile r8 = 0, driver (W120 target)
+    /// compile r8 = 0, driver
     CpuDriver,
 }
 
@@ -795,7 +795,7 @@ fn mark_set(cp: &CompiledProgram) -> std::collections::HashSet<usize> {
     mark
 }
 
-/// DS3 (W953): the printed id of the duplicate xy variable that DS1's hoist reads at full size (the plan builder gives it a fresh id above every node index).
+/// DS3: the printed id of the duplicate xy variable that DS1's hoist reads at full size (the plan builder gives it a fresh id above every node index).
 pub fn ds_dup_rid(cp: &CompiledProgram) -> usize {
     cp.nodes.len() + 1000
 }

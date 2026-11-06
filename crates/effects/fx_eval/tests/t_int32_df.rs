@@ -1,7 +1,7 @@
-//! INT32 step DF (W605 (c)): the unbound fixed-slider (host type 2) default is the registered 16.16 value f32(trunc(d x 65536) / 65536)
+//! INT32 step DF: the unbound fixed-slider (host type 2) default is the registered 16.16 value f32(trunc(d x 65536) / 65536)
 //! of the text default d for parameters outside the normalize_scale table; bound values are taken as given (the harness's snap_16_16);
 //! the normalize_scale path is unchanged; a negative off-grid default refuses PARAM-DEFAULT-OFFGRID-NEGATIVE. Mutants (fx_eval features):
-//! df_round_mut, df_f32text_mut, df_bound_mut, df_ns_mut; each fails at least one test here. Also TICKMAP-INDEX-NOT-REGISTERED (W553, W608 (h)).
+//! df_round_mut, df_f32text_mut, df_bound_mut, df_ns_mut; each fails at least one test here. Also TICKMAP-INDEX-NOT-REGISTERED.
 use fx_eval::hostcurve::{fold, fold_with_table, HostCurveValues};
 use fx_eval::units::{ns_of, snap_16_16, style_param_row};
 static RECORDS: effects_rtdata::Table = effects_rtdata::Table::new("data/TICKMAP_PARAM_RECORDS.tsv");
@@ -107,7 +107,7 @@ fn offgrid_negative_default_refused_on_constructed_text() {
     assert_eq!(constructed("0.8").unwrap()[0], 0x3f4ccc00);
 }
 
-/// W605 (c) 3: for every non-normalize_scale host type 2 parameter of the claimed programs that the program text reads and whose
+/// for every non-normalize_scale host type 2 parameter of the claimed programs that the program text reads and whose
 /// registered value bits are recorded, the native's unbound lane x 65536 equals the bits.
 #[test]
 fn table_unbound_lane_equals_registered_bits() {
@@ -153,14 +153,14 @@ fn table_unbound_lane_equals_registered_bits() {
     assert!(bad.is_empty(), "{:?}", bad);
 }
 
-/// W553 (a), W608 (h): the table index of a claimed style's parameter must be its registered host index.
+/// the table index of a claimed style's parameter must be its registered host index.
 #[test]
 fn tickmap_index_not_registered_refused() {
     if !effects_rtdata::have_tables() {
         return;
     }
     let h = HostCurveValues::default();
-    // step TPR (W645 (a) 3): the shipped table now carries index 23; the refusal is kept on a CONSTRUCTED table, the shipped text with
+    // step TPR: the shipped table now carries index 23; the refusal is kept on a CONSTRUCTED table, the shipped text with
     // Transform_and_Blur_Autogen's rotate row set back to the old index 0 row
     let old = RECORDS.replace("Transform_and_Blur_Autogen\trotate\t1\t1\t1\t0\t0\t6\t23", "Transform_and_Blur_Autogen\trotate\t1\t1\t1\t0\t0\t6\t0");
     assert_ne!(old.as_str(), &*RECORDS);

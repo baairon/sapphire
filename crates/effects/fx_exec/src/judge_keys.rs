@@ -1,4 +1,4 @@
-//! Judge-interface module (W689 (a)): the recorded reader-head numbers that the emulator's records and the claim lines carry, mapped to opaque
+//! Judge-interface module: the recorded reader-head numbers that the emulator's records and the claim lines carry, mapped to opaque
 //! names here at the input boundary. No arithmetic or output depends on the numbers; every other module uses the names.
 
 pub const R4_HEAD: u64 = 0x7eb3d0;
@@ -24,7 +24,7 @@ pub fn head_name(h: u64) -> &'static str {
     }
 }
 
-/// Judge-interface option names (W823 (d) 4): the claim lines carry these names byte for byte; every use refers to the constant.
+/// Judge-interface option names: the claim lines carry these names byte for byte; every use refers to the constant.
 pub const OPT_CTX_OWNER_MODE: &str = "--ctx-1ae";
 pub const OPT_SRC_ROW_GATE: &str = "--src-row58";
 pub const OPT_OPACITY_ARM: &str = "--opacity-arm-7b0";

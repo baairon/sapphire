@@ -653,7 +653,7 @@ impl Ret {
     }
 }
 
-// ---- SSE2 packed integer and shuffle helpers (fleet-7) ------------------------------------------------------------
+// ---- SSE2 packed integer and shuffle helpers ------------------------------------------------------------
 
 #[inline(always)]
 fn dw(x: u128, i: u32) -> u32 {

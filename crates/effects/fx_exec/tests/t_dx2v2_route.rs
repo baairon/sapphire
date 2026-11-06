@@ -1,4 +1,4 @@
-//! Step DX2 v2 (W652 (d)): DX2's bound-count rule for v3_to_v4_if4 runs only when CompileOptions::v3_bound_count is set (fx_run sets it on
+//! Step DX2 v2: DX2's bound-count rule for v3_to_v4_if4 runs only when CompileOptions::v3_bound_count is set (fx_run sets it on
 //! the 'ae32' route only). On State A the node keeps its own count and no V3TOV4IF4-COUNT-UNBOUND refusal is raised.
 use fx_exec::exec::combo_table;
 

@@ -102,7 +102,7 @@ pub struct ParamRec {
     pub default: DefaultVal,
     pub flags: Vec<String>,
     pub info: FlagInfo,
-    /// W83: the default is the program text's own default
+    /// the default is the program text's own default
     pub binding: &'static str,
     /// LYM3: the layout row's name for this record (the original's array holds this name; `:modify NAME CANON` renames); equals `name` on the def path
     pub layout_name: String,

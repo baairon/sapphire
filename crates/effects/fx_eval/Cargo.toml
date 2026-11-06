@@ -14,13 +14,13 @@ name = "fx_eval_cli"
 path = "src/main.rs"
 
 [features]
-# step DX2 (W603): the own-count mutant (v3_to_v4_if4 takes its own count, not the bound image argument's)
+# step DX2: the own-count mutant (v3_to_v4_if4 takes its own count, not the bound image argument's)
 dx2_owncount_mut = []
-# step DX2 v2 (W652 (d)): the flag ignored (DX2 v1) and the refusal dropped; each must fail its test
+# step DX2 v2: the flag ignored (DX2 v1) and the refusal dropped; each must fail its test
 dx2v2_allroutes_mut = []
 dx2v2_norefuse_mut = []
 brd2_lane0_mut = []
-# FLD3-FORM (W666 (d) 2): wrong candidate forms and the classifier kept refusing; each must fail t_fld3_form
+# FLD3-FORM: wrong candidate forms and the classifier kept refusing; each must fail t_fld3_form
 fld3_form_kept_mut = []
 fld3_bcast_mut = []
 fld3m_kept_mut = []
@@ -36,9 +36,9 @@ int23_a1last_mut = []
 int24_lane0v_mut = []
 mut_childclear = []
 mut_join = []
-# INT21 step Q (W491, W170): the EQC1 mutant without the count conjunct; must fail arm2_differing_counts_even_if_lanes_equal
+# INT21 step Q: the EQC1 mutant without the count conjunct; must fail arm2_differing_counts_even_if_lanes_equal
 eqc1_mut_nocount = []
-# INT32 step DF (W605 (c) 5): mutants of the registered 16.16 default rule (never in a shipped build)
+# INT32 step DF: mutants of the registered 16.16 default rule (never in a shipped build)
 df_round_mut = []
 df_f32text_mut = []
 df_bound_mut = []

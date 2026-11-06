@@ -22,7 +22,7 @@ pub struct Params {
     pub n: i32,
     /// Value of every lane of the 32 byte vector constant (listing). ON1-A2, STD-002: required, no default, T2 runs 1.0 and 0.75.
     pub vec_one: f32,
-    /// Destination pointer address & 0x1f per channel, in bytes (missing entries = 0, a 32 byte aligned buffer). ON1-A5 (W55).
+    /// Destination pointer address & 0x1f per channel, in bytes (missing entries = 0, a 32 byte aligned buffer). ON1-A5.
     pub dst_phase_bytes: Vec<u32>,
 }
 
@@ -34,7 +34,7 @@ pub enum Error {
     ShortPlane { channel: usize, need: usize, have: usize },
 }
 
-/// Deliberate bugs for the mutation run (W63 item 4). `None` is the real port.
+/// Deliberate bugs for the mutation run. `None` is the real port.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mutant {
     None,
@@ -220,7 +220,7 @@ pub fn render(p: &Params, srcs: &[&[f32]], outs: &mut [&mut [f32]]) -> Result<()
     render_impl(p, Mutant::None, srcs, outs)
 }
 
-/// Mutation run entry (W63).
+/// Mutation run entry.
 pub fn render_mutant(p: &Params, m: Mutant, srcs: &[&[f32]], outs: &mut [&mut [f32]]) -> Result<(), Error> {
     render_impl(p, m, srcs, outs)
 }

@@ -1,4 +1,4 @@
-//! Batch 002: field getters and setters, address computations and constant returns (10 to 14 bytes).
+//! field getters and setters, address computations and constant returns (10 to 14 bytes).
 use crate::*;
 
 /// parity: P1 @0x117de size=10

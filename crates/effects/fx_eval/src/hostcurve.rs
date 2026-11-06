@@ -1,4 +1,4 @@
-//! TMR1 / INT20 step T: get_curve_val through tickmap::map_param on the claim route (W334 (e) 2, W479).
+//! TMR1 / INT20 step T: get_curve_val through tickmap::map_param on the verified render path.
 //! The host's checkout answers come from a HOST-CURVE-VALUES input, a text file:
 //!   `host <field> <int>`           field in effect_ref, time_mult, time_scale, double_flag, global, selector (host record fields)
 //!   time_frames ([pinfo]) is not in the file: fx_run fills it from --host-frame ([ctx], INFERRED to be the same field)
@@ -18,11 +18,11 @@ pub struct HostCurveValues {
     pub values: BTreeMap<(String, i32, i32, i32, i32), (i32, i32)>,
     /// step PW: parameter -> field -> value text, from `point` lines
     pub points: BTreeMap<String, BTreeMap<String, String>>,
-    /// step TPU (W662 (c) 1): parameter -> field -> hex text, from `unit` lines (REC_UNIT_KEY, x3 32-bit; d4, d5 64-bit; all four required)
+    /// step TPU: parameter -> field -> hex text, from `unit` lines (REC_UNIT_KEY, x3 32-bit; d4, d5 64-bit; all four required)
     pub units: BTreeMap<String, BTreeMap<String, String>>,
 }
 
-/// Fields a `unit` entry must carry (step TPU, W662 (c) 1).
+/// Fields a `unit` entry must carry (step TPU).
 pub const UNIT_FIELDS: [&str; 4] = [crate::judge_keys::REC_UNIT_KEY, "x3", "d4", "d5"];
 
 /// Fields a `point` record must carry (list is `none` or the host object type; prelude_status and prelude_type are also required when list is none).
@@ -115,12 +115,12 @@ fn fields_of(r: &effects_rtdata::TickmapRecord) -> RecFields {
     [r.ptype, r.nlanes, r.kind_byte, r.subtype_byte, r.flags_a_byte, r.flags_b_byte, r.index]
 }
 
-/// Step TPR (W645 (a) 1), tests: the row of a record table given as TSV text, by program and parameter (the row's nine fields as text).
+/// Step TPR, tests: the row of a record table given as TSV text, by program and parameter (the row's nine fields as text).
 pub fn table_row<'a>(table: &'a str, prog: &str, pname: &str) -> Option<Vec<&'a str>> {
     table.lines().skip(1).map(|l| l.split('\t').collect::<Vec<_>>()).find(|f| f.len() == 9 && f[0] == prog && f[1] == pname)
 }
 
-/// Step TPR (W645 (a) 3), tests: `fold` with the parameter record table given as TSV text; `fold` uses the defined records, so the claim path is
+/// Step TPR, tests: `fold` with the parameter record table given as TSV text; `fold` uses the defined records, so the claim path is
 /// unchanged. Tests use it to keep the index-check refusal on a constructed table.
 pub fn fold_with_table(table: &str, prog: &str, pname: &str, t: f32, cur: &[f32], n: usize, hcv: &HostCurveValues, diags: &mut Vec<String>) -> Option<Vec<f32>> {
     let row = table_row(table, prog, pname).map(|f| {
@@ -146,17 +146,17 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
         return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (nlanes: record {} lanes, program node {} lanes for {})", g(2), n, pname));
     }
     let rec = tickmap::ParamRec { ptype: g(1) as i32, nlanes: g(2) as u8, kind_byte: g(3) as u8, subtype_byte: g(4) as u8, flags_a_byte: g(5) as u8, flags_b_byte: g(6) as u8, index: g(7) as i16, rec_unit_value: f32::NAN };
-    // INT32 step DF (W553 (a), W582 (g), W608 (h)): the table index is the key sent to the host's checkout; for a claimed style it must equal
+    // INT32 step DF: the table index is the key sent to the host's checkout; for a claimed style it must equal
     // the parameter's registered host index in STYLE_PARAM_INDEX.tsv, else the line refuses by name.
     if let Some(sr) = crate::units::style_param_row(prog, pname) {
         if sr.host_index != rec.index as i32 {
             return refuse(diags, format!("TICKMAP-INDEX-NOT-REGISTERED ({} {}: table index {}, the style's registered index {}; W553)", prog, pname, rec.index, sr.host_index));
         }
     }
-    // INT30 TICKMAP step (TMP1, Batch 69 rule 1): nibble 5 reads [rec] and the pinfo unit fields, which the parameter record table
+    // INT30 TICKMAP step (TMP1): nibble 5 reads [rec] and the pinfo unit fields, which the parameter record table
     // does not carry; the line refuses by name instead of reading a constructed value (the NaN placeholders are never read).
     let pt = hcv.points.get(pname);
-    // step TPU (W662 (c) 2): a generic-path unit entry; never together with a point entry, and it never makes a point context
+    // step TPU: a generic-path unit entry; never together with a point entry, and it never makes a point context
     let un = hcv.units.get(pname);
     if un.is_some() && pt.is_some() {
         return refuse(diags, format!("TICKMAP-UNIT-AND-POINT ({}: {}: a generic-path unit entry and a point entry; W662)", prog, pname));
@@ -169,7 +169,7 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
         None => return refuse(diags, "TICKMAP-HOST-FIELD-UNSOURCED (time_frames)".to_string()),
     };
     let need = |k: &str| hcv.host.get(k).copied();
-    // W490 (e) 2: the global is HOST-APP's cell (1 in the claim state). On the claim route fx_run supplies 1 and refuses a differing file line; on a state A route the file line (TICKMAP's E1 re-score: 0) is used.
+    // the global is HOST-APP's cell (1 in the claim state). On the verified render path fx_run supplies 1 and refuses a differing file line; on a state A route the file line (TICKMAP's E1 re-score: 0) is used.
     let global: i64 = match (hcv.ae32, hcv.host.get("global").copied()) {
         (true, None) => 1,
         (true, Some(1)) => 1,

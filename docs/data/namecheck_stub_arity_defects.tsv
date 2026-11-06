@@ -1,4 +1,4 @@
-stub_offset	exact_target	function	call_addr	owner_source	int_args_listed_in_lift	int_args_in_bank_signature	arg_regs_freshly_written_before_call
+stub_offset	exact_target	function	call_addr	crate_source	int_args_listed_in_lift	int_args_in_bank_signature	arg_regs_freshly_written_before_call
 0x11b	__vector_base<NTV2DeviceInfo, allocator<NTV2DeviceInfo> >::~__vector_base()	f_00016080		findings/port-a/rust/src/p2v/w001.rs	0	1	
 0x11b	__vector_base<NTV2DeviceInfo, allocator<NTV2DeviceInfo> >::~__vector_base()	f_000160de		findings/port-a/rust/src/p2v/w001.rs	0	1	
 0x2bf	void vector<NTV2_RP188, allocator<NTV2_RP188> >::__push_back_slow_path<NTV2_RP188 const&>(	f_000270b9	270e2	findings/port-b/rust/src/p2v/g013.rs	1	2	0

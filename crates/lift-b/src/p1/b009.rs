@@ -1,4 +1,4 @@
-//! Batch 009: an initialiser with computed fields, a jump-table switch, and the multi-level set predicates /
+//! an initialiser with computed fields, a jump-table switch, and the multi-level set predicates /
 //! classifiers over the constant family 0x10266400..0x10710851.
 use crate::cov::{br, hit};
 use crate::*;

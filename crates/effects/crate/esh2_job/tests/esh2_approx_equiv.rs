@@ -1,4 +1,4 @@
-//! ESH2 Rust-only tests: APPROX-BOUND sensitivity of the vrcpps estimate (W49) and the exhaustive equivalence sweeps behind the argued mutants.
+//! ESH2 Rust-only tests: APPROX-BOUND sensitivity of the vrcpps estimate and the exhaustive equivalence sweeps behind the argued mutants.
 use esh2_job::*;
 
 fn ulps(a: f32, b: f32) -> u32 {

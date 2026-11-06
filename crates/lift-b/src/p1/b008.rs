@@ -1,4 +1,4 @@
-//! Batch 008: black/white fill patterns, a 10-bit repack, nested signed-split set predicates, initialisers
+//! black/white fill patterns, a 10-bit repack, nested signed-split set predicates, initialisers
 //! (including two HDR mastering-display style constant tables).
 use crate::cov::br;
 use crate::*;

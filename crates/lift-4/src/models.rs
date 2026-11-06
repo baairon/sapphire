@@ -37,7 +37,7 @@ thread_local! {
     static MODELS: RefCell<Vec<(bool, u64, Kind)>> = RefCell::new(Vec::new());
     static OUTS: RefCell<Vec<Out>> = RefCell::new(Vec::new());
     static STUB_ZONE: RefCell<u64> = RefCell::new(0);
-    /// fleet-4: result values of indirect calls (spec "indres"); the pick is a hash of the call result rdx with two extra "keep" slots.
+    /// Result values of indirect calls (spec "indres"); the pick is a hash of the call result rdx with two extra "keep" slots.
     static INDRES: RefCell<Vec<(Key, Vec<u64>, bool)>> = RefCell::new(Vec::new());
 }
 
@@ -59,7 +59,7 @@ pub struct Out {
     pub fields: Vec<(u64, u64)>,
     /// The callee built a libc++ __tree (std::map / std::set) in the object: {begin, root, size} plus 0..3 world heap nodes.
     pub tree: bool,
-    /// fleet-4: the callee writes one of these values into every field (picked by a hash of the call result rdx), instead of `outval`.
+    /// The callee writes one of these values into every field (picked by a hash of the call result rdx), instead of `outval`.
     pub vals: Vec<u64>,
 }
 
@@ -138,7 +138,7 @@ pub fn install_from(path: &Path) {
     set_indres(parse_indres(&text));
 }
 
-/// Lines `indres 0x10478300,...` (key ind) and `res <ind|stub:0x1d5|fn:0x2fdd8> 0x..,0x..` (fleet-4).
+/// Lines `indres 0x10478300,...` (key ind) and `res <ind|stub:0x1d5|fn:0x2fdd8> 0x..,0x..`.
 pub fn parse_indres(text: &str) -> Vec<(Key, Vec<u64>, bool)> {
     let vals = |s: &str| -> Vec<u64> { s.split(',').map(|v| u64::from_str_radix(v.trim().trim_start_matches("0x"), 16).unwrap()).collect() };
     let mut out = Vec::new();

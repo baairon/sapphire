@@ -7,7 +7,7 @@
 //! `flag_cell_b == 0`).
 //!
 //! Labels used below: MEASURED-DYLIB constants (approved original file, read only); APPROX-MODEL (vrcpps modelled as the exact f32 1/x on both
-//! sides, W49); ALIGN-DEPENDENT (the vector/scalar split of a line depends on the address of the `cur` line, W55: explicit input `cur_addr`);
+//! sides); ALIGN-DEPENDENT (the vector/scalar split of a line depends on the address of the `cur` line, explicit input `cur_addr`);
 //! HOST: the partition service (start, count) is an explicit input; the job context is the explicit `Ctx`.
 //!
 //! Every arithmetic site follows the listing: f64 compares and scaling constants, `vminss` operand order (NaN yields the second operand),

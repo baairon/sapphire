@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-//! lift_8: Rust ports of the neutral_3 functions assigned to group B (see findings/fleet-8/SUMMARY.md).
+//! lift_8: Rust ports of the neutral_3 functions assigned to group B.
 //!
 //! Struct pointers are raw byte views (`&[u8]` / `&mut [u8]` starting at the pointer) until the layouts are
 //! established; fields are read and written at the same offsets the original code uses.

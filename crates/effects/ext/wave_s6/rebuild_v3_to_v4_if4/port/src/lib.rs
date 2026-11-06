@@ -75,7 +75,7 @@ pub enum VqError {
     Plane(PlError),
 }
 
-/// Explicit parameters (no Default, W65). `combo` is the table row the executor selected (slot 31 result is `COMBOS[combo].out`),
+/// Explicit parameters (no Default). `combo` is the table row the executor selected (slot 31 result is `COMBOS[combo].out`),
 /// `host` the pool flag of the plane service (PL1-A3), `roi` the info record handed to the passes (flat mode only).
 #[derive(Clone, Copy, Debug)]
 pub struct Params {

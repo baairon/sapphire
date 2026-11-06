@@ -37,7 +37,7 @@ pub struct Combo {
     pub out: usize,
 }
 
-/// Explicit parameters (no Default, W65): `host` the pool flag of the plane service (PL1-A3), `roi` the info record handed to the
+/// Explicit parameters (no Default): `host` the pool flag of the plane service (PL1-A3), `roi` the info record handed to the
 /// entry (flat mode only).
 #[derive(Clone, Copy, Debug)]
 pub struct Params {

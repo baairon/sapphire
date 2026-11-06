@@ -1,4 +1,4 @@
-//! PROVENANCE: copied (not moved) from wave_shake/rebuild/src/native.rs (builder R-series, finished). Shake keeps its own file; this copy is
+//! PROVENANCE: copied (not moved) from wave_shake/rebuild/src/native.rs (R-series port). Shake keeps its own file; this copy is
 //! the shared one. Contents: HashTable/hash1/hash2, memset_x, round_q12_x, cvttsd2si32, weight tables.
 //!
 //! native: hand-written Rust twins of the small non-math callees of the AVX render body and of the
@@ -263,7 +263,7 @@ pub struct WeightTables {
     pub int: Vec<i32>,
     /// Float table : `(f32)int[i] * 2^-12`4,608 entries.
     pub float: Vec<f32>,
-    /// `2 * i0` where `i0` is the FIRST index whose int entry is 0 (stored by the builders to the dword at
+    /// `2 * i0` where `i0` is the FIRST index whose int entry is 0 (stored by the table builders to the dword at
     /// dump); `None` if no entry is zero (the original then leaves the dword untouched).
     pub cutoff: Option<i32>,
 }
@@ -306,7 +306,7 @@ pub fn build_weights_1() -> WeightTables {
 }
 
 ///  (static initialiser): `scale = (f32)cutoff_int * 2^-12` (`cvtsi2ss` of the dword,
-/// `mulss` by 2^-12, stored). Scale decision of the owner: use the BUILT cutoff 9074
+/// `mulss` by 2^-12, stored). Scale: use the BUILT cutoff 9074
 /// (`build_weights_*().cutoff == Some(9074)`, scale 2.2153320); the captured integer is 9215 (scale 2.2497559).
 #[inline]
 pub fn scale_x(cutoff: i32) -> f32 {

@@ -1,4 +1,4 @@
-//! Batch 006: flag bit setter, ladders over unsigned bounds, set predicates, nibble extraction and the first
+//! flag bit setter, ladders over unsigned bounds, set predicates, nibble extraction and the first
 //! pixel/sample repacking loops (4 bytes or 4 words per pixel to 3, 10-bit packing, byte reversal).
 use crate::cov::br;
 use crate::*;

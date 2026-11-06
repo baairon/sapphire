@@ -32,7 +32,7 @@ pub fn mark_blocked(prim: &str) -> bool {
     p == "monochrome"
 }
 
-/// INT18 (W301, PROGRAM-FLAG-READ): [prog] bit 4 is set when some function node of the parsed program (called programs and defuns
+/// INT18 (PROGRAM-FLAG-READ): [prog] bit 4 is set when some function node of the parsed program (called programs and defuns
 /// included, as the genotype holds them) has a class flag word with 0x40000 (writer); only motion_blur has it.
 pub fn program_flag_bit4(g: &crate::build::Genotype) -> bool {
     g.nodes.iter().any(|n| n.kind == crate::build::NodeKind::Function && flags_of(&n.name) & 0x40000 != 0)

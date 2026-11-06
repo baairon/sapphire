@@ -1,12 +1,12 @@
 # Assumptions and limits
 
-What the parity figures rest on, and how many rows depend on each assumption. Parity is strong measured evidence on seeded inputs under these assumptions, not a proof for every input or every callee.
+What the parity figures rest on, and how many rows depend on each assumption. Together these assumptions form the [harness model](glossary.md#harness-model), plus one [precondition label](glossary.md#precondition-label) still in use. Parity is strong measured evidence on seeded inputs under these assumptions, not a proof for every input or every callee.
 
 ## Summary
 
 | Assumption | Applies to | Effect on the claim |
 |---|---|---|
-| Seeded worlds | every P2v row | equal in every compared world (at least 900 per function); inputs no world produced were not compared |
+| Seeded worlds | every [P2v](glossary.md#p2v) row | equal in every [compared world](glossary.md#compared-world) (at least 900 per function); inputs no world produced were not compared |
 | Missing data | every row that reads a missing reference | the <!--f:missing_refs-->19,563<!--/f--> missing references take seeded values, never their real ones ([missing data](missing-data.md)) |
 | Callee model | every P2v row; stated in <!--f:assume_write_nothing_rows-->8<!--/f--> ledger notes | a callee that writes through a pointer, or returns what the model never produces, was not compared |
 | Declared callee results | rows whose specs declare a callee result (`ovr`) | verified under the declared result |
@@ -17,14 +17,14 @@ What the parity figures rest on, and how many rows depend on each assumption. Pa
 | Landing pads | <!--f:audit_landing_rows-->15<!--/f--> audited rows and <!--f:close_landing_rows-->2<!--/f--> of the last seven had outcomes only there | exception paths unverified |
 | Stack protector rule and rule W | outcomes the audit explains only under them | <!--f:audit_rule_assumption_rows-->0<!--/f--> audited rows pass only under them, and none of the last seven uses them |
 | Hand proofs | <!--f:audit_proof_rows-->30<!--/f--> audited rows passed with explained outcomes, <!--f:audit_hand_proof_rows-->17<!--/f--> of them with hand proofs | an argument under the harness model, not a measurement |
-| Fault-only proofs (F), replaced by HR-FP once its proof is re-derived | <!--f:close_rows_F-->0<!--/f--> rows, <!--f:close_out_F-->0<!--/f--> outcomes | an outcome that only faulting executions take is explained; maintainer-accepted for these rows ([F](#fault-only-proofs)) |
+| Fault-only proofs (F), replaced by HR-FP once its proof is re-derived | <!--f:close_rows_F-->0<!--/f--> rows, <!--f:close_out_F-->0<!--/f--> outcomes | an outcome that only faulting executions take is explained; stated for these rows only ([F](#fault-only-proofs)) |
 | Pinned world word in the case line (PN), retired 2026-11-05 | <!--f:close_rows_PN-->0<!--/f--> row, <!--f:close_sets_pins-->0<!--/f--> pinned worlds | one outcome is seen only in worlds that carry the pin and end at a no-return call ([PN](#pinned-world-words-in-the-case-line)) |
 | Frame disjointness (P2), replaced by HR-P2 once its proof is re-derived | <!--f:close_rows_P2-->0<!--/f--> rows, <!--f:close_out_P2-->0<!--/f--> outcomes | stores through the function's own frame never hit the record array ([P2](#frame-disjointness)) |
 | Valid sort range (A1), kept for `f_0001b438` only | <!--f:close_rows_A1-->1<!--/f--> row, <!--f:close_out_A1-->3<!--/f--> outcomes | the sorted range is a whole number of records ([A1](#valid-sort-range)) |
 | Stub argument counts | <!--f:stub_arity_sites-->48<!--/f--> call sites in <!--f:stub_arity_stubs-->12<!--/f--> stubs, <!--f:stub_arity_fns-->17<!--/f--> functions | the missing argument values were never compared |
 | P1 floats | P1 rows with float returns | NaN payload and sign are not compared |
 
-Of the <!--f:fn_total-->2,702<!--/f--> strict rows, <!--f:close_labelled_rows-->1<!--/f--> rests on a labelled assumption (A1 <!--f:close_rows_A1-->1<!--/f--> row, `f_0001b438`; F <!--f:close_rows_F-->0<!--/f--> rows, PN <!--f:close_rows_PN-->0<!--/f-->, P2 <!--f:close_rows_P2-->0<!--/f-->, the first and the last now being the harness rules HR-FP and HR-P2), and <!--f:close_pass_rows-->9<!--/f--> audited rows (evidence `audit2` or `audit3`) rest on the accepted harness assumptions alone. The maintainer accepted F, PN, P2 and A1 for the rows listed under each heading below and for no others; only A1 is still in use. The evidence class of the row on A1 is `assumed` ([evidence](evidence.md#the-last-seven-rows)).
+Of the <!--f:fn_total-->2,702<!--/f--> strict rows, <!--f:close_labelled_rows-->1<!--/f--> rests on a precondition label (A1 <!--f:close_rows_A1-->1<!--/f--> row, `f_0001b438`; F <!--f:close_rows_F-->0<!--/f--> rows, PN <!--f:close_rows_PN-->0<!--/f-->, P2 <!--f:close_rows_P2-->0<!--/f-->, F and P2 now being the harness rules HR-FP and HR-P2), and <!--f:close_pass_rows-->9<!--/f--> audited rows (evidence `audit2` or `audit3`) rest on the harness model alone. The labels F, PN, P2 and A1 apply to the rows listed under each heading below and to no others; only A1 is still in use. The evidence class of the row on A1 is `assumed` ([evidence](evidence.md#the-last-seven-rows)).
 
 The harness rules HR-P2 and HR-FP (2026-11-05, [harness](harness.md#harness-rules-hr-p2-and-hr-fp)) replace P2 and F for the rows whose proofs are independently re-derived; PN is retired because `f_00056fa6` has its 0x57936 outcome seen in <!--f:close_sets_pins-->0<!--/f--> pinned worlds, that is, without a pin (set 9). A1 stays for `f_0001b438`.
 
@@ -95,7 +95,7 @@ The audit reports outcomes explained only under these rules apart from the sound
 
 ## Hand proofs
 
-Where the abstract interpreter could not decide a branch outcome, a hand proof could: a decided branch or a dead block, with the reason. The audit accepted a hand proof only when re-derived for the row in question, and the soundness pass reports any proof that calls an outcome a compared world observed impossible. Some proofs rest on "callees write nothing".
+Where the abstract interpreter could not decide a branch outcome, a hand proof could: a decided branch or a dead block, with the reason. The audit used a hand proof only when it was re-derived for the row in question, and the soundness pass reports any proof that calls an outcome a compared world observed impossible. Some proofs rest on "callees write nothing".
 
 ## Stub argument counts
 

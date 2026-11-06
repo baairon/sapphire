@@ -2,7 +2,7 @@
 use fx_exec::aspect::*;
 use std::fs;
 
-/// W237 (c): the fixture is inside the integrated tree and its SHA-256 is checked against fixtures/MANIFEST.sha256 before it is read.
+/// the fixture is inside the integrated tree and its SHA-256 is checked against fixtures/MANIFEST.sha256 before it is read.
 fn fixture(rel: &str) -> String {
     let root = effects_vecdir::path("fixtures");
     let p = root.join(rel);

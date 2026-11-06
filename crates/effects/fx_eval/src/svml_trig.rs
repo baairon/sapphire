@@ -43,7 +43,7 @@ const MAGIC_52: f64 = f64::from_bits(0x4338000000000000); // 1.5 * 2^52
 /// The scalar routine's table, computed at first use (module `libm_sincos::exact`, `svml_a`): the pair region (bytes 0..0x410,
 /// formula pairs of sin(j pi/128) and cos(j pi/128) scaled by (pi/128)^2/2 and (pi/128)^3/6), the 15 chunk pairs of 1/pi
 /// (0x410..0x500) and the three constants read at 0x540, 0x548 and 0x550. These are all the bytes any reader of the 2304 byte
-/// table of the original ever touches; the other bytes of that table are never read and are not reproduced. MEASURED on the VPS
+/// table of the original ever touches; the other bytes of that table are never read and are not reproduced. MEASURED against the stored copies
 /// (tests/t10_sin1.rs with the copies under VEC_DIR): every word of the computed regions equals the copies.
 struct Tab {
     is_cos: bool,

@@ -89,7 +89,7 @@ fn run(a: Vec<String>) -> i32 {
     let all = rd(file);
     assert_eq!(all.len(), 8 * n, "file size does not match 8 planes of {}x{}", w, hh);
     let (inp, orig) = all.split_at(4 * n);
-    // INT8 (W314 (e)): strict, or the named option --state-a-defaults
+    // INT8: strict, or the named option --state-a-defaults
     let mut b = match fx_exec::exec::strict_binding("hsb_cmp", &a) {
         Ok(b) => b,
         Err(e) => {

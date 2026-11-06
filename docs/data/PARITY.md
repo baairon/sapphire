@@ -37,18 +37,18 @@ Branch outcomes are counted over the compared worlds only (worlds where the orig
 | evidence | functions | bytes | share of code |
 |---|---|---|---|
 | P1: oracle vectors, bit exact | 549 | 58078 | 6.0% |
-| P2v: independent PASS (fleet-8 engine) | 1945 | 827551 | 85.8% |
-| P2v: owner recorded exact counts over compared worlds | 198 | 49427 | 5.1% |
+| P2v: independent PASS (second branch coverage engine) | 1945 | 827551 | 85.8% |
+| P2v: the ledger recorded exact counts over compared worlds | 198 | 49427 | 5.1% |
 | P2v: independent audit of the last seven rows and of round two, own coverage recompute (audit2) | 5 | 9280 | 1.0% |
 | **compared-worlds exact total** | 2697 | 944336 | 97.9% |
 | P2v: independent audit under the revised harness model of 2026-11-05 (audit3) | 4 | 7439 | 0.8% |
 | **revised strictest total (2026-11-05, audit3 counted)** | 2701 | 951775 | 98.7% |
-| P2v: independent audit of the last seven rows, on labelled assumptions (assumed) | 1 | 12884 | 1.3% |
+| P2v: independent audit of the last seven rows, on stated assumptions (assumed) | 1 | 12884 | 1.3% |
 | P2v: older any-world accounting, not yet audited | 0 | 0 | 0.0% |
 
 P1 vectors compared in total: 117988 across 236 functions.
 
-The last seven rows (f_0001b438, f_0002405b, f_00024a39, f_00030040, f_00031780, f_00056fa6, f_000651c2) were matched in a closing round and audited by a separate agent; on 2026-11-05 a second round (f_000ac996, f_000b11c0, f_000b4896 and a new set for f_00056fa6) was audited and moved four rows to audit2, so 4 of the ten rows rest on the harness rules HR-FP and HR-P2 (audit3) and 1 (f_0001b438) rests on the labelled assumption A1; none of these 5 is in the compared-worlds exact total. PN is retired. docs/evidence.md defines the classes and docs/assumptions.md the labels. The figures in this file were edited by hand for that round: the generator tools/parity_report.py is archived, and the facts of docs/index/facts.json are generated from docs/data/FUNCTION_MAP.tsv.
+The last seven rows (f_0001b438, f_0002405b, f_00024a39, f_00030040, f_00031780, f_00056fa6, f_000651c2) were matched in a closing round and audited by a separate checker; on 2026-11-05 a second round (f_000ac996, f_000b11c0, f_000b4896 and a new set for f_00056fa6) was audited and moved four rows to audit2, so 4 of the ten rows rest on the harness rules HR-FP and HR-P2 (audit3) and 1 (f_0001b438) rests on the stated assumption A1; none of these 5 is in the compared-worlds exact total. PN is retired. docs/evidence.md defines the classes and docs/assumptions.md the labels. The figures in this file were edited by hand for that round: the generator tools/parity_report.py is archived, and the facts of docs/index/facts.json are generated from docs/data/FUNCTION_MAP.tsv.
 
 ## By group
 

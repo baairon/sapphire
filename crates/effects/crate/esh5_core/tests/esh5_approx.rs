@@ -1,4 +1,4 @@
-//! ESH5 W49: Rust-only sensitivity test for the one approximate site (vrsqrtss at 0x2560ab). The estimate is perturbed by up to the SDM bound
+//! ESH5 Rust-only sensitivity test for the one approximate site (vrsqrtss at 0x2560ab). The estimate is perturbed by up to the SDM bound
 //! (1.5 * 2^-12 relative) before the code's own Newton step; the maximum change of the refined factor x10 and of the radii is reported (APPROX-BOUND).
 use esh5_core::*;
 

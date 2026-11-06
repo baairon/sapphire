@@ -17,11 +17,11 @@ CONF_LEVELS = ["confirmed", "consistent", "twin", "stub", "weak", "mismatch"]
 EVIDENCE_LABEL = OrderedDict([
     ("p1", "P1: oracle vectors, bit exact"),
     ("second", "P2v: PASS from a second check, separate from the row's own ledger entry"),
-    ("owner", "P2v: the row's own ledger entry, exact branch counts over compared worlds"),
-    ("audit2", "P2v: PASS from the independent audit of the last seven rows, with its own coverage recompute"),
-    ("audit3", "P2v: PASS from the independent audit under the revised harness model of 2026-11-05 (rules HR-P2 and HR-FP)"),
-    ("assumed", "P2v: PASS from the same audit, resting on labelled assumptions the maintainer accepted"),
-    ("anyworld", "P2v: older any-world accounting, not yet audited"),
+    ("ledger", "P2v: the row's own ledger entry, exact branch counts over compared worlds"),
+    ("audit2", "P2v: independently audited (the last seven rows), with its own branch coverage recompute"),
+    ("audit3", "P2v: independently audited under the harness rules of 2026-11-05 (HR-P2 and HR-FP)"),
+    ("assumed", "P2v: passes the same audit given a stated precondition named in the row"),
+    ("anyworld", "P2v: branch outcomes counted over all worlds, skipped ones included; not yet audited"),
     ("-", "none: never matched (unproven)"),
 ])
 STRICT_LABEL = OrderedDict([
@@ -33,7 +33,7 @@ STRICT_LABEL = OrderedDict([
 ALIASES = OrderedDict([
     ("strict_fn", "strict_fns"), ("p1_fn", "p1_fns"), ("p2v_fn", "p2v_exact_fns"), ("p2v_pct", "p2v_exact_pct"),
     ("exact_fn", "strictest_fns"), ("exact_bytes", "strictest_bytes"), ("exact_pct", "strictest_pct"),
-    ("second_fn", "ev_second_fns"), ("owner_fn", "ev_owner_fns"), ("anyworld_fns", "anyworld_fn"),
+    ("second_fn", "ev_second_fns"), ("ledger_fn", "ev_ledger_fns"), ("anyworld_fns", "anyworld_fn"),
     ("unproven_fn", "unproven_fns"), ("names_fn", "names_total"), ("class_cntv2card_fn", "cntv2card_fns"),
     ("stub_names", "stubs_total"), ("classes_local", "classes_total"), ("effect_names", "effects_total"),
     ("param_candidates", "params_total"), ("arity_lifted", "arity_fit_base"),
@@ -231,7 +231,7 @@ class Data:
                 ("rust_label", n.get("rust_label", "")), ("kind", n.get("kind", "")),
                 ("origin", n.get("origin", "")), ("class", ck.get("class", "")),
                 ("size", int(r["size"])), ("group", r["group"]), ("tier", r["tier"]),
-                ("status", r["status"]), ("strict", r["strict"]), ("evidence", r["evidence"]),
+                ("status", r["status"]), ("crate", r["crate"]), ("strict", r["strict"]), ("evidence", r["evidence"]),
                 ("name_check", "{} {}".format(nc["verdict"], nc["confidence"]) if nc else "none"),
                 ("name_check_reviewed", nc["reviewed"] if nc else ""),
                 ("confirmation", conf),
@@ -264,10 +264,10 @@ class Data:
             ("strict", lambda r: r["strict"] in ("p1", "exact"), "strict in {p1, exact}"),
             ("p1", lambda r: r["tier"] == "P1", "tier P1"),
             ("p2v_exact", lambda r: r["strict"] == "exact", "strict exact"),
-            ("strictest", lambda r: r["evidence"] in ("p1", "second", "owner", "audit2"),
-             "evidence in {p1, second, owner, audit2} (the earlier definition, audit3 not counted)"),
-            ("strictest_rev", lambda r: r["evidence"] in ("p1", "second", "owner", "audit2", "audit3"),
-             "evidence in {p1, second, owner, audit2, audit3} (the revised standard of 2026-11-05)"),
+            ("strictest", lambda r: r["evidence"] in ("p1", "second", "ledger", "audit2"),
+             "evidence in {p1, second, ledger, audit2} (the earlier definition, audit3 not counted)"),
+            ("strictest_rev", lambda r: r["evidence"] in ("p1", "second", "ledger", "audit2", "audit3"),
+             "evidence in {p1, second, ledger, audit2, audit3} (the revised standard of 2026-11-05)"),
             ("unproven", lambda r: r["strict"] == "unproven", "strict unproven"),
         ]:
             c, b = sel(pred)
@@ -276,7 +276,7 @@ class Data:
             put(key + "_pct", float(fmt_pct(b, total_b)), FM + " " + src + ", share of code bytes", fmt_pct(b, total_b))
         ev = Counter(r["evidence"] for r in self.fm)
         put("ev_second_fns", ev["second"], FM + " evidence second")
-        put("ev_owner_fns", ev["owner"], FM + " evidence owner")
+        put("ev_ledger_fns", ev["ledger"], FM + " evidence ledger")
         put("ev_anyworld_fns", ev["anyworld"], FM + " evidence anyworld")
         put("ev_audit2_fns", ev["audit2"], FM + " evidence audit2")
         put("ev_audit3_fns", ev["audit3"], FM + " evidence audit3")

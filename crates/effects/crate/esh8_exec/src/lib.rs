@@ -1,11 +1,11 @@
 //! ESH8: executor class for edge_aware_sharpen, slot 52, render flag 0 route.
 //!
-//! Interface contract (ESH7 MAPPING.md, W289):
+//! Interface contract (ESH7 MAPPING.md):
 //! - NO DEFAULTS: `Operands`, `CompileCtx` and `Inputs` have no `Default` impl and no constructor that fills a field; the caller states every field.
 //! - Input 0 is the Source (nch planes), input 1 is the Mask (MASK-UNBOUND when the mask kind is a plane and input 1 is not bound).
 //! - The fourth input plane at nch 3 is ABSENT (the original's table entry 3 is NULL, MEASURED ESH7). The arena ids of absent planes are
 //!   `NO_PLANE`; any access is a `Tripwire` error and is counted in `Output::plane3_accesses` (the count is zero on a successful return).
-//! - Refusals (named): flag != 0 (FLAG-NONZERO), tag < 0 (TAG-NEGATIVE, W290 (d)), nch outside 1..=3 (NCH-RANGE), iterations above 7 (ITERS-ABOVE-7).
+//! - Refusals (named): flag != 0 (FLAG-NONZERO), tag < 0 (TAG-NEGATIVE), nch outside 1..=3 (NCH-RANGE), iterations above 7 (ITERS-ABOVE-7).
 //! - PORT-LIMIT VARIANT-NCH1: deriv_io lane 0 != 0 at nch 1 reads input plane 1, whose table entry the record does not give; refused (the program literal is 0).
 //! - Scratch planes are a HOST stand-in (the original's scratch allocator is not real here); the caller states the fill.
 use esh6_driver as d;

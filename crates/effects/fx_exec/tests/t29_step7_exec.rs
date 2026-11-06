@@ -1,4 +1,4 @@
-//! INT18 (Batch 50 step 7 additions, W414 (c); Batch 49 rule 11): param_int at -2147483648.0f32, warp_rel's flag through cvttss2si, and
+//! INT18: param_int at -2147483648.0f32, warp_rel's flag through cvttss2si, and
 //! CST3's integer-typed set_arg_const cases (812 in-rule cases recorded in the emulator, cst3_setargconst_t2/out/cst3_t2_out.jsonl) as tests
 //! of the native x86 truncation used by warp_rel (kernels2::cvt_i32) and by element_of (ops_element::common::cvtt). Asserts written before
 //! the first run.

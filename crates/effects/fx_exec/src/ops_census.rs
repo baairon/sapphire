@@ -1,4 +1,4 @@
-//! INT24 (W526 (a), W533 (d), W538 (a) 3): the OPS_SCALAR_PAIRS census rows of one compiled plan, the claim-route tripwire
+//! INT24: the OPS_SCALAR_PAIRS census rows of one compiled plan, the claim-route tripwire
 //! OPS-ARITH-SCALAR-SCALAR-UNJUDGED, and the program-text path of a plan node (the operator and its argument expressions beside the id).
 //! Census only: nothing here changes a plan or an output bit.
 use fx_eval::{CompiledProgram, Genotype, NodeKind, PlanNode};
@@ -60,7 +60,7 @@ fn expr(m: &BTreeMap<usize, &PlanNode>, idx: usize, depth: usize) -> String {
     format!("( {} {} )", n.prim, a.join(" "))
 }
 
-/// The program-text path of node `idx`: "<bound name>: <prim> <argument expressions>" (W533 (d) form), argument expressions to depth 2.
+/// The program-text path of node `idx`: "<bound name>: <prim> <argument expressions>", argument expressions to depth 2.
 pub fn node_path(cp: &CompiledProgram, idx: usize) -> String {
     let m = by_idx(cp);
     match m.get(&idx) {
@@ -103,7 +103,7 @@ fn gexpr(g: &Genotype, id: usize, depth: usize) -> String {
     }
 }
 
-/// INT25 (INT24 finding 1, W533 (d)): the program-text path of genotype node `gid`: "<label>: <function> <argument expressions>", the
+/// INT25 (INT24 finding 1): the program-text path of genotype node `gid`: "<label>: <function> <argument expressions>", the
 /// arguments to depth 2 (parameters by name, constants by value, inputs by name), read from the genotype, not from the plan.
 pub fn genotype_path(g: &Genotype, gid: usize) -> String {
     match g.nodes.get(gid) {
@@ -169,7 +169,7 @@ pub fn census_line(r: &OpsRow) -> String {
     )
 }
 
-/// W526 (a) 2: the tripwire. A run-primitive of `+`, `*`, `-` or `/` with both operands non-plane is outside ops_arith's judged R cases.
+/// the tripwire. A run-primitive of `+`, `*`, `-` or `/` with both operands non-plane is outside ops_arith's judged R cases.
 pub fn scalar_scalar_tripwire(program: &str, rows: &[OpsRow]) -> Option<String> {
     rows.iter()
         .find(|r| r.op != "dissolve" && r.plane.len() >= 2 && !r.plane[0] && !r.plane[1])

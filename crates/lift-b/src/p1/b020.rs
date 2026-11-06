@@ -1,4 +1,4 @@
-//! Batch 020: composite format predicates built on the classifiers of b010, b017 and b019.
+//! composite format predicates built on the classifiers of b010, b017 and b019.
 use crate::cov::br;
 use crate::p1::{b010, b017, b019};
 use crate::*;

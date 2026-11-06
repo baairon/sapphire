@@ -1,4 +1,4 @@
-//! NV-3b tests: literal path (W115), generic folding (M1), collapse rules (M3 to M8), binding (M2).
+//! NV-3b tests: literal path, generic folding (M1), collapse rules (M3 to M8), binding (M2).
 use fx_eval::fold::*;
 use fx_eval::parse::orig_number;
 use fx_eval::*;

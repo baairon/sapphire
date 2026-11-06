@@ -1,5 +1,5 @@
 // T2: compare grad::render with the emulated original slot 52 (0x53b460) run by t2/gr1_oracle.py (VEX engine follows the SDM, not silicon).
-// Reads every <T2_DIR>/**/manifest.json (default ./t2_out). All three output planes (aux = blurred plane, dx, dy) are compared; NaN compares as a class (W64).
+// Reads every <T2_DIR>/**/manifest.json (default ./t2_out). All three output planes (aux = blurred plane, dx, dy) are compared; NaN compares as a class.
 // Without run folders the test passes vacuously and prints T2 PENDING. Env T2_TSV writes one row per case.
 use fx_common::cmp::PlaneDiff;
 use fx_common::oracle_io::Manifest;

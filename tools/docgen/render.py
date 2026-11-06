@@ -196,9 +196,8 @@ class Generator:
         for r in d.effects_status:
             rows.append(["`" + r["effect"] + "`", r["registered_styles"].replace("; ", ", "), fmt_int(int(r["counted_rows"])),
                          fmt_int(int(r["frozen_members"])), fmt_int(int(r["landing_rerun_units"]))])
-        b["effects_status"] = table(["effect", "registered styles", "counted rows", "frozen members", "re-run units"], rows)
-        rows = [["`" + r["effect"] + "`", "`" + r["paragraph_sha256"] + "`"] for r in d.effects_status]
-        b["effects_paragraph_sha"] = table(["effect", "SHA-256 of its paragraph"], rows)
+        b["effects_status"] = table(["effect", "registered styles", "verified comparisons", "recorded renders",
+                                     "re-rendered units"], rows)
         return b
 
     # ---- generated pages ----------------------------------------------
@@ -374,7 +373,7 @@ class Generator:
         opens = [[r["symbol"], r["offset"]] for r in d.audit_final if r["verdict"] == "OPEN"]
         anyw = [[r["id"], r["offset"], code(r["bank_name"])] for r in d.rows if r["evidence"] == "anyworld"]
         body = [DO_NOT_EDIT, "# Evidence", "",
-                "What each function's parity claim rests on. {} functions are strict; {} meet the revised strictest "
+                "What each function's parity result rests on. {} functions are strict; {} meet the revised strictest "
                 "standard of 2026-11-05 and {} meet the earlier definition (every branch outcome confirmed in the "
                 "compared worlds).".format(self.t("strict_fns"), self.t("strictest_rev_fns"),
                                            self.t("strictest_fns")), "",
@@ -385,7 +384,7 @@ class Generator:
                                  "rule. {} oracle vectors were compared across {} P1 functions.".format(
                                      fmt_int(len(d.audit_final)), self.t("audit_pass"), self.t("audit_open"),
                                      self.t("exact_audit_rows"), self.t("p1_vectors"), self.t("p1_vector_fns")), ""]
-        body += table(["OPEN row", "offset"], opens) + ["", "## Older any-world accounting", ""]
+        body += table(["OPEN row", "offset"], opens) + ["", "## Rows counted over all worlds (`anyworld`)", ""]
         body += table(["id", "offset", "bank name"], anyw) + ["", "## The last seven rows", ""]
         body += b["close_rows"] + [""]
         return {GEN_DIR + "/evidence.md": "\n".join(body)}

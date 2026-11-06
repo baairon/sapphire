@@ -95,7 +95,7 @@ fn flag_of_class(prim: &str, bits: u32) -> bool {
 fn has_data(cp: &CompiledProgram, n: usize, hd: u32) -> bool {
     let nd = &cp.nodes[n];
     if nd.kind == "special" {
-        // xy variable: ASSUMED frame dependent (conservative: never preserved) on the existing path; XWP2 (W746): under the placement model the
+        // xy variable: ASSUMED frame dependent (conservative: never preserved) on the existing path; XWP2: under the placement model the
         // xy clone is not frame dependent (INFERRED from the recorded plans: TB, Blur_Only and Warp SR preserve groups hold a `variable 2`)
         return !cp.xy_place;
     }

@@ -6,7 +6,7 @@
 //! 1 top pad row, heights[j] interior rows, 2 bottom pad rows (one more spare row is allocated and never written), 1 left pad pixel and
 //! 2 right pad pixels per row. Std only, no unsafe, explicit parameters (no Default).
 //!
-//! Floats are held as u32 bit patterns so copies are bit exact; NaN payloads follow the host arithmetic (compared as a class, W64).
+//! Floats are held as u32 bit patterns so copies are bit exact; NaN payloads follow the host arithmetic (compared as a class).
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
@@ -20,7 +20,7 @@ pub enum Error {
 /// Rows allocated per plane beyond the interior: 1 top pad + 2 bottom pad + 1 spare that is never written.
 pub const EXTRA_ROWS: usize = 4;
 
-/// Explicit parameters (this wrap_x, this wrap_y, this filter, rec pad_pixel). No Default (W65).
+/// Explicit parameters (this wrap_x, this wrap_y, this filter, rec pad_pixel). No Default.
 #[derive(Debug, Clone)]
 pub struct Params {
     /// column pad mode: 1 = tile, 2 = clamp, any other value = constant pad pixel (kernels branch on 2, then 1, else constant)

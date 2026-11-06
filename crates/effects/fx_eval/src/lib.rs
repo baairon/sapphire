@@ -1,6 +1,6 @@
 //! fx_eval: native reader of the effect program language (piece NV-1).
 //!
-//! Label: EVALUATOR-UNCHECKED (our evaluator, not yet compared with the original's plan, W77).
+//! Label: EVALUATOR-UNCHECKED (our evaluator, not yet compared with the original's plan).
 //! Std only, safe Rust, no panics on malformed input (errors are returned).
 //!
 //! Pipeline: `parse::tokenize` -> `parse::parse_item` (AST in an `Arena`) -> `corpus::Corpus`
@@ -19,15 +19,15 @@ pub mod preserve;
 pub mod xyplace;
 pub mod judge_keys;
 pub mod corpus;
-/// LYM1: the registered program text as the original's parser sees it (layout row with its :extra), W225 (b), LAY1
+/// LYM1: the registered program text as the original's parser sees it (layout row with its:extra), LAY1
 pub mod layoutmerge;
 pub mod parse;
 /// Native builders of the programs the thirteen styles reach (no program text is read)
 pub mod programs_native;
 pub mod svml_trig;
-/// INT9 (Batch 41 rule 3): the per-argument column of record (PGM1 argcol_rs with ARGCOL-VACUOUS and the two tie-break guards), report-only
+/// INT9: the per-argument column of record (PGM1 argcol_rs with ARGCOL-VACUOUS and the two tie-break guards), report-only
 pub mod argcol;
-/// INT15 (Batch 49 step 3, rule 5): the checkout rule ported as read (UNT3, UNT5), report-only
+/// INT15 (rule 5): the checkout rule ported as read (UNT3, UNT5), report-only
 pub mod checkout;
 pub mod hostcurve;
 
@@ -41,7 +41,7 @@ pub fn orig_number_pub(t: &str) -> Option<f64> {
     parse::orig_number(t)
 }
 
-/// INT6 (Batch 36 rule 3, PCX2 FIELDS.md): the compile context as explicit native inputs. No Default impl on purpose.
+/// INT6 (PCX2 FIELDS.md): the compile context as explicit native inputs. No Default impl on purpose.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompileContext {
     /// host time t in frames ([ctx] is derived from it); recorded, not consumed by the native compiler (Time_Warp_RGB's frame fold site is unread)
@@ -93,5 +93,5 @@ impl CompileContext {
     }
 }
 
-/// INT10 (UNT1, Batch 44 rule 3): PARAM-UNITS, the host value to record value conversion (lane 0, ns 2 and 4)
+/// INT10 (UNT1): PARAM-UNITS, the host value to record value conversion (lane 0, ns 2 and 4)
 pub mod units;

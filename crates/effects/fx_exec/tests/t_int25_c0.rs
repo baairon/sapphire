@@ -1,4 +1,4 @@
-//! INT25 (W503 (b), W540 (b) 1 (i)): the c0 control on fx_run's 'ae32' compile path. EQC1's c0 text (Blend, the unchanged node
+//! INT25: the c0 control on fx_run's 'ae32' compile path. EQC1's c0 text (Blend, the unchanged node
 //! `( if_neq_const Matte 1 m0 default_matte )`) with Matte unbound: fx_run binds an unbound input whose text default is a number as that
 //! constant (Binding.const_inputs, fx_run.rs, the INT6 rule 1 loop), then compiles through fx_exec::compile_for. The original ran this state
 //! with flags 1 and 1, counts 1 and 1 and arm 3 (EQC1 PROBE_RESULTS.tsv row c0, MEASURED there). A different arm is a finding.

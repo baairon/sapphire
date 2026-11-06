@@ -16,21 +16,21 @@ pub mod hostconv;
 pub mod hostconv14;
 /// INT10 (BCX1 PATCH 2): class postdivide, slot 53, copy_alpha < 0 route (T2 against the emulated original: wave_s9/int10_merge/t2pd)
 pub mod postdiv;
-/// INT12 (Batch 47 rule 4, W380): PDV2's owner arm with the Opacity loop (copy of pdv2_owner_arm/owner_arm/owner_arm.rs, SHA-256 in ../../../stage/PDV2_COPIED.sha256)
+/// INT12: PDV2's owner arm with the Opacity loop (copy of pdv2_owner_arm/owner_arm/owner_arm.rs, SHA-256 in ../../../stage/PDV2_COPIED.sha256)
 pub mod owner_loop;
-/// INT30 step H (W576): HPT1's render history (KEEP or RESTART per render), RENDER-HISTORY-PORTED
+/// INT30 step H: HPT1's render history (KEEP or RESTART per render), RENDER-HISTORY-PORTED
 pub mod history;
-/// INT26 step OP (W558 (a)): OPC1's Opacity conversion (host checkout integer to the loop value), OPACITY-CONVERT-PORTED
+/// INT26 step OP: OPC1's Opacity conversion (host checkout integer to the loop value), OPACITY-CONVERT-PORTED
 pub mod opacity_conv;
 pub mod mode_select;
 pub mod srcindep;
 pub mod kernels;
-/// INT24 (W526 (a), W533 (d)): OPS_SCALAR_PAIRS census rows, the OPS-ARITH-SCALAR-SCALAR-UNJUDGED tripwire, program-text node paths
+/// INT24: OPS_SCALAR_PAIRS census rows, the OPS-ARITH-SCALAR-SCALAR-UNJUDGED tripwire, program-text node paths
 pub mod ops_census;
 pub mod kernels2;
 pub mod input_class;
 pub mod selector;
-/// INT17 (Batch 49 step 5): STYLE-SELECT (INT16 stage/s7/style.rs)
+/// INT17: STYLE-SELECT (INT16 stage/s7/style.rs)
 pub mod style;
 pub mod types;
 pub mod judge_keys;

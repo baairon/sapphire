@@ -1,4 +1,4 @@
-//! Per-argument bits column of the W113 compare (Batch 39 rule 1), report-only. No dependencies.
+//! Per-argument bits column of compare, report-only. No dependencies.
 //! Port of pgm1_argcol_groups/argcol2.py. For a plan text (EP3 or NV3D format) it lists, for every run-primitive in command
 //! order, the primitive name and each argument as constant lane bits (little-endian bytes) or ":REF" (image references belong
 //! to the layout half). A pair is PASS, FAIL (names run-primitive index, primitive and argument index) or UNRESOLVED
@@ -134,7 +134,7 @@ fn alias_steps(nodes: &BTreeMap<i64, Node>, mut x: i64, r: i64) -> Option<usize>
     }
 }
 
-/// INT9 (Batch 41 rule 3): the print precision of a printed decimal. The plan printer gives at most 6 significant digits (`%g` style, trailing
+/// INT9: the print precision of a printed decimal. The plan printer gives at most 6 significant digits (`%g` style, trailing
 /// zeros trimmed, INFERRED from the printed texts such as 0.333333), so the precision is half a unit of the 6th significant digit; a printed 0 is exact.
 fn print_tol(p: f32) -> f32 {
     if p == 0.0 || !p.is_finite() {
@@ -280,7 +280,7 @@ pub fn column_detail(text: &str) -> (Column, usize, Vec<String>) {
             let ridx = out.len();
             let chosen = if cands.contains(&dest) { Some(dest) } else { cands.first().copied() };
             let mut args: Vec<String> = Vec::new();
-            // INT9 tie-break guards (Batch 41 rule 3): more than one candidate left after the printed-text match (and the destination does not decide),
+            // INT9 tie-break guards: more than one candidate left after the printed-text match (and the destination does not decide),
             // or a chosen node whose constant lanes disagree with its printed text beyond print precision, is a marker (the pair becomes UNRESOLVED)
             if chosen.is_some() && !cands.contains(&dest) && cands.len() > 1 {
                 args.push("<AMBIGUOUS>".into());
@@ -324,7 +324,7 @@ pub fn column_detail(text: &str) -> (Column, usize, Vec<String>) {
     (out, mk, detail)
 }
 
-/// INT9 (Batch 41 rule 3): (verdict, n_orig, n_native, first difference or detail). Verdicts: PASS, ARGCOL-VACUOUS (equal columns that compare no
+/// INT9: (verdict, n_orig, n_native, first difference or detail). Verdicts: PASS, ARGCOL-VACUOUS (equal columns that compare no
 /// constant: 0 run-primitives or no constant argument; never a PASS), FAIL, UNRESOLVED (any marker, the two tie-break guards included).
 pub fn compare(orig: &str, native: &str) -> (&'static str, usize, usize, String) {
     let (co, mo, dor) = column_detail(orig);

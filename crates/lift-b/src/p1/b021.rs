@@ -1,4 +1,4 @@
-//! Batch 021: the prefix-sum search f_00032f38 (b013) used to divide a remainder by the weight of the found
+//! the prefix-sum search f_00032f38 (b013) used to divide a remainder by the weight of the found
 //! entry. A zero divisor faults in the original (those cases are skipped by the vectors).
 use crate::cov::br;
 use crate::p1::b013;

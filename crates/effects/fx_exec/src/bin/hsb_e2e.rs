@@ -71,7 +71,7 @@ fn run(a: Vec<String>) -> i32 {
     assert_eq!(orig.len(), 4 * n);
     let mode_byte: i8 = a[7].parse().unwrap();
     let mode = AlphaMode::from_byte(mode_byte).expect("alpha mode");
-    // INT8 (W314 (e)): strict, or the named option --state-a-defaults
+    // INT8: strict, or the named option --state-a-defaults
     let mut b = match fx_exec::exec::strict_binding("hsb_e2e", &a) {
         Ok(b) => b,
         Err(e) => {

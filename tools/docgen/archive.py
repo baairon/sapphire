@@ -1,12 +1,12 @@
-"""Build docs/data/archive_refs.tsv: the archived material that docs/data/ and .agents/inputs/ name.
+"""Build docs/data/archive_refs.tsv: the archived material that docs/data/ and the local inputs folder name.
 
 The archive itself is never read. A reference is recorded only where a checked in table, an input note or an
 input source copy already names the path, so `archive:PATH` citations in the documents resolve offline.
 A folder that a lift test reads from `crates/` and is ignored for want of `sapphire_archive.zip` is recorded
 with kind `placed` (the user places it there from the archive).
 Rules: Windows separators become `/`; paths deeper than three parts are recorded as their three part directory;
-a `tools/` path counts only as a source copied into `.agents/inputs/tools_src/` (recorded under `tools/`, where
-those sources lived); a `docs/` path counts when docs/data/ names it or `.agents/inputs/` holds a copy, and the
+a `tools/` path counts only as a source copied into the inputs folder under `tools_src/` (recorded under `tools/`, where
+those sources lived); a `docs/` path counts when docs/data/ names it or the inputs folder holds a copy, and the
 repository no longer has it.
 """
 

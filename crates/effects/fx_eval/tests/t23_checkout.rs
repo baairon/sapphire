@@ -1,4 +1,4 @@
-//! T23 (INT15, Batch 49 step 3 and rule 5; UNT3 PATCH 2, UNT5 PATCH 1 to 3): the checkout rule ported as read (fx_eval::checkout).
+//! T23 (INT15 and rule 5; UNT3 PATCH 2, UNT5 PATCH 1 to 3): the checkout rule ported as read (fx_eval::checkout).
 //! (1) Diffuse_Autogen under Matte None (presence 1, [owner+0x124b] bit 0x10 clear): exactly blur_mask, invert_mask, mask_use are not checked out,
 //!     ba = 1 for those three and -1 for every other record, bc bit 0 clear everywhere (UNT5 MEASURED 17 of 17 records);
 //! (2) Blur_Color_Autogen: exactly invert_mask and mask_use (UNT5 bcR);

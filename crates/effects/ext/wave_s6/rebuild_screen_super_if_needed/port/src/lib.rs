@@ -80,7 +80,7 @@ pub struct Operand<'a> {
 }
 
 /// Explicit parameters. `nout` is the result of the base virtual slot 31 (: the word of the chosen combo entry, a count
-/// getter hooked in R-PARITY, W69; MEASURED table in audit_evt\COMBOS.tsv). `n` = [info]. `vec_one` = STD-002 (8 lanes
+/// getter hooked in R-PARITY; MEASURED table in audit_evt\COMBOS.tsv). `n` = [info]. `vec_one` = STD-002 (8 lanes
 /// of the same value, SEMANTIC 1.0f, uncovered); no default. `dst3_phase_bytes` = (address of output plane 3) & 0x1f, ALIGN-DEPENDENT.
 pub struct Params {
     pub nout: i32,

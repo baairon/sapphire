@@ -1,11 +1,11 @@
-//! INT20 step G (RDR8 PATCH 1 to 4 with W450 (b)'s amendments): the per-input class derived natively from the rule and the
+//! INT20 step G (RDR8 PATCH 1 to 4 with 's amendments): the per-input class derived natively from the rule and the
 //! caller's class-1 test, transcribed from RDR8's CLASS.md and input_class_model.py (listing neutral_1.asm text).
-//! Label: "INPUT-CLASS-GUARD (per-input class derived natively from the rule; claim routes refused unless every bound input
-//! derives the class the kernels implement; RDR7, RDR8, W450 (b))".
+//! Label: "INPUT-CLASS-GUARD (per-input class derived natively from the rule; verified render paths refused unless every bound input
+//! derives the class the kernels implement; RDR7, RDR8)".
 //!
 //! Cells: [owner], [owner], [prog] come from the route's derivation; the ctx row cells (
 //! [owner+2i]) from the 'ae32' host model; [prog], [prog] and the byte at * from the style's input-class
-//! record (W450 (b) 1). A record cell is read only when the derivation reaches it; a reached cell without a record value is refused by
+//! record. A record cell is read only when the derivation reaches it; a reached cell without a record value is refused by
 //! name (INPUT-CLASS-CELL-UNRECORDED). No cell defaults.
 
 /// The class the ported kernels implement (4 lanes).

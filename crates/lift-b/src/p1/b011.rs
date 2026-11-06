@@ -1,4 +1,4 @@
-//! Batch 011: thin wrappers over the format classifiers (b003, b004, b010): compare a classifier result with
+//! thin wrappers over the format classifiers (b003, b004, b010): compare a classifier result with
 //! a count, tail-call a classifier, or OR several predicates on a field of an object.
 use crate::cov::br;
 use crate::p1::{b003, b004, b010};

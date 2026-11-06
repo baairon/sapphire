@@ -4,7 +4,7 @@
 //! host plane service (finished crate `plane_service`) as service(this, mode 0, channel ch, destination = outs[ch], info), re-reading
 //! the count getter after every call (the loop bound is the getter's current value). The function itself touches no pixel; every sample
 //! is written by the plane service, which copies argument 0's channel min(ch, count-1) (flat copy) or fills a constant.
-//! std only, no unsafe. Mutation: `BUILD_MUTANT` is a compile-time constant (W170), one source line per mutant build.
+//! std only, no unsafe. Mutation: `BUILD_MUTANT` is a compile-time constant, one source line per mutant build.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mutant {
@@ -35,7 +35,7 @@ pub enum Mutant {
     AbsCount,
 }
 
-/// DSW1 (W170): the mutant compiled into this build. Base build: None. A mutant build differs by this one line only.
+/// DSW1: the mutant compiled into this build. Base build: None. A mutant build differs by this one line only.
 pub const BUILD_MUTANT: Mutant = Mutant::None;
 
 /// One call of the plane service: argument block `mode`, channel `chan`, destination plane `out` (index into the outs array of the caller).

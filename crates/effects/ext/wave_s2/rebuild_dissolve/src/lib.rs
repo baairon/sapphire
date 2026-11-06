@@ -128,7 +128,7 @@ fn pick<'a>(op: &Operand<'a>, c: usize, count: i32, rule: bool, y: usize, len: u
     }
 }
 
-/// Channel count of the original (vtable offset 0xf8, slot 31, W29) is `dst.len()` here. Errors: `PlaneCount` for no
+/// Channel count of the original (vtable offset 0xf8, slot 31) is `dst.len` here. Errors: `PlaneCount` for no
 /// destination, more than `MAX_CHANNELS`, a plane operand with a count below 1 or above the planes given; `Geometry`
 /// and `Stride` as in S3 (every plane has the destination geometry; `p.len` may not exceed the width).
 ///
