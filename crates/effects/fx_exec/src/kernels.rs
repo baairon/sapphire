@@ -385,9 +385,19 @@ pub fn run_any(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, usiz
         if tag < 1 || tag > 4 {
             return Err(ExecError::Shape(format!("{}: combo tag {} outside 1..4", c, tag)));
         }
-        return crate::kernels2::run_wired(c, tag, args, n, dims, kp);
+        let mut out = crate::kernels2::run_wired(c, tag, args, n, dims, kp)?;
+        if let (true, crate::kernels2::Out::Img(img)) = (crate::nanrule::ACTIVE, &mut out) {
+            let arm = args.iter().any(|a| crate::nanrule::has_arm_nan(&a.f32s()) || a.planes().iter().any(|p| crate::nanrule::has_arm_nan(p)));
+            crate::nanrule::canon_planes(&mut img.planes, arm);
+        }
+        return Ok(out);
     }
-    Ok(crate::kernels2::Out::Img(run_class(c, tag, args, n, kp)?))
+    let mut img = run_class(c, tag, args, n, kp)?;
+    if crate::nanrule::ACTIVE {
+        let arm = args.iter().any(|a| crate::nanrule::has_arm_nan(&a.f32s()) || a.planes().iter().any(|p| crate::nanrule::has_arm_nan(p)));
+        crate::nanrule::canon_planes(&mut img.planes, arm);
+    }
+    Ok(crate::kernels2::Out::Img(img))
 }
 
 /// IN2-W1: diff vec_mask = OP2-A3, MEASURED-DYLIB 0x7fffffff per lane.
