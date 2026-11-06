@@ -5,4 +5,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-effects_rtdata = { path = "../../../../rtdata" }
+
+[dev-dependencies]
+effects_vecdir = { path = "../../../../vecdir" }

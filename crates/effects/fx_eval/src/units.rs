@@ -118,27 +118,26 @@ pub fn unbound_default_record(text_default: f32, ns: f32, width: f32, flag40: bo
     normalize_scale_record(host, width, ns, flag40)
 }
 
-/// INT11: the registered normalize_scale value per (program, parameter), UNT1's NS_PARAMS.tsv (copied byte for byte, SHA-256
-/// 9c1e59d8e9f65a7467e67dc534128cb65d06b19c5e5ec1af45c3d9f43f7e5985; columns program, param, text_default, normalize_scale, flags).
-pub static NS_TABLE: effects_rtdata::Table = effects_rtdata::Table::new("fx_eval/data/NS_PARAMS.tsv");
-
+/// INT11: the registered normalize_scale value per (program, parameter), defined in effects_rtdata (styles/<style>.rs, field `ns`).
 /// The normalize_scale of a registered parameter, None when the program row has no normalize_scale for it.
 pub fn ns_of(program: &str, param: &str) -> Option<f32> {
-    NS_TABLE.lines().skip(1).find_map(|l| {
-        let f: Vec<&str> = l.split('\t').collect();
-        if f.len() >= 4 && f[0] == program && f[1] == param {
-            f[3].trim().parse::<f32>().ok()
-        } else {
-            None
-        }
-    })
+    effects_rtdata::ns_param(program, param).and_then(|r| r.normalize_scale)
+}
+
+/// The text default and the normalize_scale of a registered parameter, None when the row has no row or either is not a number.
+pub fn ns_entry(program: &str, param: &str) -> Option<(f32, f32)> {
+    let r = effects_rtdata::ns_param(program, param)?;
+    Some((r.text_default?, r.normalize_scale?))
+}
+
+/// Every (parameter, normalize_scale) row of PROGRAM in table order (rows without a numeric normalize_scale are left out).
+pub fn ns_rows_of(program: &str) -> Vec<(String, f32)> {
+    effects_rtdata::ns_params_of(program).filter_map(|r| r.normalize_scale.map(|ns| (r.param.to_string(), ns))).collect()
 }
 
 /// INT32 step DF (W605): the host's registration data per claimed style (one named claim-harness record per style), with the
-/// registered_value_bits column (the int32 of the first four checkout value bytes of each host type 2 row, '-' when not recorded).
-pub static STYLE_PARAM_INDEX: effects_rtdata::Table = effects_rtdata::Table::new("data/STYLE_PARAM_INDEX.tsv");
-
-/// One row of STYLE_PARAM_INDEX.tsv for a program parameter (by record name).
+/// registered_value_bits column (the int32 of the first four checkout value bytes of each host type 2 row, absent when not recorded).
+/// One row of the registration for a program parameter (by record name).
 #[derive(Debug, Clone, PartialEq)]
 pub struct StyleParamRow {
     pub display_name: String,
@@ -147,29 +146,10 @@ pub struct StyleParamRow {
     pub registered_value_bits: Option<i64>,
 }
 
-/// The STYLE_PARAM_INDEX.tsv row of PROGRAM's parameter PARAM, None when the program or the parameter has no row.
+/// The registration row of PROGRAM's parameter PARAM, None when the program or the parameter has no row.
 pub fn style_param_row(program: &str, param: &str) -> Option<StyleParamRow> {
-    let mut hdr: Vec<&str> = Vec::new();
-    for l in STYLE_PARAM_INDEX.lines() {
-        if l.starts_with('#') {
-            continue;
-        }
-        let f: Vec<&str> = l.split('\t').collect();
-        if f.first() == Some(&"program") {
-            hdr = f;
-            continue;
-        }
-        let col = |c: &str| hdr.iter().position(|h| *h == c).and_then(|k| f.get(k).copied());
-        if col("program") == Some(program) && col("record_name") == Some(param) {
-            return Some(StyleParamRow {
-                display_name: col("display_name")?.to_string(),
-                host_index: col("host_index")?.parse().ok()?,
-                host_type: col("host_type")?.parse().ok()?,
-                registered_value_bits: col("registered_value_bits").and_then(|x| x.parse::<i64>().ok()),
-            });
-        }
-    }
-    None
+    let r = effects_rtdata::style_param(program, param)?;
+    Some(StyleParamRow { display_name: r.display_name.to_string(), host_index: r.host_index, host_type: r.host_type, registered_value_bits: r.registered_value_bits })
 }
 
 /// INT32 step DF (W605 (a)): true when PARAM of PROGRAM is a fixed-slider (host type 2) parameter outside the normalize_scale table,
@@ -329,7 +309,7 @@ mod tests {
     }
         // W663 (e) 4: bits = trunc(text default x 1920 / (2 x ns) x 65536) for every NS host type 2 row with bits; disagreements listed
         let mut bad = Vec::new();
-        for l in NS_TABLE.lines().skip(1) {
+        for l in effects_rtdata::text("fx_eval/data/NS_PARAMS.tsv").lines().skip(1) {
             let f: Vec<&str> = l.split('\t').collect();
             if f.len() < 4 { continue; }
             let (Ok(td), Ok(ns)) = (f[2].trim().parse::<f64>(), f[3].trim().parse::<f64>()) else { continue };

@@ -13,7 +13,7 @@ fn code() -> Vec<u8> {
 /// ("4" and up) that the parity record counts. A set whose file is absent is skipped.
 fn sets(name: &str) -> &'static [&'static str] {
     match name {
-        "f_0001b438" => &["", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"],
+        "f_0001b438" => &["", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"],
         _ => &["", "2", "3"],
     }
 }

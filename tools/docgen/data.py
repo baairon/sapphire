@@ -19,6 +19,7 @@ EVIDENCE_LABEL = OrderedDict([
     ("second", "P2v: PASS from a second check, separate from the row's own ledger entry"),
     ("owner", "P2v: the row's own ledger entry, exact branch counts over compared worlds"),
     ("audit2", "P2v: PASS from the independent audit of the last seven rows, with its own coverage recompute"),
+    ("audit3", "P2v: PASS from the independent audit under the revised harness model of 2026-11-05 (rules HR-P2 and HR-FP)"),
     ("assumed", "P2v: PASS from the same audit, resting on labelled assumptions the maintainer accepted"),
     ("anyworld", "P2v: older any-world accounting, not yet audited"),
     ("-", "none: never matched (unproven)"),
@@ -264,7 +265,9 @@ class Data:
             ("p1", lambda r: r["tier"] == "P1", "tier P1"),
             ("p2v_exact", lambda r: r["strict"] == "exact", "strict exact"),
             ("strictest", lambda r: r["evidence"] in ("p1", "second", "owner", "audit2"),
-             "evidence in {p1, second, owner, audit2}"),
+             "evidence in {p1, second, owner, audit2} (the earlier definition, audit3 not counted)"),
+            ("strictest_rev", lambda r: r["evidence"] in ("p1", "second", "owner", "audit2", "audit3"),
+             "evidence in {p1, second, owner, audit2, audit3} (the revised standard of 2026-11-05)"),
             ("unproven", lambda r: r["strict"] == "unproven", "strict unproven"),
         ]:
             c, b = sel(pred)
@@ -276,6 +279,7 @@ class Data:
         put("ev_owner_fns", ev["owner"], FM + " evidence owner")
         put("ev_anyworld_fns", ev["anyworld"], FM + " evidence anyworld")
         put("ev_audit2_fns", ev["audit2"], FM + " evidence audit2")
+        put("ev_audit3_fns", ev["audit3"], FM + " evidence audit3")
         put("ev_assumed_fns", ev["assumed"], FM + " evidence assumed")
         put("partial_fns", sum(r["status"] == "partial" for r in self.fm), FM + " status partial")
         unp = [r["offset"] for r in self.fm if r["strict"] == "unproven"]

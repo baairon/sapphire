@@ -22,7 +22,7 @@ pub struct Combo {
     pub tag: i32,
 }
 
-/// Class combo tables (COMBOS.tsv from EV-T). Selection is the first entry whose values equal
+/// Class combo tables (defined in effects_rtdata; EV-T). Selection is the first entry whose values equal
 /// the per-argument element counts (R3, MEASURED by EV-T over 27,650 emulator cases).
 #[derive(Debug, Clone, Default)]
 pub struct ComboTable {
@@ -30,6 +30,17 @@ pub struct ComboTable {
 }
 
 impl ComboTable {
+    /// The combination tables of the classes the effects use, as defined in effects_rtdata (entries in table order).
+    pub fn from_defs() -> ComboTable {
+        let mut t = ComboTable::default();
+        for c in effects_rtdata::classes::COMBOS {
+            let v: Vec<Combo> = c.entries.iter().map(|e| Combo { vals: e.vals.to_vec(), tag: e.tag }).collect();
+            t.classes.insert(c.class.to_string(), v);
+        }
+        t
+    }
+
+    /// A table parsed from `class .. args tag ..` TSV text (tests that sweep a stored copy).
     pub fn from_tsv(text: &str) -> ComboTable {
         let mut t = ComboTable::default();
         for (i, line) in text.lines().enumerate() {

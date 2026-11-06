@@ -11,8 +11,8 @@
 //!   fast    xa <= 0x461c4000 (10000.0)   single precision Cody-Waite by pi, degree 9 odd polynomial
 //!   medium  10000 < |x| <= 2^30          double precision reduction by pi/2 (5 part constant), even/odd n, same polynomial
 //!   huge xa > 0x4e800000 (2^30), inf, NaN scalar routine (table driven, 64 bit reduction)
-//! Data: the 24 vector constants are CAPTURED (equal to the plugin file bytes); the scalar routine tables (2304 B each) are read from the
-//! approved plugin file (MEASURED-DYLIB), bytes 0..0xff of each are also CAPTURED.
+//! Data: the 24 vector constants are CAPTURED. The scalar routine tables (2304 B each) are computed at first use (pair region, 1/pi chunks and
+//! three constants, see `libm_sincos::exact::svml_a`); no file is read.
 
 const TWO_PI: f32 = f32::from_bits(0x40c90fdb); // 
 
@@ -40,11 +40,33 @@ const C4: f64 = f64::from_bits(0xbc03b39a00000000);
 const C5: f64 = f64::from_bits(0x3a945c06e0e68948);
 const MAGIC_52: f64 = f64::from_bits(0x4338000000000000); // 1.5 * 2^52
 
-fn sin_tab() -> &'static [u8] {
-    effects_rtdata::bytes("fx_eval/data/svml_sin_tab.bin") // 2304 B
+/// The scalar routine's table, computed at first use (module `libm_sincos::exact`, `svml_a`): the pair region (bytes 0..0x410,
+/// formula pairs of sin(j pi/128) and cos(j pi/128) scaled by (pi/128)^2/2 and (pi/128)^3/6), the 15 chunk pairs of 1/pi
+/// (0x410..0x500) and the three constants read at 0x540, 0x548 and 0x550. These are all the bytes any reader of the 2304 byte
+/// table of the original ever touches; the other bytes of that table are never read and are not reproduced. MEASURED on the VPS
+/// (tests/t10_sin1.rs with the copies under VEC_DIR): every word of the computed regions equals the copies.
+struct Tab {
+    is_cos: bool,
 }
-fn cos_tab() -> &'static [u8] {
-    effects_rtdata::bytes("fx_eval/data/svml_cos_tab.bin") // 2304 B
+
+impl Tab {
+    fn rd(&self, off: usize) -> u64 {
+        let a = libm_sincos::exact::svml_a();
+        let w = off / 8;
+        if w < 130 {
+            let pairs = if self.is_cos { &a.cos_pairs } else { &a.sin_pairs };
+            return pairs[w / 2][w % 2];
+        }
+        if off >= 0x410 && off < 0x500 {
+            return a.chunks[(off - 0x410) / 16][(off / 8) % 2];
+        }
+        match off {
+            0x540 => a.c540,
+            0x548 => a.c548,
+            0x550 => 0xffff_ffff_ff00_0000,
+            _ => panic!("svml_trig: table byte {:#x} is not part of the computed regions", off),
+        }
+    }
 }
 
 /// polynomial tail shared by the three regimes: r2 = r * r (single precision), r1 = the reduced argument; returns sin(r1) before the sign
@@ -106,29 +128,22 @@ fn reduce_pio2(a: f64, nd: f64) -> f64 {
 }
 
 #[inline]
-fn rd64(tab: &[u8], off: usize) -> u64 {
-    let mut b = [0u8; 8];
-    b.copy_from_slice(&tab[off..off + 8]);
-    u64::from_le_bytes(b)
-}
-
-#[inline]
 fn quiet_nan_sub(x: f32) -> f32 {
     // subss xmm0,xmm0 on inf or NaN: NaN -> the quieted NaN, inf -> the default NaN (negative sign, quiet bit)
     if x.is_nan() { f32::from_bits(x.to_bits() | 0x0040_0000) } else { f32::from_bits(0xffc0_0000) }
 }
 
 /// scalar routine (sin table) and (cos table): same code, different tables
-fn scalar_fallback(x: f32, tab: &[u8], is_cos: bool) -> f32 {
+fn scalar_fallback(x: f32, tab: &Tab, is_cos: bool) -> f32 {
     let bits = x.to_bits();
     if bits & 0x7f80_0000 == 0x7f80_0000 {
         return quiet_nan_sub(x);
     }
     let xd = x as f64;
     let ecx = (((bits & 0x7fff_ffff) >> 23).wrapping_sub(0x8e) & 0xfff8) as usize;
-    let t3_bits = rd64(tab, ecx * 2 + 0x410);
-    let t5 = f64::from_bits(rd64(tab, ecx * 2 + 0x418));
-    let mask = rd64(tab, 0x550);
+    let t3_bits = tab.rd(ecx * 2 + 0x410);
+    let t5 = f64::from_bits(tab.rd(ecx * 2 + 0x418));
+    let mask = tab.rd(0x550);
     let mut x2 = f64::from_bits(mask & t3_bits);
     let mut x3 = f64::from_bits(t3_bits << 40);
     let mut x1 = xd;
@@ -144,7 +159,7 @@ fn scalar_fallback(x: f32, tab: &[u8], is_cos: bool) -> f32 {
     let ecx = x2.to_bits() as u32;
     x2 -= MAGIC_52;
     x1 += x3;
-    let c540 = f64::from_bits(rd64(tab, 0x540));
+    let c540 = f64::from_bits(tab.rd(0x540));
     let x5 = x5 - x2;
     let ecx2 = ecx.wrapping_add(ecx);
     let sgn = (((ecx2 << 24) as i32) >> 31) as u32;
@@ -152,11 +167,11 @@ fn scalar_fallback(x: f32, tab: &[u8], is_cos: bool) -> f32 {
     let edx = (ecx2.wrapping_add(sgn)) ^ sgn;
     x1 += x5;
     let idx = (edx & 0xfe) as usize;
-    let c548 = f64::from_bits(rd64(tab, 0x548));
+    let c548 = f64::from_bits(tab.rd(0x548));
     let r = x1;
     let r2 = x1 * x1;
-    let a3 = f64::from_bits(rd64(tab, idx * 8));
-    let a5 = f64::from_bits(rd64(tab, idx * 8 + 8));
+    let a3 = f64::from_bits(tab.rd(idx * 8));
+    let a5 = f64::from_bits(tab.rd(idx * 8 + 8));
     // sin : cs from (eax), es from eax; cos has the two roles swapped
     let cs = if is_cos { (eax & 0x100) << 23 } else { ((eax.wrapping_add(0x80)) & 0x100) << 23 };
     let mut y3 = a3 * r;
@@ -192,7 +207,7 @@ pub fn sinf_svml(x: f32) -> f32 {
         return fast_tail(x, nf, nf_i);
     }
     if xa > T2_BITS {
-        return scalar_fallback(x, sin_tab(), false);
+        return scalar_fallback(x, &Tab { is_cos: false }, false);
     }
     sin_medium(x)
 }
@@ -207,7 +222,7 @@ pub fn cosf_svml(x: f32) -> f32 {
         return fast_tail(xa, nf, n);
     }
     if (xa_bits as i32) > T2_BITS {
-        return scalar_fallback(xa, cos_tab(), true);
+        return scalar_fallback(xa, &Tab { is_cos: true }, true);
     }
     let a = xa as f64;
     let q = (a * TWO_OVER_PI) as i32;

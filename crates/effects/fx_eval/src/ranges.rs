@@ -1,7 +1,7 @@
 //! NEG-2: the per-program parameter range table and the measured clamp rule, owned by the evaluator.
 //!
-//! The table is `data/PARAM_RANGES.tsv` (read at run time from the data folder, see `effects_rtdata`; format: program, parameter, type, lanes,
-//! real_min, real_max, default, ...; text-derived from the shipped Autogen/layout, NEG1-A1). The rule is the
+//! The table is defined in `effects_rtdata` (styles/<style>.rs, field `ranges`: program, parameter, type, lanes, min, max, default and the
+//! two enforcement flags; text-derived from the shipped Autogen/layout, NEG1-A1). The REC-HARNESS set is test data and holds no rows here. The rule is the
 //! arithmetic of the original compiler pass -> (NEG-1 runs D, D2, D3):
 //!   * the clamp is lane-wise on every bound parameter value, before fold and compile;
 //!   * ORDER: the upper bound first, the lower bound last (`if v > max {v = max}; if v < min {v = min}`), which only matters when min > max;
@@ -12,10 +12,6 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-/// The embedded table (a copy of NEG-1 / DF-1 `PARAM_RANGES.tsv`).
-pub static PARAM_RANGES_TSV: effects_rtdata::Table = effects_rtdata::Table::new("fx_eval/data/PARAM_RANGES.tsv");
-/// INT6 (Batch 36 rule 5): the REC-HARNESS table (INT4's table, Drop_Shadow rows from the harness record PREC rows). A named state A option, never a default.
-pub static PARAM_RANGES_REC_TSV: effects_rtdata::Table = effects_rtdata::Table::new("fx_eval/data/PARAM_RANGES_REC.tsv");
 /// Row labels of the core-key rows (RANGE-ROWS-CORE-COPY / RANGE-ROWS-CORE-BY-TEXT).
 pub const RANGE_ROW_LABELS_TSV: &str = include_str!("../data/RANGE_ROW_LABELS.tsv");
 
@@ -106,13 +102,34 @@ impl RangeTable {
         }
         t
     }
-    /// The embedded table, parsed once.
+    /// The table of the defined rows (`effects_rtdata`), in table order.
+    pub fn from_defs() -> RangeTable {
+        let mut t = RangeTable::default();
+        for d in effects_rtdata::range_defs() {
+            let row = RangeRow {
+                program: d.program.to_string(),
+                parameter: d.parameter.to_string(),
+                ptype: d.ptype.to_string(),
+                lanes: d.lanes,
+                min: d.min,
+                max: d.max,
+                default: d.default.to_string(),
+                min_enforced: d.min_enforced,
+                max_enforced: d.max_enforced,
+            };
+            t.index.insert((row.program.clone(), row.parameter.clone()), t.rows.len());
+            t.rows.push(row);
+        }
+        t
+    }
+    /// The embedded table, built once. The REC-HARNESS set (an explicit option of the stored state A runs) is test data: it holds no rows
+    /// here, so no parameter of it is clamped; tests parse the stored copy with `parse`.
     pub fn builtin() -> &'static RangeTable {
         static T: OnceLock<RangeTable> = OnceLock::new();
         static TR: OnceLock<RangeTable> = OnceLock::new();
         match range_set() {
-            RangeSet::Real => T.get_or_init(|| RangeTable::parse(&PARAM_RANGES_TSV)),
-            RangeSet::RecHarness => TR.get_or_init(|| RangeTable::parse(&PARAM_RANGES_REC_TSV)),
+            RangeSet::Real => T.get_or_init(RangeTable::from_defs),
+            RangeSet::RecHarness => TR.get_or_init(RangeTable::default),
         }
     }
     /// Row of a program parameter. W224 (a): the lookup is EXACT. Every row is keyed by the program whose record it was measured on; there is no
@@ -170,25 +187,18 @@ pub fn clamp_param(program: &str, parameter: &str, v: &mut [f32]) -> Option<bool
 
 /// DSW3, MEASURED (Drop_Shadow PREC rows, n3 and n4) and READ : a parameter record whose input index is >= 0 and whose
 /// input is not bound (bit of [ctx] clear) takes the copy-default path of and SKIPS the range clamp. `data/PARAM_INPUTS.tsv` lists
-/// (program, parameter, input_index) read from the records after the original program load (tools/rec_inputs.py, emulator, observe-only).
-pub static PARAM_INPUTS_TSV: effects_rtdata::Table = effects_rtdata::Table::new("fx_eval/data/PARAM_INPUTS.tsv");
+/// (program, parameter, input_index) read from the records after the original program load; defined in effects_rtdata (field `inputs`).
 
 /// INT28 step PI (W563 (b)): the PARAM_INPUTS rows that a record's input index cell confirms (tools/pi_fleet.py over the fleet's CTX records). The table rows were written by DSW3's tools/rec_inputs.py from the def-text parse; Warp_Perspective_Autogen's three rows held the def
 /// order's 0 and take the registered program's 1 by record (WPR1 D2, L80e).
-pub static PARAM_INPUT_RECORDS_TSV: effects_rtdata::Table = effects_rtdata::Table::new("fx_eval/data/PARAM_INPUT_RECORDS.tsv");
+/// Defined in effects_rtdata (field `input_records`).
 
 pub const PARAM_INPUT_INDEX_BY_RECORD: &str = "PARAM-INPUT-INDEX-BY-RECORD (Warp_Perspective_Autogen: blur_mask, invert_mask, mask_use input index 1 from the registered records' input index cell; WPR1, W563)";
 
 /// True when a record's input index cell confirms the row (exact program name first, then the core name, as param_input_index).
 pub fn param_input_recorded(program: &str, parameter: &str) -> bool {
-    let has = |p: &str| PARAM_INPUT_RECORDS_TSV.lines().skip(1).any(|l| {
-        let f: Vec<&str> = l.split('\t').collect();
-        f.len() >= 2 && f[0] == p && f[1] == parameter
-    });
-    let exact = PARAM_INPUTS_TSV.lines().skip(1).any(|l| {
-        let f: Vec<&str> = l.split('\t').collect();
-        f.len() >= 2 && f[0] == program && f[1] == parameter
-    });
+    let has = |p: &str| effects_rtdata::has_input_record(p, parameter);
+    let exact = effects_rtdata::param_inputs().any(|r| r.program == program && r.parameter == parameter);
     if exact {
         return has(program);
     }
@@ -205,28 +215,12 @@ pub fn host_value_index_check(program: &str, parameter: &str) -> Result<(), Stri
 
 /// Input index of a program parameter's record, if its record carries one (>= 0). A trailing `_Autogen` is ignored.
 pub fn param_input_index(program: &str, parameter: &str) -> Option<usize> {
-    static T: OnceLock<HashMap<(String, String), usize>> = OnceLock::new();
-    let t = T.get_or_init(|| {
-        let mut m = HashMap::new();
-        for (i, line) in PARAM_INPUTS_TSV.lines().enumerate() {
-            if i == 0 || line.trim().is_empty() {
-                continue;
-            }
-            let f: Vec<&str> = line.split('\t').collect();
-            if f.len() >= 3 {
-                if let Ok(k) = f[2].trim().parse::<usize>() {
-                    m.insert((f[0].to_string(), f[1].to_string()), k);
-                }
-            }
-        }
-        m
-    });
+    let find = |p: &str| effects_rtdata::param_inputs().find(|r| r.program == p && r.parameter == parameter).map(|r| r.input_index);
     // exact program name first (the wrapper's own records), then the core name
-    if let Some(&k) = t.get(&(program.to_string(), parameter.to_string())) {
+    if let Some(k) = find(program) {
         return Some(k);
     }
-    let p = program.strip_suffix("_Autogen").unwrap_or(program);
-    t.get(&(p.to_string(), parameter.to_string())).copied()
+    find(program.strip_suffix("_Autogen").unwrap_or(program))
 }
 
 /// NZ1 (W298, Batch 38 rule 8): the plugin's node store rewrites a node cell only when old and new DIFFER as floats (ucomiss), so +0 and -0 never

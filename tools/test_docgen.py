@@ -119,11 +119,11 @@ class CloseRowsTest(unittest.TestCase):
         self.ledger = {l.split("\t")[0]: l.split("\t") for l in self.d.ledger_lines if l}
 
     def test_rows_agree_with_map_ledger_and_sets(self):
-        self.assertEqual(len(self.d.audit_close), 7)
+        self.assertEqual(len(self.d.audit_close), 10)
         for r in self.d.audit_close:
             row, led = self.by[r["symbol"]], self.ledger[r["symbol"]]
             self.assertEqual((row["tier"], row["status"], row["strict"]), ("P2v", "done", "exact"), r["symbol"])
-            self.assertEqual(row["evidence"], "audit2" if r["labels"] == "-" else "assumed", r["symbol"])
+            self.assertIn(row["evidence"], ("audit2", "audit3") if r["labels"] == "-" else ("assumed",), r["symbol"])
             self.assertEqual(led[3:7], ["P2v", "done", "exact", row["evidence"]], r["symbol"])
             self.assertEqual(led[7], "{}/{}".format(r["compared"], r["worlds"]), r["symbol"])
             self.assertGreaterEqual(int(r["compared"]), 900)
@@ -139,11 +139,12 @@ class CloseRowsTest(unittest.TestCase):
     def test_counts_and_standards(self):
         f = {k: v["value"] for k, v in self.d.facts.items()}
         self.assertEqual(f["close_labelled_rows"], f["ev_assumed_fns"])
-        self.assertEqual(f["close_pass_rows"], f["ev_audit2_fns"])
+        self.assertEqual(f["close_pass_rows"], f["ev_audit2_fns"] + f["ev_audit3_fns"])
         self.assertEqual(f["close_pass_rows"] + f["close_labelled_rows"], f["close_rows"])
         strictest = sum(1 for r in self.d.fm if r["evidence"] in ("p1", "second", "owner", "audit2"))
         self.assertEqual(f["strictest_fns"], strictest)
-        self.assertEqual(f["strict_fns"] - f["strictest_fns"], f["ev_anyworld_fns"] + f["ev_assumed_fns"])
+        self.assertEqual(f["strictest_rev_fns"] - f["strictest_fns"], f["ev_audit3_fns"])
+        self.assertEqual(f["strict_fns"] - f["strictest_rev_fns"], f["ev_anyworld_fns"] + f["ev_assumed_fns"])
         self.assertTrue(all(len(s["vec_sha256"]) == 64 for s in self.d.close_sets))
         self.assertEqual(f["close_sets_pins"], sum(int(s["pins"]) for s in self.d.close_sets))
 

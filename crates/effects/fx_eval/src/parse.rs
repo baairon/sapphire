@@ -152,7 +152,7 @@ impl Arena {
     pub fn get(&self, id: usize) -> Option<&PKind> {
         self.nodes.get(id)
     }
-    fn refs(&self, id: usize, out: &mut Vec<String>) {
+    pub(crate) fn refs(&self, id: usize, out: &mut Vec<String>) {
         match self.nodes.get(id) {
             Some(PKind::Ident(n)) => out.push(n.clone()),
             Some(PKind::Call { args, .. }) => {

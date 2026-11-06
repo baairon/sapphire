@@ -1,6 +1,6 @@
 //! fx_run: the NV-9 command line. Takes a program, a binding, the input planes and host frames, writes the output planes.
 //!
-//! fx_run <programs.tsv> <program> --size WxH --out PREFIX [--set name=v1,v2 ...] [--hc] [--mask-image]
+//! fx_run [<programs.tsv> | -] <program> --size WxH --out PREFIX [--set name=v1,v2 ...] [--hc] [--mask-image]
 //!   [--in Name=path[:C]] [--frame OFF=path[:C]] [--prev path[:C]] [--xy path] [--synth SEED]
 //!   [--geom left,right,aspect,assumption_e,assumption_h,roi_x,roi_y] [--geom-old (NV9-GEOM-OLD)] [--aspect a] [--static2-seed N] [--pad v] [--blur-edge 0|1] [--blur-scale N]
 //!
@@ -61,16 +61,15 @@ fn split(p: &str, dflt: usize) -> (String, usize) {
 }
 
 fn run(a0: &[String]) -> i32 {
-    // the tables taken from the original plugin are an optional data bundle (EFFECTS_DATA_DIR): stop with a clear message when they are absent
-    if let Err(m) = effects_rtdata::require_all() {
-        eprintln!("{}", m);
-        return 2;
-    }
+    // NATIVE PROGRAMS: the thirteen styles are built by fx_eval::programs_native; no programs table is read. The first argument is then absent
+    // (`fx_run <program> --size ...`) or `-`. A path in that place is an optional override (tests): the text route.
+    let a0n: Vec<String> = native_args(a0);
+    let a0: &[String] = &a0n;
     if a0.iter().any(|x| x == "--host-times") {
         return run_history(a0);
     }
     if a0.len() < 3 {
-        eprintln!("usage: fx_run <programs.tsv> <program> --size WxH --out PREFIX [options], see the source header");
+        eprintln!("usage: fx_run [<programs.tsv> | -] <program> --size WxH --out PREFIX [options], see the source header");
         return 2;
     }
     // INT17 step 5 (Batch 49 step 5, Batch 47 rule 3): STYLE-SELECT. --effect-answer N --effect-count K declare the host popup "Effect" answer and
@@ -624,14 +623,13 @@ fn run(a0: &[String]) -> i32 {
     } else {
         None
     };
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
+    let c = match corpus_for(&path) {
+        Ok(c) => c,
         Err(e) => {
-            eprintln!("cannot read {}: {}", path, e);
+            eprintln!("{}", e);
             return 2;
         }
     };
-    let c = Corpus::from_programs_tsv(&text);
     let g = match c.find_effect(&prog, None).map(|ei| build_effect(&c, ei)) {
         Some(Ok(mut g)) => {
             if let Some(li) = lay_info.as_ref() {
@@ -738,8 +736,8 @@ fn run(a0: &[String]) -> i32 {
     if ae32.is_some() {
         let mut pts: Vec<(String, Vec<f32>)> = Vec::new();
         for p in &g.params {
-            let row = fx_eval::hostcurve::table_row(&fx_eval::hostcurve::RECORDS, &g.name, &p.name);
-            let is_pt = row.as_ref().map(|f| f[4] == "2" && matches!(f[5].parse::<u32>().unwrap_or(0) & 0xf, 1 | 2 | 4 | 6 | 7)).unwrap_or(false);
+            let row = fx_eval::hostcurve::record_of(&g.name, &p.name);
+            let is_pt = row.as_ref().map(|f| f.kind_byte == 2 && matches!((f.subtype_byte as u32) & 0xf, 1 | 2 | 4 | 6 | 7)).unwrap_or(false);
             if !is_pt {
                 continue;
             }
@@ -779,12 +777,12 @@ fn run(a0: &[String]) -> i32 {
         if let Some(h) = b.host_curve_values.as_ref() {
             let mut cps: Vec<(String, Vec<f32>)> = Vec::new();
             for p in &g.params {
-                let row = fx_eval::hostcurve::table_row(&fx_eval::hostcurve::RECORDS, &g.name, &p.name);
+                let row = fx_eval::hostcurve::record_of(&g.name, &p.name);
                 let f = match row {
                     Some(f) => f,
                     None => continue,
                 };
-                let is_pt = f[4] == "2" && matches!(f[5].parse::<u32>().unwrap_or(0) & 0xf, 1 | 2 | 4 | 6 | 7);
+                let is_pt = f.kind_byte == 2 && matches!((f.subtype_byte as u32) & 0xf, 1 | 2 | 4 | 6 | 7);
                 if is_pt {
                     continue;
                 }
@@ -792,7 +790,7 @@ fn run(a0: &[String]) -> i32 {
                     eprintln!("TICKMAP-CURVE-SET-REFUSED ({}: {}: a host curve parameter's direct reads take the curve at the current time, never --set; W746)", g.name, p.name);
                     return 2;
                 }
-                let n: usize = f[3].parse().unwrap_or(1);
+                let n: usize = f.nlanes as usize;
                 let mut d = Vec::new();
                 match fx_eval::hostcurve::fold(&g.name, &p.name, 0.0, &vec![0.0f32; n], n, h, &mut d) {
                     Some(l) => cps.push((p.name.clone(), l)),
@@ -873,8 +871,7 @@ fn run(a0: &[String]) -> i32 {
                 if fetched {
                     continue;
                 }
-                let row = fx_eval::units::NS_TABLE.lines().skip(1).map(|l| l.split('\t').collect::<Vec<&str>>()).find(|f| f.len() >= 4 && f[0] == prog && f[1] == n);
-                let (td, ns) = match row.and_then(|f| Some((f[2].trim().parse::<f32>().ok()?, f[3].trim().parse::<f32>().ok()?))) {
+                let (td, ns) = match fx_eval::units::ns_entry(&prog, &n) {
                     Some(x) => x,
                     None => {
                         eprintln!("CHECKOUT-NOT-FETCHED-DEFAULT-UNREAD: {} of {} is not fetched and its text default is not a scalar of the normalize_scale table (INT18)", n, prog);
@@ -1831,18 +1828,7 @@ impl Ae32Args {
         // ns 2 or 4) or by --set as its record value (PARAM-BY-RECORD); never both, never neither
         let (fx_run_cell_b, fx_run_cell_a) = self.ratio.unwrap();
         let uw = fx_eval::units::units_width(w as i32, fx_run_cell_b, fx_run_cell_a);
-        let nsrows: Vec<(String, f32)> = fx_eval::units::NS_TABLE
-            .lines()
-            .skip(1)
-            .filter_map(|l| {
-                let f: Vec<&str> = l.split('\t').collect();
-                if f.len() >= 4 && f[0] == prog {
-                    f[3].trim().parse::<f32>().ok().map(|ns| (f[1].to_string(), ns))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let nsrows: Vec<(String, f32)> = fx_eval::units::ns_rows_of(&prog);
         for (n, x) in &self.host_params {
             if let Some(lane) = fx_eval::units::angle_host_lane(prog, n, *x) {
                 // WSR1 (W729 (b) 2): host angle -> record lane = -host (MEASURED in the S_WarpPerspective records)
@@ -2486,8 +2472,32 @@ fn class3_admit(style: &str, _k: usize, name: &str, g3_in_a: u32, mode: i32, g3:
     ])
 }
 
+/// The corpus source argument that selects the native builders.
+const NATIVE_PROGRAMS: &str = "-";
+
+/// `fx_run <program> --size ...` (no table argument) when the first argument is a natively built program: insert the native marker.
+fn native_args(a: &[String]) -> Vec<String> {
+    let mut v = a.to_vec();
+    if v.len() >= 2 && fx_eval::programs_native::has_program(&v[1]) && (v.len() == 2 || v[2].starts_with("--")) {
+        v.insert(1, NATIVE_PROGRAMS.to_string());
+    }
+    v
+}
+
+/// The program corpus: the native builders for `-`, else the programs table at `path` (optional override, text route).
+fn corpus_for(path: &str) -> Result<Corpus, String> {
+    if path == NATIVE_PROGRAMS {
+        return Ok(Corpus::native());
+    }
+    let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {}", path, e))?;
+    Ok(Corpus::from_programs_tsv(&text))
+}
+
 /// LYM1: the layout row registered for `prog` (header's last name = the program), parsed; None when the corpus has no such row.
 fn lym_resolve(path: &str, prog: &str) -> Result<Option<fx_eval::layoutmerge::LayoutInfo>, String> {
+    if path == NATIVE_PROGRAMS {
+        return fx_eval::programs_native::layout_info(prog);
+    }
     let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {}", path, e))?;
     let c = Corpus::from_programs_tsv(&text);
     let rows = fx_eval::layoutmerge::find_layout_text(c.layout_texts.iter().map(|x| x.1.as_str()), prog);
@@ -2909,27 +2919,9 @@ mod int31_alias_tests {
     }
 }
 
-/// INT31 step L2 (W592 (c), W595): the host's registered popup defaults, written by INT30's TICKMAP step (one named record per claimed style).
-static STYLE_PARAM_INDEX: effects_rtdata::Table = effects_rtdata::Table::new("data/STYLE_PARAM_INDEX.tsv");
-
-/// W630 (b): the registered choice count N of the popup whose display name is DISPLAY in PROG's row of STYLE_PARAM_INDEX.tsv (record-backed).
+/// W630 (b): the registered choice count N of the popup whose display name is DISPLAY in PROG's registration (record-backed, defined in effects_rtdata).
 fn popup_choice_count(prog: &str, display: &str) -> Option<i32> {
-    let mut hdr: Vec<&str> = Vec::new();
-    for l in STYLE_PARAM_INDEX.lines() {
-        if l.starts_with('#') {
-            continue;
-        }
-        let f: Vec<&str> = l.split('\t').collect();
-        if f.first() == Some(&"program") {
-            hdr = f;
-            continue;
-        }
-        let col = |c: &str| hdr.iter().position(|h| *h == c).and_then(|k| f.get(k).copied());
-        if col("program") == Some(prog) && col("display_name") == Some(display) {
-            return col("popup_choices").and_then(|x| x.parse::<i32>().ok());
-        }
-    }
-    None
+    effects_rtdata::style_params_of(prog).find(|r| r.display_name == display).and_then(|r| r.popup_choices)
 }
 
 /// W630 (b): a host answer V (the one-based checkout integer) of a registered popup must lie in 1..N. A name or a popup without a registered
@@ -2954,23 +2946,9 @@ fn popup_answer_check(prog: &str, display: &str, v: i32) -> Result<(), String> {
 
 /// INT31 step L2: the registered default checkout integer of PROG's popup NAME (record name), with its display name, record and style.
 fn registered_default(prog: &str, name: &str) -> Option<(i32, String, String, String)> {
-    let mut hdr: Vec<&str> = Vec::new();
-    for l in STYLE_PARAM_INDEX.lines() {
-        if l.starts_with('#') {
-            continue;
-        }
-        let f: Vec<&str> = l.split('\t').collect();
-        if f.first() == Some(&"program") {
-            hdr = f;
-            continue;
-        }
-        let col = |c: &str| hdr.iter().position(|h| *h == c).and_then(|k| f.get(k).copied());
-        if col("program") == Some(prog) && col("record_name") == Some(name) {
-            let v = col("default_checkout_integer").and_then(|x| x.parse::<i32>().ok())?;
-            return Some((v, col("display_name")?.to_string(), col("record")?.to_string(), col("style")?.to_string()));
-        }
-    }
-    None
+    let r = effects_rtdata::style_param(prog, name)?;
+    let v = r.default_checkout_integer?;
+    Some((v, r.display_name.to_string(), r.record.to_string(), r.style.to_string()))
 }
 
 /// INT31 step L2: the checkout integer v of an owner opacity extra: the bound answer (host-answer form) or the registered default.
@@ -3056,26 +3034,13 @@ fn output_opacity_checked(prog: &str, set: Option<f32>, host: Option<i32>, text_
 /// Step L2b (W616 (c), W547): the parameter a --cset display name answers: the record name (opacity, input_opacity or output_opacity)
 /// whose registered display name in STYLE_PARAM_INDEX.tsv equals the given name for this program; None for any other name.
 fn cset_param(prog: &str, display: &str) -> Option<String> {
-    let mut hdr: Vec<&str> = Vec::new();
-    for l in STYLE_PARAM_INDEX.lines() {
-        if l.starts_with('#') {
-            continue;
-        }
-        let f: Vec<&str> = l.split('\t').collect();
-        if f.first() == Some(&"program") {
-            hdr = f;
-            continue;
-        }
-        let col = |c: &str| hdr.iter().position(|h| *h == c).and_then(|k| f.get(k).copied());
-        if col("program") == Some(prog) && col("display_name") == Some(display) {
-            if let Some(r) = col("record_name") {
-                if r == "opacity" || r == "input_opacity" || r == "output_opacity" {
-                    if cfg!(feature = "l2b_cset_input_as_opacity_mut") && r == "input_opacity" {
-                        return Some("opacity".to_string());
-                    }
-                    return Some(r.to_string());
-                }
+    for row in effects_rtdata::style_params_of(prog).filter(|r| r.display_name == display) {
+        let r = row.record_name;
+        if r == "opacity" || r == "input_opacity" || r == "output_opacity" {
+            if cfg!(feature = "l2b_cset_input_as_opacity_mut") && r == "input_opacity" {
+                return Some("opacity".to_string());
             }
+            return Some(r.to_string());
         }
     }
     None
@@ -3271,7 +3236,7 @@ mod g2_popup_tests {
     }
         let mut hdr: Vec<&str> = Vec::new();
         let (mut n7, mut with) = (0, 0);
-        for l in STYLE_PARAM_INDEX.lines() {
+        for l in effects_rtdata::text("data/STYLE_PARAM_INDEX.tsv").lines() {
             if l.starts_with('#') {
                 continue;
             }

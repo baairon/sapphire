@@ -1,7 +1,7 @@
 //! The native combo selector (slot 31, base), specified by audit_evt\COMBO_SELECT.md section 2 and
 //! section 4. Exact equality, first match in table order, -1 on no match, -1 on an unbound operand, -1 on a
 //! missing table (the NULL default of 28 classes). The table of a class ends at the first entry whose tag is <= 0.
-//! Tables are data generated from audit_evt\COMBOS.tsv (`data/COMBOS_EXEC.tsv`: class, entry, args, tag, len).
+//! Tables are data generated from audit_evt\COMBOS.tsv (defined in effects_rtdata: class, entries with args, tag, len).
 
 use std::collections::HashMap;
 
@@ -17,8 +17,6 @@ pub struct Entry {
 pub struct Tables {
     pub classes: HashMap<String, Vec<Entry>>,
 }
-
-pub static EMBEDDED: effects_rtdata::Table = effects_rtdata::Table::new("fx_exec/data/COMBOS_EXEC.tsv");
 
 impl Tables {
     /// Parses `class \t entry \t args \t tag \t len` rows (no header). Rows of a class are kept in file order
@@ -63,8 +61,14 @@ impl Tables {
         t
     }
 
+    /// The selector tables of the classes the effects use, as defined in effects_rtdata (entries in table order).
     pub fn embedded() -> Tables {
-        Tables::from_tsv(&EMBEDDED)
+        let mut t = Tables::default();
+        for c in effects_rtdata::classes::COMBOS_EXEC {
+            let v: Vec<Entry> = c.entries.iter().map(|e| Entry { vals: e.vals.to_vec(), tag: e.tag, len: e.len }).collect();
+            t.classes.insert(c.class.to_string(), v);
+        }
+        t
     }
 
     pub fn has(&self, class: &str) -> bool {

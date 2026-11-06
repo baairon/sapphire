@@ -10,8 +10,6 @@ use fx_eval::{compile, CompileOptions, CompiledProgram, ComboTable, Genotype, Pl
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-pub static FX_COMBOS: effects_rtdata::Table = effects_rtdata::Table::new("fx_exec/data/COMBOS.tsv");
-
 /// Explicit parameter bindings and host values for one render (W84: nothing is read from a host).
 #[derive(Clone, Debug)]
 pub struct Binding {
@@ -165,7 +163,7 @@ pub struct ExecOutput {
 }
 
 pub fn combo_table() -> ComboTable {
-    ComboTable::from_tsv(&FX_COMBOS)
+    ComboTable::from_defs()
 }
 
 /// XWP2 (W746): the per-writer xy list of one run: (base phase in bytes mod 32, reused from render 1) per writer in execution order, and the render (1 or 2).
