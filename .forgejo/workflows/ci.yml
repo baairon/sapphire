@@ -62,6 +62,11 @@ jobs:
           cargo build --release -p fx_exec
           cargo test --release -p fx_eval -p fx_exec -p esh2_job -p esh3_jobs -p esh5_core -p esh5b_passjobs -p esh6_driver -p esh8_exec -p sharpen -p wpg1_glue -p make_mipmap -p rotate -p interp -p effects_rtdata -p effects_vecdir
 
+      # Each of the 13 effect styles renders a fixed synthetic clip at 64x32 and 50x7 through its stage, and the
+      # SHA-256 of every output must equal tools/fx_golden.tsv (this repository's own Linux renders); a difference
+      # names the style.
+      - run: python3 -I tools/fx_golden.py
+
       # The Python tools need no packages beyond the standard library to
       # compile, so a syntax slip anywhere in them fails here.
       - run: python3 -m compileall -q tools
