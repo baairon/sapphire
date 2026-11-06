@@ -298,12 +298,30 @@ pub fn check_params(def: &StageDef, params: &[String]) -> Result<Vec<(String, St
             Some(p) => p,
             None => return Err(Error::unsupported(format!("unknown param `{}`", id))),
         };
+        if value.contains('@') && def.kind == "temporal" && crate::fxstage::is_fx(def.id) {
+            // a keyed value of an effect stage: the syntax here, each key's value by the parameter's kind
+            let pieces = crate::keys::split_all(value).map_err(|r| Error::unsupported(format!("bad value for `{}`: {}", param.id, r)))?;
+            for k in &pieces {
+                check_value(param, k.value.trim())?;
+            }
+            seen.push((id.to_string(), value.to_string()));
+            continue;
+        }
         if value.contains('@') && !matches!(param.kind, ParamKind::Text { .. }) {
             return Err(Error::unsupported(format!(
                 "bad value for `{}`: keyframes need a temporal effect, and {} is a frame effect",
                 param.id, def.id
             )));
         }
+        check_value(param, value)?;
+        seen.push((id.to_string(), value.to_string()));
+    }
+    Ok(seen)
+}
+
+/// One plain value checked against its parameter's kind.
+fn check_value(param: &ParamDef, value: &str) -> Result<()> {
+    {
         match &param.kind {
             ParamKind::Checkbox { .. } => {
                 if parse_bool(value).is_none() {
@@ -329,9 +347,8 @@ pub fn check_params(def: &StageDef, params: &[String]) -> Result<Vec<(String, St
                 }
             }
         }
-        seen.push((id.to_string(), value.to_string()));
     }
-    Ok(seen)
+    Ok(())
 }
 
 /// The conformance stage.

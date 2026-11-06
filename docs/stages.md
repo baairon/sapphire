@@ -142,19 +142,19 @@ The stages as `sapphire stage list` prints them (the literal output of that comm
 id               name             family    kind   depths    params  layers
 selftest-invert  Selftest Invert  selftest  frame  8,16,32   1       0
 ffmpeg-filter    ffmpeg Filter    ffmpeg    frame  8,16,32   3       0
-blur_color_autogen Blur_Color_Autogen S_Blur    frame  8,16,32   17      0
-blur_mono_autogen Blur_Mono_Autogen S_Blur    frame  8,16,32   17      0
-transform_and_blur_autogen Transform_and_Blur_Autogen BlurMoCurves frame  8,16,32   9       0
-blur_motion_curves_no_transform_autogen Blur_Motion_Curves_No_Transform_Autogen BlurMoCurves frame  8,16,32   9       0
-diffuse_autogen  Diffuse_Autogen  S_Diffuse frame  8,16,32   15      0
-distort_rgb_autogen Distort_RGB_Autogen S_DistortRGB frame  8,16,32   10      1
-drop_shadow      Drop_Shadow      S_DropShadow frame  8,16,32   10      2
-hue_sat_bright_autogen Hue_Sat_Bright_Autogen S_HueSatBright frame  8,16,32   8       0
-sharpen_best_quality_autogen Sharpen_Best_Quality_Autogen S_Sharpen frame  8,16,32   13      0
-sharpen_fast_autogen Sharpen_Fast_Autogen S_Sharpen frame  8,16,32   8       0
+blur_color_autogen Blur_Color_Autogen S_Blur    temporal 8,16,32   17      0
+blur_mono_autogen Blur_Mono_Autogen S_Blur    temporal 8,16,32   17      0
+transform_and_blur_autogen Transform_and_Blur_Autogen BlurMoCurves temporal 8,16,32   9       0
+blur_motion_curves_no_transform_autogen Blur_Motion_Curves_No_Transform_Autogen BlurMoCurves temporal 8,16,32   9       0
+diffuse_autogen  Diffuse_Autogen  S_Diffuse temporal 8,16,32   15      0
+distort_rgb_autogen Distort_RGB_Autogen S_DistortRGB temporal 8,16,32   10      1
+drop_shadow      Drop_Shadow      S_DropShadow temporal 8,16,32   10      2
+hue_sat_bright_autogen Hue_Sat_Bright_Autogen S_HueSatBright temporal 8,16,32   8       0
+sharpen_best_quality_autogen Sharpen_Best_Quality_Autogen S_Sharpen temporal 8,16,32   13      0
+sharpen_fast_autogen Sharpen_Fast_Autogen S_Sharpen temporal 8,16,32   8       0
 time_warp_rgb_autogen Time_Warp_RGB_Autogen S_TimeWarpRGB temporal 8,16,32   6       0
 trails_autogen   Trails_Autogen   S_Trails  temporal 8,16,32   11      0
-warp_perspective_autogen Warp_Perspective_Autogen S_WarpPerspective frame  8,16,32   9       0
+warp_perspective_autogen Warp_Perspective_Autogen S_WarpPerspective temporal 8,16,32   9       0
 ```
 
 Through each stage, the counted recorded renders of the parity record that match the stage's host arrangement are rendered again and compared (MEASURED in the stage provider's parity run):
@@ -177,9 +177,13 @@ Through each stage, the counted recorded renders of the parity record that match
 
 **Host arrangement.** Each style runs one fixed host arrangement, taken from the recorded runs, and listed in `crates/neutral-handoff/data/fx_stages.tsv`. The stage derives the rest per frame: `--size` and `--geom` from the frame (`-0.5,W-0.5,1,0,(H-1-W)/2,0,0`), `--host-frame` and `--ctx-time` from the frame index (0 based), and the buffer placement per frame size (a table at the measured sizes, the 64x32 placement elsewhere, INFERRED).
 
-**Parameters.** A parameter is offered when a counted recorded render set it. Every other parameter of the style stays at its registered default, which `fx_run` applies, and a stage passes on only the parameters it was given. A value is passed through unchanged (a vector is `a,b` or `r,g,b`). `fx_params.tsv` holds only the id, the `fx_run` option form and the name of each offered parameter, taken from the manifests; the type, lanes, range and registered default are asked from `fx_run --describe-params`, which prints them from the native definitions, when the stage builds its list.
+**Parameters.** A parameter is offered when a counted recorded render set it. Every other parameter of the style stays at its registered default, which `fx_run` applies, and a stage passes on only the parameters it was given. A value is passed through unchanged (a vector is `a,b` or `r,g,b`), or read per frame when it is keyed (below). `fx_params.tsv` holds only the id, the `fx_run` option form and the name of each offered parameter, taken from the manifests; the type, lanes, range and registered default are asked from `fx_run --describe-params`, which prints them from the native definitions, when the stage builds its list.
 
 **Two inputs that `fx_run` reveals by refusing or defaults.** `--do-postdiv` is a required cross-check on the 'ae32' route, and `fx_run` derives its value from the host's opacity arm (`--owner-arm`) and the opacity parameters. The stage sends 0, and when `fx_run` answers with the line `POSTDIV-MISMATCH: the owner arm ... derives ctx = N, the recorded cell is M` it reads N (an exact pattern, covered by a unit test), repeats the frame and keeps N for every later frame of the clip. A line it cannot read is `stage_failed` carrying that line. `--owner-opacity` is omitted: `fx_run` derives it. The stage passes `--ns-default-unbound` on every run: an unbound normalize_scale parameter then takes its registered default from the native definitions instead of the `PARAM-UNITS` refusal (without the flag `fx_run` is unchanged).
+
+**Keyframes.** The 13 effect stages are `kind: temporal`, because the frames/2 convention accepts keyed values (`V@F;V@F;...`) only for temporal stages; their output frame N still depends only on input frame N (and, for Time_Warp and Trails, on the frames they always read). A keyed value follows the convention's syntax and interpolation exactly: keys at output frame numbers counted from 0, `h` to hold and `e` to ease a key, Bezier handles `iS/I` and `oS/I`, the value of the first key before it and of the last key after it. Scalars and angles interpolate, two-lane vectors move on the straight line between their keys, and integers, popups, checkboxes, colours, opacity answers and file paths hold until the next key. A float that a handle overshoots is held inside its range. Keys are stored in ticks of the rate given by `--fps` (100 a frame at an integer rate, D a frame at a rate N/D), so a keyed value without `--fps` is exit 2. The stage reads each keyed parameter at the frame and runs `fx_run` with that value; a host value (`--host-param`) between keys is put on the 1/65536 grid of a host slider, round half away from zero. `trails_autogen` renders the clip in one `fx_run` run and refuses a keyed value with exit 3. MEASURED: frame N of a keyed run is byte identical to frame N of a plain run at the value the keys give for frame N (linear, eased, Bezier, held and two-lane cases on five stages). Values between keys are not recorded renders of the original, so they are INFERRED.
+
+**Mask input.** The programs' `Mask` input is not offered as a layer. On the stages' host arrangements `fx_run` refuses a connected mask (`INPUT-CLASS-CELL-UNRECORDED` on the four-plane styles, a plane-count refusal on the three-plane styles; MEASURED on seven stages), because the recorded host runs never connected one; the mask stays the constant 1.
 
 **Layers.** Distort_RGB offers an optional `Lens` layer, Drop_Shadow optional `Background` and `Matte` layers. A layer file holds one frame (held for the whole clip) or at least as many frames as the input; any other length is exit 4. No counted recorded render used a layer input, so layers are INFERRED.
 
@@ -198,6 +202,7 @@ Through each stage, the counted recorded renders of the parity record that match
 | Buffer placement at sizes other than the measured ones | INFERRED |
 | Trails clips longer than the measured histories, Time_Warp windows beyond the measured shifts | INFERRED |
 | Layers, host curves other than the identity curve | INFERRED |
+| Keyed values between keys | INFERRED (each frame is a plain run at its value, MEASURED) |
 | Depths 8 and 16 | new conversion, not verified |
 
 **Limits.** Each frame is one `fx_run` process, so the stages are slow. MEASURED (wall time per frame including process start, under shared load on a 12 core server): 0.2 to 0.35 s at 160x96 for every stage; at 1920x1080 0.9 to 6.8 s per frame for most stages, `Blur_Motion_Curves_No_Transform_Autogen` about 12 s and `Transform_and_Blur_Autogen` about 54 s per frame. An in process route is a later optimisation and needs its own parity run.

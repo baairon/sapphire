@@ -16,10 +16,10 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | `lift-a` | Lifted functions. | 46 | 7 | 1,205 |
 | `lift-b` | Lifted functions. | 126 | 67 | 1,515 |
 | `neutral-ffmpeg` | Bridge to ffmpeg that runs it as a separate process and moves raw frames over pipes. | 23 | 22 | 130 |
-| `neutral-handoff` | Pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. | 30 | 30 | 212 |
+| `neutral-handoff` | Pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. | 31 | 31 | 216 |
 | `neutral-parity` | Replays oracle test vectors against ported functions. | 1 | 1 | 4 |
 | `neutral-world` | Rust side of the world-parametric parity harness. | 3 | 3 | 17 |
-| **total** |  | 493 | 296 | 5,671 |
+| **total** |  | 494 | 297 | 5,675 |
 
 ## lift-1
 
@@ -99,6 +99,7 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | `crates/neutral-handoff/src/format.rs` | [Depth] and [FrameSpec]: the raw frame format shared by ffmpeg, vfx and the stages. |
 | `crates/neutral-handoff/src/fxstage.rs` | The effects stage provider: one frames/2 stage per registered style of the landed effects. |
 | `crates/neutral-handoff/src/geometry.rs` | Declared geometry (docs/handoff.md#geometry, contracts/describe.schema.json). |
+| `crates/neutral-handoff/src/keys.rs` | Keyframed parameter values of the frames/2 convention: V@F;V@F;.... |
 | `crates/neutral-handoff/src/lib.rs` | Pipeline from ffmpeg through twixtor's vfx and back to ffmpeg, plus the stage commands of this repository. |
 | `crates/neutral-handoff/src/main.rs` | The sapphire binary: the pipeline wrapper and the stage subcommand. |
 | `crates/neutral-handoff/src/media.rs` | [Info]: what ffprobe says a file is, read the way tools/apply.py reads it. |

@@ -59,7 +59,13 @@ target/release/sapphire clip.mp4 --depth 32 --stage "@hue_sat_bright_autogen hue
 target/release/sapphire clip.mp4 --depth 32 --stage "@hue_sat_bright_autogen hue_shift=0.25 saturation=1.5" --dry-run
 ```
 
-Parameters hold one value for the whole clip; there is no keyframed animation. A parameter left out takes its default. The output is encoded with libx264; `--lossless` (ffv1) is available at depths 8 and 16 only.
+A parameter left out takes its default. A parameter can also change over the clip with keyframes, `VALUE@FRAME;VALUE@FRAME`, frames counted from 0 on the output; quote the stage string, because `;` ends a shell command:
+
+```sh
+target/release/sapphire clip.mp4 --depth 32 --stage "@hue_sat_bright_autogen saturation=0@0;2@24e" -o clip_sat.mp4
+```
+
+Keys may hold (`h`), ease (`e`) or carry Bezier handles, as the frames/2 convention defines them; [Driving the effect parameters](parameters-guide.md#keyframed-values) has the rules. `trails_autogen` takes no keyed value. The output is encoded with libx264; `--lossless` (ffv1) is available at depths 8 and 16 only.
 
 ### Slow stages and `--stage-timeout 0`
 
@@ -151,6 +157,6 @@ The ten effects are rebuilt so that, on every case the parity record compares, t
 - **INFERRED.** Other frame sizes and parameter values, a real clip among them, run the same code path and are expected to match, but were not measured. The same holds for buffer placement at unmeasured sizes, `S_Trails` clips longer than the measured histories, `S_TimeWarpRGB` shifts beyond the measured ones, extra layers, and host curves other than the identity curve.
 - **Not claimed.** Depths 8 and 16 add a conversion to and from float that is not part of the record. Recorded renders with a different host arrangement are not claimed for the stage.
 - **Platform.** Every comparison was judged by an emulator that follows Intel's specification, not by real CPU silicon, and the native code reproduces the original's AVX2 and FMA code tier only.
-- **Host.** The stages render the effect, not a full host application: keyframes, masks with tracking data, real host frame fetches and GPU rendering are outside the claim ([limits common to the ten effects](effects.md#limits-common-to-the-ten-effects)).
+- **Host.** The stages render the effect, not a full host application: values between keyframes, masks, real host frame fetches and GPU rendering are outside the claim ([limits common to the ten effects](effects.md#limits-common-to-the-ten-effects)).
 
 The limits of each effect are in [effects](effects.md), and the stage limits in [effects provider](stages.md#effects-provider).

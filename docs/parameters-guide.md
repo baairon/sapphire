@@ -274,6 +274,25 @@ target/release/sapphire stage apply warp_perspective_autogen --width 64 --height
   --param latitude=60 --param swing=-12 --param roll=30 --param z_dist=2.5 --param wrap=0,2 --in clip.raw --out out.raw
 ```
 
+## Keyframed values
+
+Every stage but `trails_autogen` accepts a keyed value: `--param 'ID=V@F;V@F;...'`, with `F` an output frame number counted from 0 (fractions allowed) and `--fps` giving the time base. The syntax is the frames/2 convention's: a trailing `h` holds a key until the next one, a trailing `e` eases it, and `iS/I` and `oS/I` before the suffix are Bezier handles (`S` in units a second, `I` the influence in percent, 0.1 to 100). Before the first key the value is the first key's, after the last key the last one's.
+
+- Scalars and angles interpolate: straight between plain keys, eased next to an `e` key, along the handle's curve next to a handle. A scalar that a handle overshoots is held inside its range.
+- Two-lane vectors (`shift`, `blur_rel`, `rel_amount` and the like) move on the straight line between their keys.
+- Integers, popups, checkboxes, colours, the opacity answers and `host_curve_values` hold their value until the next key and refuse handles.
+- A host value (`--host-param`) between keys is rounded to the 1/65536 grid of a host slider.
+- Each key value is checked like a plain value; a bad key, two keys on one frame tick or a missing `--fps` is refused before a frame is read.
+
+```sh
+target/release/sapphire stage apply hue_sat_bright_autogen --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param 'saturation=0@0;2@2e' --in clip.raw --out out.raw
+target/release/sapphire stage apply blur_color_autogen --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param 'blur_amount=2@0o0/50;6@2' --param 'filter=0@0h;2@1' --in clip.raw --out out.raw
+```
+
+Each frame of a keyed run equals a plain run at the value the keys give for that frame, byte for byte (MEASURED on five stages). The values between keys are INFERRED.
+
 ## Errors while driving parameters
 
 All of these end with exit 3 and an `unsupported` error naming the cause (MEASURED):
@@ -282,4 +301,5 @@ All of these end with exit 3 and an `unsupported` error naming the cause (MEASUR
 - a popup answer outside 1 to the item count (`POPUP-ANSWER-OUT-OF-RANGE`), or an opacity answer the stage's host arrangement does not cover;
 - a host value off the 1/65536 grid (`HOST-VALUE-OFF-GRID`);
 - the same program parameter given through both routes;
+- a keyed value on `trails_autogen`, a malformed key or two keys on one tick (a keyed value without `--fps` is exit 2);
 - a host curve sample that neither the given file nor the stage's identity curve can serve (`HOST-CURVE-SAMPLE-UNSERVED`).

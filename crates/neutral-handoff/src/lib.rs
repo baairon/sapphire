@@ -49,6 +49,7 @@ pub mod ffstage;
 pub mod format;
 pub mod fxstage;
 pub mod geometry;
+pub mod keys;
 pub mod media;
 pub mod paths;
 pub mod pipeline;
