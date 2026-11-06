@@ -52,6 +52,8 @@ pub struct Param {
     pub kind: String,
     /// The number of lanes of a vector value.
     pub lanes: usize,
+    /// The type `fx_run --describe-params` prints (scalar, boolean, popup, int, color, vector or angle), or empty.
+    pub ptype: String,
     /// The registered default, as text.
     pub default: String,
     /// The smallest value.
@@ -155,6 +157,7 @@ pub fn parse_tables(stages: &str, params: &str) -> Vec<Profile> {
                 name: c[3].to_string(),
                 kind: if curve { "text".into() } else if c[2] == "--cset" { "int".into() } else { "float".into() },
                 lanes: 1,
+                ptype: String::new(),
                 default: String::new(),
                 min: if c[2] == "--cset" { Some(0.0) } else { None },
                 max: None,
@@ -249,6 +252,7 @@ pub fn enrich(ps: &mut [Profile], described: &[(String, Vec<Described>)]) {
                 }
                 .to_string();
                 q.lanes = d.lanes;
+                q.ptype = d.ptype.clone();
                 q.default = d.default.split_whitespace().collect::<Vec<_>>().join(",");
                 q.min = Some(d.min);
                 q.max = Some(d.max);
@@ -874,6 +878,78 @@ fn write_out(output: &mut dyn Write, bytes: &[u8], index: u64) -> Result<()> {
     })
 }
 
+/// The `--param` values of a run, with the keyed ones read per frame.
+struct Keyed {
+    plain: Vec<(String, String)>,
+    tracks: Vec<(String, crate::keys::Track, bool)>,
+}
+
+impl Keyed {
+    /// Split `values` into plain and keyed ones. A keyed value needs the rate (its time base) and a stage that runs
+    /// fx_run per frame.
+    fn new(p: &Profile, values: &[(String, String)], rate: Option<&crate::rate::Rate>) -> Result<Keyed> {
+        use crate::keys::{time_base, Shape, Track};
+        let mut plain = Vec::new();
+        let mut tracks = Vec::new();
+        for (id, value) in values {
+            if !crate::keys::is_keyed(value) {
+                plain.push((id.clone(), value.clone()));
+                continue;
+            }
+            if p.spool {
+                return Err(Error::unsupported(format!(
+                    "bad value for `{}`: {} renders the whole clip in one fx_run run, so its parameters cannot change from frame to frame",
+                    id, p.id
+                )));
+            }
+            let r = rate.ok_or_else(|| Error::usage(format!("`{}` is keyed: keyframes need --fps N[/D], the time base of the keys", id)))?;
+            let (per_frame, per_second) = time_base(r.num(), r.den());
+            let q = p.params.iter().find(|q| q.id == *id).ok_or_else(|| Error::unsupported(format!("unknown param `{}`", id)))?;
+            let shape = match (q.form.as_str(), q.ptype.as_str(), q.lanes) {
+                ("--cset", _, _) => Shape::Hold,
+                (_, "scalar", 1) => Shape::Float { min: q.min.unwrap_or(f64::MIN), max: q.max.unwrap_or(f64::MAX) },
+                (_, "angle", 1) => Shape::Angle,
+                (_, "vector", 2) => Shape::Point,
+                _ => Shape::Hold,
+            };
+            let t = Track::parse(value, shape, per_frame, per_second).map_err(|e| Error::unsupported(format!("bad value for `{}`: {}", id, e)))?;
+            tracks.push((id.clone(), t, q.form == "--host-param"));
+        }
+        Ok(Keyed { plain, tracks })
+    }
+
+    /// The values of frame `f`. An interpolated host value is put on the 1/65536 grid of a host slider (round half away from zero).
+    fn values_at(&self, f: u64) -> Vec<(String, String)> {
+        let mut out = self.plain.clone();
+        for (id, t, host) in &self.tracks {
+            let text = match t.lanes_at(f as i64 * t.ticks_per_frame) {
+                Ok(i) => t.keys[i].text.clone(),
+                Err(lanes) => lanes
+                    .iter()
+                    .map(|x| if *host { (x * 65536.0).round() / 65536.0 } else { *x })
+                    .map(|x| format!("{}", x))
+                    .collect::<Vec<_>>()
+                    .join(","),
+            };
+            out.push((id.clone(), text));
+        }
+        out
+    }
+
+    /// Every combination a held parameter can take, for bounds: the plain values plus each key value of each track.
+    fn variants(&self) -> Vec<Vec<(String, String)>> {
+        let mut out = vec![self.plain.clone()];
+        for (id, t, _) in &self.tracks {
+            for text in t.key_texts() {
+                let mut v = self.plain.clone();
+                v.push((id.clone(), text));
+                out.push(v);
+            }
+        }
+        out
+    }
+}
+
 /// The shift (in frames) of Time_Warp's three channels: the given parameter or the registered default.
 fn tw_shifts(p: &Profile, values: &[(String, String)]) -> [i32; 3] {
     let mut s = [0i32; 3];
@@ -912,6 +988,7 @@ pub fn command_line(id: &str, spec: FrameSpec, rate: &crate::rate::Rate, params:
 pub fn apply(
     id: &str,
     spec: FrameSpec,
+    rate: Option<&crate::rate::Rate>,
     values: &[(String, String)],
     layers: &[String],
     frames: Option<u64>,
@@ -925,7 +1002,9 @@ pub fn apply(
     if spec.width < 2 {
         return Err(Error::unsupported(format!("{} needs a width of 2 or more (the host grid needs two columns)", p.id)));
     }
-    let args = param_args(p, values)?;
+    let keyed = Keyed::new(p, values, rate)?;
+    // the arguments of frame `f`: a keyed parameter takes its value at that frame
+    let args_at = |f: u64| param_args(p, &keyed.values_at(f));
     let mut ls: Vec<Layer> = Vec::new();
     for raw in layers {
         let (lid, path) = raw.split_once('=').ok_or_else(|| Error::usage(format!("`--layer` expects ID=PATH, got `{}`", raw)))?;
@@ -941,9 +1020,10 @@ pub fn apply(
     let learned = Learned::default();
     let layer_words = |index: u64| -> Result<Vec<(String, Vec<u32>)>> { ls.iter().map(|l| l.at(index)).collect() };
     if p.id == "time_warp_rgb_autogen" {
-        let shifts = tw_shifts(p, values);
-        let maxpos = shifts.iter().copied().max().unwrap_or(0).max(0) as u64;
-        let maxneg = (-shifts.iter().copied().min().unwrap_or(0)).max(0) as u64;
+        // the window covers every shift a frame can take (a keyed shift holds one of its key values)
+        let all: Vec<i32> = keyed.variants().iter().flat_map(|v| tw_shifts(p, v)).collect();
+        let maxpos = all.iter().copied().max().unwrap_or(0).max(0) as u64;
+        let maxneg = (-all.iter().copied().min().unwrap_or(0)).max(0) as u64;
         // window of input frames: `base` is the index of window[0]
         let mut window: VecDeque<Vec<u32>> = VecDeque::new();
         let mut base = 0u64;
@@ -967,11 +1047,12 @@ pub fn apply(
                 &window[(k - base) as usize]
             };
             let mut extra = Extra::default();
-            for s in shifts {
+            let vf = keyed.values_at(f);
+            for s in tw_shifts(p, &vf) {
                 let k = (f as i64 + s as i64).max(0) as u64;
                 extra.frame_words.push((format!("{},{}", k, k), get(k).clone()));
             }
-            let words = run_fx(p, spec, f, get(f), &layer_words(f)?, &args, &extra, &learned)?.remove(0);
+            let words = run_fx(p, spec, f, get(f), &layer_words(f)?, &param_args(p, &vf)?, &extra, &learned)?.remove(0);
             words_to_frame(spec, &words, &mut out);
             write_out(output, &out, f)?;
             count += 1;
@@ -989,7 +1070,7 @@ pub fn apply(
         }
         if !clip.is_empty() {
             let extra = Extra { frame_words: Vec::new(), history: Some(clip) };
-            let outs = run_fx(p, spec, 0, &[], &[], &args, &extra, &learned)?;
+            let outs = run_fx(p, spec, 0, &[], &[], &args_at(0)?, &extra, &learned)?;
             for (i, words) in outs.iter().enumerate() {
                 words_to_frame(spec, words, &mut out);
                 write_out(output, &out, i as u64)?;
@@ -1002,7 +1083,7 @@ pub fn apply(
                 break;
             }
             let src = frame_to_words(spec, &buf);
-            let words = run_fx(p, spec, count, &src, &layer_words(count)?, &args, &Extra::default(), &learned)?.remove(0);
+            let words = run_fx(p, spec, count, &src, &layer_words(count)?, &args_at(count)?, &Extra::default(), &learned)?.remove(0);
             words_to_frame(spec, &words, &mut out);
             write_out(output, &out, count)?;
             count += 1;
@@ -1027,7 +1108,7 @@ mod tests {
         assert_eq!(ps.len(), 13);
         let hsb = profile("hue_sat_bright_autogen").expect("hsb");
         assert_eq!(hsb.family, "S_HueSatBright");
-        assert_eq!(hsb.kind, "frame");
+        assert_eq!(hsb.kind, "temporal");
         assert!(hsb.host.iter().any(|(k, v)| k == "--src-planes" && v == "3"));
         assert!(hsb.params.iter().any(|q| q.id == "hue_shift"));
         assert_eq!(profile("trails_autogen").unwrap().spool, true);

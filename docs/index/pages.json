@@ -101,7 +101,7 @@
   "path": "docs/generated/crates.md",
   "title": "Crates",
   "line": "The 14 crates of the workspace, 10 of them lifted function crates.",
-  "bytes": 10226,
+  "bytes": 10337,
   "generated": true
  },
  {
@@ -276,7 +276,7 @@
   "path": "docs/guide.md",
   "title": "Using the effects",
   "line": "This page shows how to run the ten native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match.",
-  "bytes": 10554,
+  "bytes": 11000,
   "generated": false
  },
  {
@@ -318,7 +318,7 @@
   "path": "docs/parameters-guide.md",
   "title": "Driving the effect parameters",
   "line": "How to run each of the 13 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.",
-  "bytes": 28140,
+  "bytes": 30032,
   "generated": false
  },
  {
@@ -346,7 +346,7 @@
   "path": "docs/stages.md",
   "title": "Adding a provider",
   "line": "A provider is a program that offers stages over raw frames; twixtor's `vfx` and `sapphire` are two.",
-  "bytes": 17467,
+  "bytes": 19477,
   "generated": false
  }
 ]

@@ -518,7 +518,7 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
         }
     };
     if fx {
-        crate::fxstage::apply(def.id, spec, &values, &a.layers, frames, &mut ReadRef(input), &mut WriteRef(output))?;
+        crate::fxstage::apply(def.id, spec, rate.as_ref(), &values, &a.layers, frames, &mut ReadRef(input), &mut WriteRef(output))?;
         return Ok(());
     }
     if let Some((opts, ffmpeg, rate)) = &ff {
