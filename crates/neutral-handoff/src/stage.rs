@@ -11,8 +11,8 @@
 //! The registry holds the conformance stage `selftest-invert`, the ffmpeg filter stage
 //! `ffmpeg-filter` ([`crate::ffstage`]) and, from the tables `data/fx_stages.tsv` and
 //! `data/fx_params.tsv`, one stage per registered style of the landed effects ([`crate::fxstage`]).
-//! The effect stages run `fx_run` as a child process on the recorded host route and are listed
-//! hidden when `fx_run` is absent.
+//! The effect stages run in-process on the recorded host route and are always listed; they take no
+//! `--layer` input (`LAYER-INPUT-UNSUPPORTED`).
 //! `stage list --json` prints them as a stage manifest (`contracts/stage-manifest.schema.json`):
 //! the provider (`id`, `version`, `command`) and per stage `id`, `kind`, `spool`, `geometry`,
 //! `depths`, `params` and `layers`.
@@ -119,7 +119,7 @@ pub struct StageDef {
     pub params: Vec<ParamDef>,
     /// The extra inputs.
     pub layers: Vec<LayerDef>,
-    /// Listed with `"hidden": true` (the effect stages when `fx_run` is absent).
+    /// Listed with `"hidden": true` (never set for the effect stages, which are linked in).
     pub hidden: bool,
 }
 

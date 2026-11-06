@@ -7,8 +7,11 @@ sapphire rebuilds the plugin's functions and ten of its video effects in Rust, a
 ## Status
 
 - **Effects.** Ten effects run as native Rust and match the original bit for bit on every compared case ([effects](docs/effects.md)). They render through `fx_run` and as `sapphire stage` commands, from code in this repository alone, with no external data. Ten more are planned ([roadmap](docs/roadmap.md)), for 20 in all; the other effect names of the plugin are not planned.
+- **Speed.** The CPU path renders one 1920x1080 frame of the slowest stage, `blur_motion_curves_no_transform_autogen`, in about 1.1 s where the earlier one process per frame route took about 52 s (MEASURED; [Speed](docs/guide.md#speed)).
+- **Keyframes.** Every effect stage accepts keyed parameter values (`VALUE@FRAME;VALUE@FRAME`) except `trails_autogen`; each frame is a plain run at the value the keys give for it (MEASURED), and the values between keys are INFERRED ([guide](docs/guide.md#running-a-stage-on-a-clip)).
+- **Device path.** `--device gpu|gpu=N|auto` and `SAPPHIRE_DEVICE` run the kernels through OpenCL, byte identical to the CPU path. It is MEASURED on PoCL, an OpenCL runtime on the CPU, only; speed on a real GPU is INFERRED ([guide](docs/guide.md#rendering-on-a-device)).
 - **Functions.** <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f--> functions reach [strict parity](docs/glossary.md#strict) ([Parity](#parity)).
-- **Usage.** [docs/guide.md](docs/guide.md) shows how to run the effects on a video.
+- **Usage.** [docs/guide.md](docs/guide.md) shows how to run the effects on a video; the [Command-line reference](docs/cli.md) lists every flag, environment variable, exit code and refusal.
 
 ## Contents
 
@@ -41,12 +44,12 @@ From the repository root, with a stable Rust toolchain, offline:
 cargo build --release --offline -p neutral-handoff -p fx_exec
 ```
 
-On a Windows machine without the MSVC linker the GNU toolchain builds the same code: `cargo +stable-x86_64-pc-windows-gnu build --release --offline -p neutral-handoff`. The effect crates, `fx_run` among them, are built and tested in CI on Linux only.
+On a Windows machine without the MSVC linker the GNU toolchain builds the same code: `cargo +stable-x86_64-pc-windows-gnu build --release --offline -p neutral-handoff`. CI builds `fx_run` and runs the effect golden hashes (`tools/fx_golden.py`) on Linux, macOS and Windows; the device checks on PoCL and the tests of the effect crates outside the default members run on Linux only.
 
 | Binary | Path (`.exe` added on Windows) | Used by |
 |---|---|---|
 | `sapphire` | `target/release/sapphire` | the pipeline, the stage provider of `contracts/tool.json`, `tools/handoff.py doctor`, `tools/conformance.py` |
-| `fx_run` | `target/release/fx_run` | the command line of the effect runner; the 13 effect stages use the same library inside `sapphire` |
+| `fx_run` | `target/release/fx_run` | the command line of the effect runner; the 13 effect stages use the same library inside `sapphire` and need no `fx_run` process. The executable is needed only to run `fx_run --describe-params` from a shell; `stage list --json` prints the same ranges and defaults without it |
 | `fake-vfx` | `target/release/fake-vfx` | the pipeline tests, as a stand in for twixtor's `vfx` |
 
 `CARGO_TARGET_DIR` moves the binaries; `SAPPHIRE_PATH` points the Python tools at another build. The pipeline and the `neutral-ffmpeg` tests need ffmpeg and ffprobe ([finding ffmpeg](docs/ffmpeg.md#finding-ffmpeg)).
@@ -65,6 +68,7 @@ The last command decodes `clip.mp4`, shifts its hue with the `S_HueSatBright` st
 
 ## Documentation
 
+- [Command-line reference](docs/cli.md): every command, flag, environment variable, exit code and refusal of `sapphire`, `sapphire stage` and `fx_run`.
 - [docs/guide.md](docs/guide.md): using the effects on a clip or on raw frames, chaining, parameters, speed and what is claimed.
 - [docs/parameters-guide.md](docs/parameters-guide.md): every stage parameter, how to write its value, and the values verified against recorded renders.
 - [docs/effects.md](docs/effects.md): the ten native effects, their status, how to build and run `fx_run`, and their shared limits.
@@ -117,20 +121,22 @@ Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn
 
 The ten native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned ten more are in [docs/roadmap.md](docs/roadmap.md). A stage is a program that passes raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
 
-Each registered style of the ten effects is also a frames/2 stage, so twixtor and any other wrapper can run it as `sapphire stage apply STAGE` (13 stages; they need `fx_run`, and `stage list` marks them hidden without it). The [guide](docs/guide.md) shows how to run them.
+Each registered style of the ten effects is also a frames/2 stage, so twixtor and any other wrapper can run it as `sapphire stage apply STAGE` (13 stages). They are linked into `sapphire`, are always listed and need no `fx_run` process; `fx_run` is needed only for `--describe-params`. The [guide](docs/guide.md) shows how to run them.
 
 | Effect | Stages | Kind | Byte identical through the stage |
 |---|---|---|---|
-| `S_Blur` | 2 | frame | 36 of 48 recorded renders |
-| `BlurMoCurves` styles | 2 | frame | 26 of 67 |
-| `S_Diffuse` | 1 | frame | 31 of 42 |
-| `S_DistortRGB` | 1 | frame | 26 of 30 |
-| `S_DropShadow` | 1 | frame | 20 of 24 |
-| `S_HueSatBright` | 1 | frame | 118 of 130 |
-| `S_Sharpen` | 2 | frame | 35 of 78 |
+| `S_Blur` | 2 | temporal | 36 of 48 recorded renders |
+| `BlurMoCurves` styles | 2 | temporal | 26 of 67 |
+| `S_Diffuse` | 1 | temporal | 31 of 42 |
+| `S_DistortRGB` | 1 | temporal | 26 of 30 |
+| `S_DropShadow` | 1 | temporal | 20 of 24 |
+| `S_HueSatBright` | 1 | temporal | 118 of 130 |
+| `S_Sharpen` | 2 | temporal | 35 of 78 |
 | `S_TimeWarpRGB` | 1 | temporal | 10 of 22 |
-| `S_Trails` | 1 | temporal, spool | 70 of 120 |
-| `S_WarpPerspective` | 1 | frame | 10 of 224 |
+| `S_Trails` | 1 | temporal | 70 of 120 |
+| `S_WarpPerspective` | 1 | temporal | 10 of 224 |
+
+All 13 stages have kind `temporal`, because the frames/2 convention accepts keyed values only for temporal stages. Only `time_warp_rgb_autogen` and `trails_autogen` read frames other than the current one; the rest are `temporal` so that they accept keyframes.
 
 The first number counts the recorded renders of the parity record that use the stage's fixed host arrangement; each of them is byte identical through `sapphire stage apply` at depth 32 (382 of 382). The other recorded renders use a different host arrangement and are not claimed for the stage. Each stage's host, parameters, size refusals, timing and claim limits are in [docs/stages.md](docs/stages.md#effects-provider).
 
@@ -165,14 +171,14 @@ A name is the bank's assignment for its offset. As a test of the mapping as a wh
 
 ### Crate map
 
-Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, edition 2021, MIT, unpublished. External crates: none. A plain `cargo test` covers the default members, the four `neutral-*` crates.
+Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, edition 2021, MIT, unpublished. External crates: none. A plain `cargo test` covers the default members: the four `neutral-*` crates and the 52 effect crates whose tests need no stored data.
 
 | Member | Builds | Owns | Key modules (`src/`) | Tests (`#[test]` lines, scan) |
 |---|---|---|---|---|
 | `crates/neutral-world` | library | The Rust side of the world harness: the seeded model of everything outside the dump, the `Env` trait every lifted function is written against, world replay and comparison | `lib.rs` (`Env`, `World`, `check`, `Report`) | <!--f:tests_scan_neutral_world-->17<!--/f-->; `tests/synthetic.rs`, `tests/pin.rs` |
 | `crates/neutral-parity` | library | Replay of oracle vectors against ported functions | `lib.rs` (`parse`, `check`, `Report`) | <!--f:tests_scan_neutral_parity-->4<!--/f--> |
 | `crates/neutral-ffmpeg` | library | ffmpeg and ffprobe as child processes: decoder, encoder, filter graph, probe, pixel format table | `decoder.rs`, `encoder.rs`, `filter.rs`, `probe.rs`, `pixfmt.rs` with `pixfmt_table.rs`, `locate.rs`, `process.rs` | <!--f:tests_scan_neutral_ffmpeg-->130<!--/f-->; `tests/*_live.rs` need ffmpeg |
-| `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->220<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
+| `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->228<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
 | `crates/lift-a`, `crates/lift-b`, `crates/lift-1` to `crates/lift-8` | library | The ported functions. The <!--f:lift_crates-->10<!--/f--> lift crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions of the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once; the per-crate detail is in [lifting](docs/lifting.md#crate-layout) | `p1/`, `p2v/`, `missing.rs` (placeholders), `dup.rs`, `x86rt.rs` (`lift_rt.rs` in `lift-a`); `liftcheck/` in `lift-a` (feature `liftcheck`) | per crate in `docs/generated/crates.md`; `#[ignore]` without the stored vector sets |
 
 The effect crates are under `crates/effects` (the evaluator `fx_eval`, the executor and `fx_run` in `fx_exec`, the kernel crates they call, and the test helpers `effects_vecdir` and `effects_rtdata`); they are workspace members, and the ones whose tests need no stored data are default members ([effects](docs/effects.md)).
@@ -189,15 +195,15 @@ Each program's `--help` lists its flags; the contract in full is `docs/handoff.m
 
 ### Stage commands
 
-`sapphire stage list --json` prints the stage manifest of this repository (`contracts/stage-manifest.schema.json`). `sapphire stage apply STAGE --width W --height H --depth 8|16|32 [--fps N[/D]] [--frames N] [--param K=V]...` reads whole frames on standard input and writes the same number of frames of the same size and format on standard output.
+`sapphire stage list --json` prints the stage manifest of this repository (`contracts/stage-manifest.schema.json`). `sapphire stage apply STAGE --width W --height H --depth 8|16|32 [--fps N[/D]] [--frames N] [--param K=V]... [--layer ID=PATH]... [--device cpu|gpu|gpu=N|auto] [--in FILE] [--out FILE]` reads whole frames on standard input and writes the same number of frames of the same size and format on standard output.
 
 | Stage | Kind, geometry | Parameters |
 |---|---|---|
 | `selftest-invert` | frame, preserve | `invert_alpha` (checkbox, default off) |
 | `ffmpeg-filter` | frame, declared | `graph` (an ffmpeg filter graph, default `null`), `expect` (`preserve` or `declared`), `unsafe` (`1` runs filters outside the safe list) ([the ffmpeg filter stage](docs/handoff.md#the-ffmpeg-filter-stage)) |
-| 13 effect stages | frame, preserve, temporal | per stage, see [Effects provider](docs/stages.md#effects-provider) |
+| 13 effect stages | temporal, preserve | per stage, see [Effects provider](docs/stages.md#effects-provider) |
 
-In a pipeline, `--stage @selftest-invert` runs that stage in process and `--stage "@ffmpeg-filter graph=G"` or an effect stage such as `--stage @hue_sat_bright_autogen` runs `sapphire stage apply ...` as a child process of the pipeline (`SAPPHIRE_PATH` or the running executable). That child renders in process through the `fx_exec` library, so no `fx_run` process is started. The syntax of a filter graph is ffmpeg's own (ffmpeg documentation: ffmpeg-filters.html).
+In a pipeline, `--stage @selftest-invert` runs that stage in process and `--stage "@ffmpeg-filter graph=G"` or an effect stage such as `--stage @hue_sat_bright_autogen` runs `sapphire stage apply ...` as a child process of the pipeline (`SAPPHIRE_PATH` or the running executable). That child renders in process through the `fx_exec` library, so no `fx_run` process is started. The pipeline has no `--device` flag; the child inherits the environment, so `SAPPHIRE_DEVICE=gpu` runs a pipeline stage on a device ([guide](docs/guide.md#rendering-on-a-device)). Every flag and variable is in the [Command-line reference](docs/cli.md). The syntax of a filter graph is ffmpeg's own (ffmpeg documentation: ffmpeg-filters.html).
 
 ### Raw frame format
 
@@ -262,22 +268,24 @@ From the repository root:
 
 ```sh
 cargo test --release --offline -- --test-threads=2
+python -I tools/fx_golden.py
 python -I tools/test_handoff.py
 python -I tools/test_conformance.py
 python -I tools/test_docgen.py
 python -I tools/gen_docs.py --check
 python -I tools/check_docs.py
+python -I tools/test_effect_rules.py
 python -I tools/conformance.py --quick
 python -I tools/handoff.py doctor --conformance
 ```
 
-- **Default members.** `cargo test` runs `neutral-world`, `neutral-parity`, `neutral-ffmpeg` and `neutral-handoff`. The `lift-*` tests replay stored vector sets that are archived, not in the repository, and are marked `#[ignore]`; running them with the archive: [reproduce](docs/reproduce.md#re-creating-the-evidence).
-- **Effects.** The effect tests are described in [effects](docs/effects.md#tests).
+- **Default members.** `cargo test` runs `neutral-world`, `neutral-parity`, `neutral-ffmpeg`, `neutral-handoff` and the 52 effect crates whose tests need no stored data. The `lift-*` tests replay stored vector sets that are archived, not in the repository, and are marked `#[ignore]`; running them with the archive: [reproduce](docs/reproduce.md#re-creating-the-evidence).
+- **Effects.** The effect tests are described in [effects](docs/effects.md#tests). `tools/fx_golden.py` renders the 13 stages on synthetic clips and compares the SHA-256 of every output with `tools/fx_golden.tsv`; with `SAPPHIRE_DEVICE=gpu SAPPHIRE_REQUIRE_DEVICE=1` (PoCL or a GPU) it checks the device path against the same hashes.
 - **ffmpeg.** The live tests of `neutral-ffmpeg` and the pipeline tests need ffmpeg and ffprobe and print a `SKIPPED` line without them ([tests that need ffmpeg](docs/ffmpeg.md#tests-that-need-ffmpeg)). One `neutral-ffmpeg` test always prints `SKIPPED`, because the pixel format table generator is not in the repository.
 - **twixtor.** `crates/neutral-handoff/tests/cross_twixtor.rs` runs twixtor's `vfx` as a stage of this pipeline and this crate's `stage apply` inside twixtor's `tools/apply.py`, in every order; it skips with a printed reason when ffmpeg, `vfx`, Python or `apply.py` is missing.
 - **Conformance.** `tools/conformance.py --quick` is the covering subset of about a minute; the other modes are in [Handoff](#handoff).
 
-**Continuous integration.** `.github/workflows/ci.yml` (Linux, macOS and Windows, Python 3.12) and `.forgejo/workflows/ci.yml` (Linux in the `node:24-bookworm` container, with Rust from rustup) install ffmpeg (a static 9.0 build on Linux), run `cargo test --release`, build `sapphire`, compile `tools/`, then run `test_handoff.py`, `test_conformance.py`, `conformance.py --quick --allow-absent-peer`, `test_docgen.py`, `gen_docs.py --check` and `check_docs.py`, on every push to `main` and every pull request, with a 60 minute limit. Both can also be started by hand. A new push to a pull request cancels its run in flight; each push to `main` keeps a run of its own. twixtor is not checked out in CI, so every part that needs it prints a `NOT RUN` line, and `--allow-absent-peer` lets only those parts through.
+**Continuous integration.** `.github/workflows/ci.yml` (Linux, macOS and Windows, Python 3.12) and `.forgejo/workflows/ci.yml` (Linux in the `node:24-bookworm` container, with Rust from rustup) install ffmpeg (a static 9.0 build on Linux), run `cargo test --release`, build `sapphire` and `fx_run`, run `tools/fx_golden.py` (on all three systems), compile `tools/`, then run `test_handoff.py`, `test_conformance.py`, `conformance.py --quick --allow-absent-peer`, `test_docgen.py`, `gen_docs.py --check`, `check_docs.py` and `test_effect_rules.py`, on every push to `main` and every pull request, with a 60 minute limit. On Linux, both workflows install PoCL and run `fx_golden.py` through the device backend; the GitHub workflow also runs the device tests and the tests of the effect crates outside the default members. Both can also be started by hand. A new push to a pull request cancels its run in flight; each push to `main` keeps a run of its own. twixtor is not checked out in CI, so every part that needs it prints a `NOT RUN` line, and `--allow-absent-peer` lets only those parts through.
 
 ### Smoke test
 
@@ -297,7 +305,7 @@ python -I tools/handoff.py doctor
 
 | Step | Expected |
 |---|---|
-| `stage list --json` | a manifest with `"contract": "frames/2"`, provider id `sapphire` and the stages `selftest-invert`, `ffmpeg-filter` and the 13 effect stages (hidden without `fx_run`) |
+| `stage list --json` | a manifest with `"contract": "frames/2"`, provider id `sapphire` and the stages `selftest-invert`, `ffmpeg-filter` and the 13 effect stages |
 | raw pipe and `cmp` | exit 0 and no output from `cmp`: inverting twice returns the input |
 | `--dry-run` | `[plan] stages on clip.mp4: 160x96, 24.000 fps, 8 bpc (rgba), decode \| pre1 \| encode -> ...`, three `[cmd]` lines, then `[dry-run] nothing was written` |
 | `fn_info.py` | the bank name first with the id beside it, then offset, kind, origin, tier, name check `mismatch` and confirmation `mismatch` |

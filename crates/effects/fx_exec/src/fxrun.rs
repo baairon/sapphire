@@ -228,7 +228,7 @@ pub fn main_with_args(args: &[String]) -> i32 {
         match a.get(i + 1).and_then(|v| Device::parse(v)) {
             Some(d) => device = d,
             None => {
-                eprintln!("--device takes cpu, gpu or auto");
+                eprintln!("--device takes cpu, gpu, gpu=N or auto");
                 return 2;
             }
         }

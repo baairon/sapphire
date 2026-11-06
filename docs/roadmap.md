@@ -1,6 +1,15 @@
 # Roadmap
 
-The goal is 20 effects in native Rust: the ten that run today and the ten below. The other effect names of the plugin are not planned. This page holds no measured figure; the status of each finished effect is in [effects](effects.md).
+The goal is 20 effects in native Rust: the ten that run today and the ten below. The other effect names of the plugin are not planned. The status of each finished effect is in [effects](effects.md).
+
+## Platform
+
+The work that every effect shares, finished or in progress:
+
+- **CPU speed.** The effect stages render in process and the kernels use all cores. `blur_motion_curves_no_transform_autogen` went from 52 s to 1.1 s per 1080p frame (MEASURED, [Speed](guide.md#speed)).
+- **Keyframes.** Every effect stage but `trails_autogen` takes keyed values ([keyframes](parameters-guide.md#keyframed-values)). Values between keys are INFERRED.
+- **Device path.** OpenCL kernels for the heavy operations, byte identical to the CPU path, MEASURED on PoCL; speed on a real GPU is not yet measured ([device](guide.md#rendering-on-a-device)).
+- **Determinism across processors.** The golden hashes of `tools/fx_golden.py` are checked in CI on Linux, macOS and Windows, so the output bytes are held equal across processors; the effect crates avoid the platform math library for the same reason.
 
 ## Done
 
@@ -19,7 +28,7 @@ Each of these matches the original bit for bit on every compared case ([what tha
 
 ## Next ten
 
-The order follows how much code already ported each effect can reuse, cheapest first, with the two heaviest last. The choice of effects is by how often edits use them (INFERRED: no public usage statistics exist), taking one or two per kind of look: glow and light, motion, beat, colour split, glitch and transition.
+The ten below are Tier 1 and in progress. The order follows how much code already ported each effect can reuse, cheapest first, with the two heaviest last. The choice of effects is by how often edits use them (INFERRED: no public usage statistics exist), taking one or two per kind of look: glow and light, motion, beat, colour split, glitch and transition.
 
 | Order | Effect | Use |
 |---|---|---|

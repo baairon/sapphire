@@ -29,14 +29,14 @@ The *verified render path* of an effect is the host arrangement its verified com
 
 ## Using the effects
 
-Every effect below is run the same way: build `sapphire` and `fx_run`, write some raw frames at depth 32 and pipe them through the stage. The commands are run from the repository root.
+Every effect below is run the same way: build `sapphire`, write some raw frames at depth 32 and pipe them through the stage. The commands are run from the repository root.
 
 ```sh
 cargo build --release --offline -p fx_exec -p neutral-handoff
 ffmpeg -f lavfi -i testsrc=size=64x32:rate=25 -frames:v 3 -f rawvideo -pix_fmt gbrapf32le in.raw
 ```
 
-`sapphire` finds `fx_run` beside itself in `target/release`. Each section gives one worked command that reads `in.raw` and writes `out.raw`. The parameter values in the commands are values the verified comparisons used.
+The effect stages are linked into `sapphire`, so no `fx_run` executable is needed; `fx_run` is built by the same command and is used for `fx_run --describe-params` and for rendering an effect program directly. Each section gives one worked command that reads `in.raw` and writes `out.raw`. The parameter values in the commands are values the verified comparisons used.
 
 The parameter tables list each stage's parameters as `sapphire stage list --json` prints them: the option that sets it, the stage type and the number of lanes of the value `V`. A parameter with more than one lane is passed as comma separated numbers, for example `--param blur_rel=0.5,1.25`. A parameter that is not passed keeps its registered default. The defaults and valid ranges are printed by `fx_run --describe-params PROGRAM`, for example `target/release/fx_run --describe-params Trails_Autogen`; the stage refuses a value outside the range with exit 3.
 
@@ -150,7 +150,7 @@ Parity: 31 verified comparisons, 54 recorded renders and 54 re-rendered units, a
 
 ### `S_DistortRGB`
 
-Bends the image through a distortion field, with a different strength for the red, green and blue channels, so colours split apart at the distorted edges. The field comes from a blurred lens image: the optional `Lens` layer, or the source itself. Amount and its relative amount per axis set the strength, the per-channel warp values set each channel's share, and the warp direction can be rotated.
+Bends the image through a distortion field, with a different strength for the red, green and blue channels, so colours split apart at the distorted edges. The field comes from a blurred lens image, which is the source itself (the stage takes no extra layer). Amount and its relative amount per axis set the strength, the per-channel warp values set each channel's share, and the warp direction can be rotated.
 
 | style | stage |
 |---|---|
@@ -173,11 +173,11 @@ Bends the image through a distortion field, with a different strength for the re
 target/release/sapphire stage apply distort_rgb_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param amount=1.3125 --param amount_rel=1.1875,0.8125 --param warp_red=0.9375 --param warp_green=0.4375 --param warp_blue=0.1875 --param blur_lens=44 < in.raw > out.raw
 ```
 
-Parity: 30 verified comparisons, 30 recorded renders and 30 re-rendered units, all equal. 28 are byte identical; in 2 the output holds NaN values, which are equal as NaN values while their payload bits are not compared. No approximate reciprocal instruction is used on the verified render path (MEASURED). 26 of 30 counted recorded renders match the stage's host arrangement. No verified comparison used the `Lens` layer.
+Parity: 30 verified comparisons, 30 recorded renders and 30 re-rendered units, all equal. 28 are byte identical; in 2 the output holds NaN values, which are equal as NaN values while their payload bits are not compared. No approximate reciprocal instruction is used on the verified render path (MEASURED). 26 of 30 counted recorded renders match the stage's host arrangement.
 
 ### `S_DropShadow`
 
-Casts a shadow of the image. The shadow is made from the image's alpha, blurred, shifted, coloured and given its own opacity, then placed under the foreground, whose opacity can be set as well. The optional `Background` layer is composited under the result and the optional `Matte` layer limits it. `comp_premult` chooses how the layers are combined with respect to premultiplied alpha.
+Casts a shadow of the image. The shadow is made from the image's alpha, blurred, shifted, coloured and given its own opacity, then placed under the foreground, whose opacity can be set as well. The shadow is limited by the input's own alpha and composited over nothing else, because the stage takes no extra layer. `comp_premult` chooses how the parts are combined with respect to premultiplied alpha.
 
 | style | stage |
 |---|---|
@@ -204,7 +204,7 @@ This effect has no wrapper program; the stage runs its registered program, Drop_
 target/release/sapphire stage apply drop_shadow --width 64 --height 32 --depth 32 --fps 25/1 --param shadow_blur=0.291702271 --param color=0.356862754,0.713725507,0.184313729 --param shadow_opacity=0.679092407 --param shift=0.00299692154,-0.00117826462 --param fg_opacity=0.736099243 --param comp_premult=1 < in.raw > out.raw
 ```
 
-Parity: 24 verified comparisons, 26 recorded renders and 26 re-rendered units, all equal in both renders. None of the approximate reciprocal instructions in the effect's code is reached on the verified render path (MEASURED for 11 sites; the logarithm sites INFERRED from the plan constants). 20 of 24 counted recorded renders match the stage's host arrangement. No verified comparison used a layer.
+Parity: 24 verified comparisons, 26 recorded renders and 26 re-rendered units, all equal in both renders. None of the approximate reciprocal instructions in the effect's code is reached on the verified render path (MEASURED for 11 sites; the logarithm sites INFERRED from the plan constants). 20 of 24 counted recorded renders match the stage's host arrangement.
 
 ### `S_HueSatBright`
 
@@ -408,7 +408,8 @@ Tests that compare the definitions or the computed tables with copies of the plu
 - `ROUTE AVX2-ONLY`: the original selects one of several code tiers from the CPU's features. The native code reproduces the tier that runs on CPUs with AVX2 and FMA; on CPUs without them the original runs other tiers with different rounding, and those results are not reproduced.
 - Where an operation is sensitive to approximate reciprocals, the effect's section states its bound in ulps.
 - The host side is modelled, not rebuilt: the verified render path described above. In the test harness, three of the plugin's licence-family routines were answered with fixed values instead of being run, and the host's licence client found no licence server.
-- Not verified: a real host application (its parameter units, keyframed animation, multi band and multi threaded rendering, real frame fetches), GPU rendering, 8 and 16 bit formats, trial or unlicensed rendering, mocha with tracking data, and NaN payload and sign bits.
+- Not verified: a real host application (its parameter units, its keyframe interpolation, multi band and multi threaded rendering, masks, real frame fetches), the original's GPU renderer, 8 and 16 bit formats, trial or unlicensed rendering, mocha with tracking data, and NaN payload and sign bits.
+- Sapphire's own keyframed values between keys are INFERRED (each frame is a plain run at the value the keys give, MEASURED), and its device path is MEASURED on PoCL only.
 - Licence, activation, trial and machine identity code of the original is not rebuilt.
 - Cases outside an effect's verified comparisons, such as other sizes and parameter values, run the same code and are INFERRED.
 

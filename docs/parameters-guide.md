@@ -140,7 +140,7 @@ target/release/sapphire stage apply diffuse_autogen --width 64 --height 32 --dep
 
 ## `S_DistortRGB`
 
-One stage, `distort_rgb_autogen` (program `Distort_RGB_Autogen`). It takes the gradient of a blurred monochrome lens image (the optional `Lens` layer, else the input itself) and displaces the red, green and blue channels along it by different amounts (INFERRED).
+One stage, `distort_rgb_autogen` (program `Distort_RGB_Autogen`). It takes the gradient of a blurred monochrome lens image (the input itself; the stage takes no `Lens` layer) and displaces the red, green and blue channels along it by different amounts (INFERRED).
 
 - `amount`, scalar, `--set`. The overall strength of the displacement; a negative value pushes the other way (INFERRED). Verified at 9 values from `-0.9375` to `1.5625`.
 - `amount_rel`, two lanes, `--set`. Scales the displacement per axis (INFERRED). Verified at 10 value pairs, each lane between `0.6875` and `1.4375`.
@@ -158,7 +158,7 @@ target/release/sapphire stage apply distort_rgb_autogen --width 64 --height 32 -
 
 ## `S_DropShadow`
 
-One stage, `sapphire stage apply drop_shadow` (its program has the same name, capitalised). It takes a matte (the optional `Matte` layer, else the input's alpha), moves it, blurs it, colours it, and composites the input over the shadow and the optional `Background` layer (INFERRED). On an opaque input the shadow is hidden behind the input: the worked command below returns its input unchanged (MEASURED); the shadow shows where the input is transparent.
+One stage, `sapphire stage apply drop_shadow` (its program has the same name, capitalised). It takes the input's alpha as a matte, moves it, blurs it, colours it, and composites the input over the shadow (INFERRED). The stage takes no `Matte` or `Background` layer. On an opaque input the shadow is hidden behind the input: the worked command below returns its input unchanged (MEASURED); the shadow shows where the input is transparent.
 
 - `shadow_blur`, scalar, `--host-param` (host units relative to the frame width). The softness of the shadow (INFERRED). Verified at 7 values from `0` to `24`.
 - `shift`, two lanes, `--set` (record values). The offset of the shadow from the matte (INFERRED). Verified at 7 value pairs, from `0,-0` to `1.25999975,-1.25999975`.

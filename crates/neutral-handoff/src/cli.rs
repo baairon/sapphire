@@ -56,6 +56,10 @@ flags of the wrapper:
   -V, --version        print the version
   -h, --help           print this text
 
+environment: `@NAME` effect stages run as `sapphire stage apply NAME` children that inherit it, and
+SAPPHIRE_DEVICE=gpu|gpu=N|auto moves them to an OpenCL device (the pipeline has no --device);
+SAPPHIRE_DEVICE_REPORT=1 prints the device used. docs/cli.md lists every variable.
+
 exit codes (frames/2): 0 done, 1 stage_failed, 2 usage, 3 unsupported, 4 bad_input / broken_pipe /
 partial_frame, 5 stage_timeout, 6 tool_missing. Under --contract frames/1: 0 done, 1 any failure,
 2 a command line the parser rejects.
@@ -64,14 +68,25 @@ partial_frame, 5 stage_timeout, 6 tool_missing. Under --contract frames/1: 0 don
 /// The text of `stage --help`.
 pub const STAGE_HELP: &str = "usage: sapphire stage list [--json] [--contract frames/1|2]
        sapphire stage apply STAGE --width W --height H --depth 8|16|32 [--fps N[/D]]
-                                  [--frames N] [--param K=V]... [--in FILE] [--out FILE] [--check]
-                                  [--describe] [--ffmpeg-path PATH] [--json] [--contract frames/1|2]
-                                  [--device cpu|gpu|auto]
+                                  [--frames N] [--param K=V]... [--layer ID=PATH]... [--in FILE] [--out FILE]
+                                  [--check] [--describe] [--ffmpeg-path PATH] [--json] [--contract frames/1|2]
+                                  [--device cpu|gpu|gpu=N|auto]
 
-`stage list --json` prints the stage manifest (contracts/stage-manifest.schema.json). `--describe`
-reads no input and prints the output geometry (contracts/describe.schema.json). The stages are
-`selftest-invert` and `ffmpeg-filter` (--param graph=G, expect=preserve|declared, unsafe=1 for
-filters that read files).
+`stage list --json` prints the stage manifest (contracts/stage-manifest.schema.json), with the kind, the
+parameters (kind, default, range) and the layers of every stage. `--describe` reads no input and prints
+the output geometry (contracts/describe.schema.json).
+
+The stages are `selftest-invert`, `ffmpeg-filter` (--param graph=G, expect=preserve|declared, unsafe=1 for
+filters that read files) and the 13 effect stages, which render in process: blur_color_autogen,
+blur_mono_autogen, transform_and_blur_autogen, blur_motion_curves_no_transform_autogen, diffuse_autogen,
+distort_rgb_autogen, drop_shadow, hue_sat_bright_autogen, sharpen_best_quality_autogen, sharpen_fast_autogen,
+time_warp_rgb_autogen, trails_autogen and warp_perspective_autogen. The effect stages accept keyframed
+values (--param ID=V@F;V@F, which needs --fps) and --layer ID=PATH for the layers `stage list` shows.
+
+--device picks where the effect stages compute: cpu (default), gpu (the first usable OpenCL device), gpu=N
+(device N of the probe order) or auto (a GPU if one is usable, else the CPU). With no --device or with
+`--device cpu`, the environment variable SAPPHIRE_DEVICE (gpu, gpu=N or auto) chooses; an explicit
+--device gpu, gpu=N or auto wins over it. SAPPHIRE_DEVICE_REPORT=1 prints the device used.
 
 `stage apply` reads whole raw frames (rgba, rgba64le or gbrapf32le by --depth) on stdin, writes the
 same number of frames of the same size and format on stdout. --frames N checks the frame count.
@@ -421,7 +436,7 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
     };
     let def = stage::find(&a.stage)
         .ok_or_else(|| Error::unsupported(format!("unknown stage `{}`, `sapphire stage list` shows the registered ones", a.stage)))?;
-    if !a.layers.is_empty() && def.layers.is_empty() {
+    if !a.layers.is_empty() && def.layers.is_empty() && def.kind == "frame" {
         return Err(Error::usage(format!("{} is a frame effect, --layer only apply to temporal effects", def.id)));
     }
     let width = positive_int("--width", a.width.as_deref().ok_or_else(|| Error::usage("missing --width"))?)?;
@@ -450,7 +465,7 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
     }
     let device = match a.device.as_deref() {
         None => fx_exec::fxrun::Device::Cpu,
-        Some(t) => fx_exec::fxrun::Device::parse(t).ok_or_else(|| Error::usage(format!("`--device` expects cpu, gpu or auto, got `{}`", t)))?,
+        Some(t) => fx_exec::fxrun::Device::parse(t).ok_or_else(|| Error::usage(format!("`--device` expects cpu, gpu, gpu=N or auto, got `{}`", t)))?,
     };
     let values = stage::check_params(&def, &a.params)?;
     let ffmpeg_filter = def.id == crate::ffstage::ID;

@@ -405,3 +405,28 @@ fn vfx_then_ours_and_ours_then_vfx_return_the_input() {
         }
     }
 }
+
+#[test]
+fn effect_stages_list_no_layers() {
+    let ran = run(&handoff_exe(), &args(&["stage", "list", "--json"]));
+    assert_eq!(ran.code, 0, "{}", ran.stderr);
+    let doc = Json::parse(&ran.out_text()).expect("JSON");
+    let stages = doc.get("stages").and_then(|v| v.as_array()).unwrap();
+    let mut n = 0;
+    for s in stages.iter().filter(|s| s.get("id").and_then(|v| v.as_str()).map_or(false, |i| i != "selftest-invert" && i != "ffmpeg-filter")) {
+        assert_eq!(s.get("layers").and_then(|v| v.as_array()).map(|a| a.len()), Some(0), "{:?}", s.get("id").and_then(|v| v.as_str()));
+        n += 1;
+    }
+    assert_eq!(n, 13);
+}
+
+#[test]
+fn layer_on_an_effect_stage_is_refused_with_exit_3_before_rendering() {
+    for (stage, layer) in [("drop_shadow", "Matte"), ("drop_shadow", "Background"), ("distort_rgb_autogen", "Lens")] {
+        let a = args(&["stage", "apply", stage, "--width", "16", "--height", "8", "--depth", "32", "--fps", "24", "--layer", &format!("{}=/nonexistent.u32", layer)]);
+        let ran = run_env(&handoff_exe(), &a, &[], Some(vec![0u8; 16 * 8 * 16]), Duration::from_secs(30));
+        assert_eq!(ran.code, 3, "{} {}: {}", stage, layer, ran.stderr);
+        assert!(ran.stderr.contains("LAYER-INPUT-UNSUPPORTED"), "{}", ran.stderr);
+        assert!(ran.stdout.is_empty());
+    }
+}

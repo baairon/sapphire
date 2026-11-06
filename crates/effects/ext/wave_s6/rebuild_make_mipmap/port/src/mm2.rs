@@ -75,9 +75,28 @@ fn cvttss2si(v: f32) -> i32 {
     }
 }
 
+/// log(x) / ln 2 for x >= 1, from only exact IEEE operations (no platform libm): the binary exponent k plus
+/// ln(m) / ln 2 for the mantissa m in [1, 2), where ln(m) = 2 atanh((m - 1) / (m + 1)) is summed as a series.
+fn log_over_ln2(x: i32) -> f64 {
+    let k = 31 - x.leading_zeros() as i32;
+    let m = x as f64 / (1u64 << k) as f64;
+    let z = (m - 1.0) / (m + 1.0);
+    let z2 = z * z;
+    let mut term = z;
+    let mut sum = 0.0f64;
+    let mut n = 1.0f64;
+    for _ in 0..40 {
+        sum += term / n;
+        term *= z2;
+        n += 2.0;
+    }
+    k as f64 + 2.0 * sum / LN2
+}
+
 /// levels = ceil(log(x) / ln 2) + 2, or 2 when that is negative (: log, divsd by ln 2, cvtsd2ss, ceilf (roundss 2 = round up), cvttss2si)
 fn level_count(x: i32, m: Mut2) -> i32 {
-    let l = (x as f64).ln() / LN2;
+    // log of a non-positive size is -inf or NaN, which the conversion below turns into the 2-level result
+    let l = if x >= 1 { log_over_ln2(x) } else { f64::NEG_INFINITY };
     let mut f = (l as f32).ceil();
     if m == Mut2::LevelsFloor {
         f = (l as f32).floor();
@@ -280,6 +299,34 @@ pub fn assumptions2() -> Vec<(&'static str, &'static str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The level count of the former libm route, kept here as the reference for the exact route.
+    fn level_count_libm(x: i32, m: Mut2) -> i32 {
+        let l = (x as f64).ln() / LN2;
+        let mut f = (l as f32).ceil();
+        if m == Mut2::LevelsFloor {
+            f = (l as f32).floor();
+        }
+        let q = cvttss2si(f);
+        let add = if m == Mut2::LevelsPlus1 { 3 } else { 2 };
+        if q < 0 {
+            2
+        } else {
+            q.wrapping_add(add)
+        }
+    }
+
+    #[test]
+    fn level_count_matches_the_libm_route_for_every_size() {
+        for m in [Mut2::None, Mut2::LevelsFloor, Mut2::LevelsPlus1] {
+            for x in -2..=8192 {
+                assert_eq!(level_count(x, m), level_count_libm(x, m), "x={x}");
+            }
+            for x in (8193..=1 << 24).step_by(997) {
+                assert_eq!(level_count(x, m), level_count_libm(x, m), "x={x}");
+            }
+        }
+    }
 
     #[test]
     fn levels_and_extents_from_the_listing() {
