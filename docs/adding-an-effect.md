@@ -8,10 +8,10 @@ The conventions every new effect follows, and the parity proof it shows before i
 - A crate whose tests need no stored data and call no platform libm function is also added to `default-members`, so a plain `cargo test --release` runs it. The others stay out, like `fx_eval` and `fx_exec`.
 - Nothing is linked from the original plugin, and no file from it is copied into the tree.
 
-## Program builders
+## Program constructors
 
-- Each registered style of the effect gets a native builder in `crates/effects/fx_eval/src/programs_native.rs`. The builder constructs the style's program graph, together with the helper programs and layout rows it reaches, as Rust constructor code.
-- The builder holds no program text and reads no file. The text parser stays as a test route only.
+- Each registered style of the effect gets a native constructor function in `crates/effects/fx_eval/src/programs_native.rs`. The constructor builds the style's program graph, together with the helper programs and layout rows it reaches, as Rust constructor code.
+- The constructor holds no program text and reads no file. The text parser stays as a test route only.
 
 ## Parameter and class facts
 
@@ -51,7 +51,12 @@ Rules for a kernel:
 - **NaN.** A device output that holds a NaN is rerun on the CPU, which applies the default NaN rule, so a kernel need not reproduce NaN payloads.
 - **A CPU parity change** to an operation removes its `ALLOWLIST` entry unless the kernel changes in the same patch.
 
-The self-check results are cached per device, driver and digest of the kernel sources ([Rendering on a device](guide.md#rendering-on-a-device)), so a changed kernel source is checked again on every machine. Device tests run one at a time (`-- --test-threads=1`) because some OpenCL runtimes crash when two threads create contexts at once; the library also serializes context, queue and program creation behind one lock. Tests that need a device print `NOT RUN` and pass when no OpenCL platform is present.
+The self-check results are cached per build, device, driver, kernel sources, build options and loaded program binary ([Rendering on a device](guide.md#rendering-on-a-device)). The build identity is a digest of the running executable, so a change to a CPU kernel, to the device glue or to a corpus invalidates the cache automatically on every machine.
+
+- **Serial device tests.** The device integration tests run one at a time (`-- --test-threads=1`) because some OpenCL runtimes crash when two threads create contexts at once; the library also serializes context, queue, program and kernel creation behind one lock.
+- **Double precision corpus.** A kernel with a double precision path needs a corpus that covers the full single precision exponent range (subnormal to the largest finite value), both signs and the inputs one ulp from the points where the double precision result rounds differently.
+- **Test files.** The device tests are named by operation family: `device_pointwise`, `device_warp`, `device_ripmap` and `device_neighbourhood` (and `device_backend` for the executor). A new kernel goes in the file of its family.
+- **No silent skips in CI.** With `SAPPHIRE_REQUIRE_DEVICE=1` a device test that would print `NOT RUN` panics instead. Without the variable, tests that need a device print `NOT RUN` and pass when no OpenCL platform is present.
 
 ## Reference section
 

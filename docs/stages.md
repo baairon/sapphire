@@ -215,13 +215,14 @@ Through each stage, the counted recorded renders of the parity record that match
 | `blur_motion_curves_no_transform_autogen` | 52.84 / 51.09 | 1.08 / 1.14 | 0.74 / 0.72 |
 | `diffuse_autogen` | 3.02 / 2.90 | 1.90 / 2.34 | 0.72 / 0.69 |
 | `distort_rgb_autogen` | 8.48 / 7.57 | 1.73 / 1.87 | 2.14 / 1.95 |
-| `@drop_shadow` | 1.84 / 1.74 | 1.52 / 1.73 | 0.72 / 0.71 |
+| `stage apply drop_shadow` | 1.84 / 1.74 | 1.52 / 1.73 | 0.72 / 0.71 |
 | `hue_sat_bright_autogen` | 0.84 / 0.84 | 0.47 / 0.51 | 0.54 / 0.59 |
 | `sharpen_best_quality_autogen` | 2.79 / 2.71 | 2.40 / 2.38 | 0.86 / 0.88 |
 | `sharpen_fast_autogen` | 1.18 / 1.10 | 0.66 / 0.73 | 0.64 / 0.69 |
 | `time_warp_rgb_autogen` | 1.44 / 1.31 | 0.78 / 0.73 | 0.88 / 0.81 |
 | `trails_autogen` | 1.26 / 1.16 | 0.85 / 0.75 | 0.85 / 0.88 |
 | `warp_perspective_autogen` | 3.87 / 3.49 | 1.37 / 1.31 | 1.44 / 1.46 |
+
 The default path (`--device cpu`) is byte identical to the former one process per frame route on the parity record. The `PoCL device` column is `--device gpu` on PoCL, an OpenCL runtime on the CPU; it is not GPU speed, which is INFERRED until measured on a GPU. See [Rendering on a device](guide.md#rendering-on-a-device).
 
 Recorded renders that do not match the stage's host arrangement (a different host arrangement, a fractional frame, a `--prev` file given outside the history chain) count in the parity record and are not verified through the stage.

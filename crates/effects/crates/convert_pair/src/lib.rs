@@ -420,7 +420,7 @@ pub fn convert_dest_frame_n12(image_planes: i32, to_dest_params_a: i32, mode_byt
 // per pixel (u32 bits, the first dword = A). Source: variant B head (listing text, both loops): the second and third dwords,
 // through the finite test, no read of the first dword, no multiply (CONVERT-VARIANT-B-UNWEIGHTED, MEASURED r1b). Destination: the mode-2
 // three-plane body stores the second and third dwords, only; slot 0 is the host source row's slot 0 by the row copier (14, 14)
-// (DEST-ALPHA-FROM-SOURCE-ROW, MEASURED r1b and r1c). Variant C is NOT here (Opus 57).
+// (DEST-ALPHA-FROM-SOURCE-ROW, MEASURED r1b and r1c). Variant C is NOT here.
 // Mutants are fixed at build time by env CONVERT_PAIR_G3_MUT (one build per mutant, each binary's SHA-256 recorded):
 // 1 planes weighted by alpha, 2 slot 0 written 0.0, 3 slot 0 written 1.0, 4 planes 4, 5 finite test removed.
 // ---------------------------------------------------------------------------------------------------------------------------

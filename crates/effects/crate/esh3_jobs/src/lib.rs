@@ -7,7 +7,7 @@
 //!
 //! Labels: MEASURED-DYLIB constants (approved original file, read only, see CELLS.tsv); HOST: the partition service (start, count) is an
 //! explicit input; the job context is the explicit `Ctx`. No approximate (rcp, rsqrt) instruction exists in these three jobs.
-//! CONTRACT-LIMIT (host supplied, listed for Opus): nch <= 4, w >= 1, s >= 1, 0 <= start < total, 0 <= count <= total - start.
+//! CONTRACT-LIMIT (host supplied): nch <= 4, w >= 1, s >= 1, 0 <= start < total, 0 <= count <= total - start.
 
 /// MEASURED-DYLIB : double 2.687.
 pub const D1: f64 = 2.687;
