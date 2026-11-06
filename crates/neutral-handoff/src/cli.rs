@@ -66,6 +66,7 @@ pub const STAGE_HELP: &str = "usage: sapphire stage list [--json] [--contract fr
        sapphire stage apply STAGE --width W --height H --depth 8|16|32 [--fps N[/D]]
                                   [--frames N] [--param K=V]... [--in FILE] [--out FILE] [--check]
                                   [--describe] [--ffmpeg-path PATH] [--json] [--contract frames/1|2]
+                                  [--device cpu|gpu|auto]
 
 `stage list --json` prints the stage manifest (contracts/stage-manifest.schema.json). `--describe`
 reads no input and prints the output geometry (contracts/describe.schema.json). The stages are
@@ -288,6 +289,7 @@ struct StageArgs {
     input: Option<String>,
     output: Option<String>,
     ffmpeg_path: Option<String>,
+    device: Option<String>,
     check: bool,
     describe: bool,
     json: bool,
@@ -318,6 +320,7 @@ fn parse_stage_apply(args: &[String]) -> Result<Option<StageArgs>> {
         input: None,
         output: None,
         ffmpeg_path: None,
+        device: None,
         check: false,
         describe: false,
         json: false,
@@ -347,6 +350,7 @@ fn parse_stage_apply(args: &[String]) -> Result<Option<StageArgs>> {
             "--in" => a.input = Some(value(&mut cursor)?),
             "--out" => a.output = Some(value(&mut cursor)?),
             "--ffmpeg-path" => a.ffmpeg_path = Some(value(&mut cursor)?),
+            "--device" => a.device = Some(value(&mut cursor)?),
             "--check" => a.check = true,
             "--describe" => a.describe = true,
             "--json" => a.json = true,
@@ -444,13 +448,17 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
     if a.describe && a.contract == Contract::V1 {
         return Err(Error::usage("--describe is part of frames/2; drop --contract frames/1"));
     }
+    let device = match a.device.as_deref() {
+        None => fx_exec::fxrun::Device::Cpu,
+        Some(t) => fx_exec::fxrun::Device::parse(t).ok_or_else(|| Error::usage(format!("`--device` expects cpu, gpu or auto, got `{}`", t)))?,
+    };
     let values = stage::check_params(&def, &a.params)?;
     let ffmpeg_filter = def.id == crate::ffstage::ID;
     let fx = crate::fxstage::is_fx(def.id);
     let mut frame_stage = None;
     let mut ff = None;
     if fx {
-        // the effect stages run as a child process per frame (`fx_run`), see `fxstage`
+        // the effect stages render in process through the fx_exec library, see `fxstage`
     } else if ffmpeg_filter {
         let opts = crate::ffstage::Options::from_values(&values)?;
         let ffmpeg = match a.ffmpeg_path.as_deref() {
@@ -518,7 +526,7 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
         }
     };
     if fx {
-        crate::fxstage::apply(def.id, spec, rate.as_ref(), &values, &a.layers, frames, &mut ReadRef(input), &mut WriteRef(output))?;
+        crate::fxstage::apply(def.id, spec, rate.as_ref(), &values, &a.layers, frames, device, &mut ReadRef(input), &mut WriteRef(output))?;
         return Ok(());
     }
     if let Some((opts, ffmpeg, rate)) = &ff {

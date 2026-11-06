@@ -53,7 +53,7 @@ pub fn strict_binding(tool: &str, a: &[String]) -> Result<Binding, String> {
     let mut b = Binding::defaults();
     if a.iter().any(|x| x == "--state-a-defaults") {
         b.hc_zero_legacy = true;
-        eprintln!("{}: STATE-A-DEFAULTS (bound mask 1, no compile context, HC-ZERO-LEGACY; not a counted run)", tool);
+        crate::fxrun::elog!("{}: STATE-A-DEFAULTS (bound mask 1, no compile context, HC-ZERO-LEGACY; not a counted run)", tool);
         return Ok(b);
     }
     let p = a.iter().position(|x| x == "--bound-mask").ok_or_else(|| format!("{}: --bound-mask HEX is required (or the named option --state-a-defaults)", tool))?;
@@ -580,7 +580,7 @@ pub fn run_host(class: &str, elnum: i32, args: &[Arg], n: usize, host: &HostFram
             if let Some(q) = &host.tw_route {
                 let r = crate::twframe::route_request(q, off).map_err(ExecError::Shape)?;
                 // REQUEST-LIST: one line per request, compared with the record's host_log arguments
-                eprintln!("HOST-REQUEST\tframe={}\tstored={:08x}\targ={}", r.frame, r.stored.to_bits(), r.arg);
+                crate::fxrun::elog!("HOST-REQUEST\tframe={}\tstored={:08x}\targ={}", r.frame, r.stored.to_bits(), r.arg);
                 let im = host.by_request.get(&(r.frame, r.stored.to_bits())).ok_or_else(|| {
                     ExecError::MissingHostFrame(format!("get_frame request frame {} stored {} (bits {:08x}) argument {}", r.frame, r.stored, r.stored.to_bits(), r.arg))
                 })?;
@@ -590,7 +590,7 @@ pub fn run_host(class: &str, elnum: i32, args: &[Arg], n: usize, host: &HostFram
                 return Ok((im.clone(), im.channels() as i32));
             }
             let key = if host.frame_round_old { off.round() as i32 } else { frame_key(off) };
-            if std::env::var("TW2_LOGFRAMES").is_ok() { eprintln!("NATIVE_FETCH {}", key); }
+            if std::env::var("TW2_LOGFRAMES").is_ok() { crate::fxrun::elog!("NATIVE_FETCH {}", key); }
             let im = host.frames.get(&key).ok_or_else(|| ExecError::MissingHostFrame(format!("get_frame offset {}", key)))?;
             if im.n != n {
                 return Err(ExecError::Shape(format!("host frame {} has {} samples per plane, frame is {}", key, im.n, n)));

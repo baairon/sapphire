@@ -1,8 +1,8 @@
 //! The effects stage provider: one frames/2 stage per registered style of the landed effects.
 //!
-//! Every stage runs `fx_run` as a child process on the recorded host route (the 'ae32' route that
-//! the stored predictions used), so the proven binary carries the parity and this module touches
-//! no effect crate. The data is in two tables:
+//! Every stage renders in process through the `fx_exec::fxrun` library on the recorded host route (the 'ae32'
+//! route that the stored predictions used), the same code the `fx_run` executable runs, so the proven
+//! route carries the parity and this module touches no effect crate. The data is in two tables:
 //!
 //! - `data/fx_stages.tsv`: per style the stage id, program, family, kind, spool, layers, the name of
 //!   the source input, the fixed options, the canonical host tuple and the buffer placement per
@@ -14,19 +14,19 @@
 //! asked from `fx_run --describe-params`, which prints them from the native definitions, and an
 //! unbound normalize_scale parameter is left to `fx_run --ns-default-unbound`.
 //!
-//! Per frame the stage writes the input as an 'ae32' word file (A, R, G, B words per pixel), runs
-//! `fx_run` and relays the `--ae32-out` words back. At depth 32 the relayout is a pure byte
-//! permutation (frames/2 `gbrapf32le` is planar G, B, R, A, 'ae32' is A, R, G, B per pixel, both
-//! f32 and straight alpha). Depths 8 and 16 convert through f32 (`v/255`, `v/65535`, back with
-//! round half to even and a clamp) and are outside the parity claim.
+//! Per frame the stage hands the input to the runner as 'ae32' words (A, R, G, B words per pixel) in memory and takes the
+//! `--ae32-out` words back in memory: no scratch files and no debug side files are written, and no process is started. At
+//! depth 32 the relayout is a pure byte permutation (frames/2 `gbrapf32le` is planar G, B, R, A, 'ae32' is A, R, G, B per pixel,
+//! both f32 and straight alpha). Depths 8 and 16 convert through f32 (`v/255`, `v/65535`, back with round half to even and a clamp)
+//! and are outside the parity claim. The Trails history route chains its renders through a scratch directory.
 //!
-//! `fx_run` is found beside the `sapphire` executable or through `SAPPHIRE_FX_RUN`; it needs no
-//! external data. Without it the stages are listed hidden and `apply` exits 3 naming what is missing.
+//! One runner thread (with the stack the effect code needs) serves a clip. `--device` picks the backend that thread installs
+//! (`fx_exec::fxrun::select_and_install`).
 
 use std::collections::VecDeque;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
+use fx_exec::fxrun::{Runner, StageIo};
 use std::sync::OnceLock;
 
 use crate::error::{tail_lines, Code, Error, Result};
@@ -219,17 +219,8 @@ pub fn parse_described(text: &str) -> Option<Vec<(String, Vec<Described>)>> {
 }
 
 fn describe_programs(ps: &[Profile]) -> Option<Vec<(String, Vec<Described>)>> {
-    let fx = fx_run_path()?;
-    let mut cmd = Command::new(fx);
-    cmd.arg("--describe-params");
-    for p in ps {
-        cmd.arg(&p.program);
-    }
-    let ran = cmd.output().ok()?;
-    if ran.status.code() != Some(0) {
-        return None;
-    }
-    parse_described(&String::from_utf8_lossy(&ran.stdout))
+    let names: Vec<&str> = ps.iter().map(|p| p.program.as_str()).collect();
+    parse_described(&fx_exec::fxrun::describe_params_json(&names))
 }
 
 /// Fill the type, lanes, range and default of each parameter from the described definitions.
@@ -270,27 +261,8 @@ fn leak(s: &str) -> &'static str {
     Box::leak(s.to_string().into_boxed_str())
 }
 
-/// Where `fx_run` is.
-pub fn fx_run_path() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os(FX_RUN_ENV) {
-        let p = PathBuf::from(p);
-        return if p.is_file() { Some(p) } else { None };
-    }
-    let exe = std::env::current_exe().ok()?;
-    let name = if cfg!(windows) { "fx_run.exe" } else { "fx_run" };
-    let p = exe.parent()?.join(name);
-    if p.is_file() {
-        Some(p)
-    } else {
-        None
-    }
-}
-
-/// What is missing for the effect stages to run, as one line, or `None`.
+/// What is missing for the effect stages to run, as one line, or `None`. The effect runner is linked in, so nothing is.
 pub fn missing() -> Option<String> {
-    if fx_run_path().is_none() {
-        return Some(format!("fx_run is not beside the sapphire executable and {} does not name it", FX_RUN_ENV));
-    }
     None
 }
 
@@ -436,23 +408,6 @@ pub fn words_to_frame(spec: FrameSpec, words: &[u32], frame: &mut [u8]) {
     }
 }
 
-fn write_words(path: &Path, words: &[u32]) -> Result<()> {
-    let mut bytes = Vec::with_capacity(words.len() * 4);
-    for w in words {
-        bytes.extend_from_slice(&w.to_le_bytes());
-    }
-    std::fs::write(path, bytes).map_err(|e| Error::stage_failed(format!("cannot write {}: {}", path.display(), e)))
-}
-
-fn read_words(path: &Path) -> Result<Vec<u32>> {
-    let bytes = std::fs::read(path).map_err(|e| Error::stage_failed(format!("fx_run wrote no {}: {}", path.display(), e)))?;
-    Ok(bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
-}
-
-// ---------------------------------------------------------------------------------------------
-// the run
-
-/// A scratch folder, removed on every exit path.
 struct Scratch(PathBuf);
 
 impl Scratch {
@@ -666,50 +621,54 @@ struct Extra {
     history: Option<Vec<Vec<u32>>>,
 }
 
-fn run_fx(p: &Profile, spec: FrameSpec, index: u64, src: &[u32], layers: &[(String, Vec<u32>)], params: &[String], extra: &Extra, learned: &Learned) -> Result<Vec<Vec<u32>>> {
-    if let Some(m) = missing() {
-        return Err(Error::unsupported(format!("the effect stages need fx_run: {}", m)));
-    }
-    let fx_run = fx_run_path().expect("checked");
-    let scratch = Scratch::new()?;
-    let dir = &scratch.0;
+/// The in-memory files of one run: names are the virtual paths on the command line.
+struct RunFiles {
+    words: Vec<(String, std::sync::Arc<Vec<u32>>)>,
+    curve: Option<(String, String)>,
+}
+
+fn run_fx(
+    runner: &Runner,
+    p: &Profile,
+    spec: FrameSpec,
+    index: u64,
+    src: Vec<u32>,
+    layers: Vec<(String, Vec<u32>)>,
+    params: &[String],
+    extra: Extra,
+    learned: &Learned,
+) -> Result<Vec<Vec<u32>>> {
     let (w, h) = (spec.width, spec.height);
-    let hist = extra.history.as_deref();
-    let (src_path, out_path) = match hist {
-        // the history route substitutes %R (1 based render) in these two paths
-        Some(frames) => {
-            for (k, f) in frames.iter().enumerate() {
-                write_words(&dir.join(format!("src{}.u32", k + 1)), f)?;
-            }
-            (dir.join("src%R.u32"), dir.join("out.r%R.u32"))
+    let hist = extra.history.is_some();
+    // The history route (Trails) chains renders through `prev.f32` and the meta file, which need a real directory.
+    let scratch = if hist { Some(Scratch::new()?) } else { None };
+    let mut files = RunFiles { words: Vec::new(), curve: None };
+    let (src_path, out_path) = if hist { ("src%R.u32".to_string(), "out.r%R.u32".to_string()) } else { ("src.u32".to_string(), "out.u32".to_string()) };
+    let count = extra.history.as_ref().map(|f| f.len()).unwrap_or(1);
+    if let Some(frames) = extra.history {
+        for (k, f) in frames.into_iter().enumerate() {
+            files.words.push((format!("src{}.u32", k + 1), std::sync::Arc::new(f)));
         }
-        None => (dir.join("src.u32"), dir.join("out.u32")),
+    } else {
+        files.words.push((src_path.clone(), std::sync::Arc::new(src)));
+    }
+    files.words.push(("prior.u32".to_string(), std::sync::Arc::new(vec![p.prior_fill; w as usize * h as usize * 4])));
+    let out_prefix = match &scratch {
+        Some(s) => s.0.join("o").to_string_lossy().into_owned(),
+        None => "o".to_string(),
     };
-    let prior_path = dir.join("prior.u32");
-    if hist.is_none() {
-        write_words(&src_path, src)?;
-    }
-    write_words(&prior_path, &vec![p.prior_fill; w as usize * h as usize * 4])?;
-    let mut args: Vec<String> = vec![
-        p.program.clone(),
-        "--size".into(),
-        format!("{}x{}", w, h),
-        "--out".into(),
-        dir.join("o").to_string_lossy().into_owned(),
-        "--ae32-src".into(),
-        format!("{}={}", p.src_name, src_path.display()),
-    ];
+    let mut args: Vec<String> = vec![p.program.clone(), "--size".into(), format!("{}x{}", w, h), "--out".into(), out_prefix, "--ae32-src".into(), format!("{}={}", p.src_name, src_path)];
     for (name, words) in layers {
-        let lp = dir.join(format!("layer_{}.u32", name));
-        write_words(&lp, words)?;
+        let lp = format!("layer_{}.u32", name);
+        files.words.push((lp.clone(), std::sync::Arc::new(words)));
         args.push("--ae32-src".into());
-        args.push(format!("{}={}", name, lp.display()));
+        args.push(format!("{}={}", name, lp));
     }
-    args.extend(["--ae32-prior".to_string(), prior_path.to_string_lossy().into_owned(), "--ae32-out".to_string(), out_path.to_string_lossy().into_owned()]);
-    let tick = if hist.is_some() { "%R".to_string() } else { index.to_string() };
+    args.extend(["--ae32-prior".to_string(), "prior.u32".to_string(), "--ae32-out".to_string(), out_path.clone()]);
+    let tick = if hist { "%R".to_string() } else { index.to_string() };
     args.extend(["--geom".to_string(), geom(w, h), "--host-frame".to_string(), tick.clone(), "--ctx-time".to_string(), tick]);
-    if let Some(frames) = hist {
-        let times: Vec<String> = (1..=frames.len()).map(|k| k.to_string()).collect();
+    if hist {
+        let times: Vec<String> = (1..=count).map(|k| k.to_string()).collect();
         args.extend(["--host-times".to_string(), times.join(",")]);
     }
     for (k, v) in p.host.iter().chain(placement_for(p, w, h).iter()).chain(p.fixed.iter()) {
@@ -721,51 +680,54 @@ fn run_fx(p: &Profile, spec: FrameSpec, index: u64, src: &[u32], layers: &[(Stri
         args.push(if k == "--palpha-cells" { v.replacen('W', &w.to_string(), 1) } else { v.clone() });
     }
     args.extend(params.iter().cloned());
-    // an unbound normalize_scale parameter takes its registered default inside fx_run
+    // an unbound normalize_scale parameter takes its registered default from the native definitions
     args.push("--ns-default-unbound".into());
-    let curve_path = dir.join("curve.txt");
-    let write_curve = || std::fs::write(&curve_path, constant_curve(w, h, index, &learned.curve_keys(index))).map_err(|e| Error::stage_failed(format!("cannot write {}: {}", curve_path.display(), e)));
     let own_curve = p.params.iter().any(|q| q.id == "host_curve_values") && !args.iter().any(|a| a == "--host-curve-values");
+    let curve_name = "curve.txt".to_string();
     if own_curve {
-        write_curve()?;
+        files.curve = Some((curve_name.clone(), constant_curve(w, h, index, &learned.curve_keys(index))));
         args.push("--host-curve-values".into());
-        args.push(curve_path.to_string_lossy().into_owned());
+        args.push(curve_name.clone());
     }
     args.push("--do-postdiv".into());
     args.push(learned.postdiv.get().to_string());
-    for (i, (key, words)) in extra.frame_words.iter().enumerate() {
-        let fp = dir.join(format!("fw{}.u32", i));
-        write_words(&fp, words)?;
+    for (i, (key, words)) in extra.frame_words.into_iter().enumerate() {
+        let name = format!("fw{}.u32", i);
+        files.words.push((name.clone(), std::sync::Arc::new(words)));
         args.push("--frame-words".into());
-        args.push(format!("{}={}", key, fp.display()));
+        args.push(format!("{}={}", key, name));
     }
-    let exec = |args: &[String]| {
-        Command::new(&fx_run)
-            .args(args)
-            .current_dir(dir)
-            .output()
-            .map_err(|e| Error::tool_missing(format!("cannot run {}: {}", fx_run.display(), e)))
+    let exec = |args: &[String], files: &RunFiles| {
+        let mut io = StageIo::default();
+        io.keep_chain_files = hist;
+        for (k, v) in &files.words {
+            io.words.insert(k.clone(), v.clone());
+        }
+        if let Some((k, t)) = &files.curve {
+            io.texts.insert(k.clone(), t.clone());
+        }
+        runner.run(args.to_vec(), io)
     };
     if let Some(n) = learned.xy_writers.get() {
         fit_xy_list(&mut args, n, index)?;
     }
-    let mut ran = exec(&args)?;
-    // The owner-arm `do_postdiv` is a required cross-check on the 'ae32' route that fx_run only reveals through
-    // its refusal; it is learned once per clip and kept. The samples the route reads from the stage's own constant curve
-    // are learned the same way: each `HOST-CURVE-VALUE-MISSING` (in a plan error or a refusal) names one sample, which is added
-    // with its identity value.
+    let (mut code, mut io) = exec(&args, &files);
+    // The owner-arm `do_postdiv` is a required cross-check that the run reveals only through its refusal; the library hands
+    // over the value the owner arm derives, it is learned once per clip and kept. The samples the route reads from the stage's
+    // own constant curve are learned the same way: each `HOST-CURVE-VALUE-MISSING` (in a plan error or a refusal) names one
+    // sample, which is added with its identity value.
     for _ in 0..8 + CURVE_RERUNS {
-        let text = String::from_utf8_lossy(&ran.stderr).into_owned();
-        if ran.status.code() == Some(1) && text.contains("XY-BASE-LIST-MISMATCH") && learned.xy_writers.get().is_none() {
-            // the measured placement lists fewer or more default-xy writers than this plan has: fx_run names the count
+        let text = io.log.clone();
+        if code == 1 && text.contains("XY-BASE-LIST-MISMATCH") && learned.xy_writers.get().is_none() {
+            // the measured placement lists fewer or more default-xy writers than this plan has: the run names the count
             let line = text.lines().find(|l| l.contains("XY-BASE-LIST-MISMATCH")).unwrap_or("").to_string();
             let n = parse_xy_writers(&text).ok_or_else(|| Error::unsupported(format!("frame {}: XY-BASE-LIST-UNSERVED: cannot read the writer count from fx_run: {}", index, line)))?;
             learned.xy_writers.set(Some(n));
             fit_xy_list(&mut args, n, index)?;
-            ran = exec(&args)?;
+            (code, io) = exec(&args, &files);
             continue;
         }
-        if own_curve && matches!(ran.status.code(), Some(1) | Some(2)) && text.contains("HOST-CURVE-VALUE-MISSING (") {
+        if own_curve && matches!(code, 1 | 2) && text.contains("HOST-CURVE-VALUE-MISSING (") {
             let line = text.lines().find(|l| l.contains("HOST-CURVE-VALUE-MISSING")).unwrap_or("").to_string();
             let key = match parse_curve_missing(&text) {
                 Some(k) if identity_sample(k.index).is_some() => k,
@@ -776,19 +738,20 @@ fn run_fx(p: &Profile, spec: FrameSpec, index: u64, src: &[u32], layers: &[(Stri
                 return Err(Error::unsupported(format!("frame {}: HOST-CURVE-SAMPLE-UNSERVED: the sample is in the curve and still refused: {}", index, line)).with_tail(tail_lines(&text, 3)));
             }
             learned.curve.borrow_mut().push(entry);
-            write_curve()?;
-            ran = exec(&args)?;
+            files.curve = Some((curve_name.clone(), constant_curve(w, h, index, &learned.curve_keys(index))));
+            (code, io) = exec(&args, &files);
             continue;
         }
-        if ran.status.code() != Some(2) {
+        if code != 2 {
             break;
         }
         if text.contains("POSTDIV-MISMATCH") {
-            match parse_postdiv(&text) {
+            match io.postdiv {
                 Some(n) => {
                     learned.postdiv.set(n);
-                    { let at = args.iter().rposition(|a| a == "--do-postdiv").expect("do-postdiv"); args[at + 1] = n.to_string(); }
-                    ran = exec(&args)?;
+                    let at = args.iter().rposition(|a| a == "--do-postdiv").expect("do-postdiv");
+                    args[at + 1] = n.to_string();
+                    (code, io) = exec(&args, &files);
                     continue;
                 }
                 None => {
@@ -799,25 +762,24 @@ fn run_fx(p: &Profile, spec: FrameSpec, index: u64, src: &[u32], layers: &[(Stri
         }
         break;
     }
-    let stderr = String::from_utf8_lossy(&ran.stderr).into_owned();
+    let stderr = io.log.clone();
     let tail = tail_lines(&stderr, 3);
     let first = stderr.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").to_string();
-    match ran.status.code() {
-        Some(0) => {}
-        Some(1) if stderr.contains("XY-BASE-LIST-MISMATCH") => {
+    match code {
+        0 => {}
+        1 if stderr.contains("XY-BASE-LIST-MISMATCH") => {
             return Err(Error::unsupported(format!("frame {}: XY-BASE-LIST-UNSERVED: the placement fx_run asks for cannot be served: {}", index, first)).with_tail(tail))
         }
-        Some(1) if stderr.contains("HOST-CURVE-VALUE-MISSING") => {
+        1 if stderr.contains("HOST-CURVE-VALUE-MISSING") => {
             return Err(Error::unsupported(format!("frame {}: HOST-CURVE-SAMPLE-UNSERVED: the host curve does not hold a sample the route reads: {}", index, first)).with_tail(tail))
         }
-        Some(2) => return Err(Error::unsupported(format!("frame {}: fx_run refused: {}", index, first)).with_tail(tail)),
-        code => return Err(Error::stage_failed(format!("frame {}: fx_run failed with {:?}", index, code)).with_tail(tail)),
+        2 => return Err(Error::unsupported(format!("frame {}: fx_run refused: {}", index, first)).with_tail(tail)),
+        code => return Err(Error::stage_failed(format!("frame {}: fx_run failed with {:?}", index, Some(code))).with_tail(tail)),
     }
-    let count = hist.map(|f| f.len()).unwrap_or(1);
     let mut outs = Vec::with_capacity(count);
     for k in 1..=count {
-        let path = if hist.is_some() { dir.join(format!("out.r{}.u32", k)) } else { out_path.clone() };
-        let words = read_words(&path)?;
+        let name = if hist { format!("out.r{}.u32", k) } else { out_path.clone() };
+        let words = io.outs.remove(&name).ok_or_else(|| Error::stage_failed(format!("fx_run wrote no {}", name)))?;
         if words.len() != w as usize * h as usize * 4 {
             return Err(Error::stage_failed(format!("frame {}: fx_run wrote {} words for a {}x{} frame", index + k as u64 - 1, words.len(), w, h)).with_tail(tail));
         }
@@ -992,6 +954,7 @@ pub fn apply(
     values: &[(String, String)],
     layers: &[String],
     frames: Option<u64>,
+    device: fx_exec::fxrun::Device,
     input: &mut dyn Read,
     output: &mut dyn Write,
 ) -> Result<()> {
@@ -999,6 +962,8 @@ pub fn apply(
     if let Some(m) = missing() {
         return Err(Error::unsupported(format!("the effect stages need fx_run: {}", m)));
     }
+    // the runner thread selects and installs the backend (`fx_exec::fxrun::select_and_install`)
+    let runner = Runner::new(device);
     if spec.width < 2 {
         return Err(Error::unsupported(format!("{} needs a width of 2 or more (the host grid needs two columns)", p.id)));
     }
@@ -1052,7 +1017,7 @@ pub fn apply(
                 let k = (f as i64 + s as i64).max(0) as u64;
                 extra.frame_words.push((format!("{},{}", k, k), get(k).clone()));
             }
-            let words = run_fx(p, spec, f, get(f), &layer_words(f)?, &param_args(p, &vf)?, &extra, &learned)?.remove(0);
+            let words = run_fx(&runner, p, spec, f, get(f).clone(), layer_words(f)?, &param_args(p, &vf)?, extra, &learned)?.remove(0);
             words_to_frame(spec, &words, &mut out);
             write_out(output, &out, f)?;
             count += 1;
@@ -1070,7 +1035,7 @@ pub fn apply(
         }
         if !clip.is_empty() {
             let extra = Extra { frame_words: Vec::new(), history: Some(clip) };
-            let outs = run_fx(p, spec, 0, &[], &[], &args_at(0)?, &extra, &learned)?;
+            let outs = run_fx(&runner, p, spec, 0, Vec::new(), Vec::new(), &args_at(0)?, extra, &learned)?;
             for (i, words) in outs.iter().enumerate() {
                 words_to_frame(spec, words, &mut out);
                 write_out(output, &out, i as u64)?;
@@ -1083,7 +1048,7 @@ pub fn apply(
                 break;
             }
             let src = frame_to_words(spec, &buf);
-            let words = run_fx(p, spec, count, &src, &layer_words(count)?, &args_at(count)?, &Extra::default(), &learned)?.remove(0);
+            let words = run_fx(&runner, p, spec, count, src, layer_words(count)?, &args_at(count)?, Extra::default(), &learned)?.remove(0);
             words_to_frame(spec, &words, &mut out);
             write_out(output, &out, count)?;
             count += 1;

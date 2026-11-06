@@ -130,9 +130,9 @@ It prints `L1 stage matrix pass` and `L3 failure injection pass`, marks the othe
 
 ## Effects provider
 
-`sapphire stage list --json` also lists one stage per registered style of the ten landed effects (13 stages). Each stage runs `fx_run` as a child process on the verified render path, the host arrangement the recorded renders of the parity record used, so the verified binary carries the parity and the stage code has no build coupling to the effect crates. A later effect joins by adding rows to `crates/neutral-handoff/data/fx_stages.tsv` and `fx_params.tsv`.
+`sapphire stage list --json` also lists one stage per registered style of the ten landed effects (13 stages). Each stage renders in process through the `fx_exec` library, the same code as `fx_run`, on the verified render path, the host arrangement the recorded renders of the parity record used. A later effect joins by adding rows to `crates/neutral-handoff/data/fx_stages.tsv` and `fx_params.tsv`.
 
-**Requirements.** The stages need `fx_run` (beside the `sapphire` executable, or named by `SAPPHIRE_FX_RUN`); the effects need no external data. Without `fx_run`, `stage list` still prints the stages, with `"hidden": true`, and `stage apply` exits 3 and names what is missing. A run writes a scratch folder per frame and removes it on every exit path.
+**Requirements.** The stages are linked into `sapphire`; the effects need no external data, and no `fx_run` executable is needed. A run writes no scratch files and no debug side files (only the Trails history route chains its renders through a scratch folder, removed on every exit path). `--device cpu|gpu|auto` picks the backend (default `cpu`); until a device backend is built in, `gpu` and `auto` print one note on stderr and render on the cpu.
 
 **Per frame.** The input frame is written as an 'ae32' word file (A, R, G, B words per pixel, f32 bits, straight alpha). At depth 32 this is a pure byte permutation of the frames/2 planes G, B, R, A. Depths 8 and 16 convert through f32 (`v/255`, `v/65535`, back with round half to even and a clamp) and are not verified. The `fx_run` output words are relaid back the same way.
 
@@ -205,7 +205,7 @@ Through each stage, the counted recorded renders of the parity record that match
 | Keyed values between keys | INFERRED (each frame is a plain run at its value, MEASURED) |
 | Depths 8 and 16 | new conversion, not verified |
 
-**Limits.** Each frame is one `fx_run` process, so the stages are slow. MEASURED (wall time per frame including process start, under shared load on a 12 core server): 0.2 to 0.35 s at 160x96 for every stage; at 1920x1080 0.9 to 6.8 s per frame for most stages, `Blur_Motion_Curves_No_Transform_Autogen` about 12 s and `Transform_and_Blur_Autogen` about 54 s per frame. An in process route is a later optimisation and needs its own parity run.
+**Limits.** The stages render in process, one runner thread per clip. MEASURED (wall time of one 1920x1080 frame through `sapphire stage apply`, best of two runs under shared load on a 12 core server): 0.6 to 1.8 s for seven of the thirteen stages (the hue, blur, sharpen_fast, time warp, trails and shadow ones), 3 to 4.4 s for `diffuse_autogen`, `sharpen_best_quality_autogen`, `warp_perspective_autogen`, `transform_and_blur_autogen` and `blur_motion_curves_no_transform_autogen`, and 8.7 s for `distort_rgb_autogen`. The route is byte identical to the former one process per frame route on the parity record.
 
 Recorded renders that do not match the stage's host arrangement (a different host arrangement, a fractional frame, a `--prev` file given outside the history chain) count in the parity record and are not verified through the stage.
 

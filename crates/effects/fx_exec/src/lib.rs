@@ -7,6 +7,7 @@
 //! `execute_compiled` on a plan you compiled yourself; `cmds::execute_commands` runs an EP-3 text plan.
 
 pub mod aspect;
+pub mod fxrun;
 pub mod cmds;
 pub mod nanrule;
 pub mod downsampled;

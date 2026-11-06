@@ -6,7 +6,7 @@ Every command below was run from the repository root on a one second 160x96 test
 
 ## Setup
 
-Build `sapphire` and `fx_run` together, so that both land in `target/release`. The effect stages look for `fx_run` beside the `sapphire` executable, or at the path in `SAPPHIRE_FX_RUN`.
+The effect stages are linked into `sapphire`; no other executable is needed. The `fx_run` command line is built from the same library and also takes `--device cpu|gpu|auto`.
 
 ```sh
 cargo build --release --offline -p neutral-handoff -p fx_exec
@@ -138,16 +138,15 @@ See [Driving the effect parameters](parameters-guide.md) for every stage paramet
 
 ## Speed
 
-Each frame is one `fx_run` process, including its start. Wall time per frame, MEASURED under shared load on a 12 core server ([effects provider](stages.md#effects-provider)):
+The stages render in process. Wall time of one frame, MEASURED under shared load on a 12 core server, best of two runs ([effects provider](stages.md#effects-provider)):
 
 | Frame size | Time per frame |
 |---|---|
-| 160x96 | 0.2 to 0.35 s for every stage |
-| 1920x1080 | 0.9 to 6.8 s for most stages |
-| 1920x1080, `blur_motion_curves_no_transform_autogen` | about 12 s |
-| 1920x1080, `transform_and_blur_autogen` | about 54 s |
+| 1920x1080, seven stages | 0.6 to 1.8 s |
+| 1920x1080, five stages (including both BlurMoCurves stages) | 3 to 4.4 s |
+| 1920x1080, `distort_rgb_autogen` | about 8.7 s |
 
-Start with a short, small clip. A faster in process route is a later optimisation and would need its own parity run.
+Start with a short, small clip.
 
 ## What is claimed
 
