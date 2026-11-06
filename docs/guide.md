@@ -67,13 +67,39 @@ target/release/sapphire clip.mp4 --depth 32 --stage "@hue_sat_bright_autogen sat
 
 Keys may hold (`h`), ease (`e`) or carry Bezier handles, as the frames/2 convention defines them; [Driving the effect parameters](parameters-guide.md#keyframed-values) has the rules. `trails_autogen` takes no keyed value. The output is encoded with libx264; `--lossless` (ffv1) is available at depths 8 and 16 only.
 
-### Slow stages and `--stage-timeout 0`
+### Large frames and `--stage-timeout 0`
 
-Each frame of an effect stage is one `fx_run` process, so the stages are slow at large sizes ([Speed](#speed)). The pipeline stops a process that moves no data for 120 seconds, which a slow stage can reach on a single large frame. `--stage-timeout 0` turns that limit off:
+The effect stages render inside the `sapphire` process ([Speed](#speed) lists the time of one 1080p frame for each stage). The pipeline stops a stage that moves no data for 120 seconds, a limit a very large frame or a slow machine can reach. `--stage-timeout 0` turns that limit off:
 
 ```sh
 target/release/sapphire clip.mp4 --depth 32 --stage-timeout 0 --stage "@transform_and_blur_autogen" -o clip_tb.mp4
 ```
+
+### Rendering on a device
+
+`--device` picks where the effect kernels run. It is accepted by `sapphire stage apply` and by `fx_run`.
+
+| Value | Meaning |
+|---|---|
+| `cpu` | The reference path. This is the default; no OpenCL library is loaded. |
+| `gpu` | The first usable OpenCL device, a GPU if there is one, else any usable device (a CPU runtime such as PoCL counts). |
+| `gpu=N` | Device number N of the probe order. |
+| `auto` | The first usable GPU, else the CPU. |
+
+```sh
+target/release/sapphire stage apply sharpen_best_quality_autogen --device auto --width 1920 --height 1080 --depth 32 --fps 24 < clip.f32 > out.f32
+```
+
+The OpenCL library is opened at run time, so a machine without one still builds and renders on the CPU. A device is used only after two checks:
+
+- **Probe.** The device must offer double precision floats, correctly rounded single precision divide and square root, denormals and round to nearest, the full OpenCL profile and OpenCL C 1.2. A device that fails is refused with the reasons; `gpu` and `gpu=N` then render on the CPU and `auto` does so silently.
+- **Self-check.** Before an operation runs on the device, its kernel is run on a set of adversarial inputs (subnormals, negative zero, infinities, NaN, exact ties, odd frame sizes) and compared bit for bit with the CPU kernel. An operation that differs is not used on the device.
+
+The device output is the same bytes as the CPU output. An operation without a device kernel, one the kernel declines for a given shape or value, and any node whose output holds a NaN all run on the CPU for that node, so a partly supported plan still renders. `SAPPHIRE_DEVICE_REPORT=1` prints how many nodes of each operation ran on the device and how many fell back, with the reason.
+
+The self-check costs about 9 s the first time a device and driver are used. The passes are then kept in the user cache directory (`~/.cache/sapphire` on Linux, `~/Library/Caches/sapphire` on macOS, `%LOCALAPPDATA%\sapphire` on Windows), keyed on the device name, the driver version and a digest of the kernel sources, and a later process skips them (0.07 s). A new driver or a changed kernel makes the entry unreadable and the checks run again. `SAPPHIRE_DEVICE_CHECK_CACHE=0` turns the cache off and `SAPPHIRE_CACHE_DIR` moves it. Compiled kernels are cached separately in the temporary directory.
+
+A clip of a few frames can cost more on the device than on the CPU, because of the one time setup. Speedups on a real GPU are INFERRED until measured on one; the figures in [Speed](#speed) for a device are PoCL, an OpenCL runtime on the CPU, and show correctness, not GPU speed.
 
 ## Chaining stages
 
@@ -138,15 +164,28 @@ See [Driving the effect parameters](parameters-guide.md) for every stage paramet
 
 ## Speed
 
-The stages render in process. Wall time of one frame, MEASURED under shared load on a 12 core server, best of two runs ([effects provider](stages.md#effects-provider)):
+Wall time of one 1920x1080 frame through `sapphire stage apply`, MEASURED on a 12 core server under some shared load (two runs per cell, in seconds, `before` and `after` on the same machine):
 
-| Frame size | Time per frame |
-|---|---|
-| 1920x1080, seven stages | 0.6 to 1.8 s |
-| 1920x1080, five stages (including both BlurMoCurves stages) | 3 to 4.4 s |
-| 1920x1080, `distort_rgb_autogen` | about 8.7 s |
+| stage | before PR 4 (s) | after, CPU (s) | after, PoCL device (s) |
+|---|---|---|---|
+| `blur_color_autogen` | 1.27 / 1.22 | 0.72 / 0.76 | 0.74 / 0.73 |
+| `blur_mono_autogen` | 1.02 / 1.01 | 0.64 / 0.66 | 0.71 / 0.69 |
+| `transform_and_blur_autogen` | 11.26 / 11.87 | 1.01 / 1.17 | 0.72 / 0.74 |
+| `blur_motion_curves_no_transform_autogen` | 52.84 / 51.09 | 1.08 / 1.14 | 0.74 / 0.72 |
+| `diffuse_autogen` | 3.02 / 2.90 | 1.90 / 2.34 | 0.72 / 0.69 |
+| `distort_rgb_autogen` | 8.48 / 7.57 | 1.73 / 1.87 | 2.14 / 1.95 |
+| `@drop_shadow` | 1.84 / 1.74 | 1.52 / 1.73 | 0.72 / 0.71 |
+| `hue_sat_bright_autogen` | 0.84 / 0.84 | 0.47 / 0.51 | 0.54 / 0.59 |
+| `sharpen_best_quality_autogen` | 2.79 / 2.71 | 2.40 / 2.38 | 0.86 / 0.88 |
+| `sharpen_fast_autogen` | 1.18 / 1.10 | 0.66 / 0.73 | 0.64 / 0.69 |
+| `time_warp_rgb_autogen` | 1.44 / 1.31 | 0.78 / 0.73 | 0.88 / 0.81 |
+| `trails_autogen` | 1.26 / 1.16 | 0.85 / 0.75 | 0.85 / 0.88 |
+| `warp_perspective_autogen` | 3.87 / 3.49 | 1.37 / 1.31 | 1.44 / 1.46 |
+- `before PR 4` is the previous build: one `fx_run` process per frame and a full ripmap plane copy per row in the warp kernels.
+- `after, CPU` is the default `--device cpu`, with the warp copies removed, the render in process and the parallel-safe kernels on all cores (`SAPPHIRE_THREADS=1` runs them on one).
+- `after, PoCL device` runs with the device path on PoCL, an OpenCL runtime on the same CPU. It shows that the device path is byte identical and what the path costs on this machine; it is CPU OpenCL and is never GPU speed. Speedups on a real GPU are INFERRED until one is measured.
 
-Start with a short, small clip.
+Most of the remaining time of the light stages is moving the frame in and out of the process, not the effect. Start with a short, small clip.
 
 ## What is claimed
 
