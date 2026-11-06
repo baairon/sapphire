@@ -8,9 +8,9 @@
 //!
 //! * `WARP_HELPERS`: `warp_fmod` (exact fmod of a float widened to double by an integer valued divisor, integer arithmetic),
 //!   `warp_sincosf` (port of `libm_sincos::sincosf_traced` for the table walk, tiny and non finite routes).
-//! * `WARP_WARP`: kernel `warp_warp_f32`, ports `warp_rel::render` + `warp_f2::run` (`rel` = 1) and `warp_driver::run` (`rel` = 0)
+//! * `WARP_WARP`: kernel `warp_warp_f32`, ports `warp_rel::render` + `warp_rel_sampler::run` (`rel` = 1) and `warp_driver::run` (`rel` = 0)
 //!   for the flag 0 path, host mode 0, n <= 4 planes.
-//! * `WARP_ROTATE`: kernel `warp_rotate_f32`, ports `rotate::render` (seven operand paths).
+//! * `WARP_ROTATE`: kernel `warp_rotate_f32`, ports `rotate2d::render` (seven operand paths).
 //! * `WARP_PERSP`: kernels `warp_persp_f32` and `warp_persp_alpha_f32`, port `perspective::run` and `perspective_alpha`.
 
 pub const WARP_HELPERS: &str = r#"
@@ -118,9 +118,9 @@ void warp_sincosf(float x, __global const ulong* st, float* so, float* co, int* 
 "#;
 
 pub const WARP_WARP: &str = r#"
-/* MIRRORS_MUL_ADD: warp_f2::x_raw, warp_f2::y_raw, warp_f2::blend1, warp_driver::x_raw, warp_driver::y_raw, warp_driver::blend1 */
+/* MIRRORS_MUL_ADD: warp_rel_sampler::x_raw, warp_rel_sampler::y_raw, warp_rel_sampler::blend1, warp_driver::x_raw, warp_driver::y_raw, warp_driver::blend1 */
 
-/* warp_f2::fm / warp_driver::fm: fmod of the coordinate by the dimension, plus the dimension for a negative coordinate. */
+/* warp_rel_sampler::fm / warp_driver::fm: fmod of the coordinate by the dimension, plus the dimension for a negative coordinate. */
 float warp_fm(float v, int dim) {
     float wf = (float)dim;
     int neg = 0x0p+0f > v;
@@ -269,7 +269,7 @@ __kernel void warp_warp_f32(__global const float* plane, uint plen, __global con
 "#;
 
 pub const WARP_ROTATE: &str = r#"
-/* MIRRORS_MUL_ADD: rotate::render_cfg (FMA sites 0 to 31) */
+/* MIRRORS_MUL_ADD: rotate2d::render_cfg (FMA sites 0 to 31) */
 
 /* path 1..4: the angle is a plane (v constant or planes, centre constant or planes: P1 vC cC, P2 vC cP, P3 vP cC, P4 vP cP).
    path 5..7: the angle is a constant, (s, c) come from the host (P5 vC cP, P6 vP cP, P7 vP cC with the host folded k1, k2).

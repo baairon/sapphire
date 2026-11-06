@@ -10,7 +10,8 @@ anchors), paths (inline code paths), ids (every f_XXXXXXXX is in docs/data/FUNCT
 (flag tables against --help, exit code tables against contracts/error.schema.json; active once that schema
 exists), ascii (and control characters but tab, LF and CR), dashes, secrets, person (first person), claims (forbidden claims), ffmpeg (ffmpeg claims cite a
 doc page or a measured command), archive (archive:PATH citations resolve through docs/data/archive_refs.tsv),
-effects (an effect is named only by its exact string from docs/data/effect_names.tsv, in code font).
+effects (an effect is named only by its exact string from docs/data/effect_names.tsv, in code font), process (no
+words or codes that say how the repository was made: tools/process_terms.py, outside code spans and fenced blocks).
 
 Effects rule scope: an `S_` token must be a bank name, in code font, and never on a line with a function id;
 a near miss is a token that equals a bank name or its stem (the name without `S_`) once case, spaces, hyphens
@@ -37,9 +38,10 @@ sys.path.insert(0, TOOLS)
 from docgen.archive import resolves  # noqa: E402
 from docgen.data import ROOT, read_tsv  # noqa: E402
 from docgen.render import SKIP_DIRS, md_files  # noqa: E402
+import process_terms  # noqa: E402
 
 CHECKS = ["regen", "links", "paths", "ids", "flags", "exits", "ascii", "dashes", "secrets", "person", "claims",
-          "ffmpeg", "archive", "effects"]
+          "ffmpeg", "archive", "effects", "process"]
 TEXT_EXT = (".md", ".py", ".rs", ".toml", ".json", ".jsonl", ".tsv", ".yml", ".yaml", ".txt", ".html", ".css",
             ".schema")
 ROOT_FILES = {"README.md", "Cargo.toml", "Cargo.lock", "LICENSE", ".gitignore", ".gitattributes"}
@@ -558,6 +560,19 @@ def check_effects(ctx):
                 out.append(("effects", rel, i, msg))
             if FID.search(line) and any(t in bank.exact for t in E_PREFIXED.findall(line)):
                 out.append(("effects", rel, i, "effect name beside a function id implies a mapping"))
+    return out
+
+
+def check_process(ctx):
+    """Pages say what the code does, not how it was made: the terms and codes of tools/process_terms.py, outside code
+    spans, link targets and fenced blocks. docs/handoff.md is shared with twixtor and checked there."""
+    out = []
+    for rel in ctx.md:
+        if rel == "docs/handoff.md":
+            continue
+        for i, line in lines_outside_fences(ctx.text(rel)):
+            for _, name, text in process_terms.prose_hits(line):
+                out.append(("process", rel, i, "%s: %s" % (name, text)))
     return out
 
 

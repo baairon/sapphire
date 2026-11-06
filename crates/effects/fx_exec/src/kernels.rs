@@ -196,8 +196,8 @@ fn binary_k(class: &str, args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Resu
             "*" => ops_arith::mul::render(&p, &oa, &ob, &mut outs),
             "/" => ops_arith::div::render(&p, &oa, &ob, &mut outs),
             "diff" => {
-                let dp = diff::Params { nout: tag, n: n as i32, vec_one: kp.vec_one, vec_mask: DIFF_VEC_MASK, dst3_phase_bytes: kp.dst3_phase_bytes };
-                diff::render(&dp, &oa, &ob, &mut outs)
+                let dp = ops_diff::Params { nout: tag, n: n as i32, vec_one: kp.vec_one, vec_mask: DIFF_VEC_MASK, dst3_phase_bytes: kp.dst3_phase_bytes };
+                ops_diff::render(&dp, &oa, &ob, &mut outs)
             }
             "max" => ops_minmax::max::render(&p, &oa, &ob, &mut outs),
             _ => ops_minmax::min::render(&p, &oa, &ob, &mut outs),
@@ -377,8 +377,8 @@ pub fn run_class(class: &str, tag: i32, args: &[Arg], n: usize, kp: &KParams) ->
     }
 }
 
-/// NV-9 dispatch: the NV-5 classes through `run_class`, the NV-9 classes through `kernels2::run_wired` (the ripmap result of
-/// make_mipmap is not a plain image).
+/// Dispatch: the classes of `kernels2::WIRED` through `kernels2::run_wired` (the ripmap result of make_mipmap is not a
+/// plain image), every other class through `run_class`.
 pub fn run_any(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, usize), kp: &KParams) -> Result<crate::kernels2::Out, ExecError> {
     let c = normalize_class(class);
     if crate::kernels2::WIRED.contains(&c) {
@@ -402,7 +402,7 @@ pub fn run_any(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, usiz
 
 /// diff vec_mask = OP2-A3, MEASURED-DYLIB 0x7fffffff per lane.
 pub const DIFF_VEC_MASK: u32 = 0x7fff_ffff;
-/// clamp allones = STD-001, MEASURED-DYLIB 0xffffffff per lane.
+/// clamp allones: MEASURED-DYLIB 0xffffffff per lane.
 pub const CLAMP_ALLONES: u32 = 0xffff_ffff;
 
 /// clamp(a, b, c), three operands, native median ladders per operand shape (crate `clamp`). Output plane phases all take
@@ -413,11 +413,11 @@ fn clamp_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, Exec
     let oa = ops_arith::Operand { count: args[0].count(), is_const: args[0].is_const(), consts: args[0].f32s(), planes: &pa };
     let ob = ops_arith::Operand { count: args[1].count(), is_const: args[1].is_const(), consts: args[1].f32s(), planes: &pb };
     let oc = ops_arith::Operand { count: args[2].count(), is_const: args[2].is_const(), consts: args[2].f32s(), planes: &pc };
-    let p = clamp::Params { nout: tag, n: n as i32, allones: CLAMP_ALLONES, dst_phase_bytes: [kp.dst3_phase_bytes; 4] };
+    let p = ops_clamp::Params { nout: tag, n: n as i32, allones: CLAMP_ALLONES, dst_phase_bytes: [kp.dst3_phase_bytes; 4] };
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; tag.max(0) as usize];
     {
         let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|v| v.as_mut_slice()).collect();
-        clamp::render(&p, &oa, &ob, &oc, &mut outs).map_err(|e| kerr("clamp", e))?;
+        ops_clamp::render(&p, &oa, &ob, &oc, &mut outs).map_err(|e| kerr("clamp", e))?;
     }
     Ok(Image { n, planes: outv })
 }

@@ -1,0 +1,16 @@
+
+[package]
+name = "perspective_alpha"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of perspective_alpha slot 52 AVX2 body; the sincosf callee is the crate libm_sincos."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+libm_sincos = { path = "../libm_sincos" }
+
+[dev-dependencies]
+fx_common = { path = "../../fx_common" }

@@ -1,4 +1,4 @@
-//! tests on the INT tree (reads the stored and sets in place, writes to int29_merge/runs/tw). Original header: tests (one sequential test because the mutation switch is global): (1) the port against the stored T2 set (5851 cases), (2) the mutant floor over the same set,
+//! Tests of `twframe` (reads the stored sets in place, writes its reports to `effects_vecdir::out_dir()`), one sequential test because the mutation switch is global: (1) the port against the stored T2 set (5851 cases), (2) the mutant floor over the same set,
 //! (3) the new limit-window arithmetic against the new emulator block L (15463 cases), (4) unit tests of the history, record and cache models.
 use fx_exec::twframe::*;
 use std::collections::HashMap;

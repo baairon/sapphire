@@ -1,4 +1,4 @@
-//! NV-3f tests: constant paths and collapses for the non-Milestone programs (values MEASURED in the EP-3c / EP-3d original dumps).
+//! Constant paths and collapses for the non-Milestone programs (values MEASURED in the original dumps).
 use fx_eval::compile::{ArgView2, ComboTable};
 use fx_eval::fold::{collapse_arm, fold_kind, fold_lanes};
 use fx_eval::plan::fmt_g6;
@@ -29,7 +29,7 @@ fn element_of_constant() {
     // EdgeRays: element_of [0.25 0.25 0.25] 1 = 0.25 (0x3e800000)
     assert_eq!(bits(fold_lanes("element_of", &[c([0.25, 0.25, 0.25, 0.0], 3, 3), s(1.0)], 1, None))[0], 0x3e800000);
     assert_eq!(bits(fold_lanes("element_of", &[c([1.0, 2.0, 3.0, 0.0], 3, 3), s(2.0)], 1, None))[0], 3.0f32.to_bits());
-    // MEASURED (original compile of constructed constants, work/eo, 48 of 48 rows): the index is truncated and taken modulo the lane count
+    // MEASURED (original compile of constructed constants, 48 of 48 rows): the index is truncated and taken modulo the lane count
     // (floor-modulo, so -1 is the last lane); index 9 of a 3-lane vector is lane 0 (this assertion was an INFERRED clamp to the last lane before)
     assert_eq!(bits(fold_lanes("element_of", &[c([1.0, 2.0, 3.0, 0.0], 3, 3), s(9.0)], 1, None))[0], 1.0f32.to_bits());
     assert_eq!(bits(fold_lanes("element_of", &[c([1.0, 2.0, 3.0, 0.0], 3, 3), s(-1.0)], 1, None))[0], 3.0f32.to_bits());

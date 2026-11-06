@@ -569,7 +569,7 @@ fn esh_accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
 }
 
 fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, DevError> {
-    use esh3_jobs as j3;
+    use edge_aware_sharpen_jobs as j3;
     let src_op = img(s, &a[0], c.n)?;
     let src = src_op.get();
     let (w, h) = c.dims;
@@ -646,7 +646,7 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
     let c1 = buf(if nu > 1 { 1 } else { 0 });
     let c2 = buf(if nu > 2 { 2 } else { 0 });
     let cur = mask_buf.unwrap_or_else(|| src.plane(0));
-    let pw = esh4_powf::powf(4.0f32, 3.0f32);
+    let pw = libm_powf::powf(4.0f32, 3.0f32);
     let (wu, hu) = (w as u32, h as u32);
     let nn = n as u32;
     for it in 0..iters.max(0) as usize {
@@ -706,7 +706,7 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
             if zero {
                 s.queue.copy(buf(pa[ch]), buf(pb[ch]))?;
             } else {
-                let (hx, hy) = match esh5_core::radii(base, base, pw, 3) {
+                let (hx, hy) = match edge_aware_sharpen_blur_core::radii(base, base, pw, 3) {
                     Ok(v) => v,
                     Err(_) => return unsup("exp2 argument beyond the fast path"),
                 };
@@ -715,7 +715,7 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
                 for i in 0..3 {
                     for (rad, is_x, aux) in [(hx[i], true, t0), (hy[i], false, t1)] {
                         if rad > 1.0f32 {
-                            let p = esh5b_passjobs::cb_cell_a(rad);
+                            let p = edge_aware_sharpen_box_filter::cb_cell_a(rad);
                             let name = if is_x { "esh_filter_x_f32" } else { "esh_filter_y_f32" };
                             s.launch(name, if is_x { h } else { w }, &[buf(sp).arg(), buf(dp).arg(), buf(aux).arg(), ClArg::U32(wu), ClArg::U32(hu), ClArg::F32(p[0]), ClArg::F32(p[1]), ClArg::F32(p[2])])?;
                             let (ns, nd) = if sp == in_ids[ch] { (wa, pb[ch]) } else { (dp, sp) };
@@ -728,7 +728,7 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
                     s.queue.copy(buf(sp), buf(pb[ch]))?;
                 }
             }
-            let m = arr[it].mul_add(esh6_driver::MIX_C, -esh6_driver::MIX_C).mul_add(arr[7 + ch], esh6_driver::MIX_C);
+            let m = arr[it].mul_add(edge_aware_sharpen_render::MIX_C, -edge_aware_sharpen_render::MIX_C).mul_add(arr[7 + ch], edge_aware_sharpen_render::MIX_C);
             s.launch("esh_level_f32", n, &[buf(pb[ch]).arg(), buf(pa[ch]).arg(), out.plane(ch).arg(), ClArg::U32(nn), ClArg::F32(m)])?;
             if pa[ch] == in_ids[ch] {
                 pa[ch] = pb[ch];
@@ -1028,7 +1028,7 @@ fn esh_corpus() -> Vec<SelfCase> {
     }
     // mask values on both sides of the two double precision thresholds of the weight functions (compared after widening to double)
     {
-        let edges: Vec<f32> = [esh3_jobs::LOW, esh3_jobs::HIGH]
+        let edges: Vec<f32> = [edge_aware_sharpen_jobs::LOW, edge_aware_sharpen_jobs::HIGH]
             .iter()
             .flat_map(|&t| {
                 let b = (t as f32).to_bits();

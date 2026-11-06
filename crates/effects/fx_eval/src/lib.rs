@@ -1,4 +1,4 @@
-//! fx_eval: native reader of the effect program language (piece NV-1).
+//! fx_eval: native reader of the effect program language.
 //!
 //! Label: EVALUATOR-UNCHECKED (our evaluator, not yet compared with the original's plan).
 //! Std only, safe Rust, no panics on malformed input (errors are returned).
@@ -59,7 +59,7 @@ impl CompileContext {
     /// Parse the four required flags from a command line: `--ctx-time F --ctx-word2 0|1 OPT_CTX_OWNER_MODE N --ctx-has-data HEX`. Any missing or unparsable one is an error.
     pub fn from_args(a: &[String]) -> Result<CompileContext, String> {
         let get = |k: &str| -> Result<&str, String> {
-            let p = a.iter().position(|x| x == k).ok_or_else(|| format!("{} is required (compile context, Batch 36 rule 3, no default)", k))?;
+            let p = a.iter().position(|x| x == k).ok_or_else(|| format!("{} is required (compile context, no default)", k))?;
             a.get(p + 1).map(|s| s.as_str()).ok_or_else(|| format!("{} needs a value", k))
         };
         let t: f32 = get("--ctx-time")?.parse().map_err(|_| "--ctx-time must be a float".to_string())?;

@@ -1,4 +1,3 @@
-// tests/t27_lym1.rs renamed t31_lym1.rs (the t27 name is; NEXT.md of, step L).
 //! the 13 registered programs merged with their layout row: extras, hardcodes, parameter counts.
 use fx_eval::layoutmerge::{find_layout_text, merge_layout, read_layout};
 use fx_eval::{build_effect, Corpus};

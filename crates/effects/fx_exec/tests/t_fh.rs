@@ -1,4 +1,4 @@
-//! Step FH: a host frame is converted from the harness's ae32 words by the head of its input, like that input's Source frame.
+//! A host frame is converted from the harness's ae32 words by the head of its input, like that input's Source frame.
 //! The conversion routine is the one the executor uses for the Source input (ae32_to_image); the CLI test checks the raw path refusal.
 use fx_exec::hostconv14::{ae32_to_image, Ae32Source, R3_HEAD, VB3_HEAD};
 

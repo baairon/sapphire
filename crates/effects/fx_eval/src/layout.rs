@@ -1,4 +1,4 @@
-//! NV-3c: command layout of the plan (F13), derived from the emitter and its helpers and measured
+//! Command layout of the plan (F13), derived from the emitter and its helpers and measured
 //! against the layout half of the 56 fitted dumps. Labels in README.md of this folder.
 //!
 //! Rules (address, status):
@@ -23,7 +23,7 @@ pub fn class_flags() -> &'static HashMap<String, u32> {
     M.get_or_init(|| effects_rtdata::classes::CLASS_FLAGS.iter().map(|(n, f)| (n.to_string(), *f)).collect())
 }
 
-/// NV-3g rule A (RULE-FITTED, evidence tools/argprop.py): a marked `monochrome` does not pass the command-flag mark on to its
+/// monochrome mark rule (RULE-FITTED): a marked `monochrome` does not pass the command-flag mark on to its
 /// argument. 6 of 6 observations in the originals (PixelSortLinear a, b, nf1, nf2 and PixelSortRadial nf1, nf2) show the argument unmarked
 /// (flag 1) while the node itself is marked (flag 0); every other (primitive, argument) pair seen (16 other (primitive, argument) pairs, 373 observations) propagates.
 /// Cause INFERRED: the argument cell type byte read by the image-argument predicate (slot 9, : `[cell] == 0`) is non-zero for monochrome.

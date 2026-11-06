@@ -9,7 +9,7 @@
 //! * [`CPU_ONLY`]: every other op of the executor's dispatch with the reason it has no kernel yet. The test
 //!   `every_op_has_a_device_kernel_or_a_cpu_only_entry` fails when an op of `kernels::SUPPORTED` or `kernels2::WIRED`
 //!   is in neither table, so a new effect cannot add an op without either a device kernel or a written reason.
-//!   Entries are deleted as kernels land (see API.md of the delivery).
+//!   Entries are deleted as kernels land.
 
 use crate::backend::NodeCall;
 use crate::kernels;
@@ -136,7 +136,7 @@ pub const CPU_ONLY: &[(&str, &str)] = &[
 ];
 
 fn copy_calls_are_identity(tag: i32) -> bool {
-    let calls = copy_slot52::slot52_calls(tag);
+    let calls = copy_planes::slot52_calls(tag);
     calls.len() == tag.max(0) as usize && calls.iter().enumerate().all(|(i, c)| c.mode == 0 && c.chan == i as i32 && c.out == i as i32)
 }
 

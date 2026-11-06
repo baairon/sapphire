@@ -1,0 +1,11 @@
+
+[package]
+name = "ops_element"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Native port of the builtin classes element_of, max_element, min_element."
+
+[dependencies]
+# plane_service: the host plane service (flat copy and constant fill paths).
+plane_service = { path = "../plane_service" }

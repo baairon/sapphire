@@ -1,0 +1,20 @@
+
+[package]
+name = "edge_aware_sharpen_render"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Std-only port of the CPU render entry of edge_aware_sharpen (slot 52, flag 0 route) over the pool jobs, powf, the blur core and the box filter."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+edge_aware_sharpen_weights = { path = "../edge_aware_sharpen_weights" }
+edge_aware_sharpen_jobs = { path = "../edge_aware_sharpen_jobs" }
+libm_powf = { path = "../libm_powf" }
+edge_aware_sharpen_blur_core = { path = "../edge_aware_sharpen_blur_core" }
+edge_aware_sharpen_box_filter = { path = "../edge_aware_sharpen_box_filter" }
+
+[dev-dependencies]
+effects_vecdir = { path = "../../vecdir" }

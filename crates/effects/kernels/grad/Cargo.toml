@@ -1,0 +1,21 @@
+
+[package]
+name = "grad"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the grad class CPU render (slot 52 -> launcher -> blur_core + gradient callback)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+blur = { path = "../blur" }
+fx_common = { path = "../../fx_common" }
+
+[features]
+# Mutation switch for the floor audit: with `--features mutants` the env var COV_MUT selects one edit. Off by default.
+mutants = []
+
+[dev-dependencies]
+effects_vecdir = { path = "../../vecdir" }

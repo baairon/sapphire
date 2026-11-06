@@ -30,11 +30,11 @@ pub struct Binding {
     pub host_curves_unkeyed: bool,
     /// keyed host curve answers (curve name, f32 bits of the requested time) -> lanes; Some = no default, an unanswered request is a compile error
     pub host_keyed: Option<BTreeMap<(String, u32), Vec<f32>>>,
-    /// step T: the claimed HOST-CURVE-VALUES input (fx_run --host-curve-values FILE)
+    /// the claimed HOST-CURVE-VALUES input (fx_run --host-curve-values FILE)
     pub host_curve_values: Option<fx_eval::hostcurve::HostCurveValues>,
     /// HC-ZERO-LEGACY: the named state A zero fold; false = HC-NO-INTERFACE (a get_curve_val with neither interface is an error)
     pub hc_zero_legacy: bool,
-    /// NEG-2 RANGES-OFF: skip the evaluator range clamp (also env NEG2_RANGES_OFF)
+    /// RANGES-OFF: skip the evaluator range clamp (also env NEG2_RANGES_OFF)
     pub ranges_off: bool,
     /// explicit bound-input mask of the compile (bit 0 = Source bound); the executor default is 1, `fx_run --bound-mask` sets it (A.2)
     pub bound_input_mask: u32,
@@ -136,7 +136,7 @@ pub struct Inputs {
 pub struct HostFrames {
     pub prev_dest: Option<Image>,
     pub frames: BTreeMap<i32, Image>,
-    /// NV5-FRAME-ROUND-OLD (NV-8 frame rule merged in FX-1 for the Time_Warp_RGB re-run): true selects round(t); false (default) is floor(max(0, t)).
+    /// NV5-FRAME-ROUND-OLD: true selects round(t); false (default) is the measured frame rule floor(max(0, t)) of `frame_key`.
     pub frame_round_old: bool,
     /// Some on the verified render path; get_frame then asks the request the plugin makes (twframe::route_request) and
     /// takes the frame keyed by (frame, stored bits) from `by_request`; None keeps the state A rule above (frame_key) and `frames`.
@@ -235,7 +235,7 @@ pub fn compile_for(program: &Genotype, binding: &Binding) -> Result<CompiledProg
     Ok(cp)
 }
 
-/// The entry for NV-6: compile with the binding, then run on the explicit inputs.
+/// The entry point: compile with the binding, then run on the explicit inputs.
 pub fn execute(program: &Genotype, binding: &Binding, inputs: &Inputs, host: &HostFrames) -> Result<ExecOutput, ExecError> {
     let cp = compile_for(program, binding)?;
     execute_compiled(&cp, binding, inputs, host)
@@ -263,7 +263,7 @@ pub fn unsupported_classes(cp: &CompiledProgram) -> Vec<String> {
 /// x86 cvttss2si (NaN or out of range gives 0x80000000), image-only arguments refused; 1,624 of 1,624 constructed cases equal in the emulator
 /// at counts 1 to 4, float and integer-typed, special values; 4 of 4 mutants killed; comp_premult reads raw lanes;
 /// counts 0 and above 4 refused by name; premise CONST-ROUTE-)". Execution time only: the plan dump keeps fold.rs lanes.
-/// The lanes stay f32 here; an integer-typed consumer converts at its own site with the x86 model (rebuild_common x86), never a saturating cast.
+/// The lanes stay f32 here; an integer-typed consumer converts at its own site with the x86 model (fx_common::x86), never a saturating cast.
 /// Features cst1_raw_cp (no fill) and fill0_mut (lanes n..3 = 0) are the gate's controls, test builds only.
 fn const_val(nd: &PlanNode) -> Result<Val, ExecError> {
     // : "CONST-COUNT-NEGATIVE-OFF-CLAIM (plan constants with count -1 in LightWrap, Matte_Ops, Matte_Ops_Comp and
@@ -595,7 +595,7 @@ fn eval_graph_core(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, hos
     Ok((ExecOutput { dest, saved_prev_dest: saved, trace, diagnostics }, vals))
 }
 
-/// NV-8 frame rule (EP-8 MEASURED on the original): absolute frame floor(max(0, current + t)), current frame 0; NaN and negative read frame 0.
+/// Frame rule (MEASURED on the original): absolute frame floor(max(0, current + t)), current frame 0; NaN and negative read frame 0.
 pub fn frame_key(t: f32) -> i32 {
     // / M1: : vxorps xmm1; vmaxss xmm1,xmm1,t (= if 0 > t {0} else {t}: NaN stays NaN); vroundss mode 1 (floor); vcvtss2si (NaN or out of range gives 0x80000000)
     let c = if 0.0 > t { 0.0 } else { t };

@@ -1,0 +1,11 @@
+
+[package]
+name = "blur_rows_y"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+fx_common = { path = "../../fx_common" }

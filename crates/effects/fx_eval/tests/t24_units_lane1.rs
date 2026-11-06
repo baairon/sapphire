@@ -1,5 +1,5 @@
-//! t24: (the lane-1 term) and PATCH 3 (the popup rule) in fx_eval::units.
-//! Vectors: data/UNT2_CONV_T2.tsv, a field-for-field copy of rig T2 output (wave_s9/unt2_units_rest/out/conv_t2_out.jsonl,
+//! t24: the lane-1 term and the popup rule in fx_eval::units.
+//! Vectors: data/UNT2_CONV_T2.tsv, a field-for-field copy of the T2 rig output (conv_t2_out.jsonl,
 //! SHA-256 bebafd6798719af6f2b945a9016e2f3a21d253d85d43a19cf1b6535e8f49c652): 18,880 cases of the original's conversion function 0x11ca10
 //! run in the emulator (entries disp, vex and sse; lanes 0 and 1; ns 1 and others; arms clear, null and set; types 1 and 2).
 use fx_eval::units::{conv_record, normalize_scale_record, popup_record, units_width, ConvIn, RatioArm};

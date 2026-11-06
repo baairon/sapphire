@@ -1,0 +1,15 @@
+
+[package]
+name = "warp_driver"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the warp pixel driver, AVX2 body of."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+warp_sampler = { path = "../warp_sampler" }
+libm_fmod = { path = "../libm_fmod" }
+fx_common = { path = "../../fx_common" }

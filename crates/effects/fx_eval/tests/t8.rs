@@ -1,4 +1,4 @@
-//! T8 (NEG-2): the evaluator owns the parameter range table and the measured clamp rule (NEG-1 runs D, D2, D3).
+//! T8: the evaluator owns the parameter range table and the measured clamp rule (measurement runs D, D2, D3).
 use fx_eval::ranges::*;
 use fx_eval::*;
 

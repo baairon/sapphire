@@ -1,5 +1,4 @@
-//! step s11_prerender: byte copy of wave_s9/pdv3_owner_rest/owner_arm/owner_arm.rs below this line.
-//! the owner arm of the original plugin ported as one pure function.
+//! The owner arm of the original plugin, ported as one pure function.
 //!
 //! Sources (neutral_1 listing addresses; every statement labelled in ../README.md):
 //!   * definition flag: sets bit 0x20 of [[owner]] for the token "dynamic" (cell);

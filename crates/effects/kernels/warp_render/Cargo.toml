@@ -1,0 +1,20 @@
+
+[package]
+name = "warp_render"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Render entries of the warp classes: slot 52 of perspective and perspective_alpha (dispatchers over their AVX2 bodies) and slot 53 of warp (over the driver)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+perspective = { path = "../perspective" }
+perspective_alpha = { path = "../perspective_alpha" }
+warp_driver = { path = "../warp_driver" }
+warp_sampler = { path = "../warp_sampler" }
+
+[dev-dependencies]
+effects_vecdir = { path = "../../vecdir" }
+fx_common = { path = "../../fx_common" }

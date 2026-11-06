@@ -1,6 +1,6 @@
-//! Command-level executor: runs a plan in the EP-3 text form (allocate-images, convert-from-source, run-primitive,
+//! Command-level executor: runs a plan in the text form of the original's compiled plans (allocate-images, convert-from-source, run-primitive,
 //! copy-images, constant, free-images, convert-to-dest, exec-linewise), with the original's buffer reuse. It is the
-//! second path to the same builtin crates: node-level (`exec`) uses NV-3's bit-exact lanes, this path uses the lanes as
+//! second path to the same builtin crates: node-level (`exec`) uses the compiler's bit-exact lanes, this path uses the lanes as
 //! printed (6 significant digits), so it is for structural and plane cross-checks against original plans.
 //! f32 only: convert-from-source and convert-to-dest are the identity on f32 planes (other formats NOT REBUILT).
 
@@ -87,7 +87,7 @@ fn parse_item(toks: &[String], i: &mut usize, depth: usize) -> Result<Sx, ExecEr
     }
 }
 
-/// The printed command texts of an EP-3 dump (`CMD <seq> <type> <text> <addr>` rows).
+/// The printed command texts of a plan dump of the original (`CMD <seq> <type> <text> <addr>` rows).
 pub fn commands_of_dump(dump: &str) -> Vec<String> {
     dump.lines()
         .filter(|l| l.starts_with("CMD\t"))

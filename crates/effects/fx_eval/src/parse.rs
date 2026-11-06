@@ -640,7 +640,7 @@ pub fn read_vector_literal(text: &str) -> Result<Vec<f64>, ParseError> {
 /// (M10): the original's text-to-number path for NUMBER tokens, reproduced generically.
 /// The value is accumulated in single precision (f32): the integer part as `v = v * 10 + d`, then for each
 /// fractional digit `v += d * scale; scale *= 0.1f`, with `scale` starting at 0.1f; a leading `-` negates.
-/// MEASURED-FITTED: this reproduces 181 of 183 parameter-default literals of the 56 EP-3 and EP-3b dumps bit
+/// MEASURED-FITTED: this reproduces 181 of 183 parameter-default literals of the 56 recorded dumps bit
 /// for bit, including the 5 parameters (4 literals) where the nearest f32 differs from the original lane (0.01, 0.05 in two programs,
 /// 0.112 and 0.9). The other 2 (`affect_alpha`) are the separate
 /// `default_to_1_if_postdiv` rule, not this path. The listing function is NOT located (UNKNOWN); the tokens
@@ -670,7 +670,7 @@ pub fn orig_number(text: &str) -> Option<f64> {
     Some(if neg { -(v as f64) } else { v as f64 })
 }
 
-/// NV-3c: the original's string-to-float function, READ from the listing. Two builds of one function: (SSE tier,
+/// The original's string-to-float function, READ from the listing. Two builds of one function: (SSE tier,
 /// integer part `v = v*10 + d` with two roundings) and (AVX2 tier, `vfmadd213ss`one rounding; `fma = true`).
 /// Skips leading white space, accepts one sign, digits, one '.', fractional digits as `scale *= 0.1f; v += d * scale`
 /// (scale starts at 1.0f), an `e` or `E` exponent (`v = (f32)((f64)v * pow(10.0, atoi(rest)))`, then stops), and stops at

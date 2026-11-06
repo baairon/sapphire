@@ -1,4 +1,4 @@
-//! NV-3e: the linewise grouping pass of the plan builder, ported from the listing (function, helpers,
+//! The linewise grouping pass of the plan builder, ported from the listing (function, helpers,
 //! ). Listing offsets (VA = offset). Every rule below is STATIC (read from the code) unless marked.
 //!
 //! Input: the node array of the program in compile (eval) order, as the original holds it when the compile argument r8 = 0
@@ -80,7 +80,7 @@ impl Ctx {
     fn pos(&self, id: usize) -> Option<usize> {
         self.nodes.iter().position(|x| x.id == id)
     }
-    /// image argument predicate (class slot, APPROXIMATED as "the argument node is in the array", as NV-3c did)
+    /// image argument predicate (class slot, APPROXIMATED as "the argument node is in the array")
     fn is_img_arg(&self, n: &LNode, k: usize) -> bool {
         n.is_func && self.pos(n.args[k]).is_some()
     }

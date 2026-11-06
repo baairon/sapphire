@@ -1,7 +1,7 @@
 //! Device kernel sources of make_mipmap (the ripmap pyramid) and blur_warp (the four bodies A to D of the segment sampler).
 //!
 //! Every kernel reproduces the operation order and rounding of its CPU function (`make_mipmap::mm2`, `make_mipmap::build`,
-//! `blur_warp::render` with `bwb_bodya`..`bwb_bodyd` and `bwb_p1`). `fma()` appears only where the CPU calls `mul_add`.
+//! `blur_warp::render` with `blur_warp_1ch`..`blur_warp_4ch` and `blur_warp_point`). `fma()` appears only where the CPU calls `mul_add`.
 //!
 //! * make_mipmap: the ripmap of one object is ONE device buffer holding the NL x NP padded planes one after the other (plane
 //!   (l, j) at the offset the host passes); every pad row and column is written by the kernel that the CPU writes it with, in
@@ -170,7 +170,7 @@ __kernel void ripmap_mm_ver(__global uint* rip, uint soff, uint doff, uint strid
 "#;
 
 pub const RIPMAP_BLUR_WARP: &str = r#"
-/* MIRRORS_MUL_ADD: bwb_bodya::s2_x, bwb_bodya::s3_y, bwb_bodya::run_planes_full, bwb_bodya::p2::x_major_sample, bwb_bodya::p2::y_major_sample, bwb_bodyb::x_major_sample2, bwb_bodyb::y_major_sample2, bwb_bodyc::x_major_sample, bwb_bodyc::y_major_sample, bwb_bodyd::x_major_sample_ex, bwb_bodyd::p3::spec_loop, bwb_bodyd::p3::flag0_sample, bwb_bodyd::p4::y_major_sample, bwb_p1::sample */
+/* MIRRORS_MUL_ADD: blur_warp_1ch::s2_x, blur_warp_1ch::s3_y, blur_warp_1ch::run_planes_full, blur_warp_1ch::p2::x_major_sample, blur_warp_1ch::p2::y_major_sample, blur_warp_2ch::x_major_sample2, blur_warp_2ch::y_major_sample2, blur_warp_3ch::x_major_sample, blur_warp_3ch::y_major_sample, blur_warp_4ch::x_major_sample_ex, blur_warp_4ch::p3::spec_loop, blur_warp_4ch::p3::flag0_sample, blur_warp_4ch::p4::y_major_sample, blur_warp_point::sample */
 
 typedef struct {
     float x;
@@ -943,7 +943,7 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
     }
 }
 
-/* bwb_p1::sample for 1 to 4 channels (the scalar element form), then the planes times a4. The CPU indexes the whole plane
+/* blur_warp_point::sample for 1 to 4 channels (the scalar element form), then the planes times a4. The CPU indexes the whole plane
    buffer by `i as usize` (a panic outside it, which is an error of the call): the same range test sets `bad`. */
 void bw_p1(bw_cfg g, int mode_x, int mode_y, int width, int height, int stride, float x, float y, float a4, bw_plane* P, float* res) {
     int n = g.nc;

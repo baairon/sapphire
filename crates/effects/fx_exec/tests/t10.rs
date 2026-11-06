@@ -1,6 +1,6 @@
-//! T10 of NV-9b: the dump's host geometry (/ EP-6 item 7) as the default binding, the NV9-GEOM-OLD switch, the geometry delta
+//! T10: the dump's host geometry as the default binding, the NV9-GEOM-OLD switch, the geometry delta
 //! on Diffuse and Blur_Motion_Curves_No_Transform, and node-level execution against the native plan text of BOTH plan modes
-//! (GpuFirst r8 = 1 and CpuDriver r8 = 0) of the NV-3e compiler. Outputs: out/GEOM_DELTA_NV9B.tsv, out/MODES_NV9B.tsv.
+//! (GpuFirst r8 = 1 and CpuDriver r8 = 0) of the compiler. Outputs: out/GEOM_DELTA_NV9B.tsv, out/MODES_NV9B.tsv.
 use fx_eval::cpuplan::{plan_text_mode, PlanMode};
 use fx_eval::{build_effect, Corpus, Genotype};
 use fx_exec::cmds::{commands_of_dump, execute_commands_xy};
@@ -121,7 +121,7 @@ fn pixel_centre_plane_by_hand_and_equals_the_grid_of_the_dump_geometry() {
         }
         assert!(m < 2e-6, "{}x{}: pixel-centre plane vs xy_grid of the dump geometry differ by {}", w, h, m);
     }
-    // the NV-9 plane under the dump geometry lands at (px - 0.5, py - 0.5): not the identity
+    // the full-frame plane (NV9-GEOM-OLD) under the dump geometry lands at (px - 0.5, py - 0.5): not the identity
     let old = xy_grid(8, 4, &Geom::full_frame(8, 4), 0.0);
     assert_eq!([old.planes[0][0], old.planes[1][0]], [-1.0, 0.5]);
 }

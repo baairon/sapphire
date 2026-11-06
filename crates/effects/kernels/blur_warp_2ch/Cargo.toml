@@ -1,0 +1,10 @@
+
+[package]
+name = "blur_warp_2ch"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+blur_warp_1ch = { path = "../blur_warp_1ch" }
+blur_warp_point = { path = "../blur_warp_point" }
+libm_fmod = { path = "../libm_fmod" }

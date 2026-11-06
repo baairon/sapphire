@@ -1,4 +1,4 @@
-//! NV-3e: the ported linewise grouping pass (listing 0x18fa0, 0x19c70, 0x1a870, 0xb8c0), examples read off the original r8 = 0 eval lists.
+//! The ported linewise grouping pass (listing 0x18fa0, 0x19c70, 0x1a870, 0xb8c0), examples read off the original r8 = 0 eval lists.
 use fx_eval::lgpass::{random_access, run_pass, LNode};
 
 fn n(id: usize, f: bool, prim: &str, el: i32, args: &[usize]) -> LNode {

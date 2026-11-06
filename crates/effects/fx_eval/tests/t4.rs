@@ -1,4 +1,4 @@
-//! NV-3b tests: literal path, generic folding (M1), collapse rules (M3 to M8), binding (M2).
+//! Literal path, generic folding (M1), collapse rules (M3 to M8), binding (M2).
 use fx_eval::fold::*;
 use fx_eval::parse::orig_number;
 use fx_eval::*;
@@ -15,7 +15,7 @@ fn bits(x: Option<f64>) -> u32 {
 
 #[test]
 fn literal_path_matches_the_originals_lanes() {
-    // original lanes read from the PREC rows of the EP-3b dumps
+    // original lanes read from the PREC rows of the recorded dumps
     assert_eq!(bits(orig_number("0.01")), 0x3c23d70b);
     assert_eq!(bits(orig_number("0.05")), 0x3d4cccce);
     assert_eq!(bits(orig_number("0.112")), 0x3de56041);

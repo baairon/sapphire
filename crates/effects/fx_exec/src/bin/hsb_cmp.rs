@@ -1,4 +1,4 @@
-//! hsb_cmp (NV-6): run the native Hue_Sat_Bright executor on the INPUT planes stored in an EP-4 style ORIG_PLANES file
+//! hsb_cmp: run the native Hue_Sat_Bright executor on the INPUT planes stored in an ORIG_PLANES file
 //! (layout IN(4) OUT(4), f32 little endian, planes of H*W with stride W) and bit-compare with the stored ORIGINAL output planes.
 //! usage: hsb_cmp <programs.tsv> <file.bin> <W> <H> "<name=v1,v2;name=v>" [--plan RESULT.json] [--dump out.bin] [--tsv] [--consts]
 use fx_eval::{build_effect, Corpus};

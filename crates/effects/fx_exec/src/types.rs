@@ -240,15 +240,15 @@ impl std::error::Error for ExecError {}
 /// assumption of this executor (NV5-A3, NV5-A4) and is listed in the README.
 #[derive(Clone, Copy, Debug)]
 pub struct KParams {
-    /// STD-002: every lane of the 32 byte ymm constant (SEMANTIC 1.0f)
+    /// Every lane of the 32 byte ymm constant (SEMANTIC 1.0f)
     pub vec_one: f32,
-    /// (address of output plane 3) & 0x1f; a 32 byte aligned allocation gives 0 (allocator alignment is EP-4's question)
+    /// (address of output plane 3) & 0x1f; a 32 byte aligned allocation gives 0 (the allocator's alignment is a host value)
     pub dst3_phase_bytes: u32,
     /// the pool flag of the plane service (PL1-A3): false = outside a pool worker
     pub in_pool: bool,
     /// NV9-A3 / NV9B-A1: sampler geometry; None = the binding chosen by `geom_mode` (Dump: `Geom::dump`, Nv9Old: `Geom::full_frame`)
     pub geom: Option<Geom>,
-    /// NV9B-A1: which default host geometry and xy plane `geom == None` means (default Dump = / EP-6 item 7)
+    /// NV9B-A1: which default host geometry and xy plane `geom == None` means (default Dump)
     pub geom_mode: GeomMode,
     /// NV9B-A2: the host aspect a that set_aspect stores (rec = a, rec = 1/a); INFERRED 1.0
     pub host_aspect: f32,
@@ -258,10 +258,10 @@ pub struct KParams {
     pub pad_pixel: [f32; 4],
     /// NV9-A6: blur edge mode cell (pointee, U03): 0 zero, 1 mirror
     pub blur_edge: i32,
-    /// FX-1 (replaces NV9-A6 wrong default 1): blur render scale = [info] = ctx = the FRAME WIDTH (scale W + mirror edge is 8192 of 8192 bit equal, scale 1, 2, 32 is 0 of 8192).
+    /// Blur render scale (replaces the wrong default 1 of NV9-A6) = [info] = ctx = the FRAME WIDTH (scale W + mirror edge is 8192 of 8192 bit equal, scale 1, 2, 32 is 0 of 8192).
     /// A value <= 0 means "bind the frame width" (the default); a positive value is used as given. NV9-BLUR-SCALE-OLD: env NV9_BLUR_SCALE_OLD=1 makes the standin default 1 again.
     pub blur_render_scale: i32,
-    /// / scalar head count of the original xy ramp (see `x_ramp`), an explicit per-run host input = (32 - (p & 31)) / 4 for the host's row pointer p (0 when p is 32 byte aligned); default 0 (HOST-ALLOC); -1 = the closed-form pixel-centre plane of NV-9b, an explicit non-host option
+    /// / scalar head count of the original xy ramp (see `x_ramp`), an explicit per-run host input = (32 - (p & 31)) / 4 for the host's row pointer p (0 when p is 32 byte aligned); default 0 (HOST-ALLOC); -1 = the closed-form pixel-centre plane, an explicit non-host option
     pub xy_head: i32,
     /// S1: XY-HEAD-MODE. OneHead (the pre-WPE3 form: the head `xy_head` for every row) or PerRow (row r's head from
     /// the row pointer phase0 + r * W * 4). fx_run derives it from the plan's xy shape (kernels2::xy_head_mode_of); the state A constructor keeps OneHead.
@@ -366,7 +366,7 @@ pub fn xy_grid(w: usize, h: usize, g: &Geom, centre: f32) -> Image {
 }
 
 /// NV9B-A1: which default geometry (record fields rec, rec, rec) and which default `xy` plane the
-/// executor binds when the caller gives neither. `Dump` is the dump's own arithmetic (audit_rd1 GEOMETRY.tsv); `Nv9Old` is NV-9's
+/// executor binds when the caller gives neither. `Dump` is the dump's own arithmetic (audit_rd1 GEOMETRY.tsv); `Nv9Old` is a
 /// guess (label NV9-GEOM-OLD): left 0, right W, assumption_e = (H - W)/2, assumption_h 0 and the plane x = 2px/W - 1, y = (H - 2py)/W.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GeomMode {
@@ -420,7 +420,7 @@ pub fn x_ramp(cnt: usize, head: usize, s: f32, d: f32) -> Vec<f32> {
     let mut out = vec![0.0f32; cnt];
     let mut x4 = s;
     // (READ): cnt < 16 takes the plain scalar loop; 16 <= cnt < 29 skips the alignment peel
-    // (head = 0) and takes the 16 wide body, the 8 wide block and the scalar tail; cnt >= 29 as before (NV-10 had assumed the plain loop for cnt < 29).
+    // (head = 0) and takes the 16 wide body, the 8 wide block and the scalar tail; cnt >= 29 keeps the head (an earlier model assumed the plain loop for every cnt < 29).
     let head = if cnt >= 16 && cnt < 29 { 0 } else { head };
     if cnt < 16 || cnt < head + 16 {
         for o in out.iter_mut() {

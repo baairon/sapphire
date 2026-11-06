@@ -1,4 +1,4 @@
-//! T2 (NV-5): hand-evaluated programs on the node-level path: Time_Warp_RGB (HOST-FRAMES get_frame), Trails
+//! T2: hand-evaluated programs on the node-level path: Time_Warp_RGB (HOST-FRAMES get_frame), Trails
 //! (get_prev_dest, save_prev_dest), Hue_Sat_Bright single-parameter sets, errors for missing host frames.
 use fx_eval::{build_effect, Corpus, Genotype};
 use fx_exec::*;
@@ -39,7 +39,7 @@ fn time_warp_rgb_default_is_a_channel_gather_of_three_host_frames() {
         let (w, h) = (6, 3);
         let n = w * h;
         let mut hf = HostFrames::default();
-        hf.frame_round_old = true; // NV5-FRAME-ROUND-OLD: this test encodes the NV-5 rule round(t), keys -1, 0, 1
+        hf.frame_round_old = true; // NV5-FRAME-ROUND-OLD: this test encodes the frame rule round(t), keys -1, 0, 1
         hf.frames.insert(1, ramp(4, n, 1.0));
         hf.frames.insert(0, ramp(4, n, 2.0));
         hf.frames.insert(-1, ramp(4, n, 3.0));
@@ -48,7 +48,7 @@ fn time_warp_rgb_default_is_a_channel_gather_of_three_host_frames() {
         let inp = Inputs { width: w, height: h, images };
         let o = execute(&g, &binding(&[]), &inp, &hf).unwrap();
         assert_eq!(o.dest.channels(), 3);
-        // (get_frame [1]) element 0, (get_frame [0]) element 1, (get_frame [-1]) element 2 (plan text of the EP-3 dump)
+        // (get_frame [1]) element 0, (get_frame [0]) element 1, (get_frame [-1]) element 2 (plan text of the original's plan dump)
         assert_eq!(o.dest.planes[0], hf.frames[&1].planes[0]);
         assert_eq!(o.dest.planes[1], hf.frames[&0].planes[1]);
         assert_eq!(o.dest.planes[2], hf.frames[&-1].planes[2]);
@@ -180,7 +180,7 @@ fn read_f32s(p: &std::path::Path) -> Vec<f32> {
     b.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
 }
 
-/// Copies of EP-4's first original planes (audit_ep4 runA, runC: Composite, 64x32, A = Front 4 planes, B = Back 4 planes, OUT 4 planes).
+/// Copies of the first original planes (audit_ep4 runA, runC: Composite, 64x32, A = Front 4 planes, B = Back 4 planes, OUT 4 planes).
 /// Compares the native Composite byte for byte (bit patterns, NaN included) with the original's output planes.
 #[test]
 fn composite_against_the_original_planes_of_ep4() {
@@ -220,7 +220,7 @@ fn composite_against_the_original_planes_of_ep4() {
                     }
                 }
                 if run == "ep4_runC" {
-                    total_diff += diff; // runA is EP-4's aborted first try (meta: vex_steps 21, output plane never written): reported, not asserted
+                    total_diff += diff; // runA is an aborted run (meta: vex_steps 21, output plane never written): reported, not asserted
                 }
                 rep.push_str(&format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\n", run, case, 4 * n, eq, nan_pay, diff, first));
             }

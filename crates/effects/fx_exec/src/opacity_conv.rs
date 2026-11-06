@@ -1,6 +1,6 @@
-//!: the host Opacity checkout integer to the loop value of the program parameter `opacity`.
-//! Copy of wave_s9/opc1_opacity_convert/port/src/lib.rs (rules and constants only), with the kind-4 arm selector added by 
-//! the integer arm ([prog] == 0) is ported; the other arm (a host call) is refused by name (OPACITY-HOSTCALL-ARM-UNPORTED).
+//! Opacity conversion: the host Opacity checkout integer to the loop value of the program parameter `opacity`.
+//! The opacity conversion rules and constants, with the kind-4 arm selector added.
+//! The integer arm ([prog] == 0) is ported; the other arm (a host call) is refused by name (OPACITY-HOSTCALL-ARM-UNPORTED).
 //! The loop value is f32(max(v - 1, 0)) for v the checkout integer; the parameter record's optional upper and lower clamps then apply.
 
 /// The label of the merged conversion (its text, pasted exactly).

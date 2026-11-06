@@ -3,7 +3,7 @@
 //!   `host <field> <int>`           field in effect_ref, time_mult, time_scale, double_flag, global, selector (host record fields)
 //!   time_frames ([pinfo]) is not in the file: fx_run fills it from --host-frame ([ctx], INFERRED to be the same field)
 //!   `value <param> <index> <tick> <step> <scale> <status> <raw>` one checkout answer per key; status 0 = success; raw = the int32 at pd
-//!   `point <param> <field> <value>`  the recorded point fields of one parameter (step PW); every field in POINT_FIELDS is required, none is defaulted
+//!   `point <param> <field> <value>`  the recorded point fields of one parameter; every field in POINT_FIELDS is required, none is defaulted
 //! The parameter record fields are defined in effects_rtdata (styles/<style>.rs, field `tickmap` MEASURED); a parameter without a row is refused by name.
 use std::collections::BTreeMap;
 
@@ -16,13 +16,13 @@ pub struct HostCurveValues {
     /// set by fx_run: the claim ('ae32') route, where the global is HOST-APP's 1
     pub ae32: bool,
     pub values: BTreeMap<(String, i32, i32, i32, i32), (i32, i32)>,
-    /// step PW: parameter -> field -> value text, from `point` lines
+    /// parameter -> field -> value text, from `point` lines
     pub points: BTreeMap<String, BTreeMap<String, String>>,
-    /// step TPU: parameter -> field -> hex text, from `unit` lines (REC_UNIT_KEY, x3 32-bit; d4, d5 64-bit; all four required)
+    /// parameter -> field -> hex text, from `unit` lines (REC_UNIT_KEY, x3 32-bit; d4, d5 64-bit; all four required)
     pub units: BTreeMap<String, BTreeMap<String, String>>,
 }
 
-/// Fields a `unit` entry must carry (step TPU).
+/// Fields a `unit` entry must carry.
 pub const UNIT_FIELDS: [&str; 4] = [crate::judge_keys::REC_UNIT_KEY, "x3", "d4", "d5"];
 
 /// Fields a `point` record must carry (list is `none` or the host object type; prelude_status and prelude_type are also required when list is none).
@@ -115,12 +115,12 @@ fn fields_of(r: &effects_rtdata::TickmapRecord) -> RecFields {
     [r.ptype, r.nlanes, r.kind_byte, r.subtype_byte, r.flags_a_byte, r.flags_b_byte, r.index]
 }
 
-/// Step TPR, tests: the row of a record table given as TSV text, by program and parameter (the row's nine fields as text).
+/// For tests: the row of a record table given as TSV text, by program and parameter (the row's nine fields as text).
 pub fn table_row<'a>(table: &'a str, prog: &str, pname: &str) -> Option<Vec<&'a str>> {
     table.lines().skip(1).map(|l| l.split('\t').collect::<Vec<_>>()).find(|f| f.len() == 9 && f[0] == prog && f[1] == pname)
 }
 
-/// Step TPR, tests: `fold` with the parameter record table given as TSV text; `fold` uses the defined records, so the claim path is
+/// For tests: `fold` with the parameter record table given as TSV text; `fold` uses the defined records, so the claim path is
 /// unchanged. Tests use it to keep the index-check refusal on a constructed table.
 pub fn fold_with_table(table: &str, prog: &str, pname: &str, t: f32, cur: &[f32], n: usize, hcv: &HostCurveValues, diags: &mut Vec<String>) -> Option<Vec<f32>> {
     let row = table_row(table, prog, pname).map(|f| {
@@ -156,7 +156,7 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
     // TICKMAP step: nibble 5 reads [rec] and the pinfo unit fields, which the parameter record table
     // does not carry; the line refuses by name instead of reading a constructed value (the NaN placeholders are never read).
     let pt = hcv.points.get(pname);
-    // step TPU: a generic-path unit entry; never together with a point entry, and it never makes a point context
+    // a generic-path unit entry; never together with a point entry, and it never makes a point context
     let un = hcv.units.get(pname);
     if un.is_some() && pt.is_some() {
         return refuse(diags, format!("TICKMAP-UNIT-AND-POINT ({}: {}: a generic-path unit entry and a point entry)", prog, pname));
@@ -216,7 +216,7 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
     let mut phr: Option<tickmap::PointHostRec> = None;
     let mut ptype_obj: Option<i32> = None;
     if let Some(m) = pt {
-        let miss = |f: &str| format!("TICKMAP-HOST-FIELD-UNSOURCED (point field {} of {}: {}; step PW)", f, prog, pname);
+        let miss = |f: &str| format!("TICKMAP-HOST-FIELD-UNSOURCED (point field {} of {}: {})", f, prog, pname);
         let mut req: Vec<&str> = POINT_FIELDS.iter().chain(POINT_UNIT_FIELDS.iter()).copied().collect();
         if m.get("list").map(|v| v == "none").unwrap_or(false) {
             req.push("prelude_status");
@@ -227,14 +227,14 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
                 return refuse(diags, miss(k));
             }
         }
-        let iv = |k: &str| -> Result<i64, String> { m[k].parse::<i64>().map_err(|_| format!("TICKMAP-HOST-FIELD-UNSOURCED (point field {} of {}: {} is unreadable; step PW)", k, prog, pname)) };
-        let hx = |k: &str| -> Result<u64, String> { u64::from_str_radix(m[k].trim_start_matches("0x"), 16).map_err(|_| format!("TICKMAP-HOST-FIELD-UNSOURCED (point field {} of {}: {} is unreadable; step PW)", k, prog, pname)) };
+        let iv = |k: &str| -> Result<i64, String> { m[k].parse::<i64>().map_err(|_| format!("TICKMAP-HOST-FIELD-UNSOURCED (point field {} of {}: {} is unreadable)", k, prog, pname)) };
+        let hx = |k: &str| -> Result<u64, String> { u64::from_str_radix(m[k].trim_start_matches("0x"), 16).map_err(|_| format!("TICKMAP-HOST-FIELD-UNSOURCED (point field {} of {}: {} is unreadable)", k, prog, pname)) };
         macro_rules! t { ($e:expr) => { match $e { Ok(v) => v, Err(e) => return refuse(diags, e) } }; }
         if t!(iv("gid")) != global {
-            return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (point field gid of {}: {} differs from the run's global {}; step PW)", prog, pname, global));
+            return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (point field gid of {}: {} differs from the run's global {})", prog, pname, global));
         }
         if t!(iv("rtype")) != rec.ptype as i64 {
-            return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (point field rtype of {}: {} differs from the parameter record; step PW)", prog, pname));
+            return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (point field rtype of {}: {} differs from the parameter record)", prog, pname));
         }
         pinfo.selector = t!(iv("selector")) as i16;
         pinfo.unit_x3 = f32::from_bits(t!(hx("x3")) as u32);
@@ -260,7 +260,7 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
         dest[i] = cur.get(i).copied().unwrap_or(0.0);
     }
     let mut host = HcvHost { prog, pname, hcv, missing: Vec::new(), trace: Vec::new() };
-    // step PW: the point context comes from the run's recorded `point` lines; without it the point refusal stays
+    // the point context comes from the run's recorded `point` lines; without it the point refusal stays
     let ctx = phr.as_ref().map(|h| tickmap::PointCtx { h, obj_type: ptype_obj, host: &mut pthost });
     let r = tickmap::map_param(&pinfo, Some(&hr), None, global as i32, &rec, t, &mut host, &mut dest, ctx);
     diags.extend(host.trace.iter().cloned());

@@ -1,4 +1,4 @@
-//! T3 (NV-3): fold and collapse rules by hand, plan emission, the compare tool, all 38 targets.
+//! T3: fold and collapse rules by hand, plan emission, the compare tool, all 38 targets.
 use fx_eval::fold::*;
 use fx_eval::plan::*;
 use fx_eval::*;
@@ -141,7 +141,7 @@ fn diff_tool_detects_and_ignores() {
     assert_eq!(fmt_g6(1.4f32 as f64), "1.4");
     assert_eq!(fmt_g6(0.65f32 as f64), "0.65");
     assert_eq!(fmt_g6(0.0), "0");
-    // the EP-3 text form parses: a run with a clip argument
+    // the original's plan text form parses: a run with a clip argument
     let txt = "CMD\t0\tconvert-from-source\t(convert-from-source 0 :ref5.2g)\t-\nCMD\t1\trun-primitive\t(run-primitive 1 -1 :ref6.2g get_frame (clip 0 4) [ 1 ] [ 0 ] )\t-\nCMD\t2\tconvert-to-dest\t(convert-to-dest :ref6.2g)\t-\nEVALTEXT\tEval list:\\n Source(5)\\n _get_frame(6)\n";
     let c = canon_orig(txt);
     assert_eq!(c.runs.len(), 1);

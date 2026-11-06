@@ -1,0 +1,14 @@
+
+[package]
+name = "warp_rel_sampler"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the second warp sampler F2, AVX2 body of dispatcher."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+warp_sampler = { path = "../warp_sampler" }
+libm_fmod = { path = "../libm_fmod" }

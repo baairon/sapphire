@@ -5,7 +5,7 @@
 //! 2. The route's reader dispatch (hostconv14::ae32_to_image) on dr2h source gives dumped 0x7e9cc0 exit rows bit for bit (2 calls,
 //! 3 planes x 64 words; fixture fixtures/g3r_dr2h, MANIFEST.sha256; RECORD-RUN, POSTHOC information). The routing mutant
 //!    (feature g3r_mut_r3b) must fail this test.
-//! 3. G3's variant-B line in convert_pair equals readers14b's read3b on the convert_pair class-3 floor suite (check 11).
+//! 3. G3's variant-B line in convert_pair equals format14_read_b's read3b on the convert_pair class-3 floor suite (check 11).
 use fx_exec::hostconv14::{ae32_to_image, derived_head, Ae32Source, SourceGate, R3_HEAD};
 use fx_exec::input_class::{guard_one, ClassCells, RowCells};
 
@@ -73,7 +73,7 @@ fn t35_variant_b_line_equals_read3b() {
     let (mut p0, mut p1, mut p2) = (vec![0u32; n], vec![0u32; n], vec![0u32; n]);
     {
         let mut p: [&mut [u32]; 3] = [&mut p0, &mut p1, &mut p2];
-        readers14b::read3b(&mem, &mut p, 0, n as i32, false).unwrap();
+        format14_read_b::read3b(&mem, &mut p, 0, n as i32, false).unwrap();
     }
     assert_eq!(g3.len(), 3);
     assert_eq!(g3[0], p0, "plane 0");

@@ -1,5 +1,5 @@
 //! the After Effects 32-bpc source route ('ae32', HOST-PIXEL-FORMAT: memory A,R,G,B f32, 16 bytes
-//! per pixel, descriptor format 14 in). The format-14 source readers are port (crate readers14: R4, R3, R1,
+//! per pixel, descriptor format 14 in). The format-14 source readers are port (crate format14_read: R4, R3, R1,
 //! variant A with stack word 0; "R-PARITY and FLOOR-MET"). Which reader body runs is NOT chosen here: the caller passes the reader head the
 //! counted run's head hooks recorded for each source; a head other than R4, R3 or R1 (the stack-word twins, variant B
 //! variant-B stack-word, the code-13 source arm, or any other) is refused by name
@@ -8,13 +8,13 @@
 //! CONTRACT-LIMIT READER-COUNT-RANGE: a line above 2^31 - 16 pixels is refused by name.
 //! TABLE-NULL-ON-ROUTE: the curve table at is NULL on the route and the stack-word globals,
 //!  are 0, so the code-13 curve writers are off route and are not reachable from this module: a destination request on the
-//! 'ae32' route with a nonzero stack word is refused as HOST-GATED. the code-14 destination bodies (DEST-ROUTE crate c14,
+//! 'ae32' route with a nonzero stack word is refused as HOST-GATED. the code-14 destination bodies (DEST-ROUTE crate format14_write,
 //! R-PARITY (FLOOR PENDING)) answer convert-to-dest on the 'ae32' route (`ae32_dest`); the format-16 writer never stands in.
 
 use crate::types::{ExecError, Image};
 pub use crate::judge_keys::{head_name, R1_HEAD, R3_HEAD, R4_HEAD, UNPORTED_HEADS, VB1_HEAD, VB3_HEAD, VB4_HEAD};
-use readers14::{read1, read3, read4, ReadErr};
-use readers14b::{gate_is_b, read1b, read3b, read4b};
+use format14_read::{read1, read3, read4, ReadErr};
+use format14_read_b::{gate_is_b, read1b, read3b, read4b};
 
 /// Reader heads with a ported, floored body, by listing address.
 /// The heads lists that have no ported body here.
@@ -208,7 +208,7 @@ pub fn ae32_to_image(s: &Ae32Source, w: usize, h: usize) -> Result<Image, ExecEr
         VB3_HEAD => 3,
         VB1_HEAD => 1,
         hd => {
-            let listed = if UNPORTED_HEADS.contains(&hd) { "a Batch 43 rule 1 head" } else { "an unlisted head" };
+            let listed = if UNPORTED_HEADS.contains(&hd) { "a recorded head without a ported body" } else { "an unlisted head" };
             return Err(ExecError::Shape(format!("READER-BODY-NOT-PORTED: head 0x{:x} ({}) executed; ported and floored by first, it blocks END-TO-END", hd, listed)));
         }
     };
@@ -273,11 +273,11 @@ pub struct Ae32Dest {
     pub copier_source: Option<usize>,
 }
 
-/// convert-to-dest on the 'ae32' route (crate c14): "DEST-ROUTE (code 14, stack word 0: zero-arm bodies, tier A: 4 planes from
+/// convert-to-dest on the 'ae32' route (crate format14_write): "DEST-ROUTE (code 14, stack word 0: zero-arm bodies, tier A: 4 planes from
 /// 3 planes, 2 planes from, 1 plane; word 0 by the row copier body where recorded)",
 /// labelled "R-PARITY (FLOOR PENDING)" (12 of 12 plane count x tier sets at R-PARITY, 2,458,560 floats, 0 differing; the four plain
 /// bodies are not FLOOR-MET, 122 of 651 mutants unproven; the copier (14, 14) is FLOOR-MET). Cell 1, the full row of `w` pixels per call.
-/// Tier A only (feature word 0xffffff on the route; tiers B and C HOST-GATED; c14 is tier-generic as ported it).
+/// Tier A only (feature word 0xffffff on the route; tiers B and C HOST-GATED; format14_write is tier-generic as ported it).
 /// DEST-WORDS: words 1 to 3 from the body; word 0 from the body in modes 1 and 3 (and always for 4 and 2 planes), from the row copier in
 /// mode 2 when recorded, else the prior content (HOST-DEST-PRIOR). A copier at a mode other than 2 is refused (COPIER-ORDER-UNRECORDED: the
 /// body and the copier both write word 0 and their order is not recorded). A mode the body rejects (the original logs and writes
@@ -307,8 +307,8 @@ pub fn ae32_dest(route: &Ae32Route, im: &Image, w: usize, h: usize) -> Result<Ve
         let zero_row = vec![0u32; w];
         let padded: Vec<&[u32]> = if cfg!(feature = "m3p2_threeplane_body_mut") && d.planes == 1 && d.mode == 3 { vec![rows[0], &zero_row[..], &zero_row[..]] } else { rows.clone() };
         let np_body = if cfg!(feature = "m3p2_threeplane_body_mut") && d.planes == 1 && d.mode == 3 { 3 } else { d.planes };
-        c14::convert14(np_body, &padded, dst, w as i32, 1, body_mode).map_err(|e| match e {
-            c14::CErr::BadMode(m) => ExecError::Shape(format!("DEST-MODE-LOGGED: mode {} on a {}-plane destination (the original logs and writes nothing)", m, d.planes)),
+        format14_write::convert14(np_body, &padded, dst, w as i32, 1, body_mode).map_err(|e| match e {
+            format14_write::CErr::BadMode(m) => ExecError::Shape(format!("DEST-MODE-LOGGED: mode {} on a {}-plane destination (the original logs and writes nothing)", m, d.planes)),
             other => ExecError::Shape(format!("code-14 destination body: {:?}", other)),
         })?;
         if let Some(si) = d.copier_source {
@@ -316,7 +316,7 @@ pub fn ae32_dest(route: &Ae32Route, im: &Image, w: usize, h: usize) -> Result<Ve
             if s.words.len() != 4 * w * h {
                 return Err(ExecError::Shape(format!("'ae32' copier source {} has {} words, {} needed", si, s.words.len(), 4 * w * h)));
             }
-            c14::copy_word0(&s.words[4 * w * y..4 * w * (y + 1)], dst, w as i32).map_err(|e| ExecError::Shape(format!("row copier (14, 14): {:?}", e)))?;
+            format14_write::copy_word0(&s.words[4 * w * y..4 * w * (y + 1)], dst, w as i32).map_err(|e| ExecError::Shape(format!("row copier (14, 14): {:?}", e)))?;
         }
     }
     Ok(out)

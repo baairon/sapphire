@@ -1,4 +1,4 @@
-//! (wave_s9 in3_wire_misc): dissolve wiring. T1 hand tests of the wired class, node-level vs ORIGINAL plan commands on the
+//! Dissolve wiring. T1 hand tests of the wired class, node-level vs ORIGINAL plan commands on the
 //! Trails_Autogen x1 dump (mocha_mask_opacity 0.5), and the corpus sweep that records how dissolve, gamma, postdivide and if_eq are reached
 //! (operand kinds and constant values) so the three classes without a wiring can be judged from evidence (out/IN3_CLASS_USE.tsv).
 use fx_eval::{build_effect, enumerate_branches, Corpus, Genotype};

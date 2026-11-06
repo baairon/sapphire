@@ -1,7 +1,7 @@
-//! NV-3: the original compiler's per-class collapse (slot 38) and constant folding.
+//! The original compiler's per-class collapse (slot 38) and constant folding.
 //!
 //! Listing offsets (VA = offset). Sources:
-//! - dispatches `alias = prim.slot38(ctx)` for every function node (MEASURED, NV-2).
+//! - dispatches `alias = prim.slot38(ctx)` for every function node (MEASURED).
 //! - helper "constant argument is zero": every lane i < elnum of the argument satisfies
 //!   -Z < x < Z with Z = double (bits 0x3ddb7cdfd9d7bdbb = 1e-10), -Z .
 //!   Non-constant argument (flag byte [desc]) -> false. MEASURED (audit_addr lookup, bytes covered).
@@ -17,7 +17,7 @@
 //! - constant folding: (sets b160 = 1, argc = 0) when slot 30 is true,
 //!   i.e. all arguments constant and the class not flagged. The lanes are produced by the class kernel
 //!   through slot 36 (generic). Arithmetic here: f32 per lane (MEASURED by the bit-exact
-//!   comparison against the original's folded lanes in the EP-3 plans); result lanes at or past the
+//!   comparison against the original's folded lanes in the recorded plans); result lanes at or past the
 //!   node's elnum are zero (MEASURED: `(1.5, 0.75, 3, 0)`).
 
 use crate::compile::ArgView2;
@@ -104,7 +104,7 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
     // [this] is read as the first argument's element count (NV3-A2): monochrome 4ch->1ch must not collapse
     let el = a.first().and_then(|x| x.elnum).unwrap_or(-99);
     match class {
-        // NV-3f, READ: big_mult slot 38 : arg 0 zero -> 0, arg 1 zero -> 1 (the zero constant absorbs the image), arg 0 one -> 1, arg 1 one -> 0: the rule of `*`
+        // READ: big_mult slot 38 : arg 0 zero -> 0, arg 1 zero -> 1 (the zero constant absorbs the image), arg 0 one -> 1, arg 1 one -> 0: the rule of `*`
         "*" | "big_mult" => {
             if z(a, 0) {
                 Some(0)
@@ -206,10 +206,10 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
         }
         // needs [ctx] == 0 (assumed, NV3-A4)
         "warp_rel" => (z(a, 1) && z(a, 2)).then_some(0),
-        // (EP-3b M3 to M8). Each rule is MEASURED BY VALUE DEPENDENCE on the EP-3b dumps (the originals
+        // (M3 to M8). Each rule is MEASURED BY VALUE DEPENDENCE on the recorded dumps (the originals
         // collapse at these values and keep the node at others), the slot-38 body itself is not read: INFERRED.
         // interp a b t: t zero -> a, t one -> b
-        // NV-3c, READ from the listing: interp slot 38 : t (arg 2) zero -> 0; t one -> 1; args 0 and 1 equal 
+        // READ from the listing: interp slot 38 : t (arg 2) zero -> 0; t one -> 1; args 0 and 1 equal 
         // -> 0; arg 0 zero and arg 1 one -> 2 (the result is t).
         "interp" => {
             if z(a, 2) {
@@ -224,7 +224,7 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
                 None
             }
         }
-        // NV-3c, READ: add_rgb shares the `+` slot 38 : arg 1 zero -> 0, arg 0 zero -> 1
+        // READ: add_rgb shares the `+` slot 38 : arg 1 zero -> 0, arg 0 zero -> 1
         "add_rgb" => {
             if z(a, 1) {
                 Some(0)
@@ -234,7 +234,7 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
                 None
             }
         }
-        // NV-3c, READ: scale_rgb slot 38 . cnt0 = [this] (arg 0 channels), cnt1 = [this] (arg 1 channels).
+        // READ: scale_rgb slot 38 . cnt0 = [this] (arg 0 channels), cnt1 = [this] (arg 1 channels).
         // If cnt0 is odd or cnt0 == cnt1: arg 0 zero -> 0, arg 1 zero -> 1. Then: arg 1 one -> 0, arg 0 one -> 1.
         "scale_rgb" => {
             let c0 = a.first().and_then(|x| x.elnum).unwrap_or(-99);
@@ -255,7 +255,7 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
                 None
             }
         }
-        // NV-3c, READ: screen slot 38 : arg 1 zero -> 0, arg 0 zero -> 1, arg 1 one -> 1, arg 0 one -> 0
+        // READ: screen slot 38 : arg 1 zero -> 0, arg 0 zero -> 1, arg 1 one -> 1, arg 0 one -> 0
         "screen" => {
             if z(a, 1) {
                 Some(0)
@@ -269,7 +269,7 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
                 None
             }
         }
-        // NV-3c, READ: edge_aware_blur slot 38 : arg 4, 5 or 6 zero -> 0 (NV-3b used only arg 4)
+        // READ: edge_aware_blur slot 38 : arg 4, 5 or 6 zero -> 0
         "edge_aware_blur" => (z(a, 4) || z(a, 5) || z(a, 6)).then_some(0),
         // , READ: edge_aware_sharpen slot 38 : helper (constant zero within 1e-10) on argument 5 then argument 6;
         // either true -> 0 (the node forwards argument 0), else -1. In Sharpen_Best_Quality arg 5 = tiny_detail_size, arg 6 = edge_threshold.
@@ -284,9 +284,9 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
         // force_no_cache is a compile hint; tilt is the identity when shift, shear, rotate, tilt2 and the extra
         // vector are zero and the scale is one (args 1,3,4,6,7 zero, 5 one; 2 = perspective_amount is ignored)
         "motion_blur" | "force_no_cache" => Some(0),
-        // NV-3c, READ: tilt slot 38 tests args 1, 3, 4 zero, 5 one, 6 zero; arg 7 is NOT tested (NV-3b also required it)
+        // READ: tilt slot 38 tests args 1, 3, 4 zero, 5 one, 6 zero; arg 7 is NOT tested
         "tilt" => (z(a, 1) && z(a, 3) && z(a, 4) && one(a, 5) && z(a, 6)).then_some(0),
-        // NV-3c, READ: cmult slot 38, c0 = [this], c1 = [this]: arg 1 complex-one and c0 == 2 -> 0;
+        // READ: cmult slot 38, c0 = [this], c1 = [this]: arg 1 complex-one and c0 == 2 -> 0;
         // arg 0 complex-one and c1 == 2 -> 1; arg 0 zero and c0 == 2 -> 0; arg 1 zero and c0 == 2 -> 1.
         "cmult" => {
             let c0 = a.first().and_then(|x| x.elnum).unwrap_or(-99);
@@ -325,7 +325,7 @@ pub enum FoldKind {
 /// every argument is constant (slot 30), with the argument exemptions of `can_fold`. This table is the set
 /// of classes for which this crate has a constant path (the arithmetic of slot 36); a class that is not in
 /// it stays unfolded even with constant arguments (UNKNOWN, listed in the README), which is the only
-/// remaining class list. The bool is MEASURED (a folded node of that class is in the EP-3 or EP-3b dumps
+/// remaining class list. The bool is MEASURED (a folded node of that class is in the recorded dumps
 /// with bit-exact lanes) versus INFERRED.
 pub fn fold_kind(class: &str) -> Option<(FoldKind, bool)> {
     Some(match class {
@@ -339,15 +339,15 @@ pub fn fold_kind(class: &str) -> Option<(FoldKind, bool)> {
         "abs" | "one_minus" | "negate" | "cos" | "atan" | "log" => (FoldKind::Unary, true),
         "sin" | "tan" | "exp" | "sqrt" => (FoldKind::Unary, false),
         "coerce_up" | "coerce_to" | "coerce_to_v3" => (FoldKind::Broadcast, true),
-        // FX-1: the rest of the coerce family folds by the same member passes (rules read from the pass table, not probed); FX1_COERCE_FOLD_OLD=1 leaves them unfoldable
+        // the rest of the coerce family folds by the same member passes (rules read from the pass table, not probed); FX1_COERCE_FOLD_OLD=1 leaves them unfoldable
         "coerce_up_a1" | "coerce_to_v4" | "coerce_to_alpha" | "coerce_up_to_v3" if !coerce_old() && !coerce_extra_off() => (FoldKind::Broadcast, false),
         "v2" | "v3" | "v4" => (FoldKind::Concat, true),
-        // NV-3g rule F (RULE-INFERRED, DigitalDamage nf1 and nf2): append folds by the same concatenation as v2 v3 v4 (lanes [1 1 1 0] of the original for damage_freq3 = append [1 1] 1)
+        // RULE-INFERRED (DigitalDamage nf1 and nf2): append folds by the same concatenation as v2 v3 v4 (lanes [1 1 1 0] of the original for damage_freq3 = append [1 1] 1)
         "append" => (FoldKind::Concat, false),
         "v3_to_v4" => (FoldKind::V3ToV4, true),
         "v3_to_v4_if4" => (FoldKind::V3ToV4If4, true),
         "get_curve_val" | "get_frame_number" | "get_time" => (FoldKind::Host, true),
-        // NV-3f: 30 in all 24 folded nodes of the dumps (HOST-CONTEXT-MINIMAL frame rate)
+        // 30 in all 24 folded nodes of the dumps (HOST-CONTEXT-MINIMAL frame rate)
         "get_frames_per_second" => (FoldKind::Host, true),
         "cmult" | "cexp" => (FoldKind::Complex, true),
         "cdiv" | "clog" => (FoldKind::Complex, false),
@@ -356,7 +356,7 @@ pub fn fold_kind(class: &str) -> Option<(FoldKind, bool)> {
         // and slot 36 (writes zero to every output lane); see can_fold_el
         "blur" => (FoldKind::Special, false),
         "clamp" | "mag" | "dist" => (FoldKind::Special, false),
-        // NV-3f (EP-3c/EP-3d fix list B): constant paths of the vector helpers on the Rays/EdgeRays trees and the shake tree. MEASURED values (folded lanes of the original dumps); the fold test is the default slot 30 (all arguments constant)
+        // constant paths of the vector helpers on the Rays/EdgeRays trees and the shake tree. MEASURED values (folded lanes of the original dumps); the fold test is the default slot 30 (all arguments constant)
         "channels_equal" | "element_of" => (FoldKind::Special, true),
         "random_sawtooth" => (FoldKind::Special, false),
         "shake_shift" => (FoldKind::Special, false),
@@ -389,16 +389,16 @@ pub fn can_fold_el(class: &str, a: &[ArgView2], out_el: Option<i32>) -> bool {
     match class {
         "coerce_up" | "coerce_to" | "coerce_up_a1" => a.first().map(|x| x.is_const).unwrap_or(false),
         "v3_to_v4_if4" => a.len() >= 2 && a[0].is_const && a[1].is_const,
-        //, READ: mocha_render slot 30 returns 1 when [this] is null, or [[this] field] is null, or the scale lane [this] or [this] is
+        // READ: mocha_render slot 30 returns 1 when [this] is null, or [[this] field] is null, or the scale lane [this] or [this] is
         // zero, else 0. INFERRED: [this] is the mocha data of the project, which the minimal host context never supplies (HOST-MOCHA-ABSENT), so the node folds for any
-        // mocha_project value; the earlier rule (project zero) is the special case. Probed by the batch (p1, p2: mocha_project non-zero).
+        // mocha_project value; the earlier rule (project zero) is the special case. Probed with p1 and p2 (mocha_project non-zero).
         "mocha_render" => !a.is_empty() && !off("mocha_fold"),
         "get_alpha" => a.first().map(|x| matches!(x.elnum, Some(1) | Some(3)) || x.is_const).unwrap_or(false),
         _ => k == FoldKind::Host || (!a.is_empty() && a.iter().all(|x| x.is_const)),
     }
 }
 
-/// kept for NV-3 API compatibility
+/// kept for API compatibility
 pub fn fold_arg_required(class: &str, i: usize) -> bool {
     !((class == "v3_to_v4_if4" && i >= 2) || ((class == "coerce_up" || class == "coerce_to") && i >= 1))
 }
@@ -422,7 +422,7 @@ fn math1(class: &str, x: f32) -> f32 {
         "one_minus" => 1.0 - x,
         "negate" => -x,
         "cos" => crate::svml_trig::cos_rev(x),
-        // NV-3g rules E (atan in revolutions) and E2 (log(2.0) lane) are NOT merged; atan and log keep the plain f32 forms (correctly rounded by detmath) until the one-argument origin is traced (M9)
+        // the fitted rules for atan in revolutions and for the log(2.0) lane are NOT merged; atan and log keep the plain f32 forms (correctly rounded by detmath) until the one-argument origin is traced (M9)
         "atan" => crate::detmath::atan(x),
         "log" => crate::detmath::ln(x),
         "sin" => crate::svml_trig::sin_rev(x),
@@ -517,8 +517,8 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                             snap_const(x, y)
                         }
                     }
-                    // NV-3f: a zero divisor is replaced by 1e-6 (Rays rays_length 0: 1 / [0 0 0] folds to 1e6 = 0x49742400 per lane, MEASURED for numerator 1; the clamp threshold for other small divisors is UNKNOWN)
-                    // MEASURED through the original compile (work/cmp): a zero divisor of either sign is replaced by +1e-6 (1 / -0 folds to +1e6)
+                    // a zero divisor is replaced by 1e-6 (Rays rays_length 0: 1 / [0 0 0] folds to 1e6 = 0x49742400 per lane, MEASURED for numerator 1; the clamp threshold for other small divisors is UNKNOWN)
+                    // MEASURED through the original compile: a zero divisor of either sign is replaced by +1e-6 (1 / -0 folds to +1e6)
                     "/" => x / if y == 0.0 { 1e-6f32 } else { y },
                     // GLSL style mod (INFERRED, one sample: 1 mod 2 = 1)
                     "mod" => x - y * (x / y).floor(),
@@ -597,7 +597,7 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                     out[3] = a[1].lanes[0];
                 }
             } else if n < 4 {
-                // NV-3f (class F): when the node is not 4-channel (donor without 4 channels) the result is the concatenation of the first two arguments (Blur_Mono: v3_to_v4_if4 1 1 bw is [1 1] with 2 channels in the original, MEASURED node 14; the donor channel rule itself is UNKNOWN)
+                // class F: when the node is not 4-channel (donor without 4 channels) the result is the concatenation of the first two arguments (Blur_Mono: v3_to_v4_if4 1 1 bw is [1 1] with 2 channels in the original, MEASURED node 14; the donor channel rule itself is UNKNOWN)
                 let mut k = 0;
                 for x in a.iter().take(2) {
                     for j in 0..x.n.clamp(1, 4) {
@@ -735,14 +735,14 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                     out[i] = clamp_const(lane(x, i), lane(lo, i), lane(hi, i));
                 }
             }
-            // NV-3f: 1 when every channel of the argument is equal, else 0 (Rays a: channels_equal [0 0 0] folds to 1; MEASURED value of the folded lane, 1-element result)
+            // 1 when every channel of the argument is equal, else 0 (Rays a: channels_equal [0 0 0] folds to 1; MEASURED value of the folded lane, 1-element result)
             "channels_equal" => {
                 let x = a.first()?;
                 let m = x.n.clamp(1, 4);
                 // MEASURED (512 cases; two differ without the finite test): equal infinities do not count as equal (the original tests a difference, inf - inf is NaN); the epsilon of that test is NOT measured (INFERRED: exact equality of finite lanes)
                 out[0] = if (1..m).all(|i| x.lanes[i] == x.lanes[0] && x.lanes[0].is_finite()) { 1.0 } else { 0.0 };
             }
-            // NV-3f: lane `idx` of the vector (element_of [0.25 0.25 0.25] 1 = 0.25, MEASURED in EdgeRays); the index is truncated and clamped to the lanes (clamp rule INFERRED)
+            // lane `idx` of the vector (element_of [0.25 0.25 0.25] 1 = 0.25, MEASURED in EdgeRays); the index is truncated and clamped to the lanes (clamp rule INFERRED)
             "element_of" => {
                 let (x, ix) = (a.first()?, a.get(1)?);
                 let m = x.n.clamp(1, 4);
@@ -751,15 +751,15 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                 let k = (cv as i64).rem_euclid(m as i64) as usize;
                 out[0] = x.lanes[k];
             }
-            // NV-3f: random_sawtooth seed phase: 0 at phase 0 (the minimal host context has time 0; MEASURED in the Shake_Normal dumps, 24 folded lanes); other phases stay unfolded (UNKNOWN)
+            // random_sawtooth seed phase: 0 at phase 0 (the minimal host context has time 0; MEASURED in the Shake_Normal dumps, 24 folded lanes); other phases stay unfolded (UNKNOWN)
             "random_sawtooth" => {
                 let ph = a.get(1)?;
-                // NV-3g rule S (RULE-INFERRED, DigitalDamage nf1 and nf2): the sawtooth is 0 at every INTEGER phase, not only at phase 0 (blink_brights uses phase (0 - 1.5) * 10 = -15 and the original folds it to 0, as it does the 9 others; non-integer phases stay unfolded, UNKNOWN)
+                // integer phase rule (RULE-INFERRED, DigitalDamage nf1 and nf2): the sawtooth is 0 at every INTEGER phase, not only at phase 0 (blink_brights uses phase (0 - 1.5) * 10 = -15 and the original folds it to 0, as it does the 9 others; non-integer phases stay unfolded, UNKNOWN)
                 if !(0..ph.n.clamp(1, 4)).all(|i| ph.lanes[i].is_finite() && ph.lanes[i] == ph.lanes[i].floor()) {
                     return None;
                 }
             }
-            // NV-3f: every shake_shift lane of the original is NaN 0xffc00000 at the minimal host context (146 folded nodes in Shake_Normal a and b, MEASURED); WHY (missing time/fps/duration vs the body) is UNKNOWN, so this is FITTED to the minimal context
+            // every shake_shift lane of the original is NaN 0xffc00000 at the minimal host context (146 folded nodes in Shake_Normal a and b, MEASURED); WHY (missing time/fps/duration vs the body) is UNKNOWN, so this is FITTED to the minimal context
             "shake_shift" => {
                 for i in 0..n {
                     out[i] = f32::from_bits(0xffc0_0000);
@@ -797,13 +797,13 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
     Some([out[0].to_bits(), out[1].to_bits(), out[2].to_bits(), out[3].to_bits()])
 }
 
-/// FX-1: `FX1_COERCE_FOLD_OLD=1` restores the pre-FX-1 behaviour (every coerce fold replicates the last lane, the extra coerce classes stay unfolded).
+/// `FX1_COERCE_FOLD_OLD=1` restores the earlier coerce fold (every coerce fold replicates the last lane, the extra coerce classes stay unfolded).
 pub fn coerce_old() -> bool {
     std::env::var("FX1_COERCE_FOLD_OLD").map(|v| v == "1").unwrap_or(false)
 }
 
-/// FX-1: the lanes of a folded coerce family node, from the member passes of wave_s6/rebuild_ops_coerce (, R-PARITY at the pass entry,
-/// ) selected by the (arg0 channels, output channels) combo rows of EV-T COMBOS.tsv.
+/// The lanes of a folded coerce family node, from the member passes of the ops_coerce kernel (R-PARITY at the pass entry),
+/// selected by the (arg0 channels, output channels) combo rows of COMBOS.tsv.
 /// C_CELL_A copy channels c < out; D_CELL_A splat channel 0; DE_CELL_A (ch0, ch1, 0.0); E_CELL_A channel 0 for c < out-1, last = 1.0; EF_CELL_A (ch0, ch1, ch2, 1.0);
 /// F_CELL_A (ch0, ch0, ch0, ch1); P_CELL_A the LAST channel. MEASURED by probe (PLAN_ORIG_TrailsCU_V3/S1/V2): coerce_up 3 to 4 gives alpha 1.0,
 /// scalar splat, 2 to 4 gives (g, g, g, a). The other rows are read from the pass table, not probed.
@@ -844,7 +844,7 @@ pub fn coerce_lanes(class: &str, x: &ArgView2, out_n: usize) -> [f32; 4] {
     o
 }
 
-/// FX-1: `FX1_COERCE_EXTRA_OFF=1` keeps the lane fix for coerce_up / coerce_to / coerce_to_v3 but leaves coerce_up_a1, coerce_to_v4,
+/// `FX1_COERCE_EXTRA_OFF=1` keeps the lane fix for coerce_up / coerce_to / coerce_to_v3 but leaves coerce_up_a1, coerce_to_v4,
 /// coerce_to_alpha and coerce_up_to_v3 unfolded as before (their fold rules are read from the pass table, not probed).
 pub fn coerce_extra_off() -> bool {
     std::env::var("FX1_COERCE_EXTRA_OFF").map(|v| v == "1").unwrap_or(false)
@@ -896,7 +896,7 @@ pub fn snap_unit_const(x: f32) -> f32 {
 /// `if c > b { if b > a { b } else { minss(c, a) } } else if c > a { c } else { minss(b, a) }` where `minss(p, q) = if p < q { p } else { q }`
 /// (vminss: the second operand on unordered). The shape the original host uses for a node whose three arguments are constants is
 /// INFERRED (the constant path of slot 36 is not measured); on finite values every shape returns the median of the three operands, so
-/// the choice only decides NaN and tie cases. fx_exec `tests/t13.rs` compares this function with `clamp::render` for shape 000.
+/// the choice only decides NaN and tie cases. fx_exec `tests/t13.rs` compares this function with `ops_clamp::render` for shape 000.
 pub fn clamp_const(x: f32, lo: f32, hi: f32) -> f32 {
     let minss = |p: f32, q: f32| if p < q { p } else { q };
     let (a, b, c) = (x, lo, hi);

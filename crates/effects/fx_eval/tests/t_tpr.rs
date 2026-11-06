@@ -1,4 +1,4 @@
-//! Step TPR: the six claim-style rows of data/TICKMAP_PARAM_RECORDS.tsv carry the claim harness's parameter
+//! The six claim-style rows of data/TICKMAP_PARAM_RECORDS.tsv carry the claim harness's parameter
 //! records (MEASURED at every 0x71c720 entry of the recorded records); core-program and center rows are unchanged.
 use fx_eval::hostcurve::{fold, table_row, HostCurveValues};
 static RECORDS: effects_rtdata::Table = effects_rtdata::Table::new("data/TICKMAP_PARAM_RECORDS.tsv");
@@ -95,7 +95,7 @@ fn tpr_shift_point_fields() {
     }
 }
 
-/// the core-program rows and the center row are byte identical to PRE's table (int32_merge/stack, copied as tpr/TICKMAP_PARAM_RECORDS.pre.tsv).
+/// the core-program rows and the center row are byte identical to the earlier table (stored as tpr/TICKMAP_PARAM_RECORDS.pre.tsv).
 #[test]
 fn tpr_other_rows_unchanged() {
     if !effects_rtdata::have_tables() {
@@ -105,6 +105,6 @@ fn tpr_other_rows_unchanged() {
     for l in pre.lines() {
         assert!(RECORDS.lines().any(|x| x == l), "row changed or missing: {}", l);
     }
-    // step adds the Blur_Only centre row: 14 lines become 15 (TEST CHANGE, listed in PATCH.md)
+    // with the Blur_Only centre row the table has 15 lines
     assert_eq!(RECORDS.lines().count(), 15);
 }

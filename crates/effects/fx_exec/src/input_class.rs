@@ -111,7 +111,7 @@ pub fn guard_one(style: &str, i: usize, name: &str, c: &ClassCells, r: &RowCells
     }
 }
 
-/// INPUT-CLASS-GUARD at step G: every bound input must derive CLASS_IMPLEMENTED. Returns the derived classes (position, name, class).
+/// INPUT-CLASS-GUARD: every bound input must derive CLASS_IMPLEMENTED. Returns the derived classes (position, name, class).
 pub fn input_class_guard(style: &str, bound: &[(usize, &str)], c: &ClassCells, r: &RowCells) -> Result<Vec<(usize, String, u8)>, String> {
     let mut out = Vec::new();
     for &(i, name) in bound {

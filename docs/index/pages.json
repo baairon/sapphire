@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 34275,
+  "bytes": 34345,
   "generated": false
  },
  {
@@ -38,7 +38,7 @@
   "path": "docs/adding-an-effect.md",
   "title": "Adding an effect",
   "line": "The conventions every new effect follows, and the parity proof it shows before it is added.",
-  "bytes": 10706,
+  "bytes": 12727,
   "generated": false
  },
  {

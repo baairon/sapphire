@@ -1,4 +1,4 @@
-//! T1/T3 of NV-9: hand-evaluated tests per newly wired class, program-level runs of Diffuse, Transform_and_Blur and
+//! T1/T3: hand-evaluated tests per newly wired class, program-level runs of Diffuse, Transform_and_Blur and
 //! Blur_Motion_Curves_No_Transform, node-level vs original-plan-command cross-check, the status matrix (out/EXEC_STATUS_NV9B.tsv).
 use fx_eval::{build_effect, enumerate_branches, Corpus, Genotype};
 use fx_exec::cmds::{commands_of_dump, execute_commands_xy};
@@ -40,7 +40,7 @@ fn synth(ch: usize, n: usize, seed: u64) -> Image {
     Image::from_planes(planes).unwrap()
 }
 fn kp() -> KParams {
-    // NV9B: the t9 hand tests were written against NV-9's geometry binding (NV9-GEOM-OLD); the default is now the dump geometry (t10)
+    // the t9 hand tests use the full-frame geometry binding (NV9-GEOM-OLD); the default is the dump geometry (t10)
     let mut k = KParams::standin();
     k.geom_mode = GeomMode::Nv9Old;
     k
@@ -646,7 +646,7 @@ fn host_geometry_and_pad_pixel_are_sensitive_inputs() {
 
 #[test]
 fn fx1_blur_render_scale_defaults_to_the_frame_width() {
-    // FX-1 (replaces NV9-A6): the default binds [info+0x20] = the frame width; the old value 1 stays reachable (NV9-BLUR-SCALE-OLD)
+    // the default (replacing NV9-A6) binds [info+0x20] = the frame width; the old value 1 stays reachable (NV9-BLUR-SCALE-OLD)
     for (w, h) in [(64usize, 32usize), (50, 7)] {
         let src = synth(1, w * h, 11);
         let args = [Arg::Img(&src), cst(&[4.0, 4.0]), cst(&[1.0]), cst(&[1.0]), cst(&[0.0])];

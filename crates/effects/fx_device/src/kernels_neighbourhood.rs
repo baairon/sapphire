@@ -491,7 +491,7 @@ __kernel void static2_f32(__global const uint* tab, __global float* o0, __global
 /// edge_aware_sharpen: weight planes, running sums, the variable window box filter along rows and columns, and the
 /// tanh-like transform. The driver (iterations, plane bookkeeping, radii) runs on the host with the CPU functions.
 pub const NEIGHBOURHOOD_ESH: &str = r#"
-/* MIRRORS_MUL_ADD: esh3_jobs::job_2, esh3_jobs::exp_tanh_elem, esh5b_passjobs::filter3, esh6_driver::slot52 */
+/* MIRRORS_MUL_ADD: edge_aware_sharpen_jobs::job_2, edge_aware_sharpen_jobs::exp_tanh_elem, edge_aware_sharpen_box_filter::filter3, edge_aware_sharpen_render::slot52 */
 float esh_minss(float a, float b) {
     return (a < b) ? a : b;
 }
@@ -756,7 +756,7 @@ __kernel void esh_add_f32(__global const float* aa, __global float* out, uint n)
 
 #[cfg(test)]
 mod tests {
-    /// The two double literals of NEIGHBOURHOOD_ESH are the CPU constants (esh3_jobs::LOW, HIGH): sign 0, exponent field and 52 bit mantissa.
+    /// The two double literals of NEIGHBOURHOOD_ESH are the CPU constants (edge_aware_sharpen_jobs::LOW, HIGH): sign 0, exponent field and 52 bit mantissa.
     #[test]
     fn the_hex_double_constants_are_the_cpu_ones() {
         let low = 0x3ddb_7cdf_d9d7_bdbbu64;

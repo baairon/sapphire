@@ -5,7 +5,7 @@ fn b(x: f32) -> u32 { x.to_bits() }
 
 #[test]
 fn measured_warp_waves2_values() {
-    // EP-3d PLAN_ORIG_Warp_Waves2_a: NODE 33 cos lanes f304353f, NODE 34 sin lanes f404353f, NODE 55 cos eb46773f, NODE 56 sin ee83843e
+    // PLAN_ORIG_Warp_Waves2_a: NODE 33 cos lanes f304353f, NODE 34 sin lanes f404353f, NODE 55 cos eb46773f, NODE 56 sin ee83843e
     assert_eq!(b(cos_rev(0.125)), 0x3f3504f3);
     assert_eq!(b(sin_rev(0.125)), 0x3f3504f4);
     let x15 = f32::from_bits(0x3d2aaaab) ; // 1/24 revolution = 15 degrees (f32(15)/f32(360))

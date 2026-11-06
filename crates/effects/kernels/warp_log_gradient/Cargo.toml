@@ -1,0 +1,12 @@
+
+[package]
+name = "warp_log_gradient"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Slot 33 of class warp: the per-pixel log2 gradient-magnitude map (parallel_for, callback, AVX2 body) and its tile partition."
+
+[dependencies]
+
+[lib]
+path = "src/lib.rs"

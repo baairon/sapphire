@@ -1,6 +1,6 @@
-//! NV-3d: the CPU-driver plan (compile argument r8 = 0, driver), natively.
+//! The CPU-driver plan (compile argument r8 = 0, driver), natively.
 //!
-//! Labels: MEASURED = read off the 60 original r8 = 0 dumps in `orig_r0\` (EP-5 `ep5_cplan.py` harness with the compile
+//! Labels: MEASURED = read off the 60 original r8 = 0 dumps (recorded by the harness with the compile
 //! argument r8 = 0, program flag byte `prog`STATIC, copied per node to `node`).
 //! FITTED = rule chosen while looking at those 60 dumps (not a prediction until the held-out batch is scored).
 //! UNKNOWN = not reproduced. The run list (primitives, arguments, constant lanes) is the same as in the gpu-first mode;
@@ -23,7 +23,7 @@
 //!    of an argument that is top level, whose last use is this node and that has the same element count; block-local images are never reused.
 //! 4. `exec-linewise a a`: a = 1 when the block holds convert-to-dest, else 0.
 //! 5. One cleanup record (the recorded host cleanup command name, judge_keys::PLAN_CLEANUP_CMD) per allocate-images, at the end.
-//! 6. Command flag (FITTED, shared with the F13 flag rule that NV-3c ports): 0 when the node feeds, through any chain, a
+//! 6. Command flag (FITTED, shared with the F13 flag rule of layout.rs): 0 when the node feeds, through any chain, a
 //!    non-linewise node (save_prev_dest excluded) or a warp family node; 1 otherwise.
 
 use crate::compile::CompiledProgram;
@@ -32,7 +32,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanMode {
-    /// compile r8 = 1, driver (EP-3 EP-4 plans)
+    /// compile r8 = 1, driver (the original plans recorded with r8 = 1)
     GpuFirst,
     /// compile r8 = 0, driver
     CpuDriver,
@@ -43,7 +43,7 @@ pub fn donor_pos(prim: &str, k: usize) -> bool {
     match prim.strip_suffix("_if_needed").unwrap_or(prim) {
         "coerce_up" | "coerce_to" => k >= 1,
         "v3_to_v4_if4" => k >= 2,
-        // NV-3f (class E): argument 0 of time_warp is the CLIP of the input (original text `time_warp (clip 0 4) f shift`), not an image dependency: MEASURED in TimeDisplace a and b
+        // class E: argument 0 of time_warp is the CLIP of the input (original text `time_warp (clip 0 4) f shift`), not an image dependency: MEASURED in TimeDisplace a and b
         "time_warp" => k == 0,
         _ => false,
     }
@@ -56,7 +56,7 @@ pub(crate) fn is_donor_arg(prim: &str, k: usize, kind: &str) -> bool {
 }
 
 /// the exec-downsampled factor of a compiled program: 2^blur_res when the program has a constant node named `blur_res` (popup
-/// Full / Half / Quarter, record range 0..2, MEASURED in and), else 1. `NV3E_DS=old` switches the rule off (NV-3e layout).
+/// Full / Half / Quarter, record range 0..2, MEASURED in and), else 1. `NV3E_DS=old` switches the rule off (factor 1).
 pub fn ds_factor(cp: &CompiledProgram) -> u32 {
     if old("DS") {
         return 1;
@@ -137,7 +137,7 @@ struct Item {
     alias: Option<(usize, usize)>,
 }
 
-/// NV-3g rule M (RULE-INFERRED, DigitalDamage nf1 and nf2 against Rays, Warp_Chroma, Warp_Perspective, InfiniteZoom): a make_mipmap image has the mip-chain format 3 only when a consumer reads it at a random access position (warp family); a mipmap used only linewise (DigitalDamage: diff, copy_alpha in the same block) is format 2 like every other image
+/// mipmap format rule (RULE-INFERRED, DigitalDamage nf1 and nf2 against Rays, Warp_Chroma, Warp_Perspective, InfiniteZoom): a make_mipmap image has the mip-chain format 3 only when a consumer reads it at a random access position (warp family); a mipmap used only linewise (DigitalDamage: diff, copy_alpha in the same block) is format 2 like every other image
 fn fcode_n(cp: &CompiledProgram, idx: usize) -> u32 {
     let nd = &cp.nodes[idx];
     // (FORMAT-READ, pass): the format comes from the propagation pass; rule M is the named ablation WPG12_OLDFMT=1 (off in counted runs)
@@ -348,7 +348,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             break;
         }
     }
-    // NV-3e: schedule = the ported linewise pass (lgpass.rs) on the node array in compile order
+    // schedule = the ported linewise pass (lgpass.rs) on the node array in compile order
     let mut lnodes: Vec<crate::lgpass::LNode> = Vec::new();
     for it in items.iter() {
         if it.k == IK::Dest {
@@ -363,7 +363,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             is_func: it.k == IK::Run || (it.k == IK::Const && nd.folded && !nd.cls.is_empty()),
             prim: if it.k == IK::Run { nd.prim.clone() } else if it.k == IK::Const && nd.folded { nd.cls.clone() } else { String::new() },
             elnum: nd.elnum.max(1),
-            // NV-3g rule R (RULE-FITTED, Rays b/nf1/nf2; H1 [best > created] was tried and REFUTED by Transform_and_Blur_Autogen mk4_m1): the xy variable image counts as format 4 (size el * 4) in the memory budget of the linewise pass
+            // linewise memory budget rule (RULE-FITTED, Rays b, nf1 and nf2; H1 [best > created] was tried and REFUTED by a Transform_and_Blur_Autogen case): the xy variable image counts as format 4 (size el * 4) in the memory budget of the linewise pass
             fmt: if nd.kind == "special" && nd.name == "xy" { 4 } else { fcode_n(cp, nd.idx) as u8 },
             args: if it.k == IK::Run { nd.args.iter().enumerate().filter(|(k, &a)| !is_donor_arg(&nd.prim, *k, nodes[a].kind)).map(|(_, &a)| match it.alias { Some((x, _)) if a == x => dup_rid, _ => a }).collect() } else { vec![] },
             g: -1,
@@ -761,7 +761,7 @@ pub fn plan_text_mode(cp: &CompiledProgram, mode: PlanMode) -> String {
     }
 }
 
-/// NV3E_<NAME>=old selects the NV-3d FITTED rule (used only to measure the before/after of each replaced rule)
+/// NV3E_<NAME>=old selects the earlier FITTED rule (used only to measure the before/after of each replaced rule)
 fn old(name: &str) -> bool {
     std::env::var(format!("NV3E_{}", name)).map(|v| v == "old").unwrap_or(false)
 }
@@ -774,7 +774,7 @@ fn inplace_rule(prim: &str) -> bool {
     }
 }
 
-/// command flag, propagation (NV-3c, layout.rs): ids of func nodes whose run-primitive flag is 0
+/// command flag, propagation (layout.rs): ids of func nodes whose run-primitive flag is 0
 fn mark_set(cp: &CompiledProgram) -> std::collections::HashSet<usize> {
     let mut mark = std::collections::HashSet::new();
     loop {
@@ -836,7 +836,7 @@ pub fn ds_tail(cp: &CompiledProgram) -> Vec<usize> {
 }
 
 /// FITTED RULE (not read from the compiler, which does this in the pass around): the nodes that the original evaluates at FULL
-/// resolution before the exec-downsampled command. MEASURED on Blur_Motion_Curves_No_Transform at blur_res 1 and 2 (EP-10 B09 B09 / B15):
+/// resolution before the exec-downsampled command. MEASURED on Blur_Motion_Curves_No_Transform at blur_res 1 and 2:
 /// the vector `dv = xy*s1 - xy*s0` (nodes `*`, `*`, `-`) is computed at full size on its own copy of the xy variable, then downsampled with the
 /// source image, while `xy - dv` and `xy + dv` run inside the command on the small xy. Transform_and_Blur has no such node (everything inside).
 /// Rule: a computed node g whose leaves are only xy and constants (pure) is hoisted when it is an argument of a computed node that also takes

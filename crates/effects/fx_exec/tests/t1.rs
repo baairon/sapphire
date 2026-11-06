@@ -1,4 +1,4 @@
-//! T1 (NV-5): selector parity against CHOICES.tsv, hand-evaluated commands, determinism, malformed plans,
+//! T1: selector parity against CHOICES.tsv, hand-evaluated commands, determinism, malformed plans,
 //! node-level vs original-plan-command cross-check (Hue_Sat_Bright, Composite), native Composite vs comp_rgba's own render,
 //! and the status matrix of the five milestone programs (written to out/EXEC_STATUS_NV5.tsv).
 use fx_eval::{build_effect, enumerate_branches, Corpus, Genotype};
@@ -399,7 +399,7 @@ fn try_program(name: &str, tag: &str, ov: BTreeMap<String, Vec<f32>>, g: &Genoty
         }
     }
     let mut hf = HostFrames::default();
-    hf.frame_round_old = true; // NV5-FRAME-ROUND-OLD: the t1 dumps were taken with the NV-5 rule
+    hf.frame_round_old = true; // NV5-FRAME-ROUND-OLD: the t1 dumps were taken with the frame rule round(t)
     hf.prev_dest = Some(synth(4, w * h, 5, true));
     for off in -4..=4 {
         hf.frames.insert(off, synth(4, w * h, 100 + (off + 10) as u64, true));

@@ -1,10 +1,10 @@
-//! fx_exec: native f32 executor of the compiled effect plan (piece NV-5).
+//! fx_exec: native f32 executor of the compiled effect plan.
 //!
 //! Label: EVALUATOR-UNCHECKED until E-PARITY (the compiler `fx_eval` is EVALUATOR-PLAN-PARITY on 24 dumps).
 //! Std only apart from the read-only path dependencies (the builtin crates and `fx_eval`).
 //!
-//! Entry for NV-6: `execute(program, binding, inputs, host_frames) -> ExecOutput` (module `exec`), or
-//! `execute_compiled` on a plan you compiled yourself; `cmds::execute_commands` runs an EP-3 text plan.
+//! Entry point: `execute(program, binding, inputs, host_frames) -> ExecOutput` (module `exec`), or
+//! `execute_compiled` on a plan you compiled yourself; `cmds::execute_commands` runs a plan in the text form of the original's compiled plans.
 
 pub mod aspect;
 /// the execution backend seam (CPU reference, OpenCL device with per node fallback)
@@ -28,9 +28,9 @@ pub mod twframe;
 pub mod hostconv;
 /// the 'ae32' source route (readers), TABLE-NULL-ON-ROUTE, destination refused until
 pub mod hostconv14;
-///: class postdivide, slot 53, copy_alpha < 0 route (T2 against the emulated original: wave_s9/int10_merge/t2pd)
+/// class postdivide, slot 53, copy_alpha < 0 route (T2 against the emulated original)
 pub mod postdiv;
-/// owner arm with the Opacity loop (copy of pdv2_owner_arm/owner_arm/owner_arm.rs, SHA-256 in../../../stage/PDV2_COPIED.sha256)
+/// owner arm with the Opacity loop
 pub mod owner_loop;
 /// render history (KEEP or RESTART per render), RENDER-HISTORY-PORTED
 pub mod history;

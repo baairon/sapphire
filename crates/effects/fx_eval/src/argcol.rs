@@ -1,5 +1,5 @@
 //! Per-argument bits column of compare, report-only. No dependencies.
-//! Port of pgm1_argcol_groups/argcol2.py. For a plan text (or NV3D format) it lists, for every run-primitive in command
+//! For a plan text (or NV3D format) it lists, for every run-primitive in command
 //! order, the primitive name and each argument as constant lane bits (little-endian bytes) or ":REF" (image references belong
 //! to the layout half). A pair is PASS, FAIL (names run-primitive index, primitive and argument index) or UNRESOLVED
 //! (any <MISSING>, <EXTRA> or <NONODE> marker on either side).

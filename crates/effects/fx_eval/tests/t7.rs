@@ -1,9 +1,9 @@
-//! T7 (FX-1): constant folds of the coerce family follow the member passes of ops_coerce.
+//! T7: constant folds of the coerce family follow the member passes of ops_coerce.
 use fx_eval::compile::ArgView2;
 use fx_eval::fold::*;
 
 fn cv(l: &[f32]) -> ArgView2 {
-    // the compiler views replicate the last lane into the unused lanes (the bug of NV-3b to NV-3e depended on it)
+    // the compiler views replicate the last lane into the unused lanes (the earlier coerce fold depended on it)
     let mut lanes = [0f32; 4];
     for i in 0..4 {
         lanes[i] = l[i.min(l.len() - 1)];
@@ -25,7 +25,7 @@ fn f(class: &str, x: &[f32], out: i32) -> [u32; 4] {
 
 #[test]
 fn coerce_up_three_to_four_alpha_is_one() {
-    // MEASURED (PLAN_ORIG_TrailsCU_V3): (0.5, 0.25, 0.125) -> (0.5, 0.25, 0.125, 1.0); the FX-1 bug gave alpha 0.125
+    // MEASURED (PLAN_ORIG_TrailsCU_V3): (0.5, 0.25, 0.125) -> (0.5, 0.25, 0.125, 1.0); the earlier coerce fold gave alpha 0.125
     assert_eq!(f("coerce_up", &[0.5, 0.25, 0.125], 4), bits([0.5, 0.25, 0.125, 1.0]));
     // the Trails fade_color fcc3 value times fade 0.8: the alpha lane of the constant is 1
     assert_eq!(f("coerce_up", &[1.0, 0.5, 0.25], 4), bits([1.0, 0.5, 0.25, 1.0]));

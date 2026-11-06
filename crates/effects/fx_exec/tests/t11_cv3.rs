@@ -69,7 +69,7 @@ fn command_path_identity_plan_matches_image_path() {
     if !effects_rtdata::have_tables() {
         return;
     }
-    // the CPU-driver identity plan of the original (EP-9 NEXT item 6)
+    // the CPU-driver identity plan of the original
     let plan = "(exec-linewise 1 1 ((allocate-images :ref32.2 4 2 cpu)) ((convert-from-source 0 :ref32.2) (convert-to-dest :ref32.2)) ((free-images :ref32.2)))";
     let mem: Vec<f32> = (0..4 * 12).map(|i| ((i * 37 % 17) as f32) * 0.11 - 0.4).collect();
     for mode in [AlphaMode::ClampKeep, AlphaMode::ZeroAlpha, AlphaMode::One, AlphaMode::NoWrite] {

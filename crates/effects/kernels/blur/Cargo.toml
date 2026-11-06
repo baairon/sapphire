@@ -1,0 +1,16 @@
+
+[package]
+name = "blur"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the blur class: blur_core (+ + + pass wrappers + K1/K3) and render."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+blur_coef = { path = "../blur_coef" }
+blur_rows = { path = "../blur_rows" }
+blur_rows_y = { path = "../blur_rows_y" }
+fx_common = { path = "../../fx_common" }

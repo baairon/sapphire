@@ -41,67 +41,52 @@ dependencies = [
 name = "blur_warp"
 version = "0.1.0"
 dependencies = [
- "bwb_bodya",
- "bwb_bodyb",
- "bwb_bodyc",
- "bwb_bodyd",
+ "blur_warp_1ch",
+ "blur_warp_2ch",
+ "blur_warp_3ch",
+ "blur_warp_4ch",
 ]
 
 [[package]]
-name = "bwb_bodya"
+name = "blur_warp_1ch"
 version = "0.1.0"
 dependencies = [
- "bwb_libm",
- "bwb_p1",
+ "blur_warp_point",
+ "libm_fmod",
 ]
 
 [[package]]
-name = "bwb_bodyb"
+name = "blur_warp_2ch"
 version = "0.1.0"
 dependencies = [
- "bwb_bodya",
- "bwb_libm",
- "bwb_p1",
+ "blur_warp_1ch",
+ "blur_warp_point",
+ "libm_fmod",
 ]
 
 [[package]]
-name = "bwb_bodyc"
+name = "blur_warp_3ch"
 version = "0.1.0"
 dependencies = [
- "bwb_bodya",
- "bwb_libm",
- "bwb_p1",
+ "blur_warp_1ch",
+ "blur_warp_point",
+ "libm_fmod",
 ]
 
 [[package]]
-name = "bwb_bodyd"
+name = "blur_warp_4ch"
 version = "0.1.0"
 dependencies = [
- "bwb_bodya",
- "bwb_libm",
- "bwb_p1",
+ "blur_warp_1ch",
+ "blur_warp_point",
+ "libm_fmod",
 ]
 
 [[package]]
-name = "bwb_libm"
-version = "0.1.0"
-
-[[package]]
-name = "bwb_p1"
+name = "blur_warp_point"
 version = "0.1.0"
 dependencies = [
  "fx_common",
-]
-
-[[package]]
-name = "c14"
-version = "0.1.0"
-
-[[package]]
-name = "clamp"
-version = "0.1.0"
-dependencies = [
- "ops_arith",
 ]
 
 [[package]]
@@ -120,21 +105,63 @@ name = "convert_pair"
 version = "0.1.0"
 
 [[package]]
-name = "copy_slot52"
+name = "copy_planes"
 version = "0.1.0"
-
-[[package]]
-name = "diff"
-version = "0.1.0"
-dependencies = [
- "ops_arith",
-]
 
 [[package]]
 name = "dissolve"
 version = "0.1.0"
 dependencies = [
  "fx_common",
+]
+
+[[package]]
+name = "edge_aware_sharpen"
+version = "0.0.0"
+dependencies = [
+ "edge_aware_sharpen_jobs",
+ "edge_aware_sharpen_render",
+ "effects_vecdir",
+]
+
+[[package]]
+name = "edge_aware_sharpen_blur_core"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+]
+
+[[package]]
+name = "edge_aware_sharpen_box_filter"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+]
+
+[[package]]
+name = "edge_aware_sharpen_jobs"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
+]
+
+[[package]]
+name = "edge_aware_sharpen_render"
+version = "0.0.0"
+dependencies = [
+ "edge_aware_sharpen_blur_core",
+ "edge_aware_sharpen_box_filter",
+ "edge_aware_sharpen_jobs",
+ "edge_aware_sharpen_weights",
+ "effects_vecdir",
+ "libm_powf",
+]
+
+[[package]]
+name = "edge_aware_sharpen_weights"
+version = "0.0.0"
+dependencies = [
+ "effects_vecdir",
 ]
 
 [[package]]
@@ -146,57 +173,16 @@ name = "effects_vecdir"
 version = "0.1.0"
 
 [[package]]
-name = "esh2_job"
-version = "0.0.0"
-dependencies = [
- "effects_vecdir",
-]
+name = "format14_read"
+version = "0.1.0"
 
 [[package]]
-name = "esh3_jobs"
-version = "0.0.0"
-dependencies = [
- "effects_vecdir",
-]
+name = "format14_read_b"
+version = "0.1.0"
 
 [[package]]
-name = "esh4_powf"
-version = "0.0.0"
-
-[[package]]
-name = "esh5_core"
-version = "0.0.0"
-dependencies = [
- "effects_vecdir",
-]
-
-[[package]]
-name = "esh5b_passjobs"
-version = "0.0.0"
-dependencies = [
- "effects_vecdir",
-]
-
-[[package]]
-name = "esh6_driver"
-version = "0.0.0"
-dependencies = [
- "effects_vecdir",
- "esh2_job",
- "esh3_jobs",
- "esh4_powf",
- "esh5_core",
- "esh5b_passjobs",
-]
-
-[[package]]
-name = "esh8_exec"
-version = "0.0.0"
-dependencies = [
- "effects_vecdir",
- "esh3_jobs",
- "esh6_driver",
-]
+name = "format14_write"
+version = "0.1.0"
 
 [[package]]
 name = "fx_common"
@@ -224,22 +210,21 @@ dependencies = [
  "blur",
  "blur_coef",
  "blur_warp",
- "c14",
- "clamp",
  "comp_premult",
  "comp_rgba",
  "convert_pair",
- "copy_slot52",
- "diff",
+ "copy_planes",
  "dissolve",
+ "edge_aware_sharpen",
+ "edge_aware_sharpen_blur_core",
+ "edge_aware_sharpen_box_filter",
+ "edge_aware_sharpen_jobs",
+ "edge_aware_sharpen_render",
  "effects_rtdata",
  "effects_vecdir",
- "esh3_jobs",
- "esh4_powf",
- "esh5_core",
- "esh5b_passjobs",
- "esh6_driver",
- "esh8_exec",
+ "format14_read",
+ "format14_read_b",
+ "format14_write",
  "fx_common",
  "fx_device",
  "fx_eval",
@@ -247,6 +232,7 @@ dependencies = [
  "hue_shift",
  "hue_shift_preserve_luma",
  "interp",
+ "libm_powf",
  "libm_sincos",
  "make_mipmap",
  "masked_blur",
@@ -254,25 +240,25 @@ dependencies = [
  "monochrome_a",
  "one_minus",
  "ops_arith",
+ "ops_clamp",
  "ops_coerce",
+ "ops_diff",
  "ops_element",
  "ops_if",
  "ops_minmax",
  "ops_vec",
  "plane_service",
- "readers14",
- "readers14b",
- "rotate",
+ "rotate2d",
  "sat_scale",
  "scale_rgb",
  "screen_super",
  "sharpen",
  "static2",
  "v3_to_v4_if4",
- "warp_f1",
+ "warp_log_gradient",
  "warp_rel",
- "wpg1_glue",
- "wpg2_s33",
+ "warp_render",
+ "warp_sampler",
 ]
 
 [[package]]
@@ -295,6 +281,14 @@ version = "0.1.0"
 [[package]]
 name = "interp"
 version = "0.1.0"
+
+[[package]]
+name = "libm_fmod"
+version = "0.1.0"
+
+[[package]]
+name = "libm_powf"
+version = "0.0.0"
 
 [[package]]
 name = "libm_sincos"
@@ -432,10 +426,24 @@ name = "ops_arith"
 version = "0.1.0"
 
 [[package]]
+name = "ops_clamp"
+version = "0.1.0"
+dependencies = [
+ "ops_arith",
+]
+
+[[package]]
 name = "ops_coerce"
 version = "0.0.0"
 dependencies = [
  "plane_service",
+]
+
+[[package]]
+name = "ops_diff"
+version = "0.1.0"
+dependencies = [
+ "ops_arith",
 ]
 
 [[package]]
@@ -483,15 +491,7 @@ name = "plane_service"
 version = "0.0.0"
 
 [[package]]
-name = "readers14"
-version = "0.1.0"
-
-[[package]]
-name = "readers14b"
-version = "0.1.0"
-
-[[package]]
-name = "rotate"
+name = "rotate2d"
 version = "0.0.0"
 dependencies = [
  "libm_sincos",
@@ -540,37 +540,34 @@ dependencies = [
 name = "warp_driver"
 version = "0.0.0"
 dependencies = [
- "bwb_libm",
  "fx_common",
- "warp_f1",
+ "libm_fmod",
+ "warp_sampler",
 ]
 
 [[package]]
-name = "warp_f1"
-version = "0.0.0"
-dependencies = [
- "fx_common",
-]
-
-[[package]]
-name = "warp_f2"
-version = "0.0.0"
-dependencies = [
- "bwb_libm",
- "warp_f1",
-]
+name = "warp_log_gradient"
+version = "0.1.0"
 
 [[package]]
 name = "warp_rel"
 version = "0.0.0"
 dependencies = [
- "bwb_libm",
- "warp_f1",
- "warp_f2",
+ "libm_fmod",
+ "warp_rel_sampler",
+ "warp_sampler",
 ]
 
 [[package]]
-name = "wpg1_glue"
+name = "warp_rel_sampler"
+version = "0.0.0"
+dependencies = [
+ "libm_fmod",
+ "warp_sampler",
+]
+
+[[package]]
+name = "warp_render"
 version = "0.0.0"
 dependencies = [
  "effects_vecdir",
@@ -578,9 +575,12 @@ dependencies = [
  "perspective",
  "perspective_alpha",
  "warp_driver",
- "warp_f1",
+ "warp_sampler",
 ]
 
 [[package]]
-name = "wpg2_s33"
-version = "0.1.0"
+name = "warp_sampler"
+version = "0.0.0"
+dependencies = [
+ "fx_common",
+]

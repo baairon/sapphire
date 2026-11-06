@@ -104,7 +104,7 @@ fn destructuring_count_mismatch_is_an_error() {
 
 #[test]
 fn two_namespaces_head_versus_variable() {
-    // `rotate` is a parameter and a function head in the same program (HS-9)
+    // `rotate` is a parameter and a function head in the same program
     let g = gen(&["(def_effect T ( S ) ( ) ( rotate = 5 ) ( rotate S rotate ))"], "T").unwrap();
     let r = g.nodes.last().unwrap();
     assert_eq!(r.kind, NodeKind::Function);

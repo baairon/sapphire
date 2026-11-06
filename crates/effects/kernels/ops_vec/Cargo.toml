@@ -1,0 +1,16 @@
+
+[package]
+name = "ops_vec"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the builtin classes v2, v3 (and the sibling v4): the slot 53 plane assemblers (host plane service once per output channel)."
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+mutants = []
+
+[dependencies]
+plane_service = { path = "../plane_service" }

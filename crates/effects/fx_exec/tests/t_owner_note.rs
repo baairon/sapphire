@@ -55,7 +55,7 @@ fn missing_request(err: &str) -> Option<(i32, f32)> {
     Some((fr, f32::from_bits(u32::from_str_radix(bits, 16).ok()?)))
 }
 
-/// Runs the line, answering each missing host frame request with a frame given as words (step FH), until it finishes.
+/// Runs the line, answering each missing host frame request with a frame given as words, until it finishes.
 fn run(tag: &str, extra: &[&str]) -> (Option<i32>, String, String, Vec<u8>) {
     let mut frames: Vec<(String, PathBuf)> = Vec::new();
     let d = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("g2note_fr_{}_{}", std::process::id(), tag));

@@ -1,4 +1,4 @@
-//! step s25_p the program-text path of a folded node is read from the genotype. Real compile of
+//! The program-text path of a folded node is read from the genotype. Real compile of
 //! Hue_Sat_Bright_Autogen at binding A (Source 3 channels), whose two v3_to_v4_if4 nodes (genotype 67 and 70) fold.
 use fx_exec::ops_census::{genotype_path, node_path_fold, node_path_gid};
 

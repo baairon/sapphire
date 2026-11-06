@@ -1,3 +1,3 @@
 path	text	reason
-crates/effects/ext/wave_s6/rebuild_rotate/port/src/lib.rs	x.sin_cos()	selected only by the StdSinCos mutation variant, which exists to show that the parity tests reject the platform function; the default route is sincosf_x
-crates/effects/crate/esh5_core/src/lib.rs	h.powf(	a call on the Host trait; the implementation is supplied by the caller and is not a platform library call in this crate
+crates/effects/kernels/rotate2d/src/lib.rs	x.sin_cos()	selected only by the StdSinCos mutation variant, which exists to show that the parity tests reject the platform function; the default route is sincosf_x
+crates/effects/kernels/edge_aware_sharpen_blur_core/src/lib.rs	h.powf(	a call on the Host trait; the implementation is supplied by the caller and is not a platform library call in this crate

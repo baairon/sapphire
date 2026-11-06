@@ -1,7 +1,7 @@
-//! trails_cmp (NV-7, after NV-6's hsb_cmp): run the native executor on the INPUT planes and the explicit PREV-DEST frame stored in an EP-5 style
+//! trails_cmp (after hsb_cmp): run the native executor on the INPUT planes and the explicit PREV-DEST frame stored in an
 //! ORIG_PLANES file (layout IN(4) PREV_DEST_FRAME(4) OUT(4), f32 little endian, planes of H*W, stride W) and bit-compare with the stored ORIGINAL output planes.
 //! usage: trails_cmp <programs.tsv> <file.bin> <W> <H> "<name=v1,v2;name=v>" [--plan RESULT.json] [--dump out.bin] [--consts] [--noprev] [--prog Name]
-//! --zerosrc binds an all-zero Source (diagnostic for the EP-5 stand-in wiring artefact of combine 0 and 6, see README).
+//! --zerosrc binds an all-zero Source (diagnostic for the stand-in wiring artefact of combine 0 and 6).
 //! --noprev hands no prev_dest to the native side (negative control: get_prev_dest then stands in with its argument).
 use fx_eval::{build_effect, Corpus};
 use fx_exec::*;
@@ -151,7 +151,7 @@ fn run(a: Vec<String>) -> i32 {
     if let Some(e) = blur_edge {
         b.kp.blur_edge = e;
     }
-    // FX-1: the executor default is the frame width; --blur-scale overrides (1 = the old NV9-A6 value)
+    // the executor default is the frame width; --blur-scale overrides (1 = the old NV9-A6 value)
     if let Some(s) = blur_scale {
         b.kp.blur_render_scale = s;
     }

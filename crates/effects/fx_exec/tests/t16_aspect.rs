@@ -1,5 +1,5 @@
 //! T2 of the native `set_aspect` port (src/aspect.rs) against STORED emulator runs of the original function 0xc6930
-//! (t2/emu_sa.tsv, produced by t2/sa_drv.py through hole1_evg.py fix). Expected values are the original's, not a reading.
+//! (t2/emu_sa.tsv, produced by t2/sa_drv.py). Expected values are the original's, not a reading.
 use fx_exec::aspect::*;
 use std::io::Write;
 

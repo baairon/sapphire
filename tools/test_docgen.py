@@ -561,6 +561,13 @@ class CheckDocsTest(unittest.TestCase):
                          ["'proven' next to an unproven function", "forbidden claim: clean room"])
         self.assertEqual([f[3] for f in r["secrets"]], ["github token"])
 
+    def test_process_terms(self):
+        self.write("docs/a.md", "# A\n\nBuilt in " + "wa" + "ve 9 by the " + "fle" + "et (W" + "1088).\n\n"
+                                "`wave" + "_s9/x` and [a link](wave" + "_s9/y.md) are code.\n\n```\nfle" + "et in a fence\n```\n")
+        found = self.run_checks("process")["process"]
+        self.assertEqual(sorted(f[3] for f in found),
+                         ["fle" + "et: fle" + "et", "wave: wa" + "ve 9", "work item number: W" + "1088"])
+
     def test_ffmpeg_claims(self):
         self.write("docs/a.md", "# A\n\n## One\n\nffmpeg exits 0 on a truncated file.\n\n"
                                 "## Two\n\nffmpeg exits 0 on a truncated file (`ffmpeg -v error -i x.mkv -f null -`).\n")
