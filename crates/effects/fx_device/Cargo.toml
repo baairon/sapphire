@@ -1,0 +1,10 @@
+[package]
+name = "fx_device"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "OpenCL device foundation for the effect executor: run-time loader, probe, strict prelude, lint, program cache, host simulator, self-check harness and device selection (no build-time dependency, std only)"
+
+[lib]
+name = "fx_device"
+path = "src/lib.rs"

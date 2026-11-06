@@ -218,6 +218,7 @@ impl<'a> St<'a> {
                     Val::Img(i) => (**i).clone(),
                     Val::Const { n: ln, lanes } => Image::from_const(lanes, *ln, n),
                     Val::Mip(_) => return Err(ExecError::Shape("convert-to-dest of a ripmap object".into())),
+                    Val::Dev(_) => return Err(ExecError::Shape("convert-to-dest of a device image".into())),
                 };
                 if let Some(ae) = self.hc.and_then(|hc| hc.ae32.as_ref()) {
                     // DEST-ROUTE (code 14 zero-arm bodies and the row copier), never the format-16 writer

@@ -78,6 +78,7 @@ members = [
     "crates/effects/ext/wave_s9/in1_interp/port",
     "crates/effects/ext/wave_s9/in2_clamp_diff/clamp",
     "crates/effects/ext/wave_s9/in2_clamp_diff/diff",
+    "crates/effects/fx_device",
     "crates/effects/fx_eval",
     "crates/effects/fx_exec",
     "crates/effects/monochrome_a",

@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 effects_rtdata = { path = "../rtdata" }
+fx_device = { path = "../fx_device" }
 fx_eval = { path = "../fx_eval" }
 convert_pair = { path = "../crates/convert_pair" }
 # INT9: FMT3a format-14 source readers R4, R3, R1

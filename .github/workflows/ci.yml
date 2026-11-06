@@ -70,6 +70,14 @@ jobs:
           Expand-Archive -Path "$env:RUNNER_TEMP\ffmpeg.zip" -DestinationPath "$env:RUNNER_TEMP"
           Add-Content -Path $env:GITHUB_PATH -Value "$env:RUNNER_TEMP\ffmpeg-n9.0-latest-win64-gpl-9.0\bin"
 
+      # PoCL, an OpenCL runtime on the CPU, so the device backend runs its self-check on a runner with no GPU.
+      - name: Install PoCL (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pocl-opencl-icd ocl-icd-libopencl1 clinfo
+          clinfo -l
+
       # The workspace tests its default members: the harness, the parity
       # replayer, the ffmpeg bridge and the handoff pipeline, in the release
       # profile the parity runs use. The lifted crates need the stored
@@ -86,6 +94,19 @@ jobs:
       # SHA-256 of every output must equal tools/fx_golden.tsv (this repository's own Linux renders). A runner
       # that renders differently fails here and the message names the style.
       - run: python -I tools/fx_golden.py
+
+      # The device foundation (docs/adding-an-effect.md, Device): the kernel source lint, the host simulator, the probe,
+      # the self-check corpus and the unsafe scan. They need no device and run on every runner; the tests that need an
+      # OpenCL device print NOT RUN where no platform is present.
+      - run: cargo test --release -p fx_device -- --test-threads=1
+
+      # Linux with PoCL: every allowlisted op passes the self-check against the CPU kernel, the seam tests run, and the 13
+      # styles render through the device backend (SAPPHIRE_DEVICE=gpu) to the same hashes as the CPU renders above.
+      - name: Device backend on PoCL (self-check and devcheck)
+        if: runner.os == 'Linux'
+        run: |
+          cargo test --release -p fx_exec device -- --test-threads=1
+          SAPPHIRE_DEVICE=gpu python -I tools/fx_golden.py
 
       # The 15 effect crates outside the default members (docs/effects): their tests that need no stored data run;
       # the ones that need the original-derived data print NOT RUN.
