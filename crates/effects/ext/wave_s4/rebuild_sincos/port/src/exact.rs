@@ -222,6 +222,63 @@ impl Fx {
         let v = f64::from_bits(bits);
         if self.neg { -v } else { v }
     }
+    /// self * 2^k rounded to nearest even single precision, with subnormal results and overflow to infinity.
+    pub fn to_f32_scaled(&self, k: i32) -> f32 {
+        let hb = match self.top_bit() {
+            None => return if self.neg { -0.0 } else { 0.0 },
+            Some(h) => h,
+        };
+        let e = hb - FRAC_BITS + k;
+        if e > 127 {
+            return if self.neg { f32::NEG_INFINITY } else { f32::INFINITY };
+        }
+        let prec = if e >= -126 { 24 } else { 24 - (-126 - e) };
+        let low = hb - (prec - 1);
+        let mut m: u64 = 0;
+        for i in 0..prec.max(0) {
+            if self.bit(low + i) {
+                m |= 1u64 << i;
+            }
+        }
+        let half = self.bit(low - 1);
+        let sticky = self.any_below(low - 1);
+        if half && (sticky || (m & 1) == 1) {
+            m += 1;
+        }
+        // m * 2^(low - FRAC_BITS + k), exact in a double
+        let ex = low - FRAC_BITS + k;
+        let v = (m as f64) * f64::from_bits(((ex + 1023) as u64) << 52);
+        let r = v as f32;
+        if self.neg { -r } else { r }
+    }
+    /// The fractional part of self * 2^n for a non-negative self (integer bits shifted out are dropped).
+    pub fn frac_shl(&self, n: u32) -> Fx {
+        let mut r = self.frac();
+        for _ in 0..n {
+            let mut carry = 0u64;
+            for i in 0..L {
+                let v = r.m[i];
+                r.m[i] = (v << 1) | carry;
+                carry = v >> 63;
+            }
+            r.m[FRAC_LIMBS] = 0;
+        }
+        if r.is_zero() { Fx::zero() } else { r }
+    }
+    /// Whether the value is negative.
+    pub fn is_neg(&self) -> bool {
+        self.neg
+    }
+    /// The absolute value.
+    pub fn abs(mut self) -> Fx {
+        self.neg = false;
+        self
+    }
+    /// Compare with another value.
+    pub fn gt(&self, o: &Fx) -> bool {
+        let d = self.sub(o);
+        !d.is_zero() && !d.neg
+    }
     /// 1 / self by Newton iteration (self must be positive and not tiny).
     pub fn recip(&self) -> Fx {
         let mut r = Fx::from_f64(1.0 / self.to_f64());

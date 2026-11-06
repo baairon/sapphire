@@ -422,12 +422,12 @@ fn math1(class: &str, x: f32) -> f32 {
         "one_minus" => 1.0 - x,
         "negate" => -x,
         "cos" => crate::svml_trig::cos_rev(x),
-        // INT3: NV-3g rules E (atan in revolutions) and E2 (log(2.0) lane) are NOT merged; atan and log keep the plain f32 code until the one-argument origin is traced (CMP2e M9)
-        "atan" => x.atan(),
-        "log" => x.ln(),
+        // INT3: NV-3g rules E (atan in revolutions) and E2 (log(2.0) lane) are NOT merged; atan and log keep the plain f32 forms (correctly rounded by detmath) until the one-argument origin is traced (CMP2e M9)
+        "atan" => crate::detmath::atan(x),
+        "log" => crate::detmath::ln(x),
         "sin" => crate::svml_trig::sin_rev(x),
-        "tan" => x.tan(),
-        "exp" => x.exp(),
+        "tan" => crate::detmath::tan(x),
+        "exp" => crate::detmath::exp(x),
         _ => {
             // CMP2e/CMP3: MEASURED (17 of 18 grid atoms with the CMP2e form, 18 of 18 with this form): a NaN or negative argument folds to +0, +-0 keeps its sign (sqrt(-0) = -0)
             if x >= 0.0 { x.sqrt() } else { 0.0 }
@@ -669,14 +669,15 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
             }
             "cexp" => {
                 let (re, im) = cx(a.first()?);
-                let e = re.exp();
-                out[0] = e * im.cos();
-                out[1] = e * im.sin();
+                let e = crate::detmath::exp(re);
+                let (s, c) = crate::detmath::sin_cos(im);
+                out[0] = e * c;
+                out[1] = e * s;
             }
             _ => {
                 let (re, im) = cx(a.first()?);
-                out[0] = (re * re + im * im).sqrt().ln();
-                out[1] = im.atan2(re);
+                out[0] = crate::detmath::ln((re * re + im * im).sqrt());
+                out[1] = crate::detmath::atan2(im, re);
             }
         },
         FoldKind::Special => match class {

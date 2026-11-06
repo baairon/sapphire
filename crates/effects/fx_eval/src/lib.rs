@@ -7,6 +7,7 @@
 //! (all defuns and effects) -> `build::build_effect` (inlining builder) -> `build::Genotype`
 //! (genotype-equivalent node list) -> `build::genotype_tsv`.
 
+pub mod detmath;
 pub mod build;
 pub mod compile;
 pub mod fold;

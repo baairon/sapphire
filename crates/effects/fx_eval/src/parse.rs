@@ -726,7 +726,7 @@ pub fn orig_atof(text: &str, fma: bool) -> Option<f32> {
             if en {
                 e = -e;
             }
-            v = ((v as f64) * 10f64.powf(e as f64)) as f32;
+            v = ((v as f64) * crate::detmath::pow10_f64(e)) as f32;
             break;
         } else {
             break;
