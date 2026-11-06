@@ -32,3 +32,18 @@ pub fn combine(x: &[f32], b: &[f32], g: f32, dst: &mut [f32], count: usize) -> R
     }
     Ok(())
 }
+
+/// [`combine`] for a processor whose default NaN is `0x7fc00000` (`x86_nan`): a NaN result that no operand explains is the default NaN
+/// of an invalid operation (`inf - inf`), which is set to the x86 default NaN `0xffc00000`. A NaN operand is propagated as it is
+/// (`b` has been canonicalized by the caller, so the sign flip of `x * 2 - b` gives the x86 pattern).
+pub fn combine_x86_nan(x: &[f32], b: &[f32], g: f32, dst: &mut [f32], count: usize) -> Result<(), fx_common::plane::FxError> {
+    combine(x, b, g, dst, count)?;
+    if !g.is_nan() {
+        for i in 0..count {
+            if dst[i].to_bits() == 0x7fc0_0000 && !x[i].is_nan() && !b[i].is_nan() {
+                dst[i] = f32::from_bits(0xffc0_0000);
+            }
+        }
+    }
+    Ok(())
+}

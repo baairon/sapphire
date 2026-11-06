@@ -336,7 +336,23 @@ fn split(p: &str, dflt: usize) -> (String, usize) {
     }
 }
 
+/// Held for the whole of one run: the executor keeps its per-run state in process-wide statics, so two runs never overlap.
+static RUN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Forget the state a previous run left in the executor's process-wide statics.
+fn reset_run_state() {
+    *crate::exec::XY_LIST.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    crate::exec::XY_WRITERS.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    crate::exec::PERSP_ROWBUF.lock().unwrap_or_else(|e| e.into_inner()).clear();
+}
+
 pub fn run(a0: &[String]) -> i32 {
+    let _one_run_at_a_time = RUN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    reset_run_state();
+    run_locked(a0)
+}
+
+fn run_locked(a0: &[String]) -> i32 {
     if a0.iter().any(|x| x == "--describe-params") {
         return describe_params(a0);
     }
@@ -3025,7 +3041,7 @@ fn run_history(a0: &[String]) -> i32 {
                 }
             }
         }
-        let rc = run(&args);
+        let rc = run_locked(&args);
         if rc != 0 {
             crate::fxrun::elog!("render {} failed with rc {}", k + 1, rc);
             return rc;

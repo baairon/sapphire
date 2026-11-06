@@ -386,14 +386,14 @@ pub fn run_any(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, usiz
             return Err(ExecError::Shape(format!("{}: combo tag {} outside 1..4", c, tag)));
         }
         let mut out = crate::kernels2::run_wired(c, tag, args, n, dims, kp)?;
-        if let (true, crate::kernels2::Out::Img(img)) = (crate::nanrule::ACTIVE, &mut out) {
+        if let (true, crate::kernels2::Out::Img(img)) = (crate::nanrule::ACTIVE && !crate::nanrule::NO_OUTPUT_REWRITE.contains(&c), &mut out) {
             let arm = args.iter().any(|a| crate::nanrule::has_arm_nan(&a.f32s()) || a.planes().iter().any(|p| crate::nanrule::has_arm_nan(p)));
             crate::nanrule::canon_planes(&mut img.planes, arm);
         }
         return Ok(out);
     }
     let mut img = run_class(c, tag, args, n, kp)?;
-    if crate::nanrule::ACTIVE {
+    if crate::nanrule::ACTIVE && !crate::nanrule::NO_OUTPUT_REWRITE.contains(&c) {
         let arm = args.iter().any(|a| crate::nanrule::has_arm_nan(&a.f32s()) || a.planes().iter().any(|p| crate::nanrule::has_arm_nan(p)));
         crate::nanrule::canon_planes(&mut img.planes, arm);
     }

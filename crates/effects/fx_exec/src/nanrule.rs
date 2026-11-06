@@ -14,6 +14,12 @@ pub const ARM_DEFAULT_NAN: u32 = 0x7fc0_0000;
 /// Whether this processor's default NaN differs from x86's.
 pub const ACTIVE: bool = !cfg!(any(target_arch = "x86", target_arch = "x86_64"));
 
+/// Kernels whose output the rewrite must not touch. `abs`, `negate` (the operand with its sign bit cleared or flipped) and
+/// `diff` (the magnitude of a difference) give the same NaN on x86 and ARM, because the sign bit is forced or the operand NaN
+/// is propagated: `abs`/`negate` of the x86 default NaN legitimately give `0x7fc00000`. `sharpen` negates its blurred plane
+/// inside the kernel and canonicalizes its NaN words itself (`sharpen::combine::combine_x86_nan`).
+pub const NO_OUTPUT_REWRITE: [&str; 4] = ["abs", "negate", "diff", "sharpen"];
+
 /// `r` with the x86 default NaN for an invalid operation; `operand_has_arm_nan` tells whether an operand holds the ARM
 /// default NaN pattern (then a NaN result may be that operand propagated and is left alone).
 #[inline(always)]
@@ -65,5 +71,13 @@ mod tests {
         assert_eq!(op(|a, b| a + b, q, 1.0), 0x7fc0_1234);
         assert_eq!(canon(f32::from_bits(ARM_DEFAULT_NAN), true).to_bits(), ARM_DEFAULT_NAN);
         assert_eq!(canon(1.5, false), 1.5);
+    }
+
+    #[test]
+    fn sign_bit_kernels_are_exempt() {
+        for c in ["abs", "negate", "diff", "sharpen"] {
+            assert!(NO_OUTPUT_REWRITE.contains(&c));
+        }
+        assert!(!NO_OUTPUT_REWRITE.contains(&"+"));
     }
 }

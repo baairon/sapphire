@@ -622,6 +622,24 @@ struct Extra {
 }
 
 /// The in-memory files of one run: names are the virtual paths on the command line.
+/// The lines of a run's log that start with `device: `, one to a line.
+pub(crate) fn device_lines_of(log: &str) -> String {
+    log.lines().filter(|l| l.starts_with("device: ")).map(|l| format!("{}\n", l)).collect()
+}
+
+/// Writes the collected `device: ` lines to standard error when dropped.
+struct ForwardDeviceLines<'a>(&'a std::cell::RefCell<String>);
+
+impl Drop for ForwardDeviceLines<'_> {
+    fn drop(&mut self) {
+        let text = self.0.borrow();
+        if !text.is_empty() {
+            use std::io::Write;
+            let _ = std::io::stderr().write_all(text.as_bytes());
+        }
+    }
+}
+
 struct RunFiles {
     words: Vec<(String, std::sync::Arc<Vec<u32>>)>,
     curve: Option<(String, String)>,
@@ -697,6 +715,9 @@ fn run_fx(
         args.push("--frame-words".into());
         args.push(format!("{}={}", key, name));
     }
+    // the `device: ` lines of the last run go to stderr when this frame is done, on success and on failure
+    let device_lines = std::cell::RefCell::new(String::new());
+    let _forward = ForwardDeviceLines(&device_lines);
     let exec = |args: &[String], files: &RunFiles| {
         let mut io = StageIo::default();
         io.keep_chain_files = hist;
@@ -706,7 +727,9 @@ fn run_fx(
         if let Some((k, t)) = &files.curve {
             io.texts.insert(k.clone(), t.clone());
         }
-        runner.run(args.to_vec(), io)
+        let (code, io) = runner.run(args.to_vec(), io);
+        *device_lines.borrow_mut() = device_lines_of(&io.log);
+        (code, io)
     };
     if let Some(n) = learned.xy_writers.get() {
         fit_xy_list(&mut args, n, index)?;
@@ -865,7 +888,7 @@ impl Keyed {
                 )));
             }
             let r = rate.ok_or_else(|| Error::usage(format!("`{}` is keyed: keyframes need --fps N[/D], the time base of the keys", id)))?;
-            let (per_frame, per_second) = time_base(r.num(), r.den());
+            let (per_frame, per_second) = time_base(r.num(), r.den()).map_err(|e| Error::unsupported(format!("bad value for `{}`: {}", id, e)))?;
             let q = p.params.iter().find(|q| q.id == *id).ok_or_else(|| Error::unsupported(format!("unknown param `{}`", id)))?;
             let shape = match (q.form.as_str(), q.ptype.as_str(), q.lanes) {
                 ("--cset", _, _) => Shape::Hold,
@@ -884,7 +907,7 @@ impl Keyed {
     fn values_at(&self, f: u64) -> Vec<(String, String)> {
         let mut out = self.plain.clone();
         for (id, t, host) in &self.tracks {
-            let text = match t.lanes_at(f as i64 * t.ticks_per_frame) {
+            let text = match t.lanes_at((f as i64).saturating_mul(t.ticks_per_frame)) {
                 Ok(i) => t.keys[i].text.clone(),
                 Err(lanes) => lanes
                     .iter()
@@ -1065,6 +1088,13 @@ pub fn apply(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_device_lines_are_forwarded() {
+        let log = "fx_exec: note: x\ndevice: gpu 0: report\n  device: indented\ndevice: rendering on the CPU\nboom\n";
+        assert_eq!(super::device_lines_of(log), "device: gpu 0: report\ndevice: rendering on the CPU\n");
+        assert_eq!(super::device_lines_of(""), "");
+    }
+
     use super::*;
 
     #[test]
