@@ -1,4 +1,4 @@
-//! STK2: the node-grouping pass (stack word 2 = 1) as a PRESERVE-group model on the native node graph.
+//! the node-grouping pass (stack word 2 = 1) as a PRESERVE-group model on the native node graph.
 //!
 //! Source of every rule: listing neutral_1.asm (offsets, VA = offset). Labels: READ = instruction read; INFERRED = reasoning;
 //! ASSUMED = a stand-in listed in GROUPING2.md (HIGH-STAKES ASSUMPTIONS).
@@ -91,11 +91,11 @@ fn flag_of_class(prim: &str, bits: u32) -> bool {
     crate::layout::flags_of(prim) & bits != 0
 }
 
-/// has-data flag of an input node: bit (declared position + 3) of the context word (INT9 presence_bit_rows: node index of declared input j is j + 3)
+/// has-data flag of an input node: bit (declared position + 3) of the context word (presence_bit_rows: node index of declared input j is j + 3)
 fn has_data(cp: &CompiledProgram, n: usize, hd: u32) -> bool {
     let nd = &cp.nodes[n];
     if nd.kind == "special" {
-        // xy variable: ASSUMED frame dependent (conservative: never preserved) on the existing path; XWP2: under the placement model the
+        // xy variable: ASSUMED frame dependent (conservative: never preserved) on the existing path under the placement model the
         // xy clone is not frame dependent (INFERRED from the recorded plans: TB, Blur_Only and Warp SR preserve groups hold a `variable 2`)
         return !cp.xy_place;
     }
@@ -147,7 +147,7 @@ pub fn analyze(cp: &CompiledProgram, hd: u32) -> Pres {
                 v = true;
             }
         }
-        // XWP2: is set by before the fold (planner order READ), so a folded constant keeps its unfolded chain's value
+        // is set by before the fold (planner order READ), so a folded constant keeps its unfolded chain's value
         if cp.xy_place && *cp.fx_eval_pres_a_pre.get(&nd.gid).unwrap_or(&false) {
             v = true;
         }
@@ -255,7 +255,7 @@ pub fn analyze(cp: &CompiledProgram, hd: u32) -> Pres {
     Pres { key, head, mark, fx_eval_pres_a, order }
 }
 
-/// the preserve command text: the commands of the group in emission order inside one container (READ: CL1 plan, command 10)
+/// the preserve command text: the commands of the group in emission order inside one container (READ: plan, command 10)
 pub fn wrap_text(head_ref: &str, inner: &[String]) -> String {
     format!("(preserve {}\\n  ( {}\\n  )\\n)", head_ref, inner.join("\\n    "))
 }

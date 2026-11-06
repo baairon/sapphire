@@ -1,4 +1,4 @@
-//! TMR1 (step T): unit tests of the wired fold. Doubling (T2 family D shape), global 0 and 1 give equal answers,
+//! (step T): unit tests of the wired fold. Doubling (T2 family D shape), global 0 and 1 give equal answers,
 //! the global refusal on the verified render path, the failing-checkout initial lanes, and the refusals by name.
 use fx_eval::hostcurve::{fold, HostCurveValues};
 

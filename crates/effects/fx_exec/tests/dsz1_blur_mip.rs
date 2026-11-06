@@ -1,4 +1,4 @@
-//! DSZ1 unit test: blur on a make_mipmap operand equals blur on the mipmap's base image (Drop_Shadow at Shift 0);
+//! unit test: blur on a make_mipmap operand equals blur on the mipmap's base image (Drop_Shadow at Shift 0);
 //! a non-ripmap operand (image, constant) is unchanged. Std and crate APIs only.
 use fx_exec::kernels2::{run_wired, Out};
 use fx_exec::*;

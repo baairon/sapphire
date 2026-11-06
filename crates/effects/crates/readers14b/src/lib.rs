@@ -1,14 +1,14 @@
-//! FMT3e: the format 14 source readers, VARIANT B, stack word zero: 4 planes, 3 planes and 1 plane (the inline region
+//! the format 14 source readers, VARIANT B, stack word zero: 4 planes, 3 planes and 1 plane (the inline region
 //!  of the convert function, with its two arms).
 //!
-//! Variant B differs from variant A (FMT3a: R4, R3, R1) in what it stores: the colour words are NOT weighted by alpha.
+//! Variant B differs from variant A (R4, R3, R1) in what it stores: the colour words are NOT weighted by alpha.
 //! Per pixel (m0..m3 = the four host words in memory order A,R,G,B; fin(x) = x if (bits & 0x7fffffff) < 0x7f800000 else +0.0, the call; all values are
 //! raw u32 bit patterns, so a stored word is a copy of the input word or zero):
 //!   V4: p0 = fin(m1); p1 = fin(m2); p2 = fin(m3); p3 = fin(m0).     (alpha is stored as plane 3, no multiplication)
 //!   V3: p0 = fin(m1); p1 = fin(m2); p2 = fin(m3).                   (alpha is not read)
 //!   V1: p0 = fin(m0).                                               (m1..m3 are never read)
-//! The two standalone bodies V4 and V3 are scalar functions (entry as in FMT3a: rdi = pixels, rsi = plane pointer array, edx = end, r9d = start); their loop
-//! structure (a 16 pixel block loop when the CPU-flag word is nonzero, a plain loop when it is zero) is the one FMT3a ported, with the same wrap behaviour.
+//! The two standalone bodies V4 and V3 are scalar functions (entry as in rdi = pixels, rsi = plane pointer array, edx = end, r9d = start); their loop
+//! structure (a 16 pixel block loop when the CPU-flag word is nonzero, a plain loop when it is zero) is the one ported, with the same wrap behaviour.
 //! The 1 plane body is inline code with different counting (see `range1`): the destination and source indices both start at 0, the block loop skips (does not
 //! restart) a block whose 32 bit bound wraps.
 //!
@@ -69,7 +69,7 @@ fn fin(b: u32) -> u32 {
     }
 }
 
-/// Pixel count of the V4 / V3 loops (the FMT3a structure: signed start >= end does nothing; block loop r13 .. min(r13 + 16, end)).
+/// Pixel count of the V4 / V3 loops (the structure: signed start >= end does nothing; block loop r13 .. min(r13 + 16, end)).
 fn range(start: i32, end: i32, block: bool) -> Result<usize, ReadErr> {
     let ge = if mu(5) { start > end } else { start >= end };
     if ge {

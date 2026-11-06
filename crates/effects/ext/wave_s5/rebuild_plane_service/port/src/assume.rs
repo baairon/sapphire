@@ -1,4 +1,4 @@
-//! Assumption and stand-in list of the plane_service port (prefix PL1-).
+//! Assumption and stand-in list of the plane_service port (prefix -).
 
 #[derive(Clone, Debug)]
 pub struct Assumption {

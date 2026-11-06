@@ -69,7 +69,7 @@ fn release(p: &Params, i: i32) -> Result<i32, F1Error> {
     Ok(idx(&p.width_tab, i as i64)?.wrapping_add(3).wrapping_mul(p.n))
 }
 
-///  mode 0: returns (buffer, base offset in floats) with base = n + n * (width_tab[i] + 3) (BW2 reading).
+///  mode 0: returns (buffer, base offset in floats) with base = n + n * (width_tab[i] + 3) (reading).
 fn acquire<'a>(p: &Params, l: &'a Lattice, i: i32, j: i32) -> Result<(&'a [f32], i64), F1Error> {
     let w = idx(&p.width_tab, i as i64)?;
     let base = (p.n.wrapping_add(w.wrapping_add(3).wrapping_mul(p.n))) as i64;

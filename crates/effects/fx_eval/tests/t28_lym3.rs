@@ -1,4 +1,4 @@
-//! LYM3: the layout row's input group natively, both names per record, and a mutant per rule.
+//! the layout row's input group natively, both names per record, and a mutant per rule.
 use fx_eval::layoutmerge::{build_registered, merge_layout, read_layout, resolve_layout};
 use fx_eval::{build_effect, Corpus, NodeKind};
 
@@ -43,7 +43,7 @@ fn lym3_input_group_of_the_13_rows() {
             assert_eq!(g.nodes[i.node].input_pos, k + 1, "{} node position", prog);
             assert_eq!(g.nodes[i.node].kind, NodeKind::Input);
         }
-        // only Warp_Perspective's group differs from the def's (INPUTS.tsv of LYM2)
+        // only Warp_Perspective's group differs from the def's (INPUTS.tsv of)
         assert_eq!(rep.inputs_changed, *prog == "Warp_Perspective_Autogen", "{} inputs_changed", prog);
         assert_eq!(rep.default_nodes.is_empty(), *prog != "Warp_Perspective_Autogen", "{} default nodes", prog);
         // every parameter keeps a layout name; the :modify renames differ from the canonical name
@@ -109,7 +109,7 @@ fn lym3_record_names_both() {
     for (k, (cn, ln)) in want.iter().enumerate() {
         assert_eq!((g.params[k].name.as_str(), g.params[k].layout_name.as_str()), (*cn, *ln), "record {}", k);
     }
-    // lmDR3's recorded array: the layout names of the 24 records (MEASURED, LYM2 rec/)
+    // lmDR3's recorded array: the layout names of the 24 records (MEASURED rec/)
     let rec = [
         "mocha_project", "blur_mocha", "mocha_opacity", "invert_mocha", "resize_mocha", "resize_rel_x", "resize_rel_y", "shift_mocha", "bypass_mocha", "show_mocha_only", "combine_masks",
         "amount", "blur_lens", "rotate_warp_dir", "warp_red", "warp_green", "warp_blue", "amount_rel", "wrap", "filter", "blur_matte", "invert_matte", "matte_use", "opacity",

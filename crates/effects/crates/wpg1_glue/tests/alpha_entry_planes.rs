@@ -1,4 +1,4 @@
-//! WPG1 slot-function T2 for perspective_alpha: enters the dispatcher 0x548e00 (feature word served through its cell) in the emulator. Adapted from PX2 t2_planes.rs.
+//! slot-function T2 for perspective_alpha: enters the dispatcher 0x548e00 (feature word served through its cell) in the emulator. Adapted from t2_planes.rs.
 //! T2 planes: Rust port against the emulated original (harness v2, vex engine, SDM not silicon), run folders t2/out_planes_{A,B}/p<ph>/<set>/
 //! (real code of the body, of sincos 0xb76580, of the ROI helper 0x5b9b10, of 0x6670a0 and 0x673100; memset hooks for the two memset paths,
 //! PX2-A6; table entries 16..63 and the vector clamp cell are the labelled stand-ins PX2-A2 and PX2-A1).

@@ -1,4 +1,4 @@
-//! INT32 step DF: the unbound fixed-slider (host type 2) default is the registered 16.16 value f32(trunc(d x 65536) / 65536)
+//! the unbound fixed-slider (host type 2) default is the registered 16.16 value f32(trunc(d x 65536) / 65536)
 //! of the text default d for parameters outside the normalize_scale table; bound values are taken as given (the harness's snap_16_16);
 //! the normalize_scale path is unchanged; a negative off-grid default refuses PARAM-DEFAULT-OFFGRID-NEGATIVE. Mutants (fx_eval features):
 //! df_round_mut, df_f32text_mut, df_bound_mut, df_ns_mut; each fails at least one test here. Also TICKMAP-INDEX-NOT-REGISTERED.
@@ -166,7 +166,7 @@ fn tickmap_index_not_registered_refused() {
     assert_ne!(old.as_str(), &*RECORDS);
     let mut d = Vec::new();
     assert!(fold_with_table(&old, "Transform_and_Blur_Autogen", "rotate", 0.0, &[0.0], 1, &h, &mut d).is_none());
-    assert_eq!(d[0], "TICKMAP-INDEX-NOT-REGISTERED (Transform_and_Blur_Autogen rotate: table index 0, the style's registered index 23; W553)");
+    assert_eq!(d[0], "TICKMAP-INDEX-NOT-REGISTERED (Transform_and_Blur_Autogen rotate: table index 0, the style's registered index 23)");
     // a core program has no registered index row: the check does not apply and the next refusal is reached
     let mut d = Vec::new();
     assert!(fold("Transform_and_Blur", "rotate", 0.0, &[0.0], 1, &h, &mut d).is_none());

@@ -49,7 +49,7 @@ fn real_main() -> i32 {
     }
 }
 
-/// INT9: `--presence-mask HEX` (INPUT-PRESENCE-MASK, one native input), `--input-chan NAME=N` (repeatable; the channel count of an input
+/// `--presence-mask HEX` (INPUT-PRESENCE-MASK, one native input), `--input-chan NAME=N` (repeatable; the channel count of an input
 /// whose presence bit is set, a host input with no default) and the named option `--mixed-mask` (attribution only).
 fn presence_args() -> Result<(Option<u8>, BTreeMap<String, i32>, bool), String> {
     let a: Vec<String> = std::env::args().collect();
@@ -68,7 +68,7 @@ fn presence_args() -> Result<(Option<u8>, BTreeMap<String, i32>, bool), String> 
     Ok((pm, ch, a.iter().any(|x| x == "--mixed-mask")))
 }
 
-/// INT9: the bit-order table of the INPUT-PRESENCE-MASK for every effect of the corpus (program, position, input, default, bind-pass node index, bind bit, range bit).
+/// the bit-order table of the INPUT-PRESENCE-MASK for every effect of the corpus (program, position, input, default, bind-pass node index, bind bit, range bit).
 fn mask_table(programs: &str) -> i32 {
     let text = match fs::read_to_string(programs) {
         Ok(t) => t,
@@ -89,14 +89,14 @@ fn mask_table(programs: &str) -> i32 {
     0
 }
 
-/// INT6 rule 1: the bound-input mask of the CLI, `--bound-mask HEX` (STATE-A-MASK when a gate passes it); None when missing or unparsable.
+/// rule 1: the bound-input mask of the CLI, `--bound-mask HEX` (STATE-A-MASK when a gate passes it); None when missing or unparsable.
 fn mask_arg() -> Option<u32> {
     let a: Vec<String> = std::env::args().collect();
     let p = a.iter().position(|x| x == "--bound-mask")?;
     u32::from_str_radix(a.get(p + 1)?.trim_start_matches("0x"), 16).ok()
 }
 
-/// LYM3 (step L2): `--layout-merge` builds the REGISTERED program (the layout row merged as fx_run does: layout order, `:extra`, `:hardcode`, the
+/// (step L2): `--layout-merge` builds the REGISTERED program (the layout row merged as fx_run does: layout order, `:extra`, `:hardcode`, the
 /// layout input group) for a program that has a layout row; without it the def path is unchanged (the existing plan sets were recorded from the def text).
 fn layout_merge_flag() -> bool {
     std::env::args().any(|x| x == "--layout-merge")
@@ -130,7 +130,7 @@ fn one(programs: &str, name: &str, va: Option<&str>) -> i32 {
         Ok(g) => {
             print!("{}", genotype_tsv(&g));
             if layout_merge_flag() {
-                // LYM3: both names of every record and input
+                // both names of every record and input
                 print!("{}", fx_eval::layoutmerge::names_tsv(&g));
             }
             0
@@ -444,7 +444,7 @@ fn plan_one(programs: &str, combos: &str, name: &str, sets: &str) -> i32 {
     }
 }
 
-/// XWP2: the default-xy writers of the placement model (stack word 2 = 1 plan), one line per writer, then the plan text
+/// the default-xy writers of the placement model (stack word 2 = 1 plan), one line per writer, then the plan text
 fn xyplan(programs: &str, combos: &str, name: &str, sets: &str) -> i32 {
     let (c, ct) = match load(programs, combos) {
         Some(x) => x,
@@ -498,11 +498,11 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
         Err(_) => return 2,
     };
     files.sort();
-    // HCK1: keyed host curve answers, TSV rows tag, curve name, time bits (hex), lanes (hex words, comma separated); one E1 run's own hostcurve_calls
+    // keyed host curve answers, TSV rows tag, curve name, time bits (hex), lanes (hex words, comma separated); one E1 run's own hostcurve_calls
     let keyed_rows: Option<Vec<Vec<String>>> = hck.map(|p| fs::read_to_string(p).unwrap_or_default().lines().filter(|l| !l.starts_with("tag\t") && !l.is_empty()).map(|l| l.split('\t').map(|x| x.to_string()).collect()).collect());
     let mut summary = String::from("program\ttag\tsets\tstatus\tfirst_difference\n");
     let mut w113 = String::from("program\ttag\truns\tbits\tlayout\tw113\tfirst_layout_difference\n");
-    // INT9: `--argcol` writes ARGCOL.tsv (report-only; the existing tables are unchanged)
+    // `--argcol` writes ARGCOL.tsv (report-only; the existing tables are unchanged)
     let argcol_on = std::env::args().any(|x| x == "--argcol");
     let mut argcol_rows = String::from("program\ttag\targcol\trunprims_orig\trunprims_native\tdetail\n");
     for f in files {
@@ -558,7 +558,7 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
             Some(m) => m,
             None if presence_mask.is_some() => 0,
             None => {
-                eprintln!("plancmp: --bound-mask HEX is required and must parse (Batch 36 rule 1); no environment override");
+                eprintln!("plancmp: --bound-mask HEX is required and must parse; no environment override");
                 return 2;
             }
         };
@@ -628,11 +628,11 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
             let first = lm.iter().zip(lo.iter()).position(|(a, b)| a != b).map(|i| format!("cmd {}: mine `{}` vs original `{}`", i, lm[i], lo[i])).unwrap_or_else(|| if lm.len() != lo.len() { format!("command count mine {} vs original {}", lm.len(), lo.len()) } else { String::new() });
             let bits_ok = hit == tot;
             let w = d.is_empty() && bits_ok && lay_eq;
-            w113.push_str(&format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\n", prog, tag, if d.is_empty() { "RUNS-EQUAL" } else { "RUNS-DIFF" }, if bits_ok { "BITS-EQUAL" } else { "BITS-DIFF" }, if lay_eq { "LAYOUT-EQUAL" } else { "LAYOUT-DIFF" }, if w { "W113-PARITY" } else { "W113-MISS" }, first));
+            w113.push_str(&format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\n", prog, tag, if d.is_empty() { "RUNS-EQUAL" } else { "RUNS-DIFF" }, if bits_ok { "BITS-EQUAL" } else { "BITS-DIFF" }, if lay_eq { "LAYOUT-EQUAL" } else { "LAYOUT-DIFF" }, if w { "PLAN-PARITY" } else { "PLAN-MISS" }, first));
         }
         let _ = fs::write(format!("{}/MINE_{}_{}.txt", outdir, prog, tag), fx_eval::cpuplan::plan_text_mode(&cp, mode));
         if argcol_on {
-            // INT9: report-only per-argument column (original plan text against the native plan text of this compile)
+            // report-only per-argument column (original plan text against the native plan text of this compile)
             let (v, no, nn, d) = fx_eval::argcol::compare(&text, &fx_eval::cpuplan::plan_text_mode(&cp, mode));
             argcol_rows.push_str(&format!("{}\t{}\t{}\t{}\t{}\t{}\n", prog, tag, v, no, nn, d.replace('\t', " ")));
         }
@@ -641,7 +641,7 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
         let _ = fs::write(format!("{}/DIFF_{}_{}.txt", outdir, prog, tag), d.join("\n") + "\n");
     }
     let _ = fs::write(format!("{}/PLANCMP_NV3.tsv", outdir), &summary);
-    let _ = fs::write(format!("{}/W113.tsv", outdir), &w113);
+    let _ = fs::write(format!("{}/PLAN_PARITY.tsv", outdir), &w113);
     if argcol_on {
         let _ = fs::write(format!("{}/ARGCOL.tsv", outdir), &argcol_rows);
     }

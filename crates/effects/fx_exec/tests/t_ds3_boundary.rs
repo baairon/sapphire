@@ -1,4 +1,4 @@
-//! DS3: the exec-downsampled boundary follows the plan (tail leaves the command), the two default-xy writers of the path. No env switch is set here
+//! the exec-downsampled boundary follows the plan (tail leaves the command), the two default-xy writers of the path. No env switch is set here
 //! (the mutants are in t_ds3_mut.rs, one test function, because the switches are process wide).
 mod t_ds3_common;
 use t_ds3_common::*;

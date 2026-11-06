@@ -1,4 +1,4 @@
-//! hsb_e2e (CV3): the whole Hue_Sat_Bright effect on HOST MEMORY, native (convert pair wired) against the ORIGINAL run through the E1 route.
+//! hsb_e2e: the whole Hue_Sat_Bright effect on HOST MEMORY, native (convert pair wired) against the ORIGINAL run through the E1 route.
 //! usage: hsb_e2e <programs.tsv> <host.src> <DB.bin> <W> <H> "<name=v1,v2;name=v>" <mode 0..3> [--pln PLN.bin] [--prefill-aa] [--tsv]
 //! host.src = H*W*4 f32 (B,G,R,A per pixel), DB.bin = the original's host destination bytes after the run, PLN.bin = the original's planes at the writer
 //! entry (layout H,4,W). The native side: native convert-from-source per row, the native kernels (NV-5/NV-6 route), native convert-to-dest per row.
@@ -71,7 +71,7 @@ fn run(a: Vec<String>) -> i32 {
     assert_eq!(orig.len(), 4 * n);
     let mode_byte: i8 = a[7].parse().unwrap();
     let mode = AlphaMode::from_byte(mode_byte).expect("alpha mode");
-    // INT8: strict, or the named option --state-a-defaults
+    // strict, or the named option --state-a-defaults
     let mut b = match fx_exec::exec::strict_binding("hsb_e2e", &a) {
         Ok(b) => b,
         Err(e) => {

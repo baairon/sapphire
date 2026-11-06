@@ -1,7 +1,7 @@
-//! WPG1 glue (2026-11-02). Three named slot functions, each composing finished body crates by read-only path dependency:
+//! glue (2026-11-02). Three named slot functions, each composing finished body crates by read-only path dependency:
 //!
-//! * `slot52_perspective`: class perspective (vtable), slot 52 = dispatcher over the AVX2 body (PX1).
-//! * `slot52_perspective_alpha`: class perspective_alpha (vtable), slot 52 = dispatcher over the AVX2 body (PX2).
+//! * `slot52_perspective`: class perspective (vtable), slot 52 = dispatcher over the AVX2 body.
+//! * `slot52_perspective_alpha`: class perspective_alpha (vtable), slot 52 = dispatcher over the AVX2 body.
 //! * `slot53_warp`: class warp (vtable), slot 53 = (context build, optional image geometry override,
 //!   then the driver whose AVX2 body is), the F1 sampler inside it from the warp_f1 crate.
 //!
@@ -53,7 +53,7 @@ pub enum Slot52Error {
 // ---------------------------------------------------------------------------------------------------------------------------------
 // class perspective, slot 52 
 
-/// The fields slot 52 reads of the primitive `this` (MEASURED, PX1 SPEC): f32 a, gpu_call_a (angle parameter), b, pointer
+/// The fields slot 52 reads of the primitive `this` (MEASURED SPEC): f32 a, gpu_call_a (angle parameter), b, pointer
 /// to the input image object whose and are the u and v arrays.
 #[derive(Clone, Debug)]
 pub struct PerspThis<'a> {
@@ -256,6 +256,6 @@ pub fn assumptions() -> Vec<Assumption> {
         Assumption { id: "WPG1-A2", basis: "slot 53 of class warp enters the driver whose AVX2 body is ported (warp_driver); ROUTE AVX2-ONLY inherited; the ISA dispatcher is entered in the emulator with the feature word served", label: "ROUTE AVX2-ONLY" },
         Assumption { id: "WPG1-A3", basis: "byte [img] (image geometry present) is an explicit input: None keeps the record's fields (the path the executor feeds, same geometry as warp_rel and blur_warp); Some applies the listing's override and (aspect_block_d = 1/aspect, assumption_e = 0). Which path a real render takes is not measured", label: "PARAM-UNCAPTURED 1" },
         Assumption { id: "WPG1-A4", basis: "slot 33 runs before slot 53 on the flag 0 route (WG, MEASURED order) and writes P, P, P; here c1, c2 and the flag byte are explicit inputs of WarpPrim (as in warp_rel WR1-A2)", label: "SLOT33-INPUTS" },
-        Assumption { id: "WPG1-A5", basis: "memcpy and memset in are functional models in the emulator T2 (W89 LIBC-MODEL); the plane fill and descriptor of the empty-image path are call records only (inherited from the driver crate)", label: "LIBC-MODEL" },
+        Assumption { id: "WPG1-A5", basis: "memcpy and memset in are functional models in the emulator T2 (LIBC-MODEL); the plane fill and descriptor of the empty-image path are call records only (inherited from the driver crate)", label: "LIBC-MODEL" },
     ]
 }

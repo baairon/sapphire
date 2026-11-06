@@ -1,4 +1,4 @@
-//! scale_rgb (SR1, high-effort relaunch; every claim re-read from neutral_1.asm). Listing addresses; data VA = offset.
+//! scale_rgb (, high-effort relaunch; every claim re-read from neutral_1.asm). Listing addresses; data VA = offset.
 //!
 //! 1. `scale_rgb`: the REAL slot 53 of class scale_rgb (vtable), (784 B, 201 insns).
 //!    It is plain legacy SSE (movss/mulss), has NO dispatcher, NO feature-word test, no VEX, no FMA, no x87 (MEASURED listing).

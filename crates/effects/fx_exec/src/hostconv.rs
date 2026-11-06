@@ -1,4 +1,4 @@
-//! CV3: the native convert pair wired into the executor. Host memory is format code 16 (B,G,R,A f32 per pixel, rows of `width` pixels),
+//! the native convert pair wired into the executor. Host memory is format code 16 (B,G,R,A f32 per pixel, rows of `width` pixels),
 //! cell 1 (one converted row per call, HOST-BAND-MINIMAL), full-frame view, four planes, ctx = 4 (HOST-CH4).
 //! convert-from-source runs `convert_pair::convert_from_source_line` for every row (non-finite samples become +0.0, colour * alpha);
 //! convert-to-dest runs `convert_pair::convert_to_dest_line` for every row with the explicit alpha mode (a parameter of the host,
@@ -19,8 +19,8 @@ pub struct HostConvert {
     pub cell: usize,
     /// the edge margin count of the converted view; only 0 is claimed
     pub margin: usize,
-    /// INT9: the 'ae32' route (memory A,R,G,B f32, format 14 in) with the recorded reader head and plane count per source;
-    /// None = the format-16 state A route above. Some: convert-from-source reads `ae32.sources`, convert-to-dest is refused until FMT3c.
+    /// the 'ae32' route (memory A,R,G,B f32, format 14 in) with the recorded reader head and plane count per source;
+    /// None = the format-16 state A route above. Some: convert-from-source reads `ae32.sources`, convert-to-dest is refused until.
     pub ae32: Option<crate::hostconv14::Ae32Route>,
 }
 
@@ -28,7 +28,7 @@ impl HostConvert {
     /// a cell other than 1 is CELL-GT1-NOT-CLAIMED, a margin count above 0 is an error.
     pub fn check_claim(&self) -> Result<(), ExecError> {
         if self.margin > 0 {
-            return Err(ExecError::Shape(format!("convert: margin count {} above 0 is outside the claim (W211 e)", self.margin)));
+            return Err(ExecError::Shape(format!("convert: margin count {} above 0 is outside the claim", self.margin)));
         }
         if self.cell != 1 {
             return Err(ExecError::CellGt1NotClaimed(self.cell));
@@ -52,7 +52,7 @@ pub fn host_to_image(mem: &[f32], w: usize, h: usize) -> Result<Image, ExecError
     Image::from_planes(out)
 }
 
-/// The 3 plane destination rule (CV4, TW2; DSW6 A.1), stated once: turns mode 1 into mode 3 for an odd plane count and the 3 channel writer arm never
+/// The 3 plane destination rule (A.1), stated once: turns mode 1 into mode 3 for an odd plane count and the 3 channel writer arm never
 /// reads the fourth plane, so a zero plane stands in for it. Other channel counts pass unchanged. `execute_host` and `fx_run` both call this function.
 pub fn dest_for_host(dest: &Image, mode: AlphaMode) -> Result<(Image, AlphaMode), ExecError> {
     if dest.channels() == 3 {
@@ -68,8 +68,8 @@ pub fn dest_for_host(dest: &Image, mode: AlphaMode) -> Result<(Image, AlphaMode)
 
 /// Returns the host destination memory and whether the writer wrote (false for mode 0).
 pub fn image_to_host(img: &Image, w: usize, h: usize, mode: AlphaMode, prefill: &[f32]) -> Result<(Vec<f32>, bool), ExecError> {
-    // CV12: a 1 or 2 plane result image (Blur_Mono ends in gray + alpha) goes through the ported 1- and 2-plane writer arms with the plane count and
-    // mode arithmetic of (writer_args, ctx = 4, HOST-CH4); this replaces BLE1's stand-in DEST2-EXPAND.
+    // a 1 or 2 plane result image (Blur_Mono ends in gray + alpha) goes through the ported 1- and 2-plane writer arms with the plane count and
+    // mode arithmetic of (writer_args, ctx = 4, HOST-CH4); this replaces stand-in DEST2-EXPAND.
     if (img.channels() == 1 || img.channels() == 2) && img.n == w * h {
         if prefill.len() != 4 * w * h {
             return Err(ExecError::Shape("dest prefill size".into()));

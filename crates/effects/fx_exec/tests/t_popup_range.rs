@@ -1,4 +1,4 @@
-//! POPUP-ANSWER-OUT-OF-RANGE at the command line (INT36).
+//! POPUP-ANSWER-OUT-OF-RANGE at the command line.
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -53,7 +53,7 @@ fn popup_answer_out_of_range_refuses_on_the_command_line() {
         let name = arg.split('=').next().unwrap();
         let (rc, err, _, _) = run("oor", &["--cset", arg]);
         assert_eq!(rc, Some(2), "{}", err);
-        let want = format!("POPUP-ANSWER-OUT-OF-RANGE ({}: '{}' answer {} outside 1..{}; W630)", PROG, name, v, n);
+        let want = format!("POPUP-ANSWER-OUT-OF-RANGE ({}: '{}' answer {} outside 1..{})", PROG, name, v, n);
         assert!(err.contains(&want), "{}", err);
     }
 }

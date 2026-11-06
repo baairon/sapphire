@@ -1,5 +1,5 @@
-// CV12 unit tests of the 1- and 2-plane destination arms. Expected values are the ones the emulated original produced in the T2 runs
-// (writer edx per (planes, mode) is also MEASURED in BLE1's 90 original runs: Blur_Mono edx 2 in mode 1, edx 1 in modes 2 and 3).
+// unit tests of the 1- and 2-plane destination arms. Expected values are the ones the emulated original produced in the T2 runs
+// (writer edx per (planes, mode) is also MEASURED in 90 original runs: Blur_Mono edx 2 in mode 1, edx 1 in modes 2 and 3).
 use convert_pair::*;
 
 fn p4(g: &[f32], a: &[f32]) -> [Vec<f32>; 4] {

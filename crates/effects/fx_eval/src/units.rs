@@ -1,19 +1,19 @@
-//! INT10 (UNT1 PATCH 1): the host-value to record-value conversion of normalize_scale parameters, lane 0.
+//!: the host-value to record-value conversion of normalize_scale parameters, lane 0.
 //! "PARAM-UNITS (lane 0, ns 2 and 4: record = host x ((2.0 / W) x ns) in single precision, divided by 100.0 when [rec] & 0x40 is set;
-//! W = (float)[ctx] x (float)([[ctx]] / [[ctx]]); host values on the 16.16 grid; UNT1, 32 of 32 recorded tuples)".
-//! Order read by UNT1 : vdivss 2.0 (cell) / W, vmulss by [rec] (ns), vmulss by the host value; the
-//! divide by 100.0 (cell) after it. INT16 (UNT2 PATCH 2 and 3): lane 1 and ns 1 by conv_record, judged on UNT2's
+//! W = (float)[ctx] x (float)([[ctx]] / [[ctx]]); host values on the 16.16 grid, 32 of 32 recorded tuples)".
+//! Order read by vdivss 2.0 (cell) / W, vmulss by [rec] (ns), vmulss by the host value; the
+//! divide by 100.0 (cell) after it.: lane 1 and ns 1 by conv_record, judged on
 //! 18,880 emulator cases (test t24); the popup rule by popup_record. The 'ae32' route still converts lane 0 only (normalize_scale_record).
 
-/// W of the conversion (INT16): f32((f64) ctx_unit_width x ([[ctx]] / [[ctx]])), the product in double and
-/// one rounding to single, as UNT2's transcription of reads it and its rig measured (18,880 of 18,880 emulator cases). The earlier
+/// W of the conversion: f32((f64) ctx_unit_width x ([[ctx]] / [[ctx]])), the product in double and
+/// one rounding to single, as transcription of reads it and its rig measured (18,880 of 18,880 emulator cases). The earlier
 /// form (the ratio rounded to f32 first, then an f32 product) differs from the rig on 262 of the 18,880 cases (ratio other than 1.0); at
 /// ratio 1.0, the only ratio of every claim run, both forms are equal (MEASURED by test t24).
 pub fn units_width(ctx_unit_width: i32, fx_run_cell_b: f64, fx_run_cell_a: f64) -> f32 {
     ((ctx_unit_width as f32) as f64 * (fx_run_cell_b / fx_run_cell_a)) as f32
 }
 
-/// The ratio arm of (UNT2): Plain is the arm that keeps the lane-1 operands at 1.0 ([ctx] != 0 and owner flag 0x10 clear;
+/// The ratio arm of: Plain is the arm that keeps the lane-1 operands at 1.0 ([ctx] != 0 and owner flag 0x10 clear;
 /// the rig's "clear" arm); Ratio takes a = f32(d_cell_c / conv_in_a) and b = f32(d_cell_b / conv_in_a) (the rig's "null" and "set" arms).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RatioArm {
@@ -21,7 +21,7 @@ pub enum RatioArm {
     Ratio,
 }
 
-/// One input of the conversion function, as UNT2's rig T2 drives it (bit patterns kept: NaN payloads and signs count).
+/// One input of the conversion function, as rig T2 drives it (bit patterns kept: NaN payloads and signs count).
 #[derive(Clone, Copy, Debug)]
 pub struct ConvIn {
     pub w: i32,
@@ -49,7 +49,7 @@ fn cvtt(x: f32) -> i32 {
     }
 }
 
-/// The record value of one lane (UNT2 PATCH 2, wave_s9/unt2_units_rest/convmodel.py): lane 0 = host x ((2 / W) x ns); lane 1 = lane 0 x
+/// The record value of one lane (, wave_s9/unt2_units_rest/convmodel.py): lane 0 = host x ((2 / W) x ns); lane 1 = lane 0 x
 /// ((conv_in_b x clamp(a)) / (-clamp(b))) with clamp(v) = v when 0.0001 < v (as double) or v is NaN, else 1.0; the divide by 100.0 when
 /// flags & 0x40 comes after. Kind (low 4 bits) 0 is the unit-less path (host kept, then the percent divide). None for the paths the rig did
 /// not judge (types other than 1 and 2, kinds other than 0 and 5).
@@ -85,15 +85,15 @@ pub fn conv_record(c: &ConvIn) -> Option<f32> {
     Some(x)
 }
 
-/// UNT2 PATCH 3 (: dec eax; cmovs eax, 0; vcvtsi2ss): the record of a popup is f32(max(0, answer - 1)).
-/// "POPUP-ONE-BASED (MEASURED at Filter 0,1,2,3,-3; Combine Masks 1; Opacity 2; clamp at 0, no wrap; UNT2)". No upper clamp in the
+/// (: dec eax; cmovs eax, 0; vcvtsi2ss): the record of a popup is f32(max(0, answer - 1)).
+/// "POPUP-ONE-BASED (MEASURED at Filter 0,1,2,3,-3; Combine Masks 1; Opacity 2; clamp at 0, no wrap)". No upper clamp in the
 /// block (INFERRED, not tested above the item count).
 pub fn popup_record(answer: i32) -> f32 {
     let v = answer.wrapping_sub(1);
     (if v < 0 { 0 } else { v }) as f32
 }
 
-/// The 16.16 grid of the host checkout. INT18: round half to even, as the x86 conversion under the
+/// The 16.16 grid of the host checkout. round half to even, as the x86 conversion under the
 /// default MXCSR rounding does (the earlier `round` sent the half-grid points k + 0.5 away from zero). Tests: t29_step7 (k = 0 and k = 2).
 pub fn snap_16_16(host: f64) -> f32 {
     ((host * 65536.0).round_ties_even() / 65536.0) as f32
@@ -111,14 +111,14 @@ pub fn normalize_scale_record(host: f32, width: f32, ns: f32, flag40: bool) -> f
     }
 }
 
-/// INT17 step 6 (stand-in INT16-A5, INFERRED from not measured): the record of an unbound normalize_scale parameter.
+/// (stand-in, INFERRED from not measured): the record of an unbound normalize_scale parameter.
 /// The host default is text_default x 1920 / (2 x ns) on the 16.16 grid, then the record is normalize_scale_record of it.
 pub fn unbound_default_record(text_default: f32, ns: f32, width: f32, flag40: bool) -> f32 {
     let host = snap_16_16(text_default as f64 * 1920.0 / (2.0 * ns as f64));
     normalize_scale_record(host, width, ns, flag40)
 }
 
-/// INT11: the registered normalize_scale value per (program, parameter), defined in effects_rtdata (styles/<style>.rs, field `ns`).
+/// the registered normalize_scale value per (program, parameter), defined in effects_rtdata (styles/<style>.rs, field `ns`).
 /// The normalize_scale of a registered parameter, None when the program row has no normalize_scale for it.
 pub fn ns_of(program: &str, param: &str) -> Option<f32> {
     effects_rtdata::ns_param(program, param).and_then(|r| r.normalize_scale)
@@ -135,7 +135,7 @@ pub fn ns_rows_of(program: &str) -> Vec<(String, f32)> {
     effects_rtdata::ns_params_of(program).filter_map(|r| r.normalize_scale.map(|ns| (r.param.to_string(), ns))).collect()
 }
 
-/// INT32 step DF: the host's registration data per claimed style (one named claim-harness record per style), with the
+/// the host's registration data per claimed style (one named claim-harness record per style), with the
 /// registered_value_bits column (the int32 of the first four checkout value bytes of each host type 2 row, absent when not recorded).
 /// One row of the registration for a program parameter (by record name).
 #[derive(Debug, Clone, PartialEq)]
@@ -152,14 +152,14 @@ pub fn style_param_row(program: &str, param: &str) -> Option<StyleParamRow> {
     Some(StyleParamRow { display_name: r.display_name.to_string(), host_index: r.host_index, host_type: r.host_type, registered_value_bits: r.registered_value_bits })
 }
 
-/// INT32 step DF: true when PARAM of PROGRAM is a fixed-slider (host type 2) parameter outside the normalize_scale table,
+/// true when PARAM of PROGRAM is a fixed-slider (host type 2) parameter outside the normalize_scale table,
 /// the parameters whose unbound loop lane is the registered 16.16 default. The mutant df_ns_mut drops the normalize_scale exclusion.
 pub fn registered_fixed_slider(program: &str, param: &str) -> bool {
     let t2 = style_param_row(program, param).map(|r| r.host_type == 2).unwrap_or(false);
     t2 && (cfg!(feature = "df_ns_mut") || ns_of(program, param).is_none())
 }
 
-/// INT32 step DF: the registered 16.16 default of an unbound fixed-slider parameter, f32(trunc(d x 65536) / 65536) of its
+/// the registered 16.16 default of an unbound fixed-slider parameter, f32(trunc(d x 65536) / 65536) of its
 /// text default lane d; a negative off-grid d refuses PARAM-DEFAULT-OFFGRID-NEGATIVE. Mutants: df_round_mut (round half to even),
 /// df_f32text_mut (the f32 text default unchanged).
 pub fn registered_16_16(program: &str, param: &str, d: f32) -> Result<f32, String> {
@@ -168,13 +168,13 @@ pub fn registered_16_16(program: &str, param: &str, d: f32) -> Result<f32, Strin
     }
     let v = d as f64 * 65536.0;
     if v < 0.0 && v.fract() != 0.0 {
-        return Err(format!("PARAM-DEFAULT-OFFGRID-NEGATIVE ({} {}: the unbound fixed-slider default {} is negative and off the 16.16 grid; truncation and flooring differ there and no record shows which value the host registers; W605)", program, param, d));
+        return Err(format!("PARAM-DEFAULT-OFFGRID-NEGATIVE ({} {}: the unbound fixed-slider default {} is negative and off the 16.16 grid; truncation and flooring differ there and no record shows which value the host registers)", program, param, d));
     }
     let k = if cfg!(feature = "df_round_mut") { v.round_ties_even() } else { v.trunc() };
     Ok((k / 65536.0) as f32)
 }
 
-/// SHJ5 SDS widened: the host value of an UNBOUND normalize_scale host type 2 slider is the first int32 of its registered
+/// SDS widened: the host value of an UNBOUND normalize_scale host type 2 slider is the first int32 of its registered
 /// default bytes (STYLE_PARAM_INDEX registered_value_bits) divided by 65536, taken before any normalize_scale or width scaling.
 pub fn unbound_ns_host(program: &str, param: &str) -> Option<f32> {
     let row = style_param_row(program, param)?;
@@ -206,7 +206,7 @@ mod tests {
         assert_eq!(ns_of("Diffuse_Autogen", "blur_mask"), Some(4.0));
         assert_eq!(ns_of("Diffuse_Autogen", "rel_amount"), None);
     }
-    // (param, ns, host, W, H, compiled as recorded): UNT1 TUPLES.tsv and T2_TUPLES.tsv (EQUAL rows, distinct values)
+    // (param, ns, host, W, H, compiled as recorded): TUPLES.tsv and T2_TUPLES.tsv (EQUAL rows, distinct values)
     const T: &[(&str, f32, f64, i32, i32, &str)] = &[
         ("blur_amount", 4.0, 0.5272979736328125, 50, 7, "0.08436767756938934"),
         ("blur_amount", 4.0, 0.5272979736328125, 64, 32, "0.06591224670410156"),
@@ -273,7 +273,7 @@ mod tests {
         assert!(host_value_off_grid("Sharpen_Fast_Autogen", "no_such_param", 2.4).is_none());
     }
 
-    /// NSS1: Drop_Shadow's shift is a registered normalize_scale 1 parameter; the lanes from host values are
+    /// Drop_Shadow's shift is a registered normalize_scale 1 parameter; the lanes from host values are
     /// f32(q16(host)) x f32(f32(2 / W) x 1), lane 1 negated, bit for bit on 200,000 pseudo-random hosts at W 64, 50 and 49 (width fixed at 64 differs).
     #[test]
     fn nss1_drop_shadow_shift_row_and_lanes() {
@@ -326,10 +326,10 @@ mod tests {
     }
 }
 
-/// WSR1: the host angle of Warp_Perspective's swing and roll (the program text flags both `angle`). MEASURED in the S_WarpPerspective
+/// the host angle of Warp_Perspective's swing and roll (the program text flags both `angle`). MEASURED in the S_WarpPerspective
 /// records (params_after_loop of SR_64x32 and SR_50x7: Swing 25 gives lane -25.0, Roll -15 gives +15.0; the unbound lane is -0.0 = -(+0)): the
 /// record lane is the NEGATED host value, no degree to radian scaling. Scope: the two claimed programs and the two names; one host value per angle
-/// was seen, so the rule for other values is INFERRED (the fresh rows SR2 and SR3 test it on originals).
+/// was seen, so the rule for other values is INFERRED (the fresh rows and test it on originals).
 pub fn angle_host_lane(program: &str, param: &str, host: f32) -> Option<f32> {
     if (program == "Warp_Perspective" || program == "Warp_Perspective_Autogen") && (param == "swing" || param == "roll") {
         Some(-host)

@@ -1,4 +1,4 @@
-//! INT24: the OPS_SCALAR_PAIRS census rows of one compiled plan, the claim-route tripwire
+//! the OPS_SCALAR_PAIRS census rows of one compiled plan, the claim-route tripwire
 //! OPS-ARITH-SCALAR-SCALAR-UNJUDGED, and the program-text path of a plan node (the operator and its argument expressions beside the id).
 //! Census only: nothing here changes a plan or an output bit.
 use fx_eval::{CompiledProgram, Genotype, NodeKind, PlanNode};
@@ -103,7 +103,7 @@ fn gexpr(g: &Genotype, id: usize, depth: usize) -> String {
     }
 }
 
-/// INT25 (INT24 finding 1): the program-text path of genotype node `gid`: "<label>: <function> <argument expressions>", the
+/// the program-text path of genotype node `gid`: "<label>: <function> <argument expressions>", the
 /// arguments to depth 2 (parameters by name, constants by value, inputs by name), read from the genotype, not from the plan.
 pub fn genotype_path(g: &Genotype, gid: usize) -> String {
     match g.nodes.get(gid) {
@@ -115,7 +115,7 @@ pub fn genotype_path(g: &Genotype, gid: usize) -> String {
     }
 }
 
-/// INT25: the path of a fold or decision row by genotype id. A plan node that keeps its arguments gives the plan path; a node the plan keeps
+/// the path of a fold or decision row by genotype id. A plan node that keeps its arguments gives the plan path; a node the plan keeps
 /// without arguments (a folded node) or does not keep gives the genotype path, marked "(genotype path)".
 pub fn node_path_fold(cp: &CompiledProgram, g: &Genotype, gid: usize) -> String {
     match cp.nodes.iter().find(|n| n.gid == gid) {
@@ -175,7 +175,7 @@ pub fn scalar_scalar_tripwire(program: &str, rows: &[OpsRow]) -> Option<String> 
         .find(|r| r.op != "dissolve" && r.plane.len() >= 2 && !r.plane[0] && !r.plane[1])
         .map(|r| {
             format!(
-                "OPS-ARITH-SCALAR-SCALAR-UNJUDGED ({}: node {}: {} with both operands non-plane, counts {},{}, nout {}; this operand pair is outside ops_arith's judged R cases; PLR4, W526)",
+                "OPS-ARITH-SCALAR-SCALAR-UNJUDGED ({}: node {}: {} with both operands non-plane, counts {},{}, nout {}; this operand pair is outside ops_arith's judged R cases)",
                 program, r.node, r.op, r.counts[0], r.counts[1], r.nout
             )
         })

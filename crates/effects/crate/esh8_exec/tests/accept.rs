@@ -1,4 +1,4 @@
-//! ESH8 acceptance: the executor class against ESH6's stored emulator cases (t2/export) and against the slot52 port, plus refusal and tripwire tests.
+//! acceptance: the executor class against stored emulator cases (t2/export) and against the slot52 port, plus refusal and tripwire tests.
 use esh6_driver as d;
 use esh8_exec::*;
 use std::collections::HashMap;
@@ -90,7 +90,7 @@ fn accept_stored_cases() {
             sigmoid_scale: sg,
             rel_chan: [f("g0"), f("g1"), f("g2")],
         };
-        // the ESH6 reference run (the slot52 port on the full arena) for every case, including the cases the executor refuses
+        // the reference run (the slot52 port on the full arena) for every case, including the cases the executor refuses
         let mut arr = [0f32; 11];
         for k in 0..7 {
             arr[k] = sg[k];
@@ -112,7 +112,7 @@ fn accept_stored_cases() {
         let curve = plane(&mem0, 4 + 3 * nu + 4);
         let inp = Inputs { source: &srefs, mask: if sig_byte { None } else { Some(&curve) } };
         if n == 4 {
-            // outside the executor's nch range: refused; the port itself is judged on these by ESH6 (reference vs emulator here)
+            // outside the executor's nch range: refused; the port itself is judged on these by (reference vs emulator here)
             assert_eq!(run(&cc, &ops, &inp, Scratch::Zero).err(), Some(ExecErr::NchRange(4)));
             *t.refused.entry("NchRange(4)".into()).or_insert(0) += 1;
             t.ref_n4_cases += 1;

@@ -1,5 +1,5 @@
 //! Per-argument bits column of compare, report-only. No dependencies.
-//! Port of pgm1_argcol_groups/argcol2.py. For a plan text (EP3 or NV3D format) it lists, for every run-primitive in command
+//! Port of pgm1_argcol_groups/argcol2.py. For a plan text (or NV3D format) it lists, for every run-primitive in command
 //! order, the primitive name and each argument as constant lane bits (little-endian bytes) or ":REF" (image references belong
 //! to the layout half). A pair is PASS, FAIL (names run-primitive index, primitive and argument index) or UNRESOLVED
 //! (any <MISSING>, <EXTRA> or <NONODE> marker on either side).
@@ -114,7 +114,7 @@ fn groups(rest: &str) -> Vec<G> {
     out
 }
 
-/// INT9: number of first-argument steps from x to r (0 = the argument itself), up to 4; None = not reached
+/// number of first-argument steps from x to r (0 = the argument itself), up to 4; None = not reached
 fn alias_steps(nodes: &BTreeMap<i64, Node>, mut x: i64, r: i64) -> Option<usize> {
     for s in 0..4 {
         if x == r {
@@ -134,7 +134,7 @@ fn alias_steps(nodes: &BTreeMap<i64, Node>, mut x: i64, r: i64) -> Option<usize>
     }
 }
 
-/// INT9: the print precision of a printed decimal. The plan printer gives at most 6 significant digits (`%g` style, trailing
+/// the print precision of a printed decimal. The plan printer gives at most 6 significant digits (`%g` style, trailing
 /// zeros trimmed, INFERRED from the printed texts such as 0.333333), so the precision is half a unit of the 6th significant digit; a printed 0 is exact.
 fn print_tol(p: f32) -> f32 {
     if p == 0.0 || !p.is_finite() {
@@ -143,13 +143,13 @@ fn print_tol(p: f32) -> f32 {
     0.5 * crate::detmath::pow10_f32(crate::detmath::floor_log10(p) - 5)
 }
 
-/// INT9: the chosen node's constant arguments agree with the printed text within print precision (MAPPING-TEXT-MISMATCH guard)
+/// the chosen node's constant arguments agree with the printed text within print precision (MAPPING-TEXT-MISMATCH guard)
 fn text_consistent(nodes: &BTreeMap<i64, Node>, n: i64, gs: &[G], be: bool) -> bool {
     for (x, g) in args_of(&nodes[&n]).iter().zip(gs) {
         let G::Br(t) = g else { continue };
         let Some(w) = nodes.get(x).and_then(|nn| words(nn, be)) else { return false };
         let toks: Vec<&str> = t.split_whitespace().collect();
-        // INT9: the printer's sentinel -999 for an argument that is not a constant node (an input image node, e.g. coerce_up's Source); INFERRED from the texts
+        // the printer's sentinel -999 for an argument that is not a constant node (an input image node, e.g. coerce_up's Source); INFERRED from the texts
         if toks.iter().all(|x| *x == "-999") {
             continue;
         }
@@ -163,7 +163,7 @@ fn text_consistent(nodes: &BTreeMap<i64, Node>, n: i64, gs: &[G], be: bool) -> b
             if a.is_nan() && p.is_nan() {
                 continue;
             }
-            // INT9: an integer-typed argument prints the truncated lane (cvttss2si, DSW4's set_arg_const)
+            // an integer-typed argument prints the truncated lane (cvttss2si set_arg_const)
             let int_tok = !tk.contains('.') && !tk.contains('e') && !tk.contains('E');
             if int_tok && a.is_finite() && a.trunc() == p {
                 continue;
@@ -220,7 +220,7 @@ pub fn column(text: &str) -> (Column, usize) {
     (c, m)
 }
 
-/// INT9: the column, the marker count and the detail (guard markers and alias chains used)
+/// the column, the marker count and the detail (guard markers and alias chains used)
 pub fn column_detail(text: &str) -> (Column, usize, Vec<String>) {
     let (nodes, cmds, be) = parse(text);
     let mut out = Vec::new();
@@ -280,7 +280,7 @@ pub fn column_detail(text: &str) -> (Column, usize, Vec<String>) {
             let ridx = out.len();
             let chosen = if cands.contains(&dest) { Some(dest) } else { cands.first().copied() };
             let mut args: Vec<String> = Vec::new();
-            // INT9 tie-break guards: more than one candidate left after the printed-text match (and the destination does not decide),
+            // tie-break guards: more than one candidate left after the printed-text match (and the destination does not decide),
             // or a chosen node whose constant lanes disagree with its printed text beyond print precision, is a marker (the pair becomes UNRESOLVED)
             if chosen.is_some() && !cands.contains(&dest) && cands.len() > 1 {
                 args.push("<AMBIGUOUS>".into());
@@ -324,7 +324,7 @@ pub fn column_detail(text: &str) -> (Column, usize, Vec<String>) {
     (out, mk, detail)
 }
 
-/// INT9: (verdict, n_orig, n_native, first difference or detail). Verdicts: PASS, ARGCOL-VACUOUS (equal columns that compare no
+/// (verdict, n_orig, n_native, first difference or detail). Verdicts: PASS, ARGCOL-VACUOUS (equal columns that compare no
 /// constant: 0 run-primitives or no constant argument; never a PASS), FAIL, UNRESOLVED (any marker, the two tie-break guards included).
 pub fn compare(orig: &str, native: &str) -> (&'static str, usize, usize, String) {
     let (co, mo, dor) = column_detail(orig);
@@ -371,7 +371,7 @@ mod tests {
     fn pass_and_flipped_lane_fails_naming_argument() {
         let (v, n, _, _) = compare(ORIG, ORIG);
         assert_eq!((v, n), ("PASS", 1));
-        // INT9: the flipped side prints its own lane (0.75), as a native plan text does
+        // the flipped side prints its own lane (0.75), as a native plan text does
         let flipped = ORIG.replace("0000803f", "0000403f").replace("[ 1 ]", "[ 0.75 ]");
         let (v, _, _, fd) = compare(ORIG, &flipped);
         assert_eq!(v, "FAIL");

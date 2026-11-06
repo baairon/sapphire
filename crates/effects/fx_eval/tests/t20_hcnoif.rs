@@ -1,4 +1,4 @@
-//! T20 (INT8 HC-NO-INTERFACE): a get_curve_val request with neither the keyed nor the unkeyed host-curve interface set is a
+//! T20 (HC-NO-INTERFACE): a get_curve_val request with neither the keyed nor the unkeyed host-curve interface set is a
 //! compile error; HC-ZERO-LEGACY (the named state A option) keeps the zero fold; the unkeyed interface still compiles; a program without
 //! get_curve_val is unaffected by the option.
 use fx_eval::*;

@@ -130,7 +130,7 @@ fn run(a: Vec<String>) -> i32 {
     let inp = &all[..4 * n];
     let prev = &all[4 * n..8 * n];
     let orig = &all[8 * n..];
-    // INT8: strict, or the named option --state-a-defaults
+    // strict, or the named option --state-a-defaults
     let mut b = match fx_exec::exec::strict_binding("trails_cmp", &a) {
         Ok(b) => b,
         Err(e) => {

@@ -1,4 +1,4 @@
-//! ops_element (EM1): native std-only ports of the builtin classes element_of, max_element, min_element (AVX2 route, flag 0).
+//! ops_element: native std-only ports of the builtin classes element_of, max_element, min_element (AVX2 route, flag 0).
 pub mod common;
 pub mod element_of;
 pub mod max_element;

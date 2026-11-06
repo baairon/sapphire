@@ -1,4 +1,4 @@
-//! ops_arith (OP1): native port of the arithmetic operator classes `+` (vtable, slot 53, AVX2 body),
+//! ops_arith: native port of the arithmetic operator classes `+` (vtable, slot 53, AVX2 body),
 //! `-*` . Listing offsets, VA = offset.
 //! std only, no unsafe, explicit parameters (no Default), S3-style `render` per class module. See README.md and SPEC.md.
 pub mod add;

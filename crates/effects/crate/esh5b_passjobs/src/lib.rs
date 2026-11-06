@@ -1,4 +1,4 @@
-//! ESH5b: scratch std-only port of the pass jobs of the shared blur core of edge_aware_sharpen (route: AVX2 tier, callback pair).
+//! scratch std-only port of the pass jobs of the shared blur core of edge_aware_sharpen (route: AVX2 tier, callback pair).
 //!
 //! Original code (listing addresses of neutral_1.asm):
 //!   * pass job x (dispatcher) -> AVX2 body : one partitioned row pass; each row is the variable window box filter `filter3` over the source row

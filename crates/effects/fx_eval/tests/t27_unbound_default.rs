@@ -1,5 +1,5 @@
-//! INT17 step 6 (INT16 NEXT 4): the unbound-default test. Host default = text_default x 1920 / (2 x ns) on the 16.16 grid (INFERRED,
-//! INT16-A5), then normalize_scale_record. Blur_Color_Autogen blur_amount (text default 0.4, ns 4, NS_PARAMS.tsv) gives 12.0 at W 64
+//! the unbound-default test. Host default = text_default x 1920 / (2 x ns) on the 16.16 grid (INFERRED,
+//! ), then normalize_scale_record. Blur_Color_Autogen blur_amount (text default 0.4, ns 4, NS_PARAMS.tsv) gives 12.0 at W 64
 //! and 15.36 at W 50. Tolerance at W 50 fixed before the run: 2e-6 (about 2 ulp at 15.36).
 use fx_eval::units::{ns_of, unbound_default_record, units_width};
 

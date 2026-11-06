@@ -1,11 +1,11 @@
-//! hue_shift_preserve_luma (HP1, patched copy HP2): native port of the CPU render entry of builtin class
+//! hue_shift_preserve_luma (, patched copy): native port of the CPU render entry of builtin class
 //! `hue_shift_preserve_luma` (vtable, slot 52 = dispatcher, AVX2 body).
 //!
-//! HP2 change: the two vpermd index cells HP1-V14 (used) and
-//! HP1-V15 (used) take the ORIGINAL FILE's words 0,2,4,6,0,0,0,0
+//! change: the two vpermd index cells (used) and
+//! (used) take the ORIGINAL FILE's words 0,2,4,6,0,0,0,0
 //! (MEASURED-DYLIB) instead of the stand-in identity 0..7; vpermd is implemented faithfully (index & 7 selects the source
 //! dword) and the red luma-term gate of variant A is modelled with real lane vectors (`red_kept`). Every other line of the
-//! port is HP1's. The operand of both vpermd instructions is a lane-uniform all-ones or all-zero vector on every path
+//! port is. The operand of both vpermd instructions is a lane-uniform all-ones or all-zero vector on every path
 //! (listing proof in the README), so natural outputs do not depend on the index words; `Force` (test only) writes a
 //! lane-varying operand to show that the model and the emulator agree when it is not uniform.
 //!
@@ -56,10 +56,10 @@ pub const W_B: f32 = 0.1875;
 pub const SIXTH: f32 = f32::from_bits(0x3e2aaaad);
 pub const SIX: f32 = 6.0;
 
-/// HP1-V14 / HP1-V15 as read from the original file (MEASURED-DYLIB, 32 B each):
+/// / as read from the original file (MEASURED-DYLIB, 32 B each):
 /// dwords 0, 2, 4, 6, 0, 0, 0, 0 (both cells equal).
 pub const PERM_FILE: [u32; 8] = [0, 2, 4, 6, 0, 0, 0, 0];
-/// The old HP1 stand-in (identity), kept only for the before/after comparison and the mutants.
+/// The old stand-in (identity), kept only for the before/after comparison and the mutants.
 pub const PERM_OLD: [u32; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
 
 /// vpermd ymm, idx, src: result[i] = src[idx[i] & 7] (SDM; the index register is the FIRST source in VEX.vvvv).
@@ -84,7 +84,7 @@ pub struct Force {
 }
 
 /// Vector constant cells of one width (ymm cells xx, xmm cells xx / xx). Each field is one cell
-/// value (HP1-V01..V11 and the vpermd cell for ymm, HP1-X01..X11 for xmm; HP1-V15 is the vpermd cell read,
+/// value (..V11 and the vpermd cell for ymm..X11 for xmm is the vpermd cell read,
 /// which belongs to the xmm section, so the xmm VCells carries it). No Default: the caller names every value.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VCells {
@@ -110,12 +110,12 @@ pub struct VCells {
     pub two: f32,
     /// 4.0: blue-max hue offset
     pub four: f32,
-    /// vpermd index words: HP1-V14 (ymm site) or HP1-V15 (xmm-section site)
+    /// vpermd index words: (ymm site) or (xmm-section site)
     pub perm: [u32; 8],
 }
 
 impl VCells {
-    /// The old HP1 stand-ins (identity vpermd index); history and mutants only.
+    /// The old stand-ins (identity vpermd index); history and mutants only.
     pub const STANDIN: VCells = VCells { one: 1.0, sixth: SIXTH, six: 6.0, three_i: 3, one_i: 1, four_i: 4, w_r: W_R, half: W_G, w_b: W_B, two: 2.0, four: 4.0, perm: PERM_OLD };
     /// The cells as read from the file (MEASURED-DYLIB): equal to STANDIN except the vpermd index.
     pub const FILE: VCells = VCells { perm: PERM_FILE, ..VCells::STANDIN };
@@ -455,7 +455,7 @@ pub fn render_forced(p: &Params, src: Option<[&[f32]; 3]>, mask: Option<&[f32]>,
     Ok(calls)
 }
 
-/// HP1's entry with explicit cells (no operand override).
+/// entry with explicit cells (no operand override).
 pub fn render_with(p: &Params, src: Option<[&[f32]; 3]>, mask: Option<&[f32]>, outs: &mut [Vec<f32>; 3], cells: &Cells) -> Result<Vec<Call>, HpError> {
     render_forced(p, src, mask, outs, cells, None)
 }
@@ -468,17 +468,17 @@ pub fn render(p: &Params, src: Option<[&[f32]; 3]>, mask: Option<&[f32]>, outs: 
 /// Every assumption, with its tier: id, what, tier and basis.
 pub fn assumptions() -> Vec<(&'static str, &'static str)> {
     vec![
-        ("HP1-S1", "f32 6.0 : registry STD-006, MEASURED-DYLIB (DV1 CONFIRMED; re-read by HP2: 0x40c00000)."),
-        ("HP1-V01..V11", "ymm numeric cells 1.0 (registry STD-002), 1/6, 6.0, int 3, int 1, int 4, 0.3125, 0.5, 0.1875, 2.0, 4.0 : MEASURED-DYLIB (VA = listing; equal to the stand-in values; re-read by HP2). Old tier SEMANTIC kept as history."),
+        ("HP1-S1", "f32 6.0 : registry STD-006, MEASURED-DYLIB (CONFIRMED; re-read by 0x40c00000)."),
+        ("HP1-V01..V11", "ymm numeric cells 1.0 (registry STD-002), 1/6, 6.0, int 3, int 1, int 4, 0.3125, 0.5, 0.1875, 2.0, 4.0 : MEASURED-DYLIB (VA = listing; equal to the stand-in values; re-read by). Old tier SEMANTIC kept as history."),
         ("HP1-V12,V13", "ymm structural cells: all-ones (STD-001), sign mask (STD-005): MEASURED-DYLIB (equal)."),
-        ("HP1-V14", "vpermd index cell, =, used : MEASURED-DYLIB words 0,2,4,6,0,0,0,0 (the old stand-in identity 0..7 was REFUTED by DV1). The port takes the file words (PERM_FILE). Operand is a lane-uniform all-ones/all-zero ymm9 on every path (listing proof), so natural outputs are index independent; the forced lane-varying T2 (HP2) shows model and emulator agree otherwise."),
+        ("HP1-V14", "vpermd index cell, =, used : MEASURED-DYLIB words 0,2,4,6,0,0,0,0 (the old stand-in identity 0..7 was REFUTED by). The port takes the file words (PERM_FILE). Operand is a lane-uniform all-ones/all-zero ymm9 on every path (listing proof), so natural outputs are index independent; the forced lane-varying T2 shows model and emulator agree otherwise."),
         ("HP1-V15", "vpermd index cell, =, used (xmm section): MEASURED-DYLIB words 0,2,4,6,0,0,0,0 (same words as V14). Operand ymm10 is a lane-uniform full ymm mask on every path (listing proof)."),
         ("HP1-X01..X11", "xmm numeric cells 1.0, 2.0, 1/6, 6.0, int 3, int 1, int 4, 0.3125, 0.5, 0.1875, 4.0 : MEASURED-DYLIB (equal)."),
         ("HP1-X12..X13", "xmm structural cells: all-ones, sign mask : MEASURED-DYLIB (equal)."),
         ("HP1-A1", "feature word served as 0x9d97ff (ROUTE AVX2-ONLY; AVX tier and SSE tier not rebuilt)."),
         ("HP1-A2", "plane count getter [vtable] is a host service (fixed integer per call)."),
         ("HP1-A3", " (plane service) and (generic flag path) are record-only hooks (HOST-HOOKED); PAD-UNVERIFIED."),
-        ("HP1-A4", "vrcpps modelled as exact 1/x (W49, APPROX-MODEL); the Newton step is the code's own."),
+        ("HP1-A4", "vrcpps modelled as exact 1/x (APPROX-MODEL); the Newton step is the code's own."),
         ("HP1-A5", "null source or mask object with n > 0 is outside the contract (the original faults)."),
         ("HP1-A6", "buffers are plain f32 slices: no alignment effect exists in this body (vmaskmovps, no peel): ALIGN-INDEPENDENT."),
         ("HP2-F1", "Force (test only): a lane-varying vpermd operand written into ymm9/ymm10 on the emulator side and passed to red_kept on the Rust side; FORCED-OPERAND, not reachable from the original's data."),
@@ -628,7 +628,7 @@ mod tests {
         assert_eq!(render(&p, None, Some(&[0.0; 5]), &mut o), Err(HpError::ShortPlane));
     }
 
-    // ---- HP2: vpermd and the lane-varying operand
+    // ---- vpermd and the lane-varying operand
     #[test]
     fn vpermd_semantics() {
         let src = [10, 11, 12, 13, 14, 15, 16, 17];

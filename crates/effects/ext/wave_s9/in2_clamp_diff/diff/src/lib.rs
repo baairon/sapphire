@@ -1,11 +1,11 @@
-//! diff (IN2): native port of the operator class `diff` (vtable, first slot, getter/factory, slot 53 dispatcher,
+//! diff: native port of the operator class `diff` (vtable, first slot, getter/factory, slot 53 dispatcher,
 //! AVX2 body, AVX tier, SSE tier, slot 54 GPU twin). Listing offsets; VA = offset.
-//! The body is the OP1 `-` body shape (scalar main loop over up to 3 or nout channels, two constant-operand flags, extension of channel 3
+//! The body is the `-` body shape (scalar main loop over up to 3 or nout channels, two constant-operand flags, extension of channel 3
 //! for the (3,4) and (4,3) operand pairs) with an absolute value on every result: out = bits(a - b) AND mask.
 //! std only, no unsafe, explicit parameters (no Default), S3-style `render`. Assumption prefix IN2D-. See README.md and SPEC.md.
 pub use ops_arith::{OpError, Operand, ONE};
 
-/// Scalar abs mask, CAPTURED : low lane 0x7fffffff (lookup_ops.tsv of OP2).
+/// Scalar abs mask, CAPTURED : low lane 0x7fffffff (lookup_ops.tsv of).
 pub const ABS_MASK: u32 = 0x7fff_ffff;
 
 /// Explicit parameters. `nout` = result of virtual slot 31 (hooked count getter). `n` = [info].
@@ -269,13 +269,13 @@ fn vec_kernel(d: &mut [f32], src: &[f32], n: usize, phase: u32, w: usize, thr: u
 /// Every stand-in of this port with its tier.
 pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
-        ("IN2D-A1", "CAPTURED", "ONE 1.0f and the scalar abs mask 0x7fffffff (low lane of): bytes read by lookup.py (OP2 gate/lookup_ops.tsv)"),
+        ("IN2D-A1", "CAPTURED", "ONE 1.0f and the scalar abs mask 0x7fffffff (low lane of): bytes read by lookup.py (gate/lookup_ops.tsv)"),
         ("IN2D-A2", "MEASURED-DYLIB (STD-002)", "vector constant (32 B, uncovered in the image) = 1.0f x8, used by vsubps; explicit parameter vec_one; T2 runs 1.0 and 0.75"),
-        ("IN2D-A3", "MEASURED-DYLIB (OP2-A3)", "vector mask (32 B, uncovered) = 0x7fffffff x8, used by vandps; explicit parameter vec_mask; T2 runs 0x7fffffff and 0x3fffffff"),
+        ("IN2D-A3", "MEASURED-DYLIB", "vector mask (32 B, uncovered) = 0x7fffffff x8, used by vandps; explicit parameter vec_mask; T2 runs 0x7fffffff and 0x3fffffff"),
         ("IN2D-A4", "ROUTE", "AVX2 route only: feature word 0x9d97ff selects; AVX tier and SSE tier are not ported"),
         ("IN2D-A5", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ; the emulator follows the SDM, not silicon"),
         ("IN2D-A6", "ALIGN-DEPENDENT", "dst3_phase_bytes = (address of output plane 3) & 0x1f is an explicit input; only the extension kernels split on it, and it only matters when vec_one != 1.0 or vec_mask != 0x7fffffff"),
-        ("IN2D-A7", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 is an explicit parameter (hooked ret_const in R-PARITY, W69); combo choice and type tables of the shared builder are uncovered and not rebuilt (INFERRED: nout is the output channel count of the chosen combo)"),
+        ("IN2D-A7", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 is an explicit parameter (hooked ret_const in R-PARITY); combo choice and type tables of the shared builder are uncovered and not rebuilt (INFERRED: nout is the output channel count of the chosen combo)"),
         ("IN2D-A8", "INFERRED", "this operand channel counts, constant flags,../.. constants, records at with plane c at the record's per-channel pointer: measured from the body, host fill not run"),
         ("IN2D-A9", "CONTRACT", "both operands flagged constant still reads B's plane (A-constant branch first); counts outside 1..4 with n > 0 and short planes return an error"),
     ]

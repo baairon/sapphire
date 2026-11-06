@@ -1,9 +1,9 @@
-//! ESH5: scratch std-only port of the shared blur core, AVX2 region, for the route of edge_aware_sharpen only:
+//! scratch std-only port of the shared blur core, AVX2 region, for the route of edge_aware_sharpen only:
 //! switch mode 4 (table entry 4), plane-count argument n (stack slot [rbx]) in 0..=5, flag [rbx] == 0 (pool path).
 //! Everything else the original does in this region (modes 0..3, the vector radius loops for n >= 8, the job makers for flag != 0) is NOT ported
 //! and is refused with an error.
 //!
-//! Callees are explicit: `Host::powf` (libm, ESH4), the pool service with the pass jobs (not ported by any
+//! Callees are explicit: `Host::powf` (libm), the pool service with the pass jobs (not ported by any
 //! piece: recorded), the scratch service and the plane copy . The exp2 helper is ported here (FMA variant
 //! cpu indicator 9..11, INFERRED) with constants read from the approved file (exp2tab.rs).
 

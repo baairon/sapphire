@@ -1,4 +1,4 @@
-//! clamp (IN2): native port of the three-operand builtin `clamp` (vtable, first slot, getter/factory, slot 49,
+//! clamp: native port of the three-operand builtin `clamp` (vtable, first slot, getter/factory, slot 49,
 //! slot 53 dispatcher, AVX2 body, AVX tier, SSE tier, slot 54 GPU twin, slot 60 combo builder).
 //! Listing offsets; VA = offset. The node returns the MEDIAN of its three operands (value between the other two, whichever order they come in),
 //! with a different compare ladder per operand shape (which operands are constants), so the port keeps the 7 shapes the body has:
@@ -547,7 +547,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
         ("IN2C-A2", "ROUTE", "AVX2 route only: feature word 0x9d97ff selects; AVX tier and SSE tier are not ported"),
         ("IN2C-A3", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ; compares and min/max only (no arithmetic), the emulator follows the SDM, not silicon"),
         ("IN2C-A4", "ALIGN-DEPENDENT", "dst_phase_bytes[c] = (address of output plane c) & 0x1f is an explicit input; only n >= 0x4b0 (shape 011: 0x45d) peels, below it the vector core starts at element 0"),
-        ("IN2C-A5", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 is an explicit parameter (hooked ret_const in R-PARITY, W69); it is called again after every channel and treated as constant; combo choice and the 9 entry combo table of the own builder (words 1,2,2,3,3,3,4,4 and terminator) are not rebuilt (INFERRED: operand channel count triples)"),
+        ("IN2C-A5", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 is an explicit parameter (hooked ret_const in R-PARITY); it is called again after every channel and treated as constant; combo choice and the 9 entry combo table of the own builder (words 1,2,2,3,3,3,4,4 and terminator) are not rebuilt (INFERRED: operand channel count triples)"),
         ("IN2C-A6", "INFERRED", "this operand channel counts, constant flags, constants one float per channel indexed by the channel c (not clamped), records at with plane c at the record's per-channel pointer: measured from the body, host fill not run"),
         ("IN2C-A7", "CONTRACT", "constant index > 3 (nout > 4) and missing or short planes return an error; shape 11x reads C's plane even when C is flagged constant; operand roles (which of A,B,C is the median's value) are per shape and exactly as the body"),
         ("IN2C-A8", "INFERRED", "the node is the median of its three operands for finite inputs (MEASURED per shape); NaN and tie behaviour are exactly the compare ladders ported here and are not a claim about the effect language"),

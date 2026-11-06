@@ -1,4 +1,4 @@
-//! T10 of NV-9b: the dump's host geometry (RD1 / EP-6 item 7) as the default binding, the NV9-GEOM-OLD switch, the geometry delta
+//! T10 of NV-9b: the dump's host geometry (/ EP-6 item 7) as the default binding, the NV9-GEOM-OLD switch, the geometry delta
 //! on Diffuse and Blur_Motion_Curves_No_Transform, and node-level execution against the native plan text of BOTH plan modes
 //! (GpuFirst r8 = 1 and CpuDriver r8 = 0) of the NV-3e compiler. Outputs: out/GEOM_DELTA_NV9B.tsv, out/MODES_NV9B.tsv.
 use fx_eval::cpuplan::{plan_text_mode, PlanMode};
@@ -149,7 +149,7 @@ fn blur_warp_identity_on_the_dump_geometry_and_half_pixel_shift_of_the_old_plane
         let argso = [Arg::Mip(&mip), Arg::Img(&xo), Arg::Img(&xo), cst(&[0.5, 0.5]), cst(&[1.0]), cst(&[0.0, 0.0]), cst(&[1.0]), cst(&[0.0])];
         let outo = run_with("blur_warp", &argso, w, h, &ko).into_image().unwrap();
         assert_eq!(bits(&outo), bits(&src));
-        // ... but the old plane under the dump geometry is shifted by (-0.5, -0.5) and blends neighbours (RD1 HIGH-STAKES 1)
+        // ... but the old plane under the dump geometry is shifted by (-0.5, -0.5) and blends neighbours (HIGH-STAKES 1)
         let shifted = run_with("blur_warp", &argso, w, h, &k).into_image().unwrap();
         assert_ne!(bits(&shifted), bits(&src));
     }

@@ -1,5 +1,5 @@
-//! INT27 step SI (SIP1 outcome A): Hue_Sat_Bright_Autogen at G0, GC, GD, GN with Source at 3 channels compiles to one folded
-//! constant node; the 'ae32' constant route renders its lanes through the destination convert. Bits from SIP1's PLANS.tsv (the original's
+//! (outcome A): Hue_Sat_Bright_Autogen at G0, GC, GD, GN with Source at 3 channels compiles to one folded
+//! constant node; the 'ae32' constant route renders its lanes through the destination convert. Bits from PLANS.tsv (the original's
 //! command-0 constants, MEASURED in the emulator): G0 and GC 00000000, GD 3fc00000, GN c0000000 in lanes 0 to 2.
 use fx_exec::exec::{compile_for, execute_ae32_const, Binding, HostFrames};
 use fx_exec::hostconv14::{Ae32Dest, Ae32Route};
@@ -118,7 +118,7 @@ fn sip1_four_planes_refused() {
     let (_, b, _) = cases().remove(2);
     let cp = compile_for(&g, &b).unwrap();
     let e = route_check(&cp, &[("Source".to_string(), 4)], Some(3), "S_HueSatBright", "GD").unwrap_err();
-    assert_eq!(e, "SOURCE-INDEPENDENT-4CH-UNPORTED (S_HueSatBright GD: the native compiled a Source-independent plan at 4 planes; the original's 4-channel plan reads Source (SIP1); W552)");
+    assert_eq!(e, "SOURCE-INDEPENDENT-4CH-UNPORTED (S_HueSatBright GD: the native compiled a Source-independent plan at 4 planes; the original's 4-channel plan reads Source)");
 }
 
 #[test]

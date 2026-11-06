@@ -1,6 +1,6 @@
-//! INT21 step L: the vector `:hardcode` ported generically. Each of the three vector hardcodes of the registered layout rows gives
+//! the vector `:hardcode` ported generically. Each of the three vector hardcodes of the registered layout rows gives
 //! the value node the lanes, lane count and node type that the genotype reader gives a def vector literal of the same text (the def text rebuilt with
-//! the hardcode text in place of the def default); every scalar hardcode keeps the LYM2 result; the two refusals by name.
+//! the hardcode text in place of the def default); every scalar hardcode keeps the result; the two refusals by name.
 use fx_eval::layoutmerge::{find_layout_text, merge_layout, read_layout, LItem};
 use fx_eval::{build_effect, Corpus, NodeKind};
 
@@ -46,14 +46,14 @@ fn t34_vector_hardcode_lanes_equal_reader() {
         assert_eq!(rows.len(), 1, "{}: layout rows", prog);
         let mut li = read_layout(rows[0]).unwrap_or_else(|e| panic!("{}: {}", prog, e));
         if *prog == "Texture_Chroma_Spiral_Autogen" {
-            // FINDING (INT21): this row also carries `:modify ... = 0`, which LYM2's merge refuses first by name; the registered merge stays refused.
+            // FINDING: this row also carries `:modify... = 0`, which merge refuses first by name; the registered merge stays refused.
             let mut g0 = build_effect(&c, c.find_effect(prog, None).unwrap()).unwrap();
             let e = merge_layout(&mut g0, &li).unwrap_err();
             assert!(e.starts_with("LAYOUT-MODIFY-VALUE-UNSUPPORTED"), "{}", e);
             // test-only: the :modify value flag cleared so that the merge reaches the vector hardcode
             for it in li.items.iter_mut() {
                 if let LItem::Modify { name, canon, value, .. } = it {
-                    // LYM2's reader takes the value text as the canonical name of a `NAME = VALUE` modify; the test keeps the def name
+                    // reader takes the value text as the canonical name of a `NAME = VALUE` modify; the test keeps the def name
                     if *value {
                         *canon = name.clone();
                     }
@@ -64,7 +64,7 @@ fn t34_vector_hardcode_lanes_equal_reader() {
         assert!(li.items.iter().any(|it| matches!(it, LItem::HardcodeVec { name: n, text, .. } if n == name && text == lit)), "{}: vector item", prog);
         let mut g = build_effect(&c, c.find_effect(prog, None).unwrap()).unwrap();
         let ni = g.params.iter().find(|p| p.name == *name).and_then(|p| p.node).expect("def node");
-        // FINDING (INT21): two of the three defs give the parameter a scalar default (Texture_Chroma_Spiral_Autogen `shift = 0`, Dissolve_Zap
+        // FINDING: two of the three defs give the parameter a scalar default (Texture_Chroma_Spiral_Autogen `shift = 0`, Dissolve_Zap
         // `bg_rel_color = 0`) while the layout's hardcode is a vector: refused by 's name. Only Mosaic_Autogen (`wrap = [ 2 2 ]`) merges.
         let refusal = match *prog {
             "Texture_Chroma_Spiral_Autogen" => Some("LAYOUT-HARDCODE-LANES-MISMATCH (Texture_Chroma_Spiral_Autogen: shift: def 1 lanes, hardcode 2)"),
@@ -101,7 +101,7 @@ fn t34_scalar_hardcodes_unchanged() {
     if !effects_vecdir::have_all(&["record_extract/programs/programs.tsv"]) {
         return;
     }
-    // every scalar :hardcode of every registered layout row: the LYM2 value (text parsed as f64) and an LItem::Hardcode in the same place
+    // every scalar :hardcode of every registered layout row: the value (text parsed as f64) and an LItem::Hardcode in the same place
     let tsv = std::fs::read_to_string(pt()).expect("programs.tsv");
     let c = Corpus::from_programs_tsv(&tsv);
     let (mut scalars, mut vectors, mut unparsed) = (0usize, 0usize, Vec::new());

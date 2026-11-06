@@ -608,7 +608,7 @@ fn parse_item_inner(p: &mut P, va: &str) -> Result<Item, ParseError> {
     }
 }
 
-/// INT21 step L: a vector literal text read by the genotype reader's own path: the reader's tokenizer (each element a NUMBER token
+/// a vector literal text read by the genotype reader's own path: the reader's tokenizer (each element a NUMBER token
 /// through path, orig_number) and the same element loop and lane-count rule as a def vector default (1 to 4 elements). The whole text
 /// must be one bracketed literal. Used by layoutmerge for a `:hardcode NAME = [ ... ]` value.
 pub fn read_vector_literal(text: &str) -> Result<Vec<f64>, ParseError> {
@@ -637,7 +637,7 @@ pub fn read_vector_literal(text: &str) -> Result<Vec<f64>, ParseError> {
     Ok(x)
 }
 
-/// NV3b (M10): the original's text-to-number path for NUMBER tokens, reproduced generically.
+/// (M10): the original's text-to-number path for NUMBER tokens, reproduced generically.
 /// The value is accumulated in single precision (f32): the integer part as `v = v * 10 + d`, then for each
 /// fractional digit `v += d * scale; scale *= 0.1f`, with `scale` starting at 0.1f; a leading `-` negates.
 /// MEASURED-FITTED: this reproduces 181 of 183 parameter-default literals of the 56 EP-3 and EP-3b dumps bit

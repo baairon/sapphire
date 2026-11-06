@@ -1,10 +1,10 @@
-//! TMR1 / INT20 step T: get_curve_val through tickmap::map_param on the verified render path.
+//! / get_curve_val through tickmap::map_param on the verified render path.
 //! The host's checkout answers come from a HOST-CURVE-VALUES input, a text file:
 //!   `host <field> <int>`           field in effect_ref, time_mult, time_scale, double_flag, global, selector (host record fields)
 //!   time_frames ([pinfo]) is not in the file: fx_run fills it from --host-frame ([ctx], INFERRED to be the same field)
 //!   `value <param> <index> <tick> <step> <scale> <status> <raw>` one checkout answer per key; status 0 = success; raw = the int32 at pd
 //!   `point <param> <field> <value>`  the recorded point fields of one parameter (step PW); every field in POINT_FIELDS is required, none is defaulted
-//! The parameter record fields are defined in effects_rtdata (styles/<style>.rs, field `tickmap`; BR4 MEASURED); a parameter without a row is refused by name.
+//! The parameter record fields are defined in effects_rtdata (styles/<style>.rs, field `tickmap` MEASURED); a parameter without a row is refused by name.
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default)]
@@ -146,23 +146,23 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
         return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (nlanes: record {} lanes, program node {} lanes for {})", g(2), n, pname));
     }
     let rec = tickmap::ParamRec { ptype: g(1) as i32, nlanes: g(2) as u8, kind_byte: g(3) as u8, subtype_byte: g(4) as u8, flags_a_byte: g(5) as u8, flags_b_byte: g(6) as u8, index: g(7) as i16, rec_unit_value: f32::NAN };
-    // INT32 step DF: the table index is the key sent to the host's checkout; for a claimed style it must equal
+    // the table index is the key sent to the host's checkout; for a claimed style it must equal
     // the parameter's registered host index in STYLE_PARAM_INDEX.tsv, else the line refuses by name.
     if let Some(sr) = crate::units::style_param_row(prog, pname) {
         if sr.host_index != rec.index as i32 {
-            return refuse(diags, format!("TICKMAP-INDEX-NOT-REGISTERED ({} {}: table index {}, the style's registered index {}; W553)", prog, pname, rec.index, sr.host_index));
+            return refuse(diags, format!("TICKMAP-INDEX-NOT-REGISTERED ({} {}: table index {}, the style's registered index {})", prog, pname, rec.index, sr.host_index));
         }
     }
-    // INT30 TICKMAP step (TMP1): nibble 5 reads [rec] and the pinfo unit fields, which the parameter record table
+    // TICKMAP step: nibble 5 reads [rec] and the pinfo unit fields, which the parameter record table
     // does not carry; the line refuses by name instead of reading a constructed value (the NaN placeholders are never read).
     let pt = hcv.points.get(pname);
     // step TPU: a generic-path unit entry; never together with a point entry, and it never makes a point context
     let un = hcv.units.get(pname);
     if un.is_some() && pt.is_some() {
-        return refuse(diags, format!("TICKMAP-UNIT-AND-POINT ({}: {}: a generic-path unit entry and a point entry; W662)", prog, pname));
+        return refuse(diags, format!("TICKMAP-UNIT-AND-POINT ({}: {}: a generic-path unit entry and a point entry)", prog, pname));
     }
     if rec.subtype_byte & 0xf == 5 && pt.is_none() && un.is_none() {
-        return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (unit fields of {}: {}: rec_unit_value, unit_x3, unit_d4, unit_d5 are not recorded; TMP1)", prog, pname));
+        return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (unit fields of {}: {}: rec_unit_value, unit_x3, unit_d4, unit_d5 are not recorded)", prog, pname));
     }
     let tf = match hcv.time_frames {
         Some(v) => v,
@@ -192,10 +192,10 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
     if let Some(u) = un {
         for k in UNIT_FIELDS {
             if !u.contains_key(k) {
-                return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (unit field {} of {}: {}; W662)", k, prog, pname));
+                return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED (unit field {} of {}: {})", k, prog, pname));
             }
         }
-        let hx = |k: &str| u64::from_str_radix(u[k].trim_start_matches("0x"), 16).map_err(|_| format!("TICKMAP-HOST-FIELD-UNSOURCED (unit field {} of {}: {} is unreadable; W662)", k, prog, pname));
+        let hx = |k: &str| u64::from_str_radix(u[k].trim_start_matches("0x"), 16).map_err(|_| format!("TICKMAP-HOST-FIELD-UNSOURCED (unit field {} of {}: {} is unreadable)", k, prog, pname));
         let (r6, x3, d4, d5) = match (hx(crate::judge_keys::REC_UNIT_KEY), hx("x3"), hx("d4"), hx("d5")) {
             (Ok(a), Ok(b), Ok(c), Ok(d)) => (a, b, c, d),
             (Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => return refuse(diags, e),

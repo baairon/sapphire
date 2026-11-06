@@ -1,6 +1,6 @@
-//! INT17 step 5 (s9_style): merged from INT16 stage/s7/style.rs (byte copy below this line).
-//! INT16: STYLE-SELECT, the style of a multi-style effect from the host popup "Effect".
-//! BCJ3 (wave_s9/bcj3_blur_reach/SELECTOR.md, MEASURED in the emulator): the render path reads the program count
+//! (s9_style): merged stage/s7/style.rs (byte copy below this line).
+//! STYLE-SELECT, the style of a multi-style effect from the host popup "Effect".
+//! (wave_s9/bcj3_blur_reach/SELECTOR.md, MEASURED in the emulator): the render path reads the program count
 //! [owner] (movsx word; cmp 1; jg); with a count above 1 it checks out "Effect" (registered index 5, popup) and takes
 //! style = max(answer - 1, 0) (dec ecx; cmovs ecx, 0); load the program pointer from [owner + 8 x style].
 //! With a count of 1 or less the style index is 0 and no checkout is made. MEASURED for S_Blur: Effect = 2 gives the program pointer of
@@ -20,17 +20,17 @@ pub fn style_index(prog_count: i16, answer: i32) -> usize {
     }
 }
 
-/// The program table [owner] per multi-style effect, in index order, as MEASURED (BCJ3 for S_Blur). Effects not listed are not
+/// The program table [owner] per multi-style effect, in index order, as MEASURED (for S_Blur). Effects not listed are not
 /// claimed here; a style of one of them is refused by STYLE-SELECT only when the run declares an Effect answer.
 pub const STYLE_TABLE: &[(&str, &[&str])] = &[
     ("S_Blur", &["Blur_Color", "Blur_Mono"]),
-    // BOP1 (outcome A): S_BlurMoCurves has two styles. Effect = 2 is the Blur_Only layout object. The plugin's own def registration refuses the
+    // (outcome A): S_BlurMoCurves has two styles. Effect = 2 is the Blur_Only layout object. The plugin's own def registration refuses the
     // def name Blur_Motion_Curves_No_Transform_Autogen (39 characters, bound 32), so the Blur_Only render is the layout object's own plan, which is
-    // plan-equal (BOP1 runs/cmp_rm30.txt) to the native compile of that def. The style name used here is the layout's style name.
+    // plan-equal (runs/cmp_rm30.txt) to the native compile of that def. The style name used here is the layout's style name.
     ("S_BlurMoCurves", &["Transform_and_Blur", "Blur_Only"]),
 ];
 
-/// BOP1: the registered def a style of S_BlurMoCurves runs. Blur_Only has no registered def in the plugin; its layout object compiles the same plan as
+/// the registered def a style of S_BlurMoCurves runs. Blur_Only has no registered def in the plugin; its layout object compiles the same plan as
 /// the def Blur_Motion_Curves_No_Transform_Autogen (the native compiles that text).
 pub fn style_program(core: &str) -> Option<&'static str> {
     match core {

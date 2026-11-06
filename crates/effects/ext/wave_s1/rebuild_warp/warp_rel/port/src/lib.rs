@@ -112,10 +112,10 @@ pub struct Assumption {
 pub fn assumptions() -> Vec<Assumption> {
     vec![
         Assumption { id: "WR1-A1", basis: "ROUTE AVX2-ONLY: F2 dispatcher mask test 0x9d97ff selects; the SSE twin and tier are not ported (inherited from FX2-A1)", label: "MEASURED listing, ROUTE AVX2-ONLY" },
-        Assumption { id: "WR1-A2", basis: "slot 33 (shared with class warp) writes P, P and P before slot 53 and calls prefill; here those P fields and the image object [P] are explicit inputs (W44), the prefill callback is not rebuilt", label: "HOST-HOOKED (explicit inputs), NOT REBUILT: slot 33 chain" },
+        Assumption { id: "WR1-A2", basis: "slot 33 (shared with class warp) writes P, P and P before slot 53 and calls prefill; here those P fields and the image object [P] are explicit inputs, the prefill callback is not rebuilt", label: "HOST-HOOKED (explicit inputs), NOT REBUILT: slot 33 chain" },
         Assumption { id: "WR1-A3", basis: "image channel count n = [[P]]: no store to P exists in the warp_rel constructor (base) or in slots 3,6,22,23,33,38,40,49,53,54,55,56,57 (listing read), so the binder is outside the class; n range of real callers UNKNOWN. Image constructor immediate n: 0, 1 and 3 (NTRACE.md); the port refuses n > 8", label: "UNKNOWN range; CONTRACT-LIMIT n <= 8 (measured by the end-to-end probes)" },
-        Assumption { id: "WR1-A4", basis: "wrapper reads only P and Q fields listed in lib.rs; element index [Q] is an explicit input; the a1/a2/c1/c2 arrays are explicit slices (no pointer values are read by the port, W55)", label: "ALIGN-INDEPENDENT" },
-        Assumption { id: "WR1-A5", basis: "F2's inherited stand-ins: CPU word 0x9d97ff (route selector, PARAM-UNCAPTURED 1), assert helper and empty-image fills recorded only (CALLEE-MODELLED); fmod and F1 run as real code in the emulator and are the finished natives in Rust (no hook on fmod in this T2)", label: "inherited FX2-A2, FX2-A3, FX2-A9" },
+        Assumption { id: "WR1-A4", basis: "wrapper reads only P and Q fields listed in lib.rs; element index [Q] is an explicit input; the a1/a2/c1/c2 arrays are explicit slices (no pointer values are read by the port)", label: "ALIGN-INDEPENDENT" },
+        Assumption { id: "WR1-A5", basis: "F2's inherited stand-ins: CPU word 0x9d97ff (route selector, PARAM-UNCAPTURED 1), assert helper and empty-image fills recorded only (CALLEE-MODELLED); fmod and F1 run as real code in the emulator and are the finished natives in Rust (no hook on fmod in this T2)", label: "inherited FX2-A2" },
         Assumption { id: "WR1-A6", basis: "MXCSR round to nearest, no FTZ, no DAZ", label: "HOST-FP-ASSUMED" },
     ]
 }
@@ -123,7 +123,7 @@ pub fn assumptions() -> Vec<Assumption> {
 /// Class summary (vtable, vtables\class_vtable_pairs.tsv row warp_rel), slot by slot at flag 0.
 pub fn class_summary() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
-        ("33", " (416 B, shared with class warp)", "binder/prefill: writes P, calls (REC-PARITY by WS3), NOT REBUILT here; must run before slot 53"),
+        ("33", " (416 B, shared with class warp)", "binder/prefill: writes P, calls (REC-PARITY by), NOT REBUILT here; must run before slot 53"),
         ("38", " (96 B)", "predicate (returns 0 or -1 from tests), no pixels"),
         ("40", " (192 B)", "bounds/extent query (or default), no pixels, NOT REBUILT"),
         ("53", " (160 B)", "CPU render entry: this port (wrapper plus F2, F1 on the flag path)"),

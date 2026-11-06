@@ -1,4 +1,4 @@
-//! plan_dump <programs.tsv> <program> [--hc] [--cpu (r8 = 0 CpuDriver plan text, NV3e)] [name=v1,v2 ...]: prints the native plan (node table and plan text) of one branch set.
+//! plan_dump <programs.tsv> <program> [--hc] [--cpu (r8 = 0 CpuDriver plan text)] [name=v1,v2 ...]: prints the native plan (node table and plan text) of one branch set.
 use fx_eval::cpuplan::{plan_text_mode, PlanMode};
 use fx_eval::{build_effect, compile, Corpus};
 use std::collections::BTreeMap;
@@ -11,14 +11,14 @@ fn main() {
 
 fn run(a: Vec<String>) -> i32 {
     if a.len() < 3 {
-        eprintln!("usage: plan_dump <programs.tsv> <program> [--hc] [--cpu (r8 = 0 CpuDriver plan text, NV3e)] [name=v1,v2 ...]");
+        eprintln!("usage: plan_dump <programs.tsv> <program> [--hc] [--cpu (r8 = 0 CpuDriver plan text)] [name=v1,v2 ...]");
         return 2;
     }
     let text = std::fs::read_to_string(&a[1]).expect("programs.tsv");
     let c = Corpus::from_programs_tsv(&text);
     let ei = c.find_effect(&a[2], None).expect("effect");
     let g = build_effect(&c, ei).expect("build");
-    // INT8: plan_dump has only the state A semantics (Mask = 1 constant, no compile context); it refuses to run unless the named option is passed
+    // plan_dump has only the state A semantics (Mask = 1 constant, no compile context); it refuses to run unless the named option is passed
     if !a.iter().any(|x| x == "--state-a-defaults") {
         eprintln!("plan_dump: refused: only the named option --state-a-defaults exists (Mask := 1, no compile context); not usable in counted runs");
         return 2;
@@ -33,7 +33,7 @@ fn run(a: Vec<String>) -> i32 {
         } else if s == "--ranges-off" {
             o.ranges_off = true;
         } else if let Some(v) = s.strip_prefix("--src-chan=") {
-            // INT24: Source (and Foreground) bound with N channels, as fx_run's --src-chan (FLD2's compiles at Source 3 channels)
+            // Source (and Foreground) bound with N channels, as fx_run's --src-chan (compiles at Source 3 channels)
             let k: i32 = v.parse().expect("--src-chan=N");
             o.input_elnum.insert("Source".into(), k);
             o.input_elnum.insert("Foreground".into(), k);
@@ -61,7 +61,7 @@ fn run(a: Vec<String>) -> i32 {
         );
     }
     println!("{}", plan_text_mode(&cp, mode));
-    // INT24: with --gid, the genotype id and program-text path of every plan node, the compile's fold list and its v3_to_v4_if4 folds
+    // with --gid, the genotype id and program-text path of every plan node, the compile's fold list and its v3_to_v4_if4 folds
     if a.iter().any(|x| x == "--gid") {
         for n in &cp.nodes {
             println!("GID	N{}	gid {}	{}", n.idx, n.gid, fx_exec::ops_census::node_path(&cp, n.idx));

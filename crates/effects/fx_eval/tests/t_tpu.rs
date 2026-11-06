@@ -41,7 +41,7 @@ fn run(style: &str, t: &str) -> (Option<Vec<f32>>, Vec<String>) {
     (r, d)
 }
 
-/// (i) TMP1's MEASURED returns: 0.25 and -0.125 at size_x 64, every unit field 1.0, give 0x3c000000 and 0x3b800000; lanes 0 give 0 and -0.
+/// (i) MEASURED returns: 0.25 and -0.125 at size_x 64, every unit field 1.0, give 0x3c000000 and 0x3b800000; lanes 0 give 0 and -0.
 #[test]
 fn tpu_tmp1_measured_returns() {
     if !effects_rtdata::have_tables() {
@@ -57,7 +57,7 @@ fn tpu_tmp1_measured_returns() {
     }
 }
 
-/// (ii) Constructed pins (FM2 lens): each field moved off 1.0 alone, then all together, at size_x 50 and size_y 7.
+/// (ii) Constructed pins (lens): each field moved off 1.0 alone, then all together, at size_x 50 and size_y 7.
 #[test]
 fn tpu_constructed_pins() {
     if !effects_rtdata::have_tables() {
@@ -86,7 +86,7 @@ fn tpu_refusals() {
     for s in STYLES {
         let (r, d) = run(s, &text(16384, -8192, Some(64), Some(32), None, false));
         assert!(r.is_none());
-        assert_eq!(d[0], format!("TICKMAP-HOST-FIELD-UNSOURCED (unit fields of {}: shift: rec_unit_value, unit_x3, unit_d4, unit_d5 are not recorded; TMP1)", s));
+        assert_eq!(d[0], format!("TICKMAP-HOST-FIELD-UNSOURCED (unit fields of {}: shift: rec_unit_value, unit_x3, unit_d4, unit_d5 are not recorded)", s));
         let (r, d) = run(s, &text(16384, -8192, None, Some(32), Some((1.0, 1.0, 1.0, 1.0)), false));
         assert!(r.is_none());
         assert_eq!(d[0], "TICKMAP-HOST-FIELD-UNSOURCED (size_x)");
@@ -95,6 +95,6 @@ fn tpu_refusals() {
         assert_eq!(d[0], "TICKMAP-HOST-FIELD-UNSOURCED (size_y)");
         let (r, d) = run(s, &text(16384, -8192, Some(64), Some(32), Some((1.0, 1.0, 1.0, 1.0)), true));
         assert!(r.is_none());
-        assert_eq!(d[0], format!("TICKMAP-UNIT-AND-POINT ({}: shift: a generic-path unit entry and a point entry; W662)", s));
+        assert_eq!(d[0], format!("TICKMAP-UNIT-AND-POINT ({}: shift: a generic-path unit entry and a point entry)", s));
     }
 }

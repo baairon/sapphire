@@ -1,4 +1,4 @@
-//! fx_run_gate: the gate wrapper of fx_run (INT6). fx_run itself REQUIRES the bound-input mask. The stored state A gates and suites were made with the harness
+//! fx_run_gate: the gate wrapper of fx_run. fx_run itself REQUIRES the bound-input mask. The stored state A gates and suites were made with the harness
 //! semantics "compile mask 1 (Source bound), explicit images bound whatever their bit": this wrapper passes exactly those two values explicitly
 //! (`--bound-mask 1 --bind-supplied`, labelled STATE-A-MASK and STATE-A-BIND-SUPPLIED) unless the caller already named a mask or --bind-supplied. It adds nothing else and decides nothing.
 use std::process::Command;
@@ -21,10 +21,10 @@ fn main() {
         a.push("REC-HARNESS".into()); // STATE-A-RANGES: the stored state A originals were scored against the REC table
     }
     if !a.iter().any(|x| x == "--legacy-seed-w") {
-        a.push("--legacy-seed-w".into()); // LEGACY-SEED-W: the stored state A suites were made with the NV10-P3 seed
+        a.push("--legacy-seed-w".into()); // LEGACY-SEED-W: the stored state A suites were made with the seed
     }
     if !a.iter().any(|x| x == "--hc" || x == "--hc-keyed" || x == "--hc-zero-legacy") {
-        a.push("--hc-zero-legacy".into()); // INT8 HC-ZERO-LEGACY: the stored state A suites were made with the zero host-curve fold
+        a.push("--hc-zero-legacy".into()); // HC-ZERO-LEGACY: the stored state A suites were made with the zero host-curve fold
     }
     if !a.iter().any(|x| x == "--bind-supplied") {
         a.push("--bind-supplied".into());

@@ -1,4 +1,4 @@
-//! screen_super (SS1, launch target screen_super_if_needed): native port of the builtin class `screen_super` (vtable, first slot), which the
+//! screen_super (, launch target screen_super_if_needed): native port of the builtin class `screen_super` (vtable, first slot), which the
 //! registry also holds under the literal name `screen_super_if_needed` (a second prototype instance of the SAME class, see README).
 //! Slot 53 = (dispatcher), AVX2 body (1,808 B). Listing offsets, VA = offset.
 //! std only, no unsafe, explicit parameters (no Default). Same operand layout and combo base as the operator classes `* + -`.
@@ -328,7 +328,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
         ("SS1-A3", "ROUTE", "AVX2 route only: feature word 0x9d97ff selects; the AVX body and the SSE body are not ported"),
         ("SS1-A4", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ; the emulator follows the SDM, not silicon"),
         ("SS1-A5", "ALIGN-DEPENDENT", "dst3_phase_bytes = (address of output plane 3) & 0x1f is an explicit input (only the (3,4) B-side kernel splits on it, and only matters when vec_one != 1.0)"),
-        ("SS1-A6", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 (: [chosen combo] or -1) is an explicit parameter; the combo table is MEASURED (audit_evt COMBOS.tsv), the choice and the builder are not rebuilt (COMBO-PARITY is W86)"),
+        ("SS1-A6", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 (: [chosen combo] or -1) is an explicit parameter; the combo table is MEASURED (audit_evt COMBOS.tsv), the choice and the builder are not rebuilt (COMBO-PARITY)"),
         ("SS1-A7", "INFERRED", "this are the operand channel counts, their 'is constant' flags,../.. the constants, records at with plane c at the record's per-channel pointer: measured from the body, host fill not run"),
         ("SS1-A8", "CONTRACT", "both operands flagged constant still reads B's plane (A-constant branch first); counts < 1 or > 4 with n > 0, and short planes, are outside the contract and return an error"),
     ]

@@ -1,4 +1,4 @@
-//! sat_scale: native port of the AVX2 body (HS1).
+//! sat_scale: native port of the AVX2 body.
 //!
 //! Source of truth: neutral_1.asm (listing offsets; captured VA = offset).
 //! The body mixes each pixel (or one constant colour) with its luma:

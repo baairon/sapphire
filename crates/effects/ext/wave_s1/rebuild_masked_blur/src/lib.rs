@@ -50,7 +50,7 @@ pub fn premultiply_in_place(dst: &mut [f32], mask: &[f32]) {
 }
 
 /// The combine job's threshold, the f32 (STD-007): MEASURED-DYLIB = 0x39000000 = 2^-13 = 1.2207031e-4
-/// (read from the approved plugin file, `__TEXT,__const`, 2026-10-30; the earlier port default 0.0 was refuted by DV1).
+/// (read from the approved plugin file, `__TEXT,__const`, 2026-10-30; the earlier port default 0.0 was refuted by).
 pub const MASK_THRESHOLD: f32 = f32::from_bits(0x3900_0000);
 
 /// Job, AVX2 body (float path): inputs mask m, blurred premultiplied plane b, blurred mask w, source s.
@@ -92,7 +92,7 @@ pub struct MaskedBlurParams {
     /// src != 0 gives Some(f32 at src) (B-A5 of blur).
     pub aspect: Option<f32>,
     /// Constant used by the combine job (MB-A1, STD-007). MEASURED-DYLIB: the value the original uses is [`MASK_THRESHOLD`]
-    /// (2^-13, bytes 00 00 00 39 in the approved plugin file, RR1). The field stays an explicit parameter with no default and no
+    /// (2^-13, bytes 00 00 00 39 in the approved plugin file). The field stays an explicit parameter with no default and no
     /// constructor or `Default` impl fills it (PC-1); callers that mean the original pass `MASK_THRESHOLD`. Live range: the compared mask
     /// is clamped to [0,1], so pixels with m <= thr (or NaN) keep the source; any thr below 1 changes outputs, thr >= 1 keeps every pixel.
     pub mask_threshold: f32,
@@ -182,9 +182,9 @@ pub struct Assumption {
 
 pub fn assumptions() -> Vec<Assumption> {
     vec![
-        Assumption { id: "MB-A1", what: "combine job threshold (STD-007): MEASURED-DYLIB, 0x39000000 = 2^-13 read from the approved plugin file (RR1, 2026-10-30; DV1 refuted the old default 0.0); MASK_THRESHOLD holds it; mask_threshold stays an explicit parameter with no default (PC-1)", label: "MEASURED-DYLIB" },
+        Assumption { id: "MB-A1", what: "combine job threshold (STD-007): MEASURED-DYLIB, 0x39000000 = 2^-13 read from the approved plugin file (, 2026-10-30 refuted the old default 0.0); MASK_THRESHOLD holds it; mask_threshold stays an explicit parameter with no default (PC-1)", label: "MEASURED-DYLIB" },
         Assumption { id: "MB-A2", what: "mask is required (the original dereferences this unconditionally); None gives FxError::Geometry; the original clamps the host mask in place, the port clamps a copy", label: "ASSUMED" },
-        Assumption { id: "MB-A3", what: "premultiply vector splat, 1.0f in every lane: MEASURED-DYLIB (DV1 CONFIRMED all 8 lanes; RR1 T2 emulator reads the file bytes)", label: "MEASURED-DYLIB" },
+        Assumption { id: "MB-A3", what: "premultiply vector splat, 1.0f in every lane: MEASURED-DYLIB (CONFIRMED all 8 lanes T2 emulator reads the file bytes)", label: "MEASURED-DYLIB" },
         Assumption { id: "MB-A4", what: "render flag != 0 (16-bit path: uncovered) is not ported; flag 0 only", label: "ASSUMED (scope)" },
         Assumption { id: "MB-A5", what: "in-place blur of the premultiplied plane (src == dst in the dispatcher) is modelled as blur from a copy into the buffer; T2 route tests it against the aliased original", label: "ASSUMED (verified by T2)" },
         Assumption { id: "MB-A6", what: "cancel polls, roi record {w,h,c=w,d=0,e=4}, scratch phase 0, single worker: inherited from blur (B-A1, B-A2, B-A4, B-A6); edge mode is fixed to zero by the wrapper (MEASURED), so U03 does not apply", label: "ASSUMED" },

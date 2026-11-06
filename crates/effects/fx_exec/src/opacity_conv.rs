@@ -1,10 +1,10 @@
-//! INT26 step OP (OPC1 PATCH): the host Opacity checkout integer to the loop value of the program parameter `opacity`.
-//! Copy of wave_s9/opc1_opacity_convert/port/src/lib.rs (rules and constants only), with the kind-4 arm selector added by INT26:
+//!: the host Opacity checkout integer to the loop value of the program parameter `opacity`.
+//! Copy of wave_s9/opc1_opacity_convert/port/src/lib.rs (rules and constants only), with the kind-4 arm selector added by 
 //! the integer arm ([prog] == 0) is ported; the other arm (a host call) is refused by name (OPACITY-HOSTCALL-ARM-UNPORTED).
 //! The loop value is f32(max(v - 1, 0)) for v the checkout integer; the parameter record's optional upper and lower clamps then apply.
 
 /// The label of the merged conversion (its text, pasted exactly).
-pub const OPACITY_CONVERT_PORTED: &str = "OPACITY-CONVERT-PORTED (opacity = f32(max(v - 1, 0)) for v the host's Opacity checkout integer, then the parameter record's clamps; kind case and v MEASURED at Trails answers 2 and 3 and Blur answers 1 and 3; the lane written at the conversion store is the lane the owner loop reads (address MEASURED) and holds 0.0, 1.0, 0.0, 2.0 (MEASURED); the register value at the store instant INFERRED equal to the lane (the memory watch does not see AVX-engine stores; the following clamp stores write the same value); unit tests at both styles' six points and the clamps; identity and v-instead-of-v-1 mutants killed at Trails answers 2 and 3; OPC1, W548, W558)";
+pub const OPACITY_CONVERT_PORTED: &str = "OPACITY-CONVERT-PORTED (opacity = f32(max(v - 1, 0)) for v the host's Opacity checkout integer, then the parameter record's clamps; kind case and v MEASURED at Trails answers 2 and 3 and Blur answers 1 and 3; the lane written at the conversion store is the lane the owner loop reads (address MEASURED) and holds 0.0, 1.0, 0.0, 2.0 (MEASURED); the register value at the store instant INFERRED equal to the lane (the memory watch does not see AVX-engine stores; the following clamp stores write the same value); unit tests at both styles' six points and the clamps; identity and v-instead-of-v-1 mutants killed at Trails answers 2 and 3)";
 
 /// `rec_max` (upper clamp, a minimum with the value) and `rec_min` (lower clamp, a maximum with the value) are applied when set.
 pub fn popup_to_loop_opacity(v: i32, rec_max: Option<f32>, rec_min: Option<f32>) -> f32 {
@@ -23,7 +23,7 @@ pub fn popup_to_loop_opacity(v: i32, rec_max: Option<f32>, rec_min: Option<f32>)
 pub fn checkout_to_loop_opacity(prog_arm_cell: u32, v: i32, rec_max: Option<f32>, rec_min: Option<f32>) -> Result<f32, String> {
     if prog_arm_cell != 0 {
         return Err(format!(
-            "OPACITY-HOSTCALL-ARM-UNPORTED: [prog] = {}: the kind-4 arm that asks the host through [r9] is not ported (OPC1, W558 (c))",
+            "OPACITY-HOSTCALL-ARM-UNPORTED: [prog] = {}: the kind-4 arm that asks the host through [r9] is not ported",
             prog_arm_cell
         ));
     }
@@ -44,7 +44,7 @@ mod tests {
         v.max(0) as f32
     }
 
-    // Measured points (OPC1): (style, host checkout integer v, observed loop value). Trails bound values 0, 1, 2; Blur bound values 1, 2, 3.
+    // Measured points: (style, host checkout integer v, observed loop value). Trails bound values 0, 1, 2; Blur bound values 1, 2, 3.
     const POINTS: [(&str, i32, f32); 6] = [
         ("Trails answer 1", 0, 0.0),
         ("Trails answer 2", 1, 0.0),

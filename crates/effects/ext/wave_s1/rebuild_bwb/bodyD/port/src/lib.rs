@@ -47,9 +47,9 @@ pub fn assumptions() -> Vec<DAssumption> {
         DAssumption { id: "BD2", basis: "source is 4 interleaved floats per pixel: idx = 4*col - stride + t*stride (i32 wrapping), lerp pair is idx and idx+stride; stride (result, floats) is an explicit input as in A (B2)", label: "MEASURED D.lst " },
         DAssumption { id: "BD3", basis: "selector: after n<=0 (jle, straight to the finalizer) the general loop runs iff dl==1, dl = (mode_x!=0 || mode_y>0) && (col c<0 || c>=width || 0>y5 || y5>=hs || esi<0 || esi>=width || 0>y9 || y9>=hs); dl==0 selects L1..L4 (not ported); flag_cell_a==0 selects S16..S20; |dx|<|dy| (vcomiss jb, NaN included) selects Y-major", label: "MEASURED D.lst, " },
         DAssumption { id: "BD4", basis: "U4 resolved: the weight ramp divides k by n with idiv; k < n always, so the quotient is 0 and alpha = fma(a3 - 0, step_b, a1) (vfmadd213ss); n > 0 so no #DE", label: "MEASURED D.lst " },
-        DAssumption { id: "BD5", basis: "vcomiss ... jb on the y wrap sends NaN to the else branch, the port uses (a >= b) as first branch (false for NaN) as in C (BC4); NaN not in the T2 grid", label: "INFERRED from listing" },
+        DAssumption { id: "BD5", basis: "vcomiss ... jb on the y wrap sends NaN to the else branch, the port uses (a >= b) as first branch (false for NaN) as in C; NaN not in the T2 grid", label: "INFERRED from listing" },
         DAssumption { id: "BD6", basis: "zero-length stub : P1 writes n planes of the output object (n = image, explicit input, T2 uses 4); afterwards planes 0..3 at the sample index are each multiplied by a4 ([rbp])", label: "MEASURED D.lst; P1 plane count INFERRED from bwb_p1 contract (n <= 12)" },
-        DAssumption { id: "BD7", basis: "host statics ..2b (bytes), (hs) explicit inputs (W44); the general loop does not read (that is Y-major)", label: "ASSUMPTION" },
+        DAssumption { id: "BD7", basis: "host statics ..2b (bytes), (hs) explicit inputs; the general loop does not read (that is Y-major)", label: "ASSUMPTION" },
         DAssumption { id: "BD8", basis: "FMA sites in the ported sections: S2, S3, S5, S8, S14 (11 of 51); modelled with mul_add; no rcp/rsqrt/x87", label: "MEASURED listing grep (SPEC.md)" },
         DAssumption { id: "BD9", basis: "specialised loops S10..S13 are chosen by the two clamp bytes: [rbp]==0 -> S12 (row clamp only if [rbp]!=0) or S13 (none); else [rbp]==0 -> S11 (column clamp only); else S10 (both). SECTIONS.tsv label of S10 ('both clamps off') is inverted. They are the general loop minus the edge wraps; channel 3 uses a re-associated FMA chain when the row clamp is off (S11, S13)", label: "MEASURED D.lst " },
         DAssumption { id: "BD10", basis: "flag_cell_a==0 X-major (S16..S20): nearest-neighbour, weight alpha only, no 1-fx/1-c0 end weights; start/end are (x+0.5) and (e2x+0.5), n = |cvtt(e2x+.5)-cvtt(x+.5)|+1 (slope and step_a use the uncapped n, the loops the capped n); loops by cl (column range), dil (row range), [rbp] (wrap): cl==0 M4, else dil==0 M3, else wrap==0 M2, else M1; wrap checks run after the step (not before as in the general loop)", label: "MEASURED D.lst " },
@@ -176,7 +176,7 @@ pub fn x_major_sample_ex(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane, sel
         let mut al = false;
         for k in 0..n {
             if !al && (k as f32) >= wlim {
-                let q = k / n; // idiv, always 0 (BD4)
+                let q = k / n; // idiv, always 0
                 alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
                 step = step_b;
                 al = true;

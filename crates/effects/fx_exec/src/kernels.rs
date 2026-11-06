@@ -337,7 +337,7 @@ fn vec_k(class: &str, args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<
     Ok(Image { n, planes: outv })
 }
 
-/// IN1: `interp` (a, b, t) through the native crate; the AVX2 body and its slot function are at K-PARITY / R-PARITY (IN1).
+/// `interp` (a, b, t) through the native crate; the AVX2 body and its slot function are at K-PARITY / R-PARITY.
 fn interp_k(args: &[Arg], tag: i32, n: usize) -> Result<Image, ExecError> {
     need(args, 3, "interp")?;
     let (pa, pb, pt) = (args[0].planes(), args[1].planes(), args[2].planes());
@@ -400,12 +400,12 @@ pub fn run_any(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, usiz
     Ok(crate::kernels2::Out::Img(img))
 }
 
-/// IN2-W1: diff vec_mask = OP2-A3, MEASURED-DYLIB 0x7fffffff per lane.
+/// diff vec_mask = OP2-A3, MEASURED-DYLIB 0x7fffffff per lane.
 pub const DIFF_VEC_MASK: u32 = 0x7fff_ffff;
-/// IN2-W2: clamp allones = STD-001, MEASURED-DYLIB 0xffffffff per lane.
+/// clamp allones = STD-001, MEASURED-DYLIB 0xffffffff per lane.
 pub const CLAMP_ALLONES: u32 = 0xffff_ffff;
 
-/// IN2-W3: clamp(a, b, c), three operands, native median ladders per operand shape (crate `clamp`). Output plane phases all take
+/// clamp(a, b, c), three operands, native median ladders per operand shape (crate `clamp`). Output plane phases all take
 /// `kp.dst3_phase_bytes` (a 32 byte aligned allocation gives 0; ALIGN-DEPENDENT only for n >=).
 fn clamp_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
     need(args, 3, "clamp")?;

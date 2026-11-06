@@ -26,7 +26,7 @@ pub fn fmt_g6(x: f64) -> String {
         return format!("{}", x);
     }
     let s = format!("{:.5e}", x);
-    // DS1: C %g rule: exponent < -4 or >= 6 prints in exponent form (MEASURED: the original prints -8.33333e-05 where the old text had -0.0000833333)
+    // C %g rule: exponent < -4 or >= 6 prints in exponent form (MEASURED: the original prints -8.33333e-05 where the old text had -0.0000833333)
     if let Some((m, e)) = s.split_once('e') {
         if let Ok(e) = e.parse::<i32>() {
             if e < -4 || e >= 6 {

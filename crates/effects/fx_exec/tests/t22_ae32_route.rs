@@ -1,5 +1,5 @@
-//! T22 (INT9): the 'ae32' source route through FMT3a's readers, the recorded head decides the body,
-//! unported heads and the destination (until FMT3c) are refused by name, TABLE-NULL-ON-ROUTE is the native state.
+//! T22: the 'ae32' source route through readers, the recorded head decides the body,
+//! unported heads and the destination (until) are refused by name, TABLE-NULL-ON-ROUTE is the native state.
 use fx_exec::hostconv14::*;
 
 fn mem(w: usize, h: usize) -> Vec<u32> {
@@ -41,7 +41,7 @@ fn unported_heads_plane_mismatch_and_dest_are_refused() {
     }
     let e = ae32_to_image(&Ae32Source { words: m.clone(), reader_head: R4_HEAD, planes: 3 }, 2, 1).unwrap_err();
     assert!(format!("{:?}", e).contains("writes 4 planes"));
-    // INT10: the destination is merged (FMT3c); without its record it is refused by name
+    // the destination is merged; without its record it is refused by name
     let one = fx_exec::Image::from_planes(vec![vec![0.0f32; 2]; 4]).unwrap();
     let e = ae32_dest(&Ae32Route { sources: vec![], dest_stack_word: 0, dest: None }, &one, 2, 1).unwrap_err();
     assert!(format!("{:?}", e).contains("DEST-RECORD-REQUIRED"));

@@ -1,4 +1,4 @@
-//! WPG2 (2026-11-02): class warp slot 33 as a named Rust function.
+//! (2026-11-02): class warp slot 33 as a named Rust function.
 //!
 //! Route (MEASURED from the listing, see README): slot 33 = (context build, optional image geometry override with,
 //! flag byte rule, host plane service call `[[ctx]]`then with r9d = 0), (two planes: v = (hi - lo) * 0.25f,
@@ -316,11 +316,11 @@ pub fn slot33_warp(
 
 pub fn assumptions() -> Vec<(&'static str, &'static str)> {
     vec![
-        ("WPG2-A1", "the host plane service `[[ctx]]` (edx = 2, ecx = 2) returns two planes c1, c2 of width * height floats (stride = width); it is a host service hook (W69), not plugin code; the planes are inputs of the port"),
+        ("WPG2-A1", "the host plane service `[[ctx]]` (edx = 2, ecx = 2) returns two planes c1, c2 of width * height floats (stride = width); it is a host service hook, not plugin code; the planes are inputs of the port"),
         ("WPG2-A2", "pool state (g_cell_b, g_cell_c, g_cell_d, g_cell_e) and the thread helper returns are PARAM-UNCAPTURED run-time state; the captured image holds zeros (g_cell_b = 0: serial callback with a log). T2 varies each"),
         ("WPG2-A3", "SERIAL-WORKERS: the pool runner is modelled as the workers' tiles run one after the other, tids 0..nthr-1 (INFERRED that a real pool uses ids 0..n-1)"),
         ("WPG2-A4", "ROUTE AVX2-ONLY: the callback dispatcher feature word is an explicit input; AVX middle tier does not exist for this callback, the SSE twin is not ported"),
         ("WPG2-A5", "memcpy and memset inside are functional models in the emulator T2 (LIBC-MODEL); sets aspect_block_d etc. which slot 33 does not read; is the round_q12 model"),
-        ("WPG2-A6", "HOST-FP-ASSUMED: round to nearest, no FTZ, no DAZ; NaN rules follow SSE silicon, FMA NaN priority INFERRED (WS4-A7)"),
+        ("WPG2-A6", "HOST-FP-ASSUMED: round to nearest, no FTZ, no DAZ; NaN rules follow SSE silicon, FMA NaN priority INFERRED"),
     ]
 }

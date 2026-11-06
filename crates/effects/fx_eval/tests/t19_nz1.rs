@@ -1,4 +1,4 @@
-//! T19 (INT7 step 2, NZ1 PATCH 3 a to g): the node store with the compile history. Program: a Drop_Shadow-style text with `shadow_opacity` (REAL row [0, 1e6], default 1).
+//! T19 (a to g): the node store with the compile history. Program: a Drop_Shadow-style text with `shadow_opacity` (REAL row [0, 1e6], default 1).
 use fx_eval::*;
 use std::collections::BTreeMap;
 use std::path::PathBuf;

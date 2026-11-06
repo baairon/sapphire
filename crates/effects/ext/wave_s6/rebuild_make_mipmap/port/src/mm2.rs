@@ -1,4 +1,4 @@
-//! make_mipmap (MM2): the class slots 33, 32 and 34 end to end (EG table rows 6 to 8: pre-pass, pass runner, post step).
+//! make_mipmap: the class slots 33, 32 and 34 end to end (EG table rows 6 to 8: pre-pass, pass runner, post step).
 //!
 //! slot 33 = free planes (image vtable slot 6), allocator (sizes, tables), plane allocation (image vtable slot 5)
 //! slot 32 = base level fill (ONE row per call: row rec - rec of plane (0,0)), ripmap objects only (the object's mode field == 3, the record's mode field == 0)
@@ -271,9 +271,9 @@ pub fn assumptions2() -> Vec<(&'static str, &'static str)> {
         ("MM2-A2", "CONTRACT-LIMIT 1 <= C <= 4 for slot 32: keeps the shifted source pointers in a stack array of 8 byte slots at rbp that overlaps its saved registers from the fifth channel on; slot 60 has combos for C = 1..4 only"),
         ("MM2-A3", "the source channel count must equal the destination's (the left pad pixel position is computed from the source count at [src], the loops from the destination's)"),
         ("MM2-A4", "CAPTURED constants: s16/s32 scale 2^-12, 1.0f, ln 2 as double; LIBM-MODEL: log and floorf ran as real emulated code in the allocator T2"),
-        ("MM2-A5", "HOST-HOOKED: the host heap and the plane allocator object at obj (alloc, free, lock) are service hooks (W69); their request sizes are compared; plane memory is sentinel filled, alignment of returned planes is a parameter (ALIGN-DEPENDENT, output neutral)"),
+        ("MM2-A5", "HOST-HOOKED: the host heap and the plane allocator object at obj (alloc, free, lock) are service hooks; their request sizes are compared; plane memory is sentinel filled, alignment of returned planes is a parameter (ALIGN-DEPENDENT, output neutral)"),
         ("MM2-A6", "obj is a host field that only feeds the GPU pitch fields obj and obj: PARAM-UNCAPTURED explicit parameter, two or more values in T2; GPU object (obj != 0) paths and obj tail are NOT REBUILT"),
-        ("MM2-A7", "the object's mode field != 3 branch of slot 32 (plane copy, PL1's NOT REBUILT rect copy) and the record's mode field != 0 (GPU) are NOT REBUILT"),
+        ("MM2-A7", "the object's mode field != 3 branch of slot 32 (plane copy NOT REBUILT rect copy) and the record's mode field != 0 (GPU) are NOT REBUILT"),
     ]
 }
 

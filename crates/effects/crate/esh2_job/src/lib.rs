@@ -1,4 +1,4 @@
-//! ESH2: native port of pool job (listing address; AVX2 body behind the dispatcher, ROUTE AVX2-ONLY).
+//! native port of pool job (listing address; AVX2 body behind the dispatcher, ROUTE AVX2-ONLY).
 //!
 //! The job computes two "weight" planes for a recursive edge-aware filter (domain-transform style):
 //!   * `a`: a line-major plane, `a[line * w + j]` (element 0 of each line is 1.0f);

@@ -1,4 +1,4 @@
-//! Step PW: the recorded point fields reach map_param's PointCtx through the HOST-CURVE-VALUES text (TMP3 PT records).
+//! Step PW: the recorded point fields reach map_param's PointCtx through the HOST-CURVE-VALUES text (PT records).
 use fx_eval::hostcurve::{HostCurveValues, POINT_FIELDS, POINT_UNIT_FIELDS};
 
 fn text(sx: i32, sy: i32, px: i32, py: i32, list: &str, drop: Option<&str>) -> String {

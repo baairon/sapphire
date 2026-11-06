@@ -38,11 +38,11 @@ fn dense(p: &Plane) -> Vec<f32> {
     v
 }
 
-/// One plane of the wrapper (flag 0) on dense buffers with the blur step supplied by the caller (SHF1 refactor: the same code path
+/// One plane of the wrapper (flag 0) on dense buffers with the blur step supplied by the caller (refactor: the same code path
 /// serves the native `sharpen_plane` and the T2 runs that record the blur dispatcher in the emulator and hand its plane in).
 /// Copy shortcut, or `blur(x, radius)` followed by the combine job over `count` elements. Samples beyond `count`:
 /// non-alias path (destination plane distinct from the source plane): the original blurs into the output plane, so the tail keeps the blurred value;
-/// ALIAS path (destination plane is the source plane, SHE2 fix): the blur goes into the host scratch plane and the combine job writes
+/// ALIAS path (destination plane is the source plane, fix): the blur goes into the host scratch plane and the combine job writes
 /// into the source plane in place, so the tail keeps the INPUT value.
 pub fn sharpen_plane_with<F>(x: &[f32], w: usize, h: usize, radius: f32, gain: f32, count: usize, blur: F) -> Result<Vec<f32>, FxError>
 where
@@ -100,7 +100,7 @@ where
 
 /// The slot function with the alias flag: `alias` is true when the destination planes are the source planes (the host hands the same node as input and
 /// output: the split branch `sharpen :ref16.2 . :ref16.2`); the original then blurs into a host scratch plane (call [[ctx]]) and the
-/// samples beyond `p.count` keep the input value (SHE2).
+/// samples beyond `p.count` keep the input value.
 pub fn render_with_alias<F>(p: &Params, src: &[Plane], dst: &mut [PlaneMut], alias: bool, mut blur: F) -> Result<(), FxError>
 where
     F: FnMut(&[f32], usize, usize, f32) -> Result<Vec<f32>, FxError>,
@@ -150,7 +150,7 @@ pub fn render(p: &Params, src: &[Plane], dst: &mut [PlaneMut]) -> Result<(), FxE
     })
 }
 
-/// SHE3: the audited render with the alias flag and the explicit host count (Params.count). `alias` = the destination node is the source node in the plan.
+/// the audited render with the alias flag and the explicit host count (Params.count). `alias` = the destination node is the source node in the plan.
 #[cfg(feature = "blur")]
 pub fn render_alias(p: &Params, src: &[Plane], dst: &mut [PlaneMut], alias: bool) -> Result<(), FxError> {
     if dst.len() != src.len() || p.in_count != src.len() {

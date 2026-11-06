@@ -1,4 +1,4 @@
-//! CV3 T1: the native convert pair wired into the executor (host memory in, host memory out).
+//! T1: the native convert pair wired into the executor (host memory in, host memory out).
 use convert_pair::AlphaMode;
 use fx_exec::cmds::execute_commands_hc;
 use fx_exec::*;

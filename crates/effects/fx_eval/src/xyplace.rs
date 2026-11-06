@@ -1,15 +1,15 @@
-//! XWP2: default-xy writer placement, as the original's word 2 = 1 plans place it.
+//! default-xy writer placement, as the original's word 2 = 1 plans place it.
 //!
 //! RULE (pass order READ in the planner of neutral_1.asm, listing offsets; each step is the ported pass of this crate):
 //! 1. (called): every function-node argument slot whose child is a kind 4 node (Special or Input) gets a fresh clone, one per slot
-//!    (compile.rs, WPG9/WPG7 READ RULE). The fold runs after it, so a consumer that reads xy through a collapsed node reads the
+//!  (compile.rs, READ RULE). The fold runs after it, so a consumer that reads xy through a collapsed node reads the
 //!    clone made for the collapsed node's slot (Warp's rotate at angle 0: perspective and perspective_alpha share one clone).
 //! 2. (before the fold):; the xy clone is not frame dependent (INFERRED from the records), so `xy - centre` can head a group.
 //! 3. (stack word 2 = 1): the preserve analysis (preserve.rs) on the unshared graph, one clone per slot, so a clone
 //!    is private to its consumer and the scan passes.
 //! 4. call 1, then the group pass with the preserve id in its key (lgpass.rs key_eq, READ),
 //!    then call 2 : the Special policy keeps the first clone of a run of equal group ids and clears its table when the group id
-//!    changes (compile.rs, WPG9 READ). Clones in different groups stay separate writers.
+//!  changes (compile.rs, READ). Clones in different groups stay separate writers.
 //! 5. The plan builder (cpuplan.rs) then places each writer: allocated at top level (a plane, rows at base + row x W x 4: PerRow), allocated in the
 //!    line list of the exec block that writes it (one row buffer for every row: OneHead), or inside a preserve group (written in render 1 only and
 //!    reused by render 2).
@@ -122,7 +122,7 @@ thread_local! {
     static ALLOC: std::cell::RefCell<HashMap<usize, (bool, Option<usize>)>> = std::cell::RefCell::new(HashMap::new());
 }
 
-/// XWP2b (part 2): the placement of every run-primitive destination of a plan text: (destination ref, primitive, Plane or RowBuffer)
+/// (part 2): the placement of every run-primitive destination of a plan text: (destination ref, primitive, Plane or RowBuffer)
 pub fn runs_of_text(text: &str) -> Vec<(usize, String, Place)> {
     RUNS.with(|v| v.borrow_mut().clear());
     let _ = writers_of_text(text);
@@ -139,7 +139,7 @@ pub fn runs_of_text(text: &str) -> Vec<(usize, String, Place)> {
         .collect()
 }
 
-/// XWP2b: compile with the placement model and return, per perspective-class node gid, whether its destination is a row buffer
+/// compile with the placement model and return, per perspective-class node gid, whether its destination is a row buffer
 pub fn persp_places(g: &Genotype, ct: &ComboTable, opt: &CompileOptions) -> Result<HashMap<usize, bool>, CompileError> {
     let (cp, _) = compile_placed(g, ct, opt)?;
     let text = crate::cpuplan::plan_text_mode(&cp, crate::cpuplan::PlanMode::CpuDriver);
@@ -211,7 +211,7 @@ pub fn compile_placed(g: &Genotype, ct: &ComboTable, opt: &CompileOptions) -> Re
     let text = crate::cpuplan::plan_text_mode(&cp, crate::cpuplan::PlanMode::CpuDriver);
     let ws = writers_of_text(&text);
     let mut out = Vec::new();
-    // DS1's hoist duplicates the xy variable: a full-size writer for the hoisted nodes, then the body writer at the small size (plan order)
+    // hoist duplicates the xy variable: a full-size writer for the hoisted nodes, then the body writer at the small size (plan order)
     let dup = crate::cpuplan::ds_dup_rid(&cp);
     let hoist: Vec<usize> = if crate::cpuplan::ds_factor(&cp) > 1 { crate::cpuplan::ds_hoist(&cp) } else { Vec::new() };
     let has_dup = ws.iter().any(|w| w.0 == dup);

@@ -1,5 +1,5 @@
-//! T24 (INT10 s2): the 'ae32' destination route through FMT3c's code-14 zero-arm bodies (crate c14) and the row copier (14, 14).
-//! R-PARITY (FLOOR PENDING): the bodies' T2 is FMT3c's; this test checks the wiring (record inputs, word layout, prior, copier, refusals).
+//! T24: the 'ae32' destination route through code-14 zero-arm bodies (crate c14) and the row copier (14, 14).
+//! R-PARITY (FLOOR PENDING): the bodies' T2 is; this test checks the wiring (record inputs, word layout, prior, copier, refusals).
 use fx_exec::hostconv14::*;
 use fx_exec::Image;
 
@@ -57,7 +57,7 @@ fn t24_three_planes_mode2_copier_and_prior() {
 
 #[test]
 fn t24_variant_b_gate_derived() {
-    // FMT3e PATCH 2: the 0x6fa810 arm ([owner+0x13e0] == 0) gives (ctx_gate_a, ctx_gate_b) = (0, 1): variant B
+    // the 0x6fa810 arm ([owner+0x13e0] == 0) gives (ctx_gate_a, ctx_gate_b) = (0, 1): variant B
     let g = SourceGate::from_owner(false, false, 0);
     assert_eq!(derived_head(4, &g).unwrap(), VB4_HEAD);
     assert_eq!(derived_head(3, &g).unwrap(), VB3_HEAD);
@@ -66,12 +66,12 @@ fn t24_variant_b_gate_derived() {
     let a = SourceGate::from_owner(true, false, 0);
     assert_eq!(derived_head(4, &a).unwrap(), R4_HEAD);
     assert_eq!(derived_head(4, &SourceGate::from_owner(true, true, 0)).unwrap(), VB4_HEAD);
-    // INT11: the (0, 0) state is refused by name instead of reading [row+0x58]
+    // the (0, 0) state is refused by name instead of reading [row+0x58]
     let e00 = derived_head(4, &SourceGate { row_gate_cell: 1, ctx_gate_a: 0, ctx_gate_b: 0 }).unwrap_err();
     assert!(format!("{:?}", e00).contains("SOURCE-GATE-ROW58-UNRESOLVED"));
     let e = derived_source(vec![0; 8], 4, &g, Some(R4_HEAD)).unwrap_err();
     assert!(format!("{:?}", e).contains("SOURCE-VARIANT-MISMATCH"));
-    // variant B does not multiply by alpha (FMT3e): colour 2.0 with alpha 0.5 stays 2.0
+    // variant B does not multiply by alpha: colour 2.0 with alpha 0.5 stays 2.0
     let s = derived_source(vec![0.5f32.to_bits(), 2.0f32.to_bits(), 2.0f32.to_bits(), 2.0f32.to_bits()], 4, &g, Some(VB4_HEAD)).unwrap();
     let im = ae32_to_image(&s, 1, 1).unwrap();
     assert_eq!(im.planes[0][0], 2.0);

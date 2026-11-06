@@ -20,7 +20,7 @@ fn run(class: &str, args: &[Arg], w: usize, h: usize) -> Image {
     let c: Vec<i32> = args.iter().map(|a| a.count()).collect();
     let t = Tables::from_tsv(effects_rtdata::text("fx_exec/data/COMBOS_EXEC.tsv")).select_counts(class, &c);
     assert!(t > 0, "no combo for {} {:?}", class, c);
-    // SHE3 (INT5): the sharpen arm has no default count; the caller supplies W x H (HOST-COUNT, ROUTE)
+    // the sharpen arm has no default count; the caller supplies W x H (HOST-COUNT, ROUTE)
     let mut kp = KParams::standin();
     kp.sharpen_count = Some(w * h);
     match run_any(class, t, args, w * h, (w, h), &kp).unwrap() {

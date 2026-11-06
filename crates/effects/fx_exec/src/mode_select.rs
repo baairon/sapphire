@@ -1,5 +1,5 @@
-//! M3P: the host-datum derivation of [ctx] at the arm (RDR12 MODE3_DERIVATION.md line 7), and the cells it reads.
-//! Rule (MEASURED from the listing by RDR12): ctx = 1 exactly when the 590 value is 2 AND desc == 2 AND (in[idx] == 2 OR NOT(in[idx] != 0 AND in[idx] != 0))
+//! M3P: the host-datum derivation of [ctx] at the arm (MODE3_DERIVATION.md line 7), and the cells it reads.
+//! Rule (MEASURED from the listing by): ctx = 1 exactly when the 590 value is 2 AND desc == 2 AND (in[idx] == 2 OR NOT(in[idx] != 0 AND in[idx] != 0))
 //! AND the input world's data pointer differs from the output world's (after the [desc] row-pointer correction); else 0.
 //! Host datum: the two data pointers. An in-place host gives equal pointers. `--host-inplace 1` is that datum.
 
@@ -20,7 +20,7 @@ pub fn fx_run_cell_f_rule(c: &CellsMode, ptrs_equal: bool) -> Result<u32, String
         return Ok(0);
     }
     if c.dest_desc_word != 0 {
-        return Err(format!("DEST_DESC_WORD-ROW-POINTER-CORRECTION-UNPORTED (desc = {}: the bottom-up row pointer correction is not ported; zero in every RJ1 record)", c.dest_desc_word));
+        return Err(format!("DEST_DESC_WORD-ROW-POINTER-CORRECTION-UNPORTED (desc = {}: the bottom-up row pointer correction is not ported; zero in every record)", c.dest_desc_word));
     }
     let both = c.cells_mode_a != 0 && c.cells_mode_b != 0;
     if !(c.cells_mode_c == 2 || !both) {
@@ -29,8 +29,8 @@ pub fn fx_run_cell_f_rule(c: &CellsMode, ptrs_equal: bool) -> Result<u32, String
     Ok(if ptrs_equal { 0 } else { 1 })
 }
 
-/// The claim-route cells: desc = 2 by the writer (fifth argument 0 in all 13 callers, RDR12), in[idx] = 2 and desc = 0
-/// (claim-route constants, RJ1 record rj1M3F), in[idx] = the host world's width and height (RJ1: 64, 32 at 64x32).
+/// The claim-route cells: desc = 2 by the writer (fifth argument 0 in all 13 callers), in[idx] = 2 and desc = 0
+/// (claim-route constants record rj1M3F), in[idx] = the host world's width and height (64, 32 at 64x32).
 pub fn claim_cells(cells_mode_d: u32, w: usize, h: usize) -> CellsMode {
     CellsMode { cells_mode_d, dest_desc_mode: 2, cells_mode_c: 2, cells_mode_a: w as u32, cells_mode_b: h as u32, dest_desc_word: 0 }
 }
@@ -41,8 +41,8 @@ pub fn derive(cells_mode_d: u32, host_inplace: bool, w: usize, h: usize) -> Resu
     Ok((fx_run_cell_f_rule(&c, host_inplace)?, c.dest_desc_mode))
 }
 
-/// INT27: the programs whose own counted records show the five terms (desc, desc, in[idx],
-///). HSR2's RJ1 record (Hue_Sat_Bright_Autogen, rj1M3F, 64x32) and the Time_Warp_RGB_Autogen O2 records (64x32 and 50x7, FIVE_TERMS.tsv).
+/// the programs whose own counted records show the five terms (desc, desc, in[idx],
+///). record (Hue_Sat_Bright_Autogen, rj1M3F, 64x32) and the Time_Warp_RGB_Autogen O2 records (64x32 and 50x7, FIVE_TERMS.tsv).
 pub const TERMS_RECORDED: &[&str] = &["Hue_Sat_Bright_Autogen", "Time_Warp_RGB_Autogen"];
 
 /// The label for a program whose own record of the terms is owed (None for a program in TERMS_RECORDED).
@@ -50,7 +50,7 @@ pub fn terms_unrecorded_label(program: &str) -> Option<String> {
     if TERMS_RECORDED.contains(&program) {
         return None;
     }
-    Some(format!("label MODE_SELECT-TERMS-UNRECORDED ({}: ctx derived with in[idx] = 2 and desc = 0 from HSR2's RJ1 record; this style's own record of the terms is owed; M3P, W524)", program))
+    Some(format!("label MODE_SELECT-TERMS-UNRECORDED ({}: ctx derived with in[idx] = 2 and desc = 0 from record; this style's own record of the terms is owed; M3P)", program))
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-//! copy (DSW1): native port of slot 52 of builtin class `copy` (vtable, slot function, 128 bytes).
+//! copy: native port of slot 52 of builtin class `copy` (vtable, slot function, 128 bytes).
 //!
 //! The slot function is a driver loop: `n = vcall[this]` (the class count getter, virtual slot 31); for ch in 0..n it calls the
 //! host plane service (finished crate `plane_service`) as service(this, mode 0, channel ch, destination = outs[ch], info), re-reading
@@ -35,7 +35,7 @@ pub enum Mutant {
     AbsCount,
 }
 
-/// DSW1: the mutant compiled into this build. Base build: None. A mutant build differs by this one line only.
+/// the mutant compiled into this build. Base build: None. A mutant build differs by this one line only.
 pub const BUILD_MUTANT: Mutant = Mutant::None;
 
 /// One call of the plane service: argument block `mode`, channel `chan`, destination plane `out` (index into the outs array of the caller).

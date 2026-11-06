@@ -98,10 +98,10 @@ pub fn commands_of_dump(dump: &str) -> Vec<String> {
 #[derive(Debug)]
 pub struct CmdOutput {
     pub dest: Option<Image>,
-    /// CV3: the host destination memory written by the native convert-to-dest (only when a `HostConvert` was given)
+    /// the host destination memory written by the native convert-to-dest (only when a `HostConvert` was given)
     pub host_dest: Option<Vec<f32>>,
     pub host_wrote: bool,
-    /// INT10: the 'ae32' destination memory (A,R,G,B u32 words) written by the code-14 bodies (only on the 'ae32' route)
+    /// the 'ae32' destination memory (A,R,G,B u32 words) written by the code-14 bodies (only on the 'ae32' route)
     pub ae32_dest: Option<Vec<u32>>,
     pub saved_prev_dest: Option<Image>,
     pub trace: Vec<String>,
@@ -172,12 +172,12 @@ impl<'a> St<'a> {
                 let idx: usize = l.get(1).and_then(atom).and_then(|a| a.parse().ok()).ok_or_else(|| ExecError::BadPlan("convert-from-source index".into()))?;
                 let r = refname(l.get(2).ok_or_else(|| ExecError::BadPlan("convert-from-source ref".into()))?)?;
                 if let Some(ae) = self.hc.and_then(|hc| hc.ae32.as_ref()) {
-                    // INT9: the 'ae32' route, the recorded reader head and plane count of this source (FMT3a readers)
+                    // the 'ae32' route, the recorded reader head and plane count of this source (readers)
                     let s = ae.sources.get(idx).ok_or_else(|| ExecError::MissingInput(format!("'ae32' host source {}", idx)))?;
                     let im = crate::hostconv14::ae32_to_image(s, self.w, self.h)?;
                     self.refs.insert(r, Val::Img(Rc::new(im)));
                 } else if let Some(hc) = self.hc {
-                    // CV3: native convert-from-source on HOST MEMORY (format 16, B,G,R,A f32), one converted row per call (cell 1)
+                    // native convert-from-source on HOST MEMORY (format 16, B,G,R,A f32), one converted row per call (cell 1)
                     let mem = hc.src.get(idx).ok_or_else(|| ExecError::MissingInput(format!("host source {}", idx)))?;
                     let im = crate::hostconv::host_to_image(mem, self.w, self.h)?;
                     self.refs.insert(r, Val::Img(Rc::new(im)));
@@ -220,10 +220,10 @@ impl<'a> St<'a> {
                     Val::Mip(_) => return Err(ExecError::Shape("convert-to-dest of a ripmap object".into())),
                 };
                 if let Some(ae) = self.hc.and_then(|hc| hc.ae32.as_ref()) {
-                    // INT10: DEST-ROUTE (code 14 zero-arm bodies and the row copier, FMT3c), never the format-16 writer
+                    // DEST-ROUTE (code 14 zero-arm bodies and the row copier), never the format-16 writer
                     self.out.ae32_dest = Some(crate::hostconv14::ae32_dest(ae, &im, self.w, self.h)?);
                 } else if let Some(hc) = self.hc {
-                    // CV3: native convert-to-dest on HOST MEMORY with the host's alpha mode
+                    // native convert-to-dest on HOST MEMORY with the host's alpha mode
                     let (hd, wrote) = crate::hostconv::image_to_host(&im, self.w, self.h, hc.mode, &hc.dest_prefill)?;
                     self.out.host_dest = Some(hd);
                     self.out.host_wrote = wrote;
@@ -291,7 +291,7 @@ impl<'a> St<'a> {
             if tag < 0 {
                 return Err(ExecError::NoCombo { class: c, operands });
             }
-            // SHE3 (INT5): HOST-COUNT = W x H as an explicit value (STATE-A-COUNT: the writer is, [ctx] = W x H, cited by INT5-A1; the executor derives it, there is no per-run input); the alias flag is the plan's own: dest ref = first source ref
+            // HOST-COUNT = W x H as an explicit value (STATE-A-COUNT: the writer is, [ctx] = W x H, cited; the executor derives it, there is no per-run input); the alias flag is the plan's own: dest ref = first source ref
             let mut kpe = *self.kp;
             if kpe.sharpen_count.is_none() {
                 kpe.sharpen_count = Some(n);
@@ -323,7 +323,7 @@ pub fn execute_commands_xy(cmds: &[String], inputs: &[Image], width: usize, heig
     execute_commands_xy_hc(cmds, inputs, width, height, host, kp, xy, None)
 }
 
-/// CV3: as `execute_commands_xy`, with the native convert pair wired. With `hc` given, `convert-from-source i` reads HOST MEMORY `hc.src[i]` (format 16)
+/// as `execute_commands_xy`, with the native convert pair wired. With `hc` given, `convert-from-source i` reads HOST MEMORY `hc.src[i]` (format 16)
 /// through the native reader and `convert-to-dest` writes HOST MEMORY (`CmdOutput::host_dest`) through the native writer in `hc.mode`.
 pub fn execute_commands_hc(cmds: &[String], hc: &crate::hostconv::HostConvert, width: usize, height: usize, host: &HostFrames, kp: &KParams) -> Result<CmdOutput, ExecError> {
     hc.check_claim()?;

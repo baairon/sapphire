@@ -166,15 +166,15 @@ pub fn table() -> HashTable {
     HashTable::build()
 }
 
-/// Every stand-in and host assumption of this port (ids ST1-*).
+/// Every stand-in and host assumption of this port (ids -*).
 pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
         ("ST1-A1", "PARAM-UNCAPTURED 3", "n = [rec], seed_a = [rec], seed_b = [rec] are explicit parameters with no default; the host writers (tile origin, frame, row) are not measured (generic driver stores rec = 1); T2 runs hundreds of values of each"),
         ("ST1-A2", "CALLEE-RAN-AS-CODE / HOST-INIT", "the hash table (bss, zero range in the image) is built by which the host runs once before any user; T2 runs the real builder in the emulator and uses its bytes, the Rust side uses fx_common HashTable::build; that the host runs it before static2 is INFERRED (shared by tv_interference, shake, grain)"),
         ("ST1-A3", "CAPTURED", "scale constant 2^-12 (bytes 00 00 80 39), audit_addr lookup"),
         ("ST1-A4", "OUT-CONTRACT", "out0 and out1 are non-overlapping arrays of at least n floats; the original re-reads [rec] each iteration, so rec must not alias the outputs"),
-        ("ST1-A6", "DISPATCH-MODE-INFERRED", "the CPU entry is slot 53 by the W67 rule and the base stub forwards flag 0 to it (measured), but the slot 60 entry mode word [entry field] copied from zero cells could select slot 50 in the generic driver; not resolved"),
-        ("ST1-A5", "NODE-TYPE", "PIXEL (a 2-channel image of per-element random offsets): STRONG, from the slot table (slot 53 CPU and slot 54 GPU twin) and the program use; the plan dump and the compiler type inference are not available (W81)"),
+        ("ST1-A6", "DISPATCH-MODE-INFERRED", "the CPU entry is slot 53 by the entry rule and the base stub forwards flag 0 to it (measured), but the slot 60 entry mode word [entry field] copied from zero cells could select slot 50 in the generic driver; not resolved"),
+        ("ST1-A5", "NODE-TYPE", "PIXEL (a 2-channel image of per-element random offsets): STRONG, from the slot table (slot 53 CPU and slot 54 GPU twin) and the program use; the plan dump and the compiler type inference are not available"),
     ]
 }
 

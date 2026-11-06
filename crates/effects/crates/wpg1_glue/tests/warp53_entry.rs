@@ -1,7 +1,7 @@
-//! WPG1: slot-function T2 for class warp slot 53 (0x56fac0): the Rust glue (`slot53_warp` over the warp_driver and warp_f1 crates) against the
+//! slot-function T2 for class warp slot 53 (0x56fac0): the Rust glue (`slot53_warp` over the warp_driver and warp_f1 crates) against the
 //! emulated original (harness v2 vex engine, SDM not silicon; real code of the wrapper, 0x5ba5c0, 0xc6930, the driver dispatcher and AVX2 body,
 //! the accessors, F1 and fmod; memcpy/memset models, round_q12 model, recorded 0x66a800, 0x5b9bd0, 0x6758e0, 0x66ad00). Cases: t2/cases_warp53.tsv.
-//! Adapted from the WR1 test of warp_rel. Written: t2/WARP53_RESULT.tsv.
+//! Adapted from the test of warp_rel. Written: t2/WARP53_RESULT.tsv.
 use std::io::Write;
 use wpg1_glue::*;
 

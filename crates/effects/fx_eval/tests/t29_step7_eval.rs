@@ -1,4 +1,4 @@
-//! INT18: snap_16_16 rounds half to even on the 16.16 grid. The half-grid points k + 0.5 for k = 0
+//! snap_16_16 rounds half to even on the 16.16 grid. The half-grid points k + 0.5 for k = 0
 //! and k = 2 go to the even neighbour (0 and 2), k = 1 goes up to 2. Asserts written before the first run.
 use fx_eval::units::snap_16_16;
 
@@ -21,8 +21,8 @@ fn snap_half_grid_k1_and_on_grid() {
     assert_eq!(snap_16_16(3.25), 3.25f32);
 }
 
-// INT18 (PROGRAM-FLAG-READ): [prog+0x59e] bit 4 from the class table. Warp_Perspective_Autogen gets it by calling the core by
-// name (one motion_blur vcall per compile in WPG12's records); Diffuse_Autogen has no motion_blur node.
+// (PROGRAM-FLAG-READ): [prog+0x59e] bit 4 from the class table. Warp_Perspective_Autogen gets it by calling the core by
+// name (one motion_blur vcall per compile in the recorded records); Diffuse_Autogen has no motion_blur node.
 #[test]
 fn program_flag_bit4_from_class_table() {
     if !effects_vecdir::have_all(&["record_extract/programs/programs.tsv"]) {

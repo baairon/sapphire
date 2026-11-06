@@ -242,7 +242,7 @@ pub fn assumptions() -> Vec<Assumption> {
     vec![
         Assumption { id: "BW1-A1", tier: "CAPTURED", basis: "xmm3 constant 1.0f, lookup_bw.tsv N4 0000803f; also STD-002's scalar twin cell" },
         Assumption { id: "BW1-A2", tier: "ROUTE", basis: "feature word 0x9d97ff served through the pointer cell (STD-032): dispatchers etc. jump to the AVX2 body only on a full mask match " },
-        Assumption { id: "BW1-A3", tier: "INFERRED", basis: "the bodies A..D are the bwb bodies: same call targets as the bwb render; their parity (K-PARITY-THIN for A..D, W63 floor per body in their READMEs) is inherited, not re-proved; the argument mapping and host statics are the new glue and are proved by run_r.py" },
+        Assumption { id: "BW1-A3", tier: "INFERRED", basis: "the bodies A..D are the bwb bodies: same call targets as the bwb render; their parity (K-PARITY-THIN for A..D floor per body in their READMEs) is inherited, not re-proved; the argument mapping and host statics are the new glue and are proved by run_r.py" },
         Assumption { id: "BW1-A4", tier: "INFERRED", basis: "channel count n = [[this]] picks the body (cmp 1/2/3/4) and is the same field P1 reads as n; matches the COMBOS.tsv rows (arg 0 values 1,2,3,4)" },
         Assumption { id: "BW1-A5", tier: "HOST-HOOKED", basis: "fmod returns Python math.fmod (bwb_libm is bit equal on finite inputs per its README), records its call (writes 16 captured bytes to a stack scratch the bodies never read); the image accessors and P1 run as REAL emulated code in the R-PARITY run" },
         Assumption { id: "BW1-A6", tier: "NOT REBUILT", basis: "empty image tail (pad fill of each plane through, callers PL): call record only, label PAD-UNVERIFIED for w*h == 0" },

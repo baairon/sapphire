@@ -1,7 +1,7 @@
-//! ESH6: scratch std-only port of the CPU render entry (slot 52, AVX2 body) of edge_aware_sharpen, render flag 0 route.
+//! scratch std-only port of the CPU render entry (slot 52, AVX2 body) of edge_aware_sharpen, render flag 0 route.
 //!
 //! Memory model: one f32 arena; every plane is `w*h` floats (stride == width, ctx[8] == 0 of the ROI record), a plane pointer is its element offset.
-//! Callees: the ESH2 job, ESH3 jobs, ESH5 core (mode 4) with ESH4b powf and the ESH5b pass jobs.
+//! Callees: the job jobs core (mode 4) with powf and the pass jobs.
 //! The plane services (fill, copy, scale, add) are PLANE-SERVICE MODELS judged against the real code in the emulator.
 //! The pass wrappers sit on the flag != 0 arms and are NOT ported (refused with FlagNotPorted).
 //! HOST inputs (explicit): the plane count (vcall `[[this]]`), the partition service (the port runs each job on the whole range), the this fields.
@@ -19,7 +19,7 @@ pub const LOW: f64 = f64::from_bits(0x3ddb_7cdf_d9d7_bdbb);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DErr {
-    /// ESH8 tripwire: an access to an input plane id that is NO_PLANE (index 3 at nch 3).
+    /// tripwire: an access to an input plane id that is NO_PLANE (index 3 at nch 3).
     Tripwire(usize),
     FlagNotPorted(u8),
     NScope(i32),
@@ -28,7 +28,7 @@ pub enum DErr {
     Job(String),
 }
 
-/// ESH8: the id of an absent input plane (the original's NULL table entry). Any read of it is a Tripwire error.
+/// the id of an absent input plane (the original's NULL table entry). Any read of it is a Tripwire error.
 pub const NO_PLANE: usize = usize::MAX;
 
 /// The fields of `this` that the route reads (floats as read by the listing).

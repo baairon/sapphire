@@ -1,4 +1,4 @@
-//! DX2: the v3_to_v4_if4 count is the element count of the bound image argument (argument 2, here Output).
+//! the v3_to_v4_if4 count is the element count of the bound image argument (argument 2, here Output).
 use fx_exec::exec::combo_table;
 
 fn pt() -> &'static str { effects_vecdir::path_str("record_extract/programs/programs.tsv") }

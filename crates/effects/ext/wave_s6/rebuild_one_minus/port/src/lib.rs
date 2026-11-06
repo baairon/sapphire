@@ -225,7 +225,7 @@ pub fn render_mutant(p: &Params, m: Mutant, srcs: &[&[f32]], outs: &mut [&mut [f
     render_impl(p, m, srcs, outs)
 }
 
-/// Every stand-in and assumption of this port (prefix ON1-).
+/// Every stand-in and assumption of this port (prefix -).
 pub fn assumptions() -> Vec<(&'static str, &'static str)> {
     vec![
         ("ON1-A1", "ONE = 1.0f CAPTURED (lookup_om.tsv, 0000803f); scalar head and tail"),

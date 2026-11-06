@@ -1,4 +1,4 @@
-//! ops_coerce (CO1): native port of the member pass functions that the builtin classes `coerce_up`, `coerce_to_alpha`, `coerce_to` and
+//! ops_coerce: native port of the member pass functions that the builtin classes `coerce_up`, `coerce_to_alpha`, `coerce_to` and
 //! `coerce_up_a1` store in their slot 60 combo blocks (entry first field; listing offsets, VA = offset).
 //!
 //! The four classes have NO slot 53 body (slot 53 = shared stub : log + assert) and no GPU twin (slot 54 stub). Their pixel code is
@@ -255,7 +255,7 @@ pub fn assumptions() -> Vec<Assumption> {
     vec![
         Assumption { id: "CO1-A1", tier: "SEMANTIC-XF", text: "the member pointers at COMBOS entry first field are what slot 32 calls (call shape rdi this, rsi info, rdx dst planes); INFERRED as in VQ1-A3; pass mode value not measured. The plan dump shows coerce_up as run-primitive on a 1 channel image (probe), so the node is PIXEL" },
         Assumption { id: "CO1-A2", tier: "CALLEE-MODELLED", text: "slot 31 returns the combo tag; T2 serves it through a ret_const hook; the combo (pass, tag) is an explicit parameter" },
-        Assumption { id: "CO1-A3", tier: "PARAM-UNCAPTURED", text: "pool flag of the plane service (PL1-A3): Host.in_pool, both values run for fills of 512 floats and more" },
+        Assumption { id: "CO1-A3", tier: "PARAM-UNCAPTURED", text: "pool flag of the plane service: Host.in_pool, both values run for fills of 512 floats and more" },
         Assumption { id: "CO1-A4", tier: "PARAM-UNCAPTURED", text: "argument-0 block contents (maxch, enable, constants, source planes) are written by the executor's argument binding; explicit inputs" },
         Assumption { id: "CO1-A5", tier: "CAPTURED", text: "constant 1.0, audit_addr claims.tsv; 0.0 by xorps in DE_CELL_A" },
         Assumption { id: "CO1-A6", tier: "NOT REBUILT", text: "rect modes of the plane service; block getter slot 45 only enters P_CELL_A (real code in T2)" },

@@ -1,19 +1,19 @@
-// INT19: LYM2 tests/t27_lym1.rs renamed t31_lym1.rs (the t27 name is INT17s; NEXT.md of INT18, step L).
-//! LYM1: the 13 registered programs merged with their layout row (LAY1): extras, hardcodes, parameter counts.
+// tests/t27_lym1.rs renamed t31_lym1.rs (the t27 name is; NEXT.md of, step L).
+//! the 13 registered programs merged with their layout row: extras, hardcodes, parameter counts.
 use fx_eval::layoutmerge::{find_layout_text, merge_layout, read_layout};
 use fx_eval::{build_effect, Corpus};
 
 // (registered program, expected extras in layout order, :hardcode names, expected record count after the merge or 0 = not measured)
 const T: &[(&str, &[&str], &[&str], usize)] = &[
-    ("Blur_Color_Autogen", &["soft_borders", "opacity"], &[], 23), // BCJ2's 23-parameter S_Blur record
+    ("Blur_Color_Autogen", &["soft_borders", "opacity"], &[], 23), // 23-parameter S_Blur record
     ("Blur_Mono_Autogen", &["soft_borders", "opacity"], &[], 0),
     ("Transform_and_Blur_Autogen", &["opacity"], &[], 0),
     ("Blur_Motion_Curves_No_Transform_Autogen", &["opacity"], &[], 0),
     ("Diffuse_Autogen", &[], &[], 0),
-    ("Distort_RGB_Autogen", &["opacity"], &["warp_alpha"], 24), // PDV3 pvDR: 24 parameters
+    ("Distort_RGB_Autogen", &["opacity"], &["warp_alpha"], 24), // pvDR: 24 parameters
     ("Drop_Shadow", &["expand_borders", "opacity"], &[], 0),
     ("Hue_Sat_Bright_Autogen", &[], &[], 0),
-    ("Sharpen_Best_Quality_Autogen", &["opacity"], &["show"], 27), // PDV3 pvSH: 27 parameters
+    ("Sharpen_Best_Quality_Autogen", &["opacity"], &["show"], 27), // pvSH: 27 parameters
     ("Sharpen_Fast_Autogen", &["opacity"], &[], 0),
     ("Time_Warp_RGB_Autogen", &["input_opacity", "output_opacity"], &[], 0),
     ("Trails_Autogen", &["opacity"], &[], 0),
@@ -56,7 +56,7 @@ fn lym1_thirteen_programs() {
 }
 
 
-// Layout-order checks against the recorded host definition lists (PDV3 SETUP json, defs_decoded order after the fixed Load/Save/Matte rows):
+// Layout-order checks against the recorded host definition lists (SETUP json, defs_decoded order after the fixed Load/Save/Matte rows):
 // Distort_RGB: ... Amount Blur Lens Rotate Warp Dir Warp Red Warp Green Warp Blue Amount Rel(X,Y) Wrap(X,Y) Filter Blur Matte Invert Matte Matte Use Opacity;
 // Sharpen_Best: ... Opacity sits before Mask Use (host ids 52, 540); Blur_Color: Matte Use, Soft Borders, Opacity.
 #[test]

@@ -1,4 +1,4 @@
-//! ESH5 FM2 population for the vrsqrtss model: find x (with pw = x + 1 exact, so x13 = pw - 1 = x) where the two-rounding model 1/sqrt(x) in f32 and the
+//! population for the vrsqrtss model: find x (with pw = x + 1 exact, so x13 = pw - 1 = x) where the two-rounding model 1/sqrt(x) in f32 and the
 //! single-rounding model differ. Writes the first values to t2/rsqrt_diff.txt (bits of pw). Sweeps bit patterns of x in [1, 2^23) and a sample of larger ones.
 use std::io::Write;
 #[test]

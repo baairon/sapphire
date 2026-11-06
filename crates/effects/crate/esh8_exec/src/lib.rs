@@ -1,9 +1,9 @@
-//! ESH8: executor class for edge_aware_sharpen, slot 52, render flag 0 route.
+//! executor class for edge_aware_sharpen, slot 52, render flag 0 route.
 //!
-//! Interface contract (ESH7 MAPPING.md):
+//! Interface contract (MAPPING.md):
 //! - NO DEFAULTS: `Operands`, `CompileCtx` and `Inputs` have no `Default` impl and no constructor that fills a field; the caller states every field.
 //! - Input 0 is the Source (nch planes), input 1 is the Mask (MASK-UNBOUND when the mask kind is a plane and input 1 is not bound).
-//! - The fourth input plane at nch 3 is ABSENT (the original's table entry 3 is NULL, MEASURED ESH7). The arena ids of absent planes are
+//! - The fourth input plane at nch 3 is ABSENT (the original's table entry 3 is NULL, MEASURED). The arena ids of absent planes are
 //!   `NO_PLANE`; any access is a `Tripwire` error and is counted in `Output::plane3_accesses` (the count is zero on a successful return).
 //! - Refusals (named): flag != 0 (FLAG-NONZERO), tag < 0 (TAG-NEGATIVE), nch outside 1..=3 (NCH-RANGE), iterations above 7 (ITERS-ABOVE-7).
 //! - PORT-LIMIT VARIANT-NCH1: deriv_io lane 0 != 0 at nch 1 reads input plane 1, whose table entry the record does not give; refused (the program literal is 0).
@@ -17,7 +17,7 @@ pub enum MaskKind {
     Scalar(f32),
 }
 
-/// The ten operand cells of the class (ESH7 MAPPING.md section 1), all stated by the caller.
+/// The ten operand cells of the class (MAPPING.md section 1), all stated by the caller.
 #[derive(Debug, Clone, Copy)]
 pub struct Operands {
     pub mask: MaskKind,
@@ -26,7 +26,7 @@ pub struct Operands {
     pub levels: f32,              // [this]
     pub tiny_detail_size: f32,    // [this]
     pub edge_threshold: f32,      // [this]
-    /// [this + 4k], k = 0..6: lanes 0..3 are the operand, lanes 4..6 are the stale entry cells (4.2e-45, 1.4e-45, 0.0 in the ESH7 record); the caller states all seven.
+    /// [this + 4k], k = 0..6: lanes 0..3 are the operand, lanes 4..6 are the stale entry cells (4.2e-45, 1.4e-45, 0.0 in the record); the caller states all seven.
     pub sigmoid_scale: [f32; 7],
     pub rel_chan: [f32; 3],       // [this + 4k], per-channel gains for nch <= 3
 }

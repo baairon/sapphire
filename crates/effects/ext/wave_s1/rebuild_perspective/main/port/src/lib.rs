@@ -18,8 +18,8 @@ pub struct Assumption {
 
 pub fn assumptions() -> Vec<Assumption> {
     vec![
-        Assumption { id: "PX1-A1", text: "RETIRED by W50 (RERUN_SC1): the callee is the native crate libm_sincos (SC1), bit exact against the emulated routine; the f64 sin/cos model differed from it in 4 of 18,540 finite inputs (0 on the perspective range). Inherited labels: SC1-A1 (sincosf table entries 16..63) and SC1-A2 (double table entries 4..63), both ASSUMED-SEMANTIC, carried by the emulator image on the original side and by libm_sincos on the Rust side." },
-        Assumption { id: "PX1-A2", text: "APPROX-MODEL: vrcpps (6 sites:) is modelled as the exact f32 reciprocal 1.0/x on both sides (W49); the code's own Newton step follows. The SDM bound of the estimate is 1.5 * 2^-12 relative; the Rust-only sensitivity test tests/approx.rs measures the output change (APPROX-BOUND, t2/APPROX_BOUND_SC1.txt)." },
+        Assumption { id: "PX1-A1", text: "RETIRED (RERUN_SC1): the callee is the native crate libm_sincos, bit exact against the emulated routine; the f64 sin/cos model differed from it in 4 of 18,540 finite inputs (0 on the perspective range). Inherited labels: SC1-A1 (sincosf table entries 16..63) and SC1-A2 (double table entries 4..63), both ASSUMED-SEMANTIC, carried by the emulator image on the original side and by libm_sincos on the Rust side." },
+        Assumption { id: "PX1-A2", text: "APPROX-MODEL: vrcpps (6 sites:) is modelled as the exact f32 reciprocal 1.0/x on both sides; the code's own Newton step follows. The SDM bound of the estimate is 1.5 * 2^-12 relative; the Rust-only sensitivity test tests/approx.rs measures the output change (APPROX-BOUND, t2/APPROX_BOUND_SC1.txt)." },
         Assumption { id: "PX1-A3", text: " (uncovered) are 32 bit integer 1 in every lane (INFERRED: they are ANDed with a cmpgt mask and then compared by vpcmpeqd with a 0/1 broadcast of the scalar sign test). Same stand-in on both sides." },
         Assumption { id: "PX1-A4", text: " (uncovered) is all ones in every lane (same label as SC2-A1 of the dissolve port); used as a NOT mask (vxorps) so only its use as all ones matters." },
         Assumption { id: "PX1-A5", text: " holds 2pi as f32 0x40c90fdb in its first 4 bytes (MEASURED, lookup_raw.tsv: the other 12 bytes are uncovered and are not read by vmulss)." },
@@ -56,7 +56,7 @@ pub fn sincos_arg(gpu_call_a: f32) -> f32 {
     (C_QUARTER_NEG * gpu_call_a) * C_TWO_PI
 }
 
-/// The one native for the callee (crate libm_sincos, SC1): (r0, r1) = (sin, cos) as f32, bit exact against the emulated routine.
+/// The one native for the callee (crate libm_sincos): (r0, r1) = (sin, cos) as f32, bit exact against the emulated routine.
 /// PX1-A1 (the f64 model) is retired: the callee is the native crate libm_sincos.
 pub fn sincos_native(x: f32) -> (f32, f32) {
     libm_sincos::sincosf_x(x)
