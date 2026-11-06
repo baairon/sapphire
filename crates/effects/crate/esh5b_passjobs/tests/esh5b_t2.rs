@@ -1,4 +1,4 @@
-//! ESH5b T2: crate vs stored emulator runs (harness v2, vex engine; the VEX engine follows the SDM, not silicon).
+//! T2: crate vs stored emulator runs (harness v2, vex engine; the VEX engine follows the SDM, not silicon).
 //! Layouts: XD XDP XDS XAD XAS XALL (pass job x), YD YDP YDS YAD YAS YALL (pass job y), C (callback 0x261780), F FDS (callback 0x24e700 standalone), E8 E9 (exp2).
 //! Directory: env ESH5B_T2 (default t2 of this folder).
 use esh5b_passjobs::*;

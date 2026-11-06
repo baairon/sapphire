@@ -1,11 +1,11 @@
-//! ops_if (OP3): native port of the select operators `if+` and `if>`.
+//! ops_if: native port of the select operators `if+` and `if>`.
 //!
 //! Source of truth: the slot 52 AVX2 bodies of the original (if+, if>, listing offsets in
 //! neutral_1.asm; captured VA = listing). Both are one template: per output channel `ch`per element `i`
 //!   out[ch][i] = cond(i) ? x[ch][i] : y[ch][i]       (bit copies, no arithmetic)
 //! with cond = (c > 0) for `if+ c x y` and (a > b) for `if> a b x y`, an ordered compare (NaN gives false, so the y arm).
 //! Operands are an image (planes of `n` floats) or a constant (4 floats), exactly as the host fills the object.
-//! Std only, no unsafe, no Default on parameters. Assumption prefix OP3-.
+//! Std only, no unsafe, no Default on parameters. Assumption prefix -.
 
 pub const PREFIX: &str = "OP3-";
 /// Output planes start filled with this NaN pattern in the harness (img_oracle SENTINEL_BITS).
@@ -56,9 +56,9 @@ pub fn assumptions() -> Vec<Assumption> {
         Assumption { id: "OP3-A1", tier: "CAPTURED", text: "ONE = 1.0f, used for the missing alpha of an odd-count x or y operand at channel 3" },
         Assumption { id: "OP3-A2", tier: "SEMANTIC", text: "STD-001 (32 bytes, uncovered): all ones. Basis: vxorps K,cmpmask is used only as a vmaskmovps/vblendvps control (sign bit); the scalar head and tail use the complement test (jbe), so the vector else-lanes must be !mask. Explicit parameter k_mask, T2 runs all-ones and zero" },
         Assumption { id: "OP3-A3", tier: "JUMPTABLE-DERIVED", text: "the dispatch jump tables (if+, if>, 16 qwords of offsets) are uncovered; the cell is a data stand-in on both sides, each index mapped to the case entry whose emulated behaviour equals the model for that flag word (bijection checked)" },
-        Assumption { id: "OP3-A4", tier: "HOST-HOOKED", text: "virtual slot 31 is the output channel count nout; hooked ret_const (W69), meaning INFERRED from the loop bound" },
+        Assumption { id: "OP3-A4", tier: "HOST-HOOKED", text: "virtual slot 31 is the output channel count nout; hooked ret_const, meaning INFERRED from the loop bound" },
         Assumption { id: "OP3-A5", tier: "INFERRED", text: "object layout (operand count at, the flag field, constants, plane records, plane c at the record's per-channel pointer) MEASURED from the loads; that the host fills it so is INFERRED" },
-        Assumption { id: "OP3-A6", tier: "LIBC-MODEL", text: "memcpy thunk (whole-plane arm copy when the condition is constant) hooked as memcpy (W89)" },
+        Assumption { id: "OP3-A6", tier: "LIBC-MODEL", text: "memcpy thunk (whole-plane arm copy when the condition is constant) hooked as memcpy" },
         Assumption { id: "OP3-A7", tier: "ROUTE", text: "AVX2 route only (word 0x9d97ff); AVX and SSE tiers not compared; HOST-FP-ASSUMED (no arithmetic in the bodies, only ordered compares)" },
         Assumption { id: "OP3-A8", tier: "CONTRACT", text: "channel counts 1..4, nout <= 4 (constants are read at index ch), n >= 0 when a whole-plane copy runs, destination planes disjoint from the sources, flag (rcx) = 0" },
         Assumption { id: "OP3-A9", tier: "ALIGN-DEPENDENT", text: "the vector region (peel from the destination phase) is visible only when k_mask is not all ones; dst_phase explicit" },

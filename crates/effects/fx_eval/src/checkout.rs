@@ -1,14 +1,14 @@
-//! INT15 (UNT3 PATCH 2 with UNT5 PATCH 1 to 3): the parameter checkout rule, ported as read.
+//! (with to 3): the parameter checkout rule, ported as read.
 //!
 //! Parse time, per parameter record (program text flags; listing parser ..0x1062xx):
 //!   show_with_mask or mask_only: ba = position of the input named "Mask", else "Matte", else "Occlusion" (lookups);
 //!   bg_only: ba = position of the input "Background", else "Back";
 //!   show_with_mocha: bc |= 1;
-//!   otherwise ba = -1, bc = 0. A ':name' token binds nothing (UNT5, MEASURED: plain Diffuse parses with ba = -1); the registered program
-//!   of a style is its _Autogen text, in which the colon names are expanded (UNT5).
+//!   otherwise ba = -1, bc = 0. A ':name' token binds nothing (, MEASURED: plain Diffuse parses with ba = -1); the registered program
+//!   of a style is its _Autogen text, in which the colon names are expanded.
 //! Run time (fetch gate family): the host checkout runs only when the record stamp is stale and REFRESH holds:
 //!   ba < 0: REFRESH = (owner != NULL); ba >= 0: REFRESH = bit ba of [owner] (the input presence mask) or (bc & 1 and [owner] & 0x10).
-//! Label: "CHECKOUT-RULE-READ (UNT3, UNT4, UNT5)". Report-only on this tree: no route consumes it yet (INT15-A2).
+//! Label: "CHECKOUT-RULE-READ". Report-only on this tree: no route consumes it yet.
 
 use crate::build::Genotype;
 
@@ -22,7 +22,7 @@ pub struct CheckoutBytes {
     pub bc: u8,
 }
 
-/// Arms of the parser that the rule uses; all true on the claim. A false arm exists only for the mutant test (UNT5: a model without the
+/// Arms of the parser that the rule uses; all true on the claim. A false arm exists only for the mutant test (a model without the
 /// show_with_mask arm must fail the Diffuse rows).
 #[derive(Debug, Clone, Copy)]
 pub struct Arms {
@@ -42,7 +42,7 @@ fn find(inputs: &[&str], names: &[&str]) -> i16 {
 
 /// ba and bc of one record from its raw flag tokens and the program's input names in declared order.
 pub fn bind_bytes(flags: &[String], inputs: &[&str], arms: Arms) -> CheckoutBytes {
-    // INT17 (AUD1 1e F3): the parser stores ba at each arm keyword in token order, so the later token's ba stands
+    // the parser stores ba at each arm keyword in token order, so the later token's ba stands
     let mut ba = -1;
     let mut bc = 0;
     for f in flags {
@@ -68,7 +68,7 @@ pub fn refresh(b: CheckoutBytes, owner_fetch_byte: u8, owner_stamp_byte: u8, own
     (b.bc & 1) == 1 && (owner_stamp_byte & 0x10) != 0
 }
 
-/// INT17 (AUD1 1e F1 and F4): refusals where the crate and the listing would part.
+/// refusals where the crate and the listing would part.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckoutError {
     /// ba >= 32: `bt eax,edx` takes the index modulo 32 in the listing ("CHECKOUT-BA-OUT-OF-RANGE")

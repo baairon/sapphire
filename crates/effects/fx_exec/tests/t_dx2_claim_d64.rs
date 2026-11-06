@@ -1,4 +1,4 @@
-//! Step DX2: the D_64x32 claim line of Drop_Shadow on the 'ae32' route compiles with a 4-plane root and the
+//! Step the D_64x32 claim line of Drop_Shadow on the 'ae32' route compiles with a 4-plane root and the
 //! v3_to_v4_if4 node folded at n 4 to [0 0 0 1]. The line is read from dsc1()'s stored PRED.tsv (its 'cmd' column) so that this
 //! file carries none of the recorded words; only the file paths are redirected. Kills the mutant 'Output at the minimal-context
 //! default' (the node folds at 3 lanes and the root has 3 planes).

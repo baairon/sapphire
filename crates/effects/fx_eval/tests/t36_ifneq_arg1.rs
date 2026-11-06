@@ -1,5 +1,5 @@
-//! INT21 step Q: a non-constant second argument of if_neq_const is noted for fx_run's claim-route refusal IFNEQ-CONST-ARG1-NONCONST.
-//! EQC1's c7 probe text (if_neq_const 1 x ...) is noted; c6's (if_neq_const x 1 ...) is not. One test function: the note is a process-wide cell.
+//! a non-constant second argument of if_neq_const is noted for fx_run's claim-route refusal IFNEQ-CONST-ARG1-NONCONST.
+//! c7 probe text (if_neq_const 1 x ...) is noted; c6's (if_neq_const x 1 ...) is not. One test function: the note is a process-wide cell.
 use fx_eval::{build_effect, compile, enumerate_branches_opt, ComboTable, CompileOptions, Corpus};
 use std::collections::BTreeMap;
 

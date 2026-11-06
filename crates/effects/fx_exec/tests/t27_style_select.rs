@@ -1,5 +1,5 @@
-//! INT17 step 5: STYLE-SELECT on fx_run. --effect-answer N --effect-count K are judged before anything else
-//! (fx_exec::style, BCJ3's render-path rule); a selected program other than the one run is refused by name.
+//! STYLE-SELECT on fx_run. --effect-answer N --effect-count K are judged before anything else
+//! (fx_exec::style render-path rule); a selected program other than the one run is refused by name.
 use std::process::Command;
 
 fn pt() -> &'static str { effects_vecdir::path_str("record_extract/programs/programs.tsv") }

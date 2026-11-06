@@ -1,4 +1,4 @@
-//! ESH2 T2: crate vs stored emulator runs of pool job 0x245d20 (harness v2, vex engine; "VEX follows the SDM, not silicon").
+//! T2: crate vs stored emulator runs of pool job 0x245d20 (harness v2, vex engine; "VEX follows the SDM, not silicon").
 //! Directory: env ESH2_T2 (default t2 of this folder). Layouts: B1 B2 B3 BP (guide-plane mode), A1 AP (constant mode).
 use esh2_job::*;
 use std::collections::HashMap;

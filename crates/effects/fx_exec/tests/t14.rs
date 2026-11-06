@@ -1,4 +1,4 @@
-//! IN7 (wave_s9 in7_wire): hand tests of the newly wired classes remove_alpha (CO1 pass C_CELL_A, rows 1 2 3 4 -> 1 1 3 3), round (scale_rgb crate,
+//! (wave_s9 in7_wire): hand tests of the newly wired classes remove_alpha (pass C_CELL_A, rows 1 2 3 4 -> 1 1 3 3), round (scale_rgb crate,
 //! AVX2 body 0x4dab50) and scale_rgb (slot 53 0x4d5050 with its host pad call through the plane service). Expected values are computed here
 //! with independent expressions, not by calling the crates.
 use fx_exec::kernels::run_any;

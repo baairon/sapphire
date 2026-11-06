@@ -1,12 +1,12 @@
-//! INT29 step TW: TWF1, TWF2 and TWF3's frame port merged as module fx_exec::twframe, the TWF3 crate text verbatim (its
+//! and frame port merged as module fx_exec::twframe, the crate text verbatim (its
 //! mutation switch MUT stays 0 outside tests/t_int29_twf.rs) plus the claim-route request at the end.
-//! TWF3 (copy of TWF2's port with mutation switches and the new ports in the second half). Original header: TWF2: Time_Warp_RGB's frame-index writer, the checkout request and limit, and both frame-range paths, ported as read from the
+//! (copy of port with mutation switches and the new ports in the second half). Original header: Time_Warp_RGB's frame-index writer, the checkout request and limit, and both frame-range paths, ported as read from the
 //! neutral_1 listing (addresses are listing addresses). The emulated original is the judge (t2/emu.tsv, tests/t2.rs).
 //! Labels: every function names its listing range; "INFERRED" marks a reading that no emulator block covers.
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-/// TWF3 mutation switch: 0 = the port as TWF2 wrote it. Nonzero ids select one deliberate mutation (list in MUTANTS.tsv); used only by tests/t3_mut.rs.
+/// mutation switch: 0 = the port as wrote it. Nonzero ids select one deliberate mutation (list in MUTANTS.tsv); used only by tests/t3_mut.rs.
 pub static MUT: AtomicU32 = AtomicU32::new(0);
 #[inline] fn mu(id: u32) -> bool { MUT.load(Ordering::Relaxed) == id }
 
@@ -143,7 +143,7 @@ pub fn frame_range_lanes(w: i32, h: i32, lanes: &[f32], round_up: bool) -> (i32,
     range_tail(mn, mx, round_up)
 }
 
-// ================================================================ TWF3 additions
+// ================================================================ additions
 
 // ---------------------------------------------------------------- the limit cell and its record history 
 
@@ -251,7 +251,7 @@ impl FrameCache {
     }
 }
 
-// ---------------------------------------------------------------- INT29 step TW: the claim-route request
+// ---------------------------------------------------------------- the claim-route request
 
 /// The per-run request inputs of the get_frame route, every one from the run's record (no default).
 /// `big_f` is F (the --host-frame value), `dur_frames` the clip duration in frames, `limit_cell` the host limit cell taken per run from
@@ -268,11 +268,11 @@ pub struct TwRequest { pub frame: i32, pub stored: f32, pub arg: i32 }
 /// Refusals are named: the lane path is not on the recorded route (r9 = 0), a range of more than one frame, a zero step.
 pub fn route_request(q: &TwRoute, t: f32) -> Result<TwRequest, String> {
     if q.r9 == 0 {
-        return Err("FRAME-RANGE-LANE-PATH-NOT-ON-ROUTE (r9d = 0: the lane path of the frame range is ported but the recorded route is the scalar path; TWS1, W559)".into());
+        return Err("FRAME-RANGE-LANE-PATH-NOT-ON-ROUTE (r9d = 0: the lane path of the frame range is ported but the recorded route is the scalar path)".into());
     }
     let (lo, hi) = frame_range_scalar(t, q.r8 != 0);
     if lo != hi {
-        return Err(format!("FRAME-RANGE-MULTI-UNRECORDED (frames {} to {} for one request; the recorded route asks one frame per offset; TWS1, W559)", lo, hi));
+        return Err(format!("FRAME-RANGE-MULTI-UNRECORDED (frames {} to {} for one request; the recorded route asks one frame per offset)", lo, hi));
     }
     let r = checkout_request(CheckoutIn { f: lo, big_f: q.big_f, dur_frames: q.dur_frames, lim_global: q.limit_cell, step: Some(q.step), kind: q.kind, f4: q.f4 })
         .map_err(|e| format!("FRAME-REQUEST-REFUSED ({:?}; step {})", e, q.step))?;
@@ -283,7 +283,7 @@ pub fn route_request(q: &TwRoute, t: f32) -> Result<TwRequest, String> {
 mod int29_tests {
     use super::*;
     fn q(f: f32, step: i32) -> TwRoute { TwRoute { big_f: f, dur_frames: 240.0, limit_cell: 0, step, kind: 0, f4: 0, r8: 0, r9: 1 } }
-    /// REQUEST-LIST (TWS1 RECORDS_W574 F25, MEASURED keylog): F 2.5 then 3.5 at step 2 with shifts +1, 0, -1 ask frames 3,2,1 and 4,3,2
+    /// REQUEST-LIST (MEASURED keylog): F 2.5 then 3.5 at step 2 with shifts +1, 0, -1 ask frames 3,2,1 and 4,3,2
     /// with arguments 7,5,3 and 9,7,5.
     #[test]
     fn request_list_f25() {

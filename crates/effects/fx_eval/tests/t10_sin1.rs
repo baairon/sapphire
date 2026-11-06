@@ -1,4 +1,4 @@
-//! SIN1: the original sin / cos fold kernel (Intel SVML sinf4 / cosf4 SSE variants), hand values measured in the original compiler's plans.
+//! the original sin / cos fold kernel (Intel SVML sinf4 / cosf4 SSE variants), hand values measured in the original compiler's plans.
 use fx_eval::svml_trig::{cos_rev, cosf_svml, sin_rev, sinf_svml};
 
 fn b(x: f32) -> u32 { x.to_bits() }

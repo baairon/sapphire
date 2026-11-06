@@ -165,7 +165,7 @@ fn all_38_targets_compile_deterministically_with_folding() {
             }
             let ei = c.find_effect(f[0], Some(f[1])).unwrap();
             let g = build_effect(&c, ei).unwrap();
-            // HC-ZERO-LEGACY (named state A option, INT8)
+            // HC-ZERO-LEGACY (named state A option)
             let sets = enumerate_branches_opt(&g, &ct, &BTreeMap::new(), true);
             assert!(!sets.is_empty());
             for s in &sets {

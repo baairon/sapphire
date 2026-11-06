@@ -1,4 +1,4 @@
-//! monochrome (MN1): native port of the CPU render entry of builtin class `monochrome`
+//! monochrome: native port of the CPU render entry of builtin class `monochrome`
 //! (vtable, slot 53 =, AVX2 body inlined).
 //!
 //! Source of truth: neutral_1.asm (listing offsets; captured VA = offset).
@@ -178,7 +178,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str)> {
         ("MN1-A2", "ASSUMED-SEMANTIC: vector weight cell plane 0, 32 B, NOT CAPTURED: every lane = 0.3125 (f64), same basis (scalar cell CAPTURED)"),
         ("MN1-A3", "ASSUMED-SEMANTIC: vector weight cell plane 2, 32 B, NOT CAPTURED: every lane = 0.1875 (f64), same basis (scalar cell CAPTURED)"),
         ("MN1-A4", "ROUTE AVX2-ONLY: feature word cell (pointer to, word zero in the capture) is served as 0x9d97ff in the R-PARITY run; AVX tier, SSE tier and the init retry are not ported"),
-        ("MN1-A5", "HOST-HOOKED: tail callee (pad plane host service, channels < 3) is a record-only hook on the emulator side and a Call::Fill token on the Rust side; PL1's native is not used (no READY at build time): class is PAD-UNVERIFIED"),
+        ("MN1-A5", "HOST-HOOKED: tail callee (pad plane host service, channels < 3) is a record-only hook on the emulator side and a Call::Fill token on the Rust side native is not used (no READY at build time): class is PAD-UNVERIFIED"),
         ("MN1-A6", "ALIGN-DEPENDENT: Params.dst_phase is the explicit stand-in for (dest pointer & 0x1f); it only chooses which elements use the vector cells, so it changes outputs only if A1..A3 are wrong"),
         ("MN1-A7", "HOST-FP-ASSUMED: MXCSR round to nearest, no FTZ, no DAZ; null [this] with n > 0 is outside the contract (reported, not compared); dest pointer with (phase & 3) != 0 is not reachable with f32 planes (not compared)"),
     ]

@@ -1,4 +1,4 @@
-//! INT28 step PI: the Warp_Perspective_Autogen matte rows by record, the record table, and PARAM-INPUT-INDEX-UNRECORDED.
+//! the Warp_Perspective_Autogen matte rows by record, the record table, and PARAM-INPUT-INDEX-UNRECORDED.
 use fx_eval::ranges::{host_value_index_check, param_input_index, param_input_recorded, PARAM_INPUT_INDEX_BY_RECORD};
 
 #[test]
@@ -37,7 +37,7 @@ fn pi_unrecorded_row_refuses_a_host_value() {
     for (p, n) in [("Warp_Perspective", "invert_mask"), ("Warp_Perspective", "mask_use"), ("Blur_Color", "invert_mask"), ("Distort_RGB", "mask_use")] {
         assert!(!param_input_recorded(p, n), "{} {}", p, n);
         let e = host_value_index_check(p, n).unwrap_err();
-        assert_eq!(e, format!("PARAM-INPUT-INDEX-UNRECORDED ({} {}: no record of the parameter's input index; W563)", p, n));
+        assert_eq!(e, format!("PARAM-INPUT-INDEX-UNRECORDED ({} {}: no record of the parameter's input index)", p, n));
     }
     // a parameter with no PARAM_INPUTS row is not touched by the check
     assert!(host_value_index_check("Warp_Perspective", "blur_amount").is_ok());

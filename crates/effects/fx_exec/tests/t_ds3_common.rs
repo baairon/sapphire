@@ -1,4 +1,4 @@
-// shared helpers of the DS3 tests (included by path)
+// shared helpers of the tests (included by path)
 use fx_eval::{build_effect, Corpus};
 use fx_exec::exec::*;
 pub fn pt() -> &'static str { effects_vecdir::path_str("record_extract/programs/programs.tsv") }

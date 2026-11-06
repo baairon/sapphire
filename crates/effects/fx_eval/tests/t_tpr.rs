@@ -1,5 +1,5 @@
 //! Step TPR: the six claim-style rows of data/TICKMAP_PARAM_RECORDS.tsv carry the claim harness's parameter
-//! records (BMR1 PATCH.md 1, MEASURED at every 0x71c720 entry of BMR1's records); core-program and center rows are unchanged.
+//! records (MEASURED at every 0x71c720 entry of the recorded records); core-program and center rows are unchanged.
 use fx_eval::hostcurve::{fold, table_row, HostCurveValues};
 static RECORDS: effects_rtdata::Table = effects_rtdata::Table::new("data/TICKMAP_PARAM_RECORDS.tsv");
 
@@ -60,11 +60,11 @@ fn tpr_index_check_passes() {
     }
 }
 
-/// The host lines as BMR1's canary records show them (in_data +0xb8, +0xec, +0xf0, +0xf4; the global 1; selector 0).
+/// The host lines as the recorded canary records show them (in_data +0xb8, +0xec, +0xf0, +0xf4; the global 1; selector 0).
 const HOST: &str = "host effect_ref 1592590336\nhost time_mult 1\nhost time_scale 24\nhost double_flag 0\nhost global 1\nhost selector 0\n";
 
 /// shift (subtype_byte 5) refuses without point fields, and with a recorded point entry reaches a result on the generic path.
-/// The point entry is BMR1's can_tb_64x32 record (bmr1.pt.arm[0], bmr1.pt.xy[0], prelude status 0 type 6); the checkout answers
+/// The point entry is the recorded can_tb_64x32 record (bmr1.pt.arm[0], bmr1.pt.xy[0], prelude status 0 type 6); the checkout answers
 /// are that record's shift keys (shift, 24 and 25, tick 0, step 1, scale 24, status 0, answer 0).
 #[test]
 fn tpr_shift_point_fields() {
@@ -105,6 +105,6 @@ fn tpr_other_rows_unchanged() {
     for l in pre.lines() {
         assert!(RECORDS.lines().any(|x| x == l), "row changed or missing: {}", l);
     }
-    // step TPU2b adds the Blur_Only centre row: 14 lines become 15 (TEST CHANGE, listed in PATCH.md)
+    // step adds the Blur_Only centre row: 14 lines become 15 (TEST CHANGE, listed in PATCH.md)
     assert_eq!(RECORDS.lines().count(), 15);
 }

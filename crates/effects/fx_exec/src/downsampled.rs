@@ -1,4 +1,4 @@
-//! DS1: the `exec-downsampled` command (vtable, execute) as explicit-parameter Rust, std only.
+//! the `exec-downsampled` command (vtable, execute) as explicit-parameter Rust, std only.
 //!
 //! What the original does (STATIC, listing; MEASURED on the emulator, see README.md of this folder):
 //! 1. factor f = 2^blur_res (the command prints `exec-downsampled f dest (srcs) (body)`), L = log2(f) levels (= log2f).
@@ -35,7 +35,7 @@ fn fma_s(a: f32, b: f32, c: f32) -> f32 {
     a.mul_add(b, c)
 }
 
-/// DS2: an FMA site that the mutation sweep can unfuse (mutant `id` = multiply, round, add)
+/// an FMA site that the mutation sweep can unfuse (mutant `id` = multiply, round, add)
 #[inline]
 fn fma_m(a: f32, b: f32, c: f32, id: u32) -> f32 {
     if mu() == id { a * b + c } else { a.mul_add(b, c) }
@@ -176,7 +176,7 @@ pub fn down_plane(big: &[f32], w: usize, h: usize, dst_phase: u32) -> Vec<f32> {
 /// Pass 2 : odd rows 2i+1 (i < (h-1)/2) = 0.5 * (row 2i + row 2i+2). Then (caller) rows 2*h2-1 h-1 copy the previous row.
 pub fn up_plane(small: &[f32], w2: usize, h2: usize, w: usize, h: usize) -> Vec<f32> {
     assert!(w2 >= 1 && h2 >= 1 && small.len() >= w2 * h2);
-    assert!(h2 == (h + 1) >> 1 && 2 * w2 <= w + 2); // DS2: the width contract w2 == (w + 1) >> 1 is relaxed to 2*w2 <= w + 2 only for the out-of-contract tail probes (the executor always passes w2 == (w + 1) >> 1)
+    assert!(h2 == (h + 1) >> 1 && 2 * w2 <= w + 2); // the width contract w2 == (w + 1) >> 1 is relaxed to 2*w2 <= w + 2 only for the out-of-contract tail probes (the executor always passes w2 == (w + 1) >> 1)
     let mut big = vec![0.0f32; w * h];
     for i in 0..h2 {
         let r = 2 * i;

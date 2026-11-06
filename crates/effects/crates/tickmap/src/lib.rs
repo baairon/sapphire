@@ -179,14 +179,14 @@ pub enum Error {
     PointPrelude(i32),
 }
 
-/// House form of a refusal (the label text the INT step prints). `prog` and `param` fill the placeholders.
+/// House form of a refusal (the label text the step prints). `prog` and `param` fill the placeholders.
 pub fn refusal_text(e: &Error, prog: &str, param: &str) -> String {
     match e {
-        Error::PointRecType => format!("TICKMAP-POINT-RECTYPE ({} {}: the point-parameter evaluator reaches its point arm only for record types 1 and 2; TMP3, W582)", prog, param),
-        Error::PointNoTime => format!("TICKMAP-POINT-NOTIME ({} {}: the no-time selector is non-zero; that variant is not ported; TMP3, W582)", prog, param),
-        Error::PointNotRouted => format!("TICKMAP-POINT-NOTROUTED ({} {}: the host object is not of type 6 and the routing global does not send nibble 1, 2 or 4 to the point arm; the generic route is not ported; TMP3, W582)", prog, param),
-        Error::PointPrelude(st) => format!("TICKMAP-POINT-PRELUDE ({} {}: the host's type checkout for a point parameter returned status {}; the original logs it and continues with the answer as left, which is not modelled; TMP3, W596)", prog, param, st),
-        Error::N4GenericUnrecorded => format!("TICKMAP-N4-GENERIC-UNRECORDED ({} {}: nibble 4 on the generic mapping path (flags 2) is judged at slot entry only; its size inputs on that path are not recorded; TMP2, W577)", prog, param),
+        Error::PointRecType => format!("TICKMAP-POINT-RECTYPE ({} {}: the point-parameter evaluator reaches its point arm only for record types 1 and 2)", prog, param),
+        Error::PointNoTime => format!("TICKMAP-POINT-NOTIME ({} {}: the no-time selector is non-zero; that variant is not ported)", prog, param),
+        Error::PointNotRouted => format!("TICKMAP-POINT-NOTROUTED ({} {}: the host object is not of type 6 and the routing global does not send nibble 1, 2 or 4 to the point arm; the generic route is not ported)", prog, param),
+        Error::PointPrelude(st) => format!("TICKMAP-POINT-PRELUDE ({} {}: the host's type checkout for a point parameter returned status {}; the original logs it and continues with the answer as left, which is not modelled)", prog, param, st),
+        Error::N4GenericUnrecorded => format!("TICKMAP-N4-GENERIC-UNRECORDED ({} {}: nibble 4 on the generic mapping path (flags 2) is judged at slot entry only; its size inputs on that path are not recorded)", prog, param),
         other => format!("TICKMAP-ROUTE-UNPORTED ({} {}: {:?})", prog, param, other),
     }
 }

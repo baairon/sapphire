@@ -1,4 +1,4 @@
-//! CP2 EMPTY-ARM-EQUIVALENT check of the port (copy of the CV4 crate; this file is new). The original's eight empty-range guards all end in an arm that
+//! EMPTY-ARM-EQUIVALENT check of the port (copy of the crate; this file is new). The original's eight empty-range guards all end in an arm that
 //! writes nothing and returns (see EMPTY_ARM.md). These tests show that the port, given an empty range (n = 0), also writes and reads nothing:
 //! every observable (plane elements, destination floats) is unchanged, no panic, for all four alpha modes and every cell value.
 use convert_pair::*;

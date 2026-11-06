@@ -1,4 +1,4 @@
-//! ESH4: std-only native of the original library routine `powf` (dispatcher, body, twin body).
+//! std-only native of the original library routine `powf` (dispatcher, body, twin body).
 //!
 //! What it is (MEASURED by the listing and the emulator, see SPEC.md): single precision power, `powf(x, y)`, evaluated in double precision with a
 //! 65 pair log2 table, a degree 5 style polynomial pair for log2, a 32 entry exp2 table and a short exp2 polynomial; the result is rounded once

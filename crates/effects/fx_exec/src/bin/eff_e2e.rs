@@ -1,4 +1,4 @@
-//! eff_e2e (CV4): a whole effect on HOST MEMORY, native (convert pair wired) against the ORIGINAL run through the E1 route (real converts).
+//! eff_e2e: a whole effect on HOST MEMORY, native (convert pair wired) against the ORIGINAL run through the E1 route (real converts).
 //! usage: eff_e2e <programs.tsv> <Program> <host.src> <DB.bin> <W> <H> "<name=v1,v2;name=v>" <mode 0..3> [--pln PLN.bin] [--prev PREV.bin] [--frame K=FILE]... [--blur-scale N] [--prefill-aa]
 //! host.src = H*W*4 f32 (B,G,R,A per pixel), DB.bin = the original's host destination bytes after the run, PLN.bin = the original's planes at the writer
 //! entry (layout H,4,W), PREV.bin = the explicit prev-dest frame (4 planes of W*H, R,G,B,A, planar), FILE for --frame = 4 planes of W*H (delivered planes of that absolute frame).
@@ -75,7 +75,7 @@ fn run(a: Vec<String>) -> i32 {
     assert_eq!(orig.len(), 4 * n);
     let mode_byte: i8 = a[8].parse().unwrap();
     let mode = AlphaMode::from_byte(mode_byte).expect("alpha mode");
-    // INT8: strict, or the named option --state-a-defaults
+    // strict, or the named option --state-a-defaults
     let mut b = match fx_exec::exec::strict_binding("eff_e2e", &a) {
         Ok(b) => b,
         Err(e) => {

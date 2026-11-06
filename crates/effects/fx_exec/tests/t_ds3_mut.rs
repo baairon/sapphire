@@ -1,4 +1,4 @@
-//! DS3 mutants and the order test. One test function: the switches DS3_MUT and XWP2_MUT are process wide.
+//! mutants and the order test. One test function: the switches DS3_MUT and XWP2_MUT are process wide.
 mod t_ds3_common;
 use t_ds3_common::*;
 
@@ -35,7 +35,7 @@ fn mutants_and_orders() {
     // alpha-1 plane: both orders agree
     let maxrel = |a: &[f32], b: &[f32]| a.iter().zip(b).map(|(x, y)| (x - y).abs() / x.abs().max(y.abs()).max(1e-6)).fold(0.0f32, f32::max);
     let (r1, rv) = (maxrel(&new_one, &old_one), maxrel(&new_var, &old_var));
-    eprintln!("DS3 orders: alpha 1 max relative difference {:e} ({} words differ in bits), alpha varying {:e} ({} words differ)", r1, new_one.iter().zip(&old_one).filter(|(a, b)| a.to_bits() != b.to_bits()).count(), rv, new_var.iter().zip(&old_var).filter(|(a, b)| a.to_bits() != b.to_bits()).count());
+    eprintln!(" orders: alpha 1 max relative difference {:e} ({} words differ in bits), alpha varying {:e} ({} words differ)", r1, new_one.iter().zip(&old_one).filter(|(a, b)| a.to_bits() != b.to_bits()).count(), rv, new_var.iter().zip(&old_var).filter(|(a, b)| a.to_bits() != b.to_bits()).count());
     assert!(r1 < 1e-3, "alpha 1: the orders agree to the last bits (the up_plane output of an alpha that is 1 up to rounding); got {}", r1);
     // alpha-varying plane: the orders differ
     assert!(rv > 1e-2 && rv > 50.0 * r1, "alpha varying: the orders differ; got {}", rv);

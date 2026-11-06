@@ -1,4 +1,4 @@
-//! ESH5 T2: crate vs stored emulator runs of the shared blur core (entered at 0x255ff0, mode 4, flag 0). Reads t2/cases/<layout>.txt written by
+//! T2: crate vs stored emulator runs of the shared blur core (entered at 0x255ff0, mode 4, flag 0). Reads t2/cases/<layout>.txt written by
 //! tools/export_cases.py from the stored emulator records. Events (callee calls and their arguments, the radius arrays seen by the scratch service)
 //! are compared in order; float fields compare bit exact, NaN as a class (payload-only differences are counted).
 use esh5_core::*;

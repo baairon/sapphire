@@ -1,4 +1,4 @@
-//! Shared pieces of the EM1 classes: x86 max/min rules, the host plane service call (PL1, read-only dependency), errors, mutants, assumptions.
+//! Shared pieces of the classes: x86 max/min rules, the host plane service call (, read-only dependency), errors, mutants, assumptions.
 use plane_service::{plane_service, Block, Host, PlError, Roi, Sel};
 
 /// Errors: the original asserts for an operand count outside 1..4; the port returns an error instead.
@@ -89,9 +89,9 @@ pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
         ("EM1-A1", "CAPTURED/none", "the three AVX2 bodies read no data cells (MEASURED scan: only the feature word cell and assert strings); no ONE, no vector constant"),
         ("EM1-A2", "ROUTE", "AVX2 route only (feature word 0x9d97ff): bodies,; AVX and SSE tiers not compared"),
         ("EM1-A3", "HOST-FP-ASSUMED", "MXCSR round to nearest; the bodies only compare and copy, no rounding"),
-        ("EM1-A4", "CALLEE-MODELLED/PL1", "plane service is the finished PL1 native; its descriptor-0 block (class virtual returns [this]) is an explicit input (Svc), host fill INFERRED"),
+        ("EM1-A4", "CALLEE-MODELLED/PL1", "plane service is the finished native; its descriptor-0 block (class virtual returns [this]) is an explicit input (Svc), host fill INFERRED"),
         ("EM1-A5", "PARAM-UNCAPTURED", "Svc.in_pool (pool flag cell): both values run; matters only for a constant fill of >= 512 floats (-0.0 becomes +0.0)"),
-        ("EM1-A6", "HOST-HOOKED", "virtual slot 31 (call [rax]) of element_of is a count getter: nout is an explicit parameter (W69); max_element/min_element never call it"),
+        ("EM1-A6", "HOST-HOOKED", "virtual slot 31 (call [rax]) of element_of is a count getter: nout is an explicit parameter; max_element/min_element never call it"),
         ("EM1-A7", "INFERRED host fill", "the operand record at this (count, flag, consts, plane record) and descriptor 0 at [this] describe the same operand"),
         ("EM1-A8", "contract", "operand count outside 1..4 (original: assert) and nout outside 1..4 for element_of return an error; n <= 0 writes nothing for count >= 2"),
     ]

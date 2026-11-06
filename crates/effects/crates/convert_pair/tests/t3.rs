@@ -1,4 +1,4 @@
-//! CV4 T3: the two mutation survivors of CV3.
+//! T3: the two mutation survivors of.
 //! #4 (clamp_alpha: `1.0 <= a` instead of `1.0 < a`): equivalent mutant, proved by EXHAUSTION over all 2^32 f32 bit patterns (bit equal results).
 //! #15 (replicate_band: count = cell instead of cell - 1): lives in the cell > 1 sketch (outside HOST-RES-FULL); killed here by a T1 test of the
 //! sketch's own specification (listing reading of cfedb..cff9a: count = min(cell - 1, last_row - y)); the sketch is not oracle validated and not claimed.
@@ -68,8 +68,8 @@ fn survivor15_replicate_band_spec() {
     assert_eq!(d, before);
 }
 
-// INT14: the mutant switch acts only under --features mutants (mu is cfg!(feature = "mutants")), so this kill test is
-// compiled only there; INT13's default-feature failure was this test configuration, not a survivor (MEASURED: passes under the feature).
+// the mutant switch acts only under --features mutants (mu is cfg!(feature = "mutants")), so this kill test is
+// compiled only there; the recorded default-feature failure was this test configuration, not a survivor (MEASURED: passes under the feature).
 #[cfg(feature = "mutants")]
 #[test]
 fn survivor15_mutant_is_killed_by_the_spec_test() {

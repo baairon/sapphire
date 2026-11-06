@@ -1,4 +1,4 @@
-//! Shared helpers of the classes `max`, `min` (binary, shape of the OP1 bodies) and `abs`, `negate` (unary, one record).
+//! Shared helpers of the classes `max`, `min` (binary, shape of the bodies) and `abs`, `negate` (unary, one record).
 //! Listing offsets in comments: max body, min body (identical instruction for instruction after vmax <-> vmin, MEASURED
 //! by a normalised diff of the two 423 line bodies), abs body, negate body . VA = listing offset.
 //! The vector split used by the extension kernels and by the unary bodies is one and the same shape (threshold 16 and 0x1d, peel from the
@@ -366,7 +366,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
         ("OP2-A5", "ROUTE", "AVX2 route only: feature word 0x9d97ff selects max, min, abs, negate; AVX tiers and SSE tiers are not ported"),
         ("OP2-A6", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ (max/min compare, abs/negate are bit operations); the emulator follows the SDM, not silicon"),
         ("OP2-A7", "ALIGN-DEPENDENT", "dst3_phase_bytes (max/min extension) and dst_phase_bytes[c] (abs/negate) = (address of the output plane) & 0x1f are explicit inputs; they matter only when the vector constant differs from the scalar one (max/min: vec_one != 1.0; abs/negate: vec_mask != scalar mask). The harness puts every output plane at the same phase, so T2 covers equal phases for all channels"),
-        ("OP2-A8", "CALLEE-HOSTED (count getter), max and min only", "nout = result of virtual slot 31 is an explicit parameter, hooked in R-PARITY (W69); abs and negate do not call it: their channel count is the operand count [this] and no virtual call exists in the body (MEASURED listing)"),
+        ("OP2-A8", "CALLEE-HOSTED (count getter), max and min only", "nout = result of virtual slot 31 is an explicit parameter, hooked in R-PARITY; abs and negate do not call it: their channel count is the operand count [this] and no virtual call exists in the body (MEASURED listing)"),
         ("OP2-A9", "INFERRED", "object layout: counts at, flags, constants../.., records with plane c at the record's per-channel pointer; unary classes read only and (the constant flag is ignored); host fill not run"),
         ("OP2-A10", "CONTRACT", "both operands flagged constant still reads B's plane; counts outside 1..4 with n > 0, missing or short planes return an error; for abs and negate a count above the number of planes returns MissingPlane"),
     ]

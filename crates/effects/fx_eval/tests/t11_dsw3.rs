@@ -1,4 +1,4 @@
-//! T11 (DSW3): the unbound-input exception of the range pass (0x11b730, listing 0x11b86e..0x11b8e9) and the blur / comp_premult / mocha_render fold rules.
+//! T11: the unbound-input exception of the range pass (0x11b730, listing 0x11b86e..0x11b8e9) and the blur / comp_premult / mocha_render fold rules.
 use fx_eval::fold::*;
 use fx_eval::*;
 use std::collections::BTreeMap;

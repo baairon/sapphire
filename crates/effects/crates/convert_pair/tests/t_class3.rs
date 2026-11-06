@@ -1,5 +1,5 @@
-//! INT20 step G3: the floor suite of convert_pair's class-3 pair (variant B head 0x7e91c0 and the mode-2 three-plane body 0x82e5ca with
-//! the alpha slot from the host source row). Expected bits come from the rule as stated from the listing text (RDR10): plane k = slot k+1
+//! the floor suite of convert_pair's class-3 pair (variant B head 0x7e91c0 and the mode-2 three-plane body 0x82e5ca with
+//! the alpha slot from the host source row). Expected bits come from the rule as stated from the listing text: plane k = slot k+1
 //! if (bits & 0x7fffffff) < 0x7f800000 else +0.0; dest slots 1..3 = planes, slot 0 = source slot 0 (bit copy). Special values in every
 //! slot, slot 0 included: NaN (quiet, signalling, negative), both infinities, -0.0, +0.0, denormals, above 1, below 0, max finite.
 //! Every mutant of the CONVERT_PAIR_G3_MUT switch must fail this test (FLOOR-MET when all 5 are killed).

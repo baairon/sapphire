@@ -1,4 +1,4 @@
-//! SIN1: bit exact port of the original compiler's `sin` / `cos` constant fold kernel.
+//! bit exact port of the original compiler's `sin` / `cos` constant fold kernel.
 //!
 //! The fold of the primitive classes `sin` and `cos` is NOT libm: the class kernel (vtable slot 53, for sin and
 //!  for cos) multiplies the argument by TWO_PI (f32 0x40c90fdb), broadcasts it into an xmm register and

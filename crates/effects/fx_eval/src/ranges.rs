@@ -62,7 +62,7 @@ pub struct RangeRow {
     pub min: f32,
     pub max: f32,
     pub default: String,
-    /// INT4 (RNG1 PATCH 3 b): per-bound enforcement flags (columns 13 and 14, Y or N). A table without them falls back to the +-1e6 rule.
+    /// (b): per-bound enforcement flags (columns 13 and 14, Y or N). A table without them falls back to the +-1e6 rule.
     pub min_enforced: bool,
     pub max_enforced: bool,
 }
@@ -133,7 +133,7 @@ impl RangeTable {
         }
     }
     /// Row of a program parameter. the lookup is EXACT. Every row is keyed by the program whose record it was measured on; there is no
-    /// fallback from a wrapper name to its core name (the `_Autogen` strip and SHE3's exact-first fix are removed).
+    /// fallback from a wrapper name to its core name (the `_Autogen` strip and the recorded exact-first fix are removed).
     pub fn lookup(&self, program: &str, parameter: &str) -> Option<&RangeRow> {
         self.index.get(&(program.to_string(), parameter.to_string())).map(|&i| &self.rows[i])
     }
@@ -148,9 +148,9 @@ impl RangeTable {
     }
 }
 
-/// INT18: clamp_lane and clamp_lanes (the clamp without per-bound flags) had no caller on any route; they are removed
+/// clamp_lane and clamp_lanes (the clamp without per-bound flags) had no caller on any route; they are removed
 /// from the crate and kept, unchanged, as test-local functions of tests/t8.rs, whose asserts are unchanged. The route clamp is clamp_lane_row.
-/// The clamp of ONE lane with the per-bound enforcement flags (RNG1 PATCH 3 b). Operand order of the listing : vminss with the max cell first
+/// The clamp of ONE lane with the per-bound enforcement flags (b). Operand order of the listing : vminss with the max cell first
 /// (`max < v ? max : v`: above max gives the max cell, equal and NaN keep the value), then vmaxss with the min cell first (`min > v ? min : v`: below min gives the min cell, equal and NaN keep the value; -0 stays).
 pub fn clamp_lane_row(x: f32, r: &RangeRow) -> f32 {
     let mut v = x;
@@ -174,7 +174,7 @@ pub fn clamp_param(program: &str, parameter: &str, v: &mut [f32]) -> Option<bool
     let mut changed = false;
     for x in v.iter_mut() {
         let y = clamp_lane_row(*x, r);
-        // NZ1 PATCH 2: `changed` is the float compare of the plugin (NaN on either side: changed), not a bit compare
+        // `changed` is the float compare of the plugin (NaN on either side: changed), not a bit compare
         if !(y == *x) {
             changed = true;
         }
@@ -183,17 +183,17 @@ pub fn clamp_param(program: &str, parameter: &str, v: &mut [f32]) -> Option<bool
     Some(changed)
 }
 
-// ---------------------------------------------------------------- DSW3: the unbound-input exception
+// ---------------------------------------------------------------- the unbound-input exception
 
-/// DSW3, MEASURED (Drop_Shadow PREC rows, n3 and n4) and READ : a parameter record whose input index is >= 0 and whose
+///, MEASURED (Drop_Shadow PREC rows, n3 and n4) and READ : a parameter record whose input index is >= 0 and whose
 /// input is not bound (bit of [ctx] clear) takes the copy-default path of and SKIPS the range clamp. `data/PARAM_INPUTS.tsv` lists
 /// (program, parameter, input_index) read from the records after the original program load; defined in effects_rtdata (field `inputs`).
 
-/// INT28 step PI: the PARAM_INPUTS rows that a record's input index cell confirms (tools/pi_fleet.py over the recorded CTX records). The table rows were written by DSW3's tools/rec_inputs.py from the def-text parse; Warp_Perspective_Autogen's three rows held the def
-/// order's 0 and take the registered program's 1 by record (WPR1 D2, L80e).
+/// the PARAM_INPUTS rows that a record's input index cell confirms (read from the recorded CTX records). The table rows were written by tools/rec_inputs.py from the def-text parse; Warp_Perspective_Autogen's three rows held the def
+/// order's 0 and take the registered program's 1 by record (D2, L80e).
 /// Defined in effects_rtdata (field `input_records`).
 
-pub const PARAM_INPUT_INDEX_BY_RECORD: &str = "PARAM-INPUT-INDEX-BY-RECORD (Warp_Perspective_Autogen: blur_mask, invert_mask, mask_use input index 1 from the registered records' input index cell; WPR1, W563)";
+pub const PARAM_INPUT_INDEX_BY_RECORD: &str = "PARAM-INPUT-INDEX-BY-RECORD (Warp_Perspective_Autogen: blur_mask, invert_mask, mask_use input index 1 from the registered records' input index cell)";
 
 /// True when a record's input index cell confirms the row (exact program name first, then the core name, as param_input_index).
 pub fn param_input_recorded(program: &str, parameter: &str) -> bool {
@@ -208,7 +208,7 @@ pub fn param_input_recorded(program: &str, parameter: &str) -> bool {
 /// a host value fed for a parameter whose PARAM_INPUTS row has no record refuses.
 pub fn host_value_index_check(program: &str, parameter: &str) -> Result<(), String> {
     if param_input_index(program, parameter).is_some() && !param_input_recorded(program, parameter) {
-        return Err(format!("PARAM-INPUT-INDEX-UNRECORDED ({} {}: no record of the parameter's input index; W563)", program, parameter));
+        return Err(format!("PARAM-INPUT-INDEX-UNRECORDED ({} {}: no record of the parameter's input index)", program, parameter));
     }
     Ok(())
 }
@@ -223,7 +223,7 @@ pub fn param_input_index(program: &str, parameter: &str) -> Option<usize> {
     find(program.strip_suffix("_Autogen").unwrap_or(program))
 }
 
-/// NZ1: the plugin's node store rewrites a node cell only when old and new DIFFER as floats (ucomiss), so +0 and -0 never
+/// the plugin's node store rewrites a node cell only when old and new DIFFER as floats (ucomiss), so +0 and -0 never
 /// replace each other; NaN on either side counts as different (written). `old` is the node's previous cell (the program default at genotype creation, then the previous
 /// compile's stored value: COMPILE-HISTORY); a lane without an old value is written.
 pub fn node_store(old: &[f32], new: &mut [f32]) {

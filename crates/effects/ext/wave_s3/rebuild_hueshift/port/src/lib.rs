@@ -1,4 +1,4 @@
-//! hue_shift: native port of the AVX2 body (HU1).
+//! hue_shift: native port of the AVX2 body.
 //!
 //! Source of truth: neutral_1.asm (listing offsets; captured VA = offset).
 //! Gate (MEASURED neutral_1.asm): the dispatcher does `and r8,0x9d97ff; cmp r8,0x9d97ff;

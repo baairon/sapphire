@@ -1,4 +1,4 @@
-//! rotate (RT1): native port of class `rotate`slot 53 =, AVX2 body (listing offsets of neutral_1.asm,
+//! rotate: native port of class `rotate`slot 53 =, AVX2 body (listing offsets of neutral_1.asm,
 //! captured VA = offset). Std only, no unsafe. Scratch, not part of the repository.
 //!
 //! The class rotates a 2-vector per sample about a centre: `(rotate v angle center)`, angle in turns (scaled by 2*pi, the captured f32
@@ -6,7 +6,7 @@
 //! angle) or a constant. Output: two planes (x', y'). With (dx, dy) = v - center and (s, c) = sincos(2*pi*angle):
 //!   x' = center_x + dx*c - dy*s,  y' = center_y + dx*s + dy*c
 //! evaluated with the original's exact fused-multiply-add chains (seven code paths, one per operand-kind combination, each with its own
-//! operation order; the chains are NOT interchangeable bit for bit). sincos is the finished crate `libm_sincos` (SC1).
+//! operation order; the chains are NOT interchangeable bit for bit). sincos is the finished crate `libm_sincos`.
 
 use libm_sincos::sincosf_x;
 
@@ -253,12 +253,12 @@ pub struct Assumption {
 pub fn assumptions() -> Vec<Assumption> {
     vec![
         Assumption { id: "RT1-A1", tier: "CAPTURED", text: "TWO_PI = f32 0x40c90fdb, five sites in the AVX2 body" },
-        Assumption { id: "RT1-A2", tier: "ASSUMED-SEMANTIC 2 (inherited SC1-A1, SC1-A2)", text: "sincos callee is the finished crate libm_sincos; its uncaptured table cells are stand-ins on both sides of T2" },
+        Assumption { id: "RT1-A2", tier: "ASSUMED-SEMANTIC 2 (inherited SC1-A1)", text: "sincos callee is the finished crate libm_sincos; its uncaptured table cells are stand-ins on both sides of T2" },
         Assumption { id: "RT1-A3", tier: "ROUTE AVX2-ONLY", text: "feature word served as 0x9d97ff; the SSE tier is not ported (it is the third tier; no AVX tier exists in this class)" },
         Assumption { id: "RT1-A4", tier: "HOST-FP-ASSUMED", text: "MXCSR round to nearest even, no FTZ, no DAZ; the emulator follows the SDM, not silicon (vfmadd NaN rules)" },
         Assumption { id: "RT1-A5", tier: "INFERRED", text: "operand layout: argument i at this*(i+1): const byte, lanes, record (planes at record); arg0 = v, arg1 = angle (turns), arg2 = centre; outputs outs[0], outs[1]" },
         Assumption { id: "RT1-A6", tier: "INFERRED", text: "single combo (2, 1, 2) tag 2 (audit_evt COMBOS.tsv); constness is not part of the combo, so all operand-kind combinations run this one body" },
-        Assumption { id: "RT1-A7", tier: "CONTRACT-LIMIT", text: "v, angle and centre all constant with n > 0 dereferences null planes in the original (P7 reads v planes unconditionally); the port returns AllConstant; whether the evaluator folds such nodes is UNKNOWN (W95)" },
+        Assumption { id: "RT1-A7", tier: "CONTRACT-LIMIT", text: "v, angle and centre all constant with n > 0 dereferences null planes in the original (P7 reads v planes unconditionally); the port returns AllConstant; whether the evaluator folds such nodes is UNKNOWN" },
         Assumption { id: "RT1-A8", tier: "ALIGN-INDEPENDENT", text: "scalar loops only (no peel, no vector core): results do not depend on plane alignment or on n" },
         Assumption { id: "RT1-A9", tier: "CONTRACT-LIMIT", text: "short planes (shorter than n) and overlapping in/out planes are outside the contract" },
     ]

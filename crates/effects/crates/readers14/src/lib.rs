@@ -1,4 +1,4 @@
-//! FMT3a: the format 14 source readers R4, R3 and R1, variant A, stack word zero.
+//! the format 14 source readers R4, R3 and R1, variant A, stack word zero.
 //!
 //! Each original body is a plain scalar function (no VEX, no vector block, no tail jump; read instruction by instruction in asm/R4.txt, R3.txt, R1.txt).
 //! Entry registers: rdi = host pixels (16 bytes per pixel, memory order A,R,G,B f32), rsi = pointer to the plane pointer array (4, 3 or 1 used),

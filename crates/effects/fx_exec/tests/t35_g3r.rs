@@ -1,8 +1,8 @@
-//! INT21 step G3R: R3 0x7e9cc0 on the class-3 path.
-//! 1. Distort_RGB_Autogen's cells ([prog+0x590] 2, [prog+0x594] 0, [prog+0x59f] 0x80, [owner+0x1354] 1, [owner+0x1358] 0; DRR2 RECORD.tsv) give
+//! R3 0x7e9cc0 on the class-3 path.
+//! 1. Distort_RGB_Autogen's cells ([prog+0x590] 2, [prog+0x594] 0, [prog+0x59f] 0x80, [owner+0x1354] 1, [owner+0x1358] 0 RECORD.tsv) give
 //!    class 3 for Source, class3_planes() = 3, and (3 planes, gate A) derives head 0x7e9cc0.
-//! INT24 (INT21-A4): gate cells (ctx+0x76c, +0x770) = (1, 0): fixture cells INFERRED from DRR2 RECORD.tsv owner cells.
-//! 2. The route's reader dispatch (hostconv14::ae32_to_image) on DRR2's dr2h source gives DRR2's dumped 0x7e9cc0 exit rows bit for bit (2 calls,
+//! gate cells (ctx+0x76c, +0x770) = (1, 0): fixture cells INFERRED from RECORD.tsv owner cells.
+//! 2. The route's reader dispatch (hostconv14::ae32_to_image) on dr2h source gives dumped 0x7e9cc0 exit rows bit for bit (2 calls,
 //! 3 planes x 64 words; fixture fixtures/g3r_dr2h, MANIFEST.sha256; RECORD-RUN, POSTHOC information). The routing mutant
 //!    (feature g3r_mut_r3b) must fail this test.
 //! 3. G3's variant-B line in convert_pair equals readers14b's read3b on the convert_pair class-3 floor suite (check 11).
@@ -51,7 +51,7 @@ fn t35_r3_dr2h_rows() {
         }
     }
     assert_eq!(n, 384, "2 calls x 3 planes x 64 words");
-    assert_eq!(bad, 0, "R3 on the route differs from DRR2's dumped 0x7e9cc0 rows in {} of {} words", bad, n);
+    assert_eq!(bad, 0, "R3 on the route differs from dumped 0x7e9cc0 rows in {} of {} words", bad, n);
 }
 
 #[test]

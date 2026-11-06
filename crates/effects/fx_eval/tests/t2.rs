@@ -223,7 +223,7 @@ fn determinism_and_all_targets_compile() {
             }
             let ei = c.find_effect(f[0], Some(f[1])).unwrap();
             let g = build_effect(&c, ei).unwrap();
-            // HC-ZERO-LEGACY (named state A option, INT8)
+            // HC-ZERO-LEGACY (named state A option)
             let s1 = enumerate_branches_opt(&g, &ct, &BTreeMap::new(), true);
             let s2 = enumerate_branches_opt(&g, &ct, &BTreeMap::new(), true);
             assert_eq!(s1.len(), s2.len());

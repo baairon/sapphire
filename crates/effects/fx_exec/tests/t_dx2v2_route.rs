@@ -1,10 +1,10 @@
-//! Step DX2 v2: DX2's bound-count rule for v3_to_v4_if4 runs only when CompileOptions::v3_bound_count is set (fx_run sets it on
+//! Step v2: bound-count rule for v3_to_v4_if4 runs only when CompileOptions::v3_bound_count is set (fx_run sets it on
 //! the 'ae32' route only). On State A the node keeps its own count and no V3TOV4IF4-COUNT-UNBOUND refusal is raised.
 use fx_exec::exec::combo_table;
 
 fn pt() -> &'static str { effects_vecdir::path_str("record_extract/programs/programs.tsv") }
 
-/// plan_dump's State A options (Mask := 1, no compile context), with the DX2 v2 flag as given.
+/// plan_dump's State A options (Mask := 1, no compile context), with the v2 flag as given.
 fn state_a(prog: &str, flag: bool) -> (Result<(), String>, Vec<(usize, usize)>) {
     let tsv = std::fs::read_to_string(pt()).expect("programs.tsv");
     let c = fx_eval::Corpus::from_programs_tsv(&tsv);
@@ -57,7 +57,7 @@ fn dx2v2_flag_with_unbound_count_refuses_with_the_exact_text() {
     }
     let e = state_a("Original", true).0.unwrap_err();
     assert!(
-        e.contains("V3TOV4IF4-COUNT-UNBOUND (Original: node 156: the element count of the bound image argument is not known at compile; the original stores it from the bound source; DCP1, W603)"),
+        e.contains("V3TOV4IF4-COUNT-UNBOUND (Original: node 156: the element count of the bound image argument is not known at compile; the original stores it from the bound source)"),
         "{}",
         e
     );

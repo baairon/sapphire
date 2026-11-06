@@ -1,7 +1,7 @@
-//! T23 (INT15 and rule 5; UNT3 PATCH 2, UNT5 PATCH 1 to 3): the checkout rule ported as read (fx_eval::checkout).
+//! T23: the checkout rule ported as read (fx_eval::checkout).
 //! (1) Diffuse_Autogen under Matte None (presence 1, [owner+0x124b] bit 0x10 clear): exactly blur_mask, invert_mask, mask_use are not checked out,
-//!     ba = 1 for those three and -1 for every other record, bc bit 0 clear everywhere (UNT5 MEASURED 17 of 17 records);
-//! (2) Blur_Color_Autogen: exactly invert_mask and mask_use (UNT5 bcR);
+//!     ba = 1 for those three and -1 for every other record, bc bit 0 clear everywhere (MEASURED 17 of 17 records);
+//! (2) Blur_Color_Autogen: exactly invert_mask and mask_use (bcR);
 //! (3) a ':blur_mask' token binds nothing (ba = -1, checked out);
 //! (4) presence bit 1 set checks the three out; bc with 0x124b bit 0x10 checks out a show_with_mocha record whose mask is absent;
 //! (5) mutant: without the show_with_mask arm the Diffuse_Autogen rows fail (the set differs);

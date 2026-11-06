@@ -1,12 +1,12 @@
-//! LYM1: the registered program as the original's parser sees it (LAY1): the layout_effect row ALONE is handed to the parser
+//! the registered program as the original's parser sees it: the layout_effect row ALONE is handed to the parser
 //!  (stores rec[0] verbatim when the extra string rec[0] is empty); the row names the def_effect and carries
-//! `:extra` (new parameters appended to the program's parameter array: PDV3's builder appends every record the parser
+//! `:extra` (new parameters appended to the program's parameter array: builder appends every record the parser
 //! builds, unconditionally), `:modify` (flags and renames of def parameters) and `:hardcode`.
 //!
 //! This module implements the `:extra` step only (a ParamRec without a node: the body never references it, the owner arm's loop and the
 //! host definition list do). `:modify` flag changes that affect values (min, max, popup, normalize_scale) are carried by the REAL range
 //! table and NS_PARAMS.tsv already; `:modify` renames map layout names to def names (the def name is the record name used by the native).
-//! `:hardcode` is parsed and reported but NOT applied (see LayoutInfo::hardcodes; HIGH-STAKES, LYM1 README).
+//! `:hardcode` is parsed and reported but NOT applied (see LayoutInfo::hardcodes; HIGH-STAKES README).
 
 use crate::build::{Genotype, NodeKind, ParamRec};
 use crate::parse::{flag_info, DefaultVal};
@@ -85,22 +85,22 @@ pub struct Extra {
     pub flags: Vec<String>,
 }
 
-/// One item of the layout row's parameter list, in layout order (LYM2: genotype-parser.lua create_params iterates `layout.params` in this order).
+/// One item of the layout row's parameter list, in layout order (genotype-parser.lua create_params iterates `layout.params` in this order).
 #[derive(Debug, Clone, PartialEq)]
 pub enum LItem {
     /// a bare name: the def parameter of that name
     Bare(String),
     /// `( :modify NAME [CANON] [= VALUE] ( flags ) )`: canonical name = CANON or NAME (the def parameter); `value` true when the item carries `= VALUE`
-    /// INT24: `text` the raw item text; `value_text` the VALUE of a `NAME = VALUE` item (None when the reader cannot separate them)
+    /// `text` the raw item text; `value_text` the VALUE of a `NAME = VALUE` item (None when the reader cannot separate them)
     Modify { name: String, canon: String, value: bool, flags: Vec<String>, text: String, value_text: Option<String> },
     Extra(Extra),
     Hardcode { name: String, value: f64 },
-    /// INT21 step L: `:hardcode NAME = [ ... ]`: the lanes as the genotype reader gives a def vector literal of the same text
+    /// `:hardcode NAME = [... ]`: the lanes as the genotype reader gives a def vector literal of the same text
     HardcodeVec { name: String, lanes: Vec<f64>, text: String },
 }
 
-/// INT21 step L: the label of the three registered rows that carry a vector `:hardcode` (printed with the LYM2_REPORT line).
-pub const LAYOUT_HARDCODE_VECTOR_LABEL: &str = "LAYOUT-HARDCODE-VECTOR (Mosaic_Autogen wrap: the value node takes the hardcode's lanes and type; Texture_Chroma_Spiral_Autogen shift (def 1 lanes, hardcode 2; behind LAYOUT-MODIFY-VALUE-UNSUPPORTED on the same row) and Dissolve_Zap bg_rel_color (def 1 lanes, hardcode 3) are refused LAYOUT-HARDCODE-LANES-MISMATCH, MEASURED INT21 t34; these programs' merged plans are not compared with an original; no claimed style carries a vector hardcode, MEASURED LYM2 TEXTS.tsv; the rule INFERRED from the layout item hook and set_hardcoded_arg)";
+/// the label of the three registered rows that carry a vector `:hardcode` (printed with the LYM2_REPORT line).
+pub const LAYOUT_HARDCODE_VECTOR_LABEL: &str = "LAYOUT-HARDCODE-VECTOR (Mosaic_Autogen wrap: the value node takes the hardcode's lanes and type; Texture_Chroma_Spiral_Autogen shift (def 1 lanes, hardcode 2; behind LAYOUT-MODIFY-VALUE-UNSUPPORTED on the same row) and Dissolve_Zap bg_rel_color (def 1 lanes, hardcode 3) are refused LAYOUT-HARDCODE-LANES-MISMATCH, MEASURED by t34; these programs' merged plans are not compared with an original; no claimed style carries a vector hardcode, MEASURED TEXTS.tsv; the rule INFERRED from the layout item hook and set_hardcoded_arg)";
 
 /// One layout input: `Name` or `( Name Canonical [required] )`.
 #[derive(Debug, Clone, PartialEq)]
@@ -112,11 +112,11 @@ pub struct LInput {
 
 #[derive(Debug, Clone, Default)]
 pub struct LayoutInfo {
-    /// LYM2: the parameter items in layout order
+    /// the parameter items in layout order
     pub items: Vec<LItem>,
-    /// LYM2: the layout row's input group
+    /// the layout row's input group
     pub inputs: Vec<LInput>,
-    /// LYM2: the layout row's own effect flags (concatenated after the def's flags by build_genotype_helper pc 110..121)
+    /// the layout row's own effect flags (concatenated after the def's flags by build_genotype_helper pc 110..121)
     pub layout_flags: Vec<String>,
     /// the header names: (style label, def name) or (def name)
     pub header: Vec<String>,
@@ -225,11 +225,11 @@ pub fn read_layout_sx(items: Vec<Sx>) -> Result<LayoutInfo, String> {
             Some(Sx::Atom(h)) if h == ":hardcode" => {
                 if let (Some(Sx::Atom(n)), Some(Sx::Atom(v))) = (l.get(1), l.get(3)) {
                     if let Ok(value) = v.parse::<f64>() {
-                        // the scalar path, unchanged from LYM2
+                        // the scalar path, unchanged from
                         info.hardcodes.push((n.clone(), v.clone()));
                         info.items.push(LItem::Hardcode { name: n.clone(), value });
                     } else {
-                        // INT21 step L: a vector literal VALUE goes through the genotype reader's own vector-literal path
+                        // a vector literal VALUE goes through the genotype reader's own vector-literal path
                         let text = l[3..].iter().map(flat).collect::<Vec<_>>().join(" ");
                         let prog = info.header.last().cloned().unwrap_or_default();
                         let lanes = if text.starts_with('[') { crate::parse::read_vector_literal(&text).ok() } else { None };
@@ -279,7 +279,7 @@ pub fn apply_extras(g: &mut Genotype, info: &LayoutInfo) -> Result<Vec<String>, 
 }
 
 
-/// LYM2 report of one merge.
+/// report of one merge.
 #[derive(Debug, Clone, Default)]
 pub struct MergeReport {
     /// parameter names in the merged array order ([prog], create_params order)
@@ -287,22 +287,22 @@ pub struct MergeReport {
     pub extras: Vec<String>,
     /// (name, value) of each `:hardcode`: the parameter record is not built; the def's value node keeps the hardcoded constant
     pub hardcoded: Vec<(String, f32)>,
-    /// INT21 step L: (name, lanes) of each vector `:hardcode` (LAYOUT-HARDCODE-VECTOR)
+    /// (name, lanes) of each vector `:hardcode` (LAYOUT-HARDCODE-VECTOR)
     pub hardcoded_vec: Vec<(String, Vec<f32>)>,
     /// `:modify` items that carry `= VALUE` (the layout value would replace the def default: not implemented, refused)
     pub modify_values: usize,
     pub modify_count: usize,
     /// the layout row's own flags appended to the genotype flags (share_all for Blur_Color, Blur_Mono and Distort_RGB; cache_alt_frames for Time_Warp_RGB)
     pub layout_flags: Vec<String>,
-    /// LYM3: the input group after the merge: (position 1-based, canonical name, layout name, default)
+    /// the input group after the merge: (position 1-based, canonical name, layout name, default)
     pub inputs: Vec<(usize, String, String, Option<String>)>,
-    /// LYM3: def inputs absent from the layout row, now the parser's default nodes: (canonical name, def position 1-based, constant)
+    /// def inputs absent from the layout row, now the parser's default nodes: (canonical name, def position 1-based, constant)
     pub default_nodes: Vec<(String, usize, f32)>,
-    /// LYM3: the input group differs from the def's (count, order or names of positions)
+    /// the input group differs from the def's (count, order or names of positions)
     pub inputs_changed: bool,
 }
 
-/// LYM2: the registered program as genotype-parser.lua builds it from the layout row (read in interp_recovery s4_lua.out; protos 61, 131, 163, 190, 194 and
+/// the registered program as genotype-parser.lua builds it from the layout row (read in interp_recovery s4_lua.out; protos 61, 131, 163, 190, 194 and
 /// the C callback set_hardcoded_arg):
 /// * create_params (proto 163) iterates `layout.params` IN LAYOUT ORDER; for each item with should_make_param it calls create_param (record appended at
 ///   ), for a `:hardcode` item it calls set_hardcoded_arg and builds NO record;
@@ -310,9 +310,9 @@ pub struct MergeReport {
 ///   constant 0; `:modify` rows in the 13 texts carry no value);
 /// * check_layout_consistency (proto 165): a def parameter missing from the layout is a parse error.
 /// So the merged array = the layout items in order: def parameters (by canonical name), `:extra` parameters at their layout position, minus the hardcoded ones.
-/// INT24: the LAYOUT-MODIFY-VALUE-UNSUPPORTED refusal text; `what` is ":modify NAME = VALUE" or the raw item text.
+/// the LAYOUT-MODIFY-VALUE-UNSUPPORTED refusal text; `what` is ":modify NAME = VALUE" or the raw item text.
 pub fn modify_value_refusal(program: &str, what: &str) -> String {
-    format!("LAYOUT-MODIFY-VALUE-UNSUPPORTED ({}: {} in the layout row; the original's handling of a :modify value is not ported; no claimed program carries one, MEASURED IFNEQ_AFTER_Q.tsv against STYLE_MAP.tsv; W518)", program, what)
+    format!("LAYOUT-MODIFY-VALUE-UNSUPPORTED ({}: {} in the layout row; the original's handling of a :modify value is not ported; no claimed program carries one, MEASURED IFNEQ_AFTER_Q.tsv against STYLE_MAP.tsv)", program, what)
 }
 
 pub fn merge_layout(g: &mut Genotype, info: &LayoutInfo) -> Result<MergeReport, String> {
@@ -334,7 +334,7 @@ pub fn merge_layout(g: &mut Genotype, info: &LayoutInfo) -> Result<MergeReport, 
                 rep.modify_count += 1;
                 if *value {
                     rep.modify_values += 1;
-                    // INT24: the refusal prints the name and the value (LYM2's reader took the value text as the name), or the raw row text
+                    // the refusal prints the name and the value (reader took the value text as the name), or the raw row text
                     let what = match value_text {
                         Some(v) => format!(":modify {} = {}", name, v),
                         None => text.clone(),
@@ -343,7 +343,7 @@ pub fn merge_layout(g: &mut Genotype, info: &LayoutInfo) -> Result<MergeReport, 
                 }
                 match take(&mut def, canon) {
                     Some(mut p) => {
-                        // LYM3 (step L2, INT28 hand-applied: LYM3.diff hunk 3 of layoutmerge.rs did not apply over INT24's refusal text): the layout name
+                        // (step L2, hand-applied: LYM3.diff hunk 3 of layoutmerge.rs did not apply over the recorded refusal text): the layout name
                         p.layout_name = name.clone();
                         out.push(p)
                     }
@@ -371,7 +371,7 @@ pub fn merge_layout(g: &mut Genotype, info: &LayoutInfo) -> Result<MergeReport, 
                 rep.hardcoded.push((name.clone(), *value as f32));
             }
             LItem::HardcodeVec { name, lanes, text } => {
-                // INT21 step L: the target value node takes all the hardcode's lanes and its type (the layout item hook copies the VALUE
+                // the target value node takes all the hardcode's lanes and its type (the layout item hook copies the VALUE
                 // node's value and value_type; set_hardcoded_arg copies the byte [node field] cells, a count-driven copy)
                 let p = take(&mut def, name).ok_or_else(|| format!("LAYOUT-HARDCODE-UNKNOWN: {} is not a parameter of {}", name, g.name))?;
                 let ni = p.node.ok_or_else(|| format!("LAYOUT-HARDCODE-NO-NODE: {}", name))?;
@@ -409,8 +409,8 @@ pub fn merge_layout(g: &mut Genotype, info: &LayoutInfo) -> Result<MergeReport, 
     Ok(rep)
 }
 
-/// LYM3: the layout row's input group (build_genotype_helper proto 194, get_effect_input proto 190, build_input_nodes proto 159, get_node_for_input_default
-/// proto 158, read in interp_recovery/s4_lua.out by LYM2): the input count, order and names come from the layout row; each layout input takes its canonical
+/// the layout row's input group (build_genotype_helper proto 194, get_effect_input proto 190, build_input_nodes proto 159, get_node_for_input_default
+/// proto 158, read in interp_recovery/s4_lua.out by): the input count, order and names come from the layout row; each layout input takes its canonical
 /// name's default from the DEF input of that name; a def input absent from the layout becomes the parser's default node (a numeric default is a scalar
 /// constant node). Natively: the layout inputs are renumbered 1.. in layout order (the node keeps its index, its `input_pos` changes), a def input absent
 /// from the layout becomes a Scalar node with the default, and `def_input_order` records the def order for tables measured in it.
@@ -469,7 +469,7 @@ pub fn merge_inputs(g: &mut Genotype, info: &LayoutInfo, rep: &mut MergeReport) 
     Ok(())
 }
 
-/// LYM3: both names of every record and input of a merged genotype, one TSV line each (`PARAM pos canonical layout` / `INPUT pos canonical layout default`).
+/// both names of every record and input of a merged genotype, one TSV line each (`PARAM pos canonical layout` / `INPUT pos canonical layout default`).
 pub fn names_tsv(g: &Genotype) -> String {
     let mut s = String::new();
     for (k, p) in g.params.iter().enumerate() {
@@ -481,7 +481,7 @@ pub fn names_tsv(g: &Genotype) -> String {
     s
 }
 
-/// LYM3: the layout row registered for `prog` in a corpus (None for a core program or a program without a row).
+/// the layout row registered for `prog` in a corpus (None for a core program or a program without a row).
 pub fn resolve_layout(c: &crate::Corpus, prog: &str) -> Result<Option<LayoutInfo>, String> {
     if !c.layout_sx.is_empty() {
         let rows: Vec<&Vec<Sx>> = c.layout_sx.iter().filter(|r| header_names(r).last().map(|x| x == prog).unwrap_or(false)).collect();
@@ -499,7 +499,7 @@ pub fn resolve_layout(c: &crate::Corpus, prog: &str) -> Result<Option<LayoutInfo
     }
 }
 
-/// LYM3: build the registered program of `prog` (layout row merged when one is registered), as fx_run does. Ok((genotype, report)); report None on the def path.
+/// build the registered program of `prog` (layout row merged when one is registered), as fx_run does. Ok((genotype, report)); report None on the def path.
 pub fn build_registered(c: &crate::Corpus, ei: usize, prog: &str) -> Result<(Genotype, Option<MergeReport>), String> {
     let mut g = crate::build_effect(c, ei).map_err(|e| format!("{}: {}", prog, e))?;
     match resolve_layout(c, prog)? {

@@ -1,6 +1,6 @@
-//! T23 (STK2): the stack word 2 = 1 preserve-group model. Skipped when the programs table is not at its expected path.
+//! T23: the stack word 2 = 1 preserve-group model. Skipped when the programs table is not at its expected path.
 //! (1) Distort_RGB at word 2 = 1 emits one `preserve` command, `allocate-images-preserved` and `unlock-preserved-images`; at word 2 = 0 none.
-//! (2) The word 2 = 1 plan has 3 commands fewer than the word 2 = 0 plan (PCX2: 72 against 69, MEASURED on the originals).
+//! (2) The word 2 = 1 plan has 3 commands fewer than the word 2 = 0 plan (72 against 69, MEASURED on the originals).
 //! (3) A program with a motion_blur node is refused by name.
 use fx_eval::*;
 use std::collections::BTreeMap;

@@ -162,8 +162,8 @@ pub fn assumptions() -> Vec<Assumption> {
         Assumption { id: "VQ1-A1", tier: "ROUTE", text: "the block getter is the base slot 45 (blocks[mode], a fixed stride from [this]); the vtable bytes are uncovered in the data image, the slot target comes from vtables.tsv; the real runs in T2" },
         Assumption { id: "VQ1-A2", tier: "CALLEE-MODELLED", text: "slot 31 returns [combo]; the pass re-reads it as the output channel count; T2 serves COMBOS[combo].out through a ret_const hook; the combo index is an explicit parameter, all 8 rows run" },
         Assumption { id: "VQ1-A3", tier: "SEMANTIC-XF", text: "the passes in the pass entries (first field member pointer, second field adjustment 0) are what slot 32 calls; INFERRED from the call shape (rdi this, rsi pinfo, rdx destination planes, ecx flag); pass mode value not measured" },
-        Assumption { id: "VQ1-A4", tier: "PARAM-UNCAPTURED", text: "pool flag of the plane service (PL1-A3): Host.in_pool, both values run for fills of 512 floats and more" },
+        Assumption { id: "VQ1-A4", tier: "PARAM-UNCAPTURED", text: "pool flag of the plane service: Host.in_pool, both values run for fills of 512 floats and more" },
         Assumption { id: "VQ1-A5", tier: "PARAM-UNCAPTURED", text: "parameter block contents (maxch, enable, constants, source planes, int/float) are written by the executor's argument binding; explicit inputs, no default (EP-4 measures the writers and the range)" },
-        Assumption { id: "VQ1-A6", tier: "NOT REBUILT", text: "rect modes of the plane service (roi.mode != 0): record only (PL1-A6)" },
+        Assumption { id: "VQ1-A6", tier: "NOT REBUILT", text: "rect modes of the plane service (roi.mode != 0): record only" },
     ]
 }

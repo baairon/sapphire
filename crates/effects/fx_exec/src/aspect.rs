@@ -1,4 +1,4 @@
-//! DRW4: native port of the plugin function `set_aspect` and of its rounding helper, plus the callers' clamp range.
+//! native port of the plugin function `set_aspect` and of its rounding helper, plus the callers' clamp range.
 //! Every constant is read from the approved file (virtual address = listing address), see SETASPECT.md.
 //!
 //! set_aspect(ctx rdi, a xmm0 as f32), in listing order:
@@ -64,10 +64,10 @@ pub fn in_caller_range(a: f32) -> bool {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
-// DRW5: the caller block (listing addresses), ported as read. Constants read from the approved file (VA = listing):
+// the caller block (listing addresses), ported as read. Constants read from the approved file (VA = listing):
 //    = double 0.001 (MEASURED bytes fca9f1d24d62503f), = double 1e-4, = float 10000.0, = float 1.0.
 // Operation order as read:
-//     ov = f32 at the override cell (GOT slot -> bss cell, 0 in the file; writer per RCB3);
+//     ov = f32 at the override cell (GOT slot -> bss cell, 0 in the file; writer per);
 //                       if (double)ov > 0.001 (comisd, ja: NaN not taken) then set_aspect(ov) with no range test (jump to)
 //     w_cell_e == 0 or w_cell_f == 0 -> fallback
 //     w_cell_a != 0 and w_cell_b != 0 (cmovne to 1 then and, cmp 1) else fallback

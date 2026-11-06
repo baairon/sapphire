@@ -1,4 +1,4 @@
-//! SHF1: exhaustive equivalence proofs for the two surviving mutants (FM2 lens: every gain bit pattern, every small index pair).
+//! exhaustive equivalence proofs for the two surviving mutants (lens: every gain bit pattern, every small index pair).
 use std::hint::black_box;
 #[test]
 fn m21_unit_test_bitwise_equals_float_equality_for_all_2_32_gains() {

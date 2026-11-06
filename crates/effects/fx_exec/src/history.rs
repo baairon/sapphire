@@ -1,15 +1,15 @@
-//! HPT1: the render-history rule of the Trails style, as rules, formats and constants (RDR13, RDR15, TWF4).
+//! the render-history rule of the Trails style, as rules, formats and constants.
 //!
 //! A frame record holds the previous render's time, the restart time, the saved size words and the allocation state.
 //! A render KEEPS the history when the program flag bit is set, the previous time is below the current time, the current time
 //! (as f32) is below the window limit (step * K + previous time, one fused multiply-add rounded to f32) and the saved size
 //! words equal the current frame size; otherwise it RESTARTS. Each render ends with a save that writes the size words.
 //! Mutation switches (cargo features) exist for the unit tests only.
-//! INT29 step H: K = 1.9 is a rule constant (MEASURED-DYLIB); the limit is the AVX tier's fused form
+//! K = 1.9 is a rule constant (MEASURED-DYLIB); the limit is the AVX tier's fused form
 //! (VARIANT-INERT-ON-ROUTE); depth, allocator cell, program flag and host id are required per-run record inputs of fx_run's
 //! history driver (no defaults). Code addresses are cited in PATCH.md and MERGE_LOG.tsv, not here.
 
-/// K of the window limit, the double 0x3ffe666666666666 (1.9, not exactly representable). MEASURED-DYLIB by RDR15.
+/// K of the window limit, the double 0x3ffe666666666666 (1.9, not exactly representable). MEASURED-DYLIB by.
 pub const WINDOW_K: f64 = 1.9;
 /// The record's `last` value of a fresh owner: -1,000,000.
 pub const FRESH_LAST: i32 = -1_000_000;
@@ -42,9 +42,9 @@ impl FrameRecord {
     }
 
     /// The window limit as f32: fma(step, K, last_t) rounded once to f32 (the fused form of the AVX body; the separate
-    /// multiply and add of the SSE twin differs only for steps near 2^24, TWF3, and is not used on the claim host).
+    /// multiply and add of the SSE twin differs only for steps near 2^24, and is not used on the claim host).
     pub fn window_limit(last_t: i32, step: i32) -> f32 {
-        // INT29 step H: the unfused-limit mutant (separate multiply and add, the SSE twin's form) exists only to be killed
+        // the unfused-limit mutant (separate multiply and add, the SSE twin's form) exists only to be killed
         // by fused_limit_discriminates; never in a shipped build.
         if cfg!(feature = "hpt1_unfused_mut") {
             return ((step as f64) * WINDOW_K + last_t as f64) as f32;
@@ -213,7 +213,7 @@ mod tests {
         assert_eq!(r.decide(false, 2, 1, (64, 32)), Decision::Restart);
     }
 
-    /// INT29 step H: a case where the fused and the unfused limit differ. At step 16777215, last_t
+    /// a case where the fused and the unfused limit differ. At step 16777215, last_t
     /// -15099493 the fused limit is 16777215.0, so t = 16777215 restarts; the separate multiply and add gives a limit above t and
     /// would keep. The unfused-limit mutant (feature hpt1_unfused_mut) fails this test.
     #[test]

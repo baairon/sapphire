@@ -1,4 +1,4 @@
-//! The OWNER-OPACITY-DERIVED note on an unbound row with a --set; the words do not change (INT36).
+//! The OWNER-OPACITY-DERIVED note on an unbound row with a --set; the words do not change.
 use std::path::PathBuf;
 use std::process::Command;
 

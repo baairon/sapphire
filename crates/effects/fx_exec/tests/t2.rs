@@ -240,7 +240,7 @@ fn nv8_frame_rule_is_floor_of_max_zero_t() {
     assert_eq!(frame_key(1.0), 1);
     assert_eq!(frame_key(1.25), 1);
     assert_eq!(frame_key(2.5), 2);
-    // CMP3 / CMP2e M1 (MEASURED: the original instructions 0x60a4a2..0x60a4b8 run in Unicorn on 24 inputs, the native text equals them 48 of 48): NaN and values >= 2^31 give the integer indefinite 0x80000000; the old assertion (NaN reads frame 0) was an INFERRED rule
+    // / M1 (MEASURED: the original instructions 0x60a4a2..0x60a4b8 run in Unicorn on 24 inputs, the native text equals them 48 of 48): NaN and values >= 2^31 give the integer indefinite 0x80000000; the old assertion (NaN reads frame 0) was an INFERRED rule
     assert_eq!(frame_key(f32::NAN), i32::MIN);
     assert_eq!(frame_key(2147483648.0), i32::MIN);
     assert_eq!(frame_key(3.0e9), i32::MIN);

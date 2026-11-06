@@ -42,7 +42,7 @@ pub fn spec_loop(s: &SpecIn, pl: &Plane) -> Result<([f32; 4], f32), Unsupported>
     let (mut c, mut yy, mut alpha, mut step, mut al) = (s.c, s.yy, a0, s.step_a, false);
     for k in 0..s.n {
         if !al && (k as f32) >= wlim {
-            let q = k / s.n; // idiv, always 0 (BD4)
+            let q = k / s.n; // idiv, always 0
             alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
             step = step_b;
             al = true;
@@ -144,7 +144,7 @@ pub fn flag0_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Resul
         let (mut alpha, mut step, mut al) = (a0, step_a, false);
         for k in 0..n {
             if !al && (k as f32) >= wlim {
-                let q = k / n; // idiv, always 0 (BD4)
+                let q = k / n; // idiv, always 0
                 alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
                 step = step_b;
                 al = true;

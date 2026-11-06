@@ -2,7 +2,7 @@
 use fx_eval::ranges::*;
 use fx_eval::*;
 
-// INT18: test-local copies of the two functions removed from fx_eval::ranges (byte copies but for `pub`).
+// test-local copies of the two functions removed from fx_eval::ranges (byte copies but for `pub`).
 /// The measured clamp of ONE lane against a record (min, max). See the module comment for the rule.
 fn clamp_lane(mut x: f32, min: f32, max: f32) -> f32 {
     if max != UNENFORCED_BOUND && x > max {
@@ -69,14 +69,14 @@ fn table_is_embedded_and_complete() {
     }
     // the copy of the full table (test data); the defined rows are compared with it in t_native_defs.rs
     let t = RangeTable::parse(effects_rtdata::text("fx_eval/data/PARAM_RANGES.tsv"));
-    assert_eq!(t.rows.len(), 437, "RNG1 236 rows (REC values for three Warp_Perspective_Autogen layout rows) plus SHE2 74 Sharpen rows");
+    assert_eq!(t.rows.len(), 437, "236 range rows (REC values for three Warp_Perspective_Autogen layout rows) plus 74 Sharpen rows");
     assert_eq!(t.programs(), vec!["Hue_Sat_Bright_Autogen", "Diffuse_Autogen", "Trails_Autogen", "Time_Warp_RGB_Autogen", "Transform_and_Blur_Autogen", "Blur_Motion_Curves_No_Transform_Autogen", "Blur_Color_Autogen", "Blur_Mono_Autogen", "Distort_RGB_Autogen", "Warp_Perspective_Autogen", "Drop_Shadow", "Hue_Sat_Bright", "Diffuse", "Trails", "Time_Warp_RGB", "Transform_and_Blur", "Blur_Motion_Curves_No_Transform", "Sharpen_Fast_Autogen", "Sharpen_Fast", "Sharpen_Best_Quality", "Sharpen_Best_Quality_Autogen"]);
-    // INT6: the default table is REAL: Drop_Shadow shift is unbounded (min * in the layout text)
+    // the default table is REAL: Drop_Shadow shift is unbounded (min * in the layout text)
     let r = t.lookup("Drop_Shadow", "shift").unwrap();
     assert_eq!((r.lanes, r.min, r.max), (2, -1.0e6, 1.0e6));
     let r = t.lookup("Drop_Shadow", "fg_opacity").unwrap();
     assert_eq!((r.min, r.max), (0.0, 1.0));
-    // DSW2: Drop_Shadow rows (REC-HARNESS table = the harness record ranges, MEASURED from the PREC rows of the original plan dumps)
+    // Drop_Shadow rows (REC-HARNESS table = the harness record ranges, MEASURED from the PREC rows of the original plan dumps)
     let t = RangeTable::parse(effects_rtdata::text("fx_eval/data/PARAM_RANGES_REC.tsv"));
     assert_eq!(fx_eval::ranges::row_label("Diffuse").as_deref(), Some("RANGE-ROWS-CORE-COPY"));
     assert_eq!(fx_eval::ranges::row_label("Sharpen_Fast").as_deref(), Some("RANGE-ROWS-CORE-BY-TEXT"));
@@ -265,7 +265,7 @@ fn other_programs_and_unknown_parameters_are_untouched() {
     let m = bound("(def_effect Foo ( S ) ( ) ( saturation = 1 ) ( * S saturation ))", "Foo", &[("saturation", &[-3.0])], false);
     assert_eq!(m["saturation"][0], -3.0);
     // a parameter without a row in a program with rows
-    // INT4: a claimed program with a parameter that has no row is an ERROR, never a guess
+    // a claimed program with a parameter that has no row is an ERROR, never a guess
     let g = gen("(def_effect Hue_Sat_Bright_Autogen ( S ) ( ) ( zzz = 1 ) ( * S zzz ))", "Hue_Sat_Bright_Autogen");
     let mut ov = BTreeMap::new();
     ov.insert("zzz".to_string(), vec![-3.0f32]);
@@ -278,7 +278,7 @@ fn clamp_table_values_of_the_three_new_programs() {
     if !effects_rtdata::have_tables() {
         return;
     }
-    // the expectations DF1 NEXT lists (clamp_chroma, z_dist, exposure_bias, wrap, blur_res, center)
+    // the expectations (clamp_chroma, z_dist, exposure_bias, wrap, blur_res, center)
     let p = |prog: &str, k: &str, v: f32| {
         let mut x = [v];
         clamp_param(prog, k, &mut x);

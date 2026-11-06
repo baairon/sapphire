@@ -150,7 +150,7 @@ pub fn assumptions() -> Vec<Assumption> {
         Assumption { id: "B5", basis: "T2 fmod hook returns Python math.fmod semantics (exact IEEE, special cases mapped), equal to bwb_libm on finite inputs (libm T2 0 diffs); inf/NaN inputs compared as class", label: "ASSUMPTION" },
         Assumption { id: "B6", basis: "T2 stops at the first non-degenerate sample (fault hook); later samples are not compared. Planes are NOT compared in this piece", label: "ASSUMPTION" },
         Assumption { id: "B8", basis: "plane-mode data pointer: source buffer with origin offset; reads outside the buffer return Unsupported::Oob (the emulator would read padding); T2 keeps indices inside it", label: "ASSUMPTION" },
-        Assumption { id: "B9", basis: "host statics ..2b (edge flag bytes) and (float hs) are explicit inputs (W44); in T2 hs=height, bytes random 0/1", label: "ASSUMPTION" },
+        Assumption { id: "B9", basis: "host statics ..2b (edge flag bytes) and (float hs) are explicit inputs; in T2 hs=height, bytes random 0/1", label: "ASSUMPTION" },
         Assumption { id: "B10", basis: "X-major path has no P1 call; zero-length samples need the stub numerics (Unsupported::P1Needed in plane mode, T2 cases avoid them); the 16-byte constant is zero (lookup_out.tsv)", label: "MEASURED" },
         Assumption { id: "B11", basis: "FMA sites of S6..S8: (fnmadd231), (fmsub213), (fmadd213), (fmadd213), (fmsub213), (fmadd213); modelled with mul_add; no rcp/rsqrt/x87 in S6..S8", label: "MEASURED listing" },
         Assumption { id: "B7", basis: "FMA sites in S0..S5: (vfmadd132ss), (vfmsub213ss), (vfmadd132ss), (vfnmadd132ss); no rcp/rsqrt, no x87 in S0..S5", label: "MEASURED listing" },

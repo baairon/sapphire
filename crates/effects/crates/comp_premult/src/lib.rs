@@ -1,4 +1,4 @@
-//! comp_premult (CPM1): native port of the AVX2 route of builtin class `comp_premult`
+//! comp_premult: native port of the AVX2 route of builtin class `comp_premult`
 //! (vtable, slot 53, AVX2 body, listing offsets of neutral_1.asm).
 //!
 //! The class composites operand B over operand A using a THIRD operand T as the alpha:

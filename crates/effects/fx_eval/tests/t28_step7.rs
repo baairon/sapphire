@@ -1,4 +1,4 @@
-//! INT17 step s10_eqck: eq_const in the listing's f64 form and the checkout crate aligned with the listing.
+//! step s10_eqck: eq_const in the listing's f64 form and the checkout crate aligned with the listing.
 //! Expected values are the listing's arithmetic worked by hand: eps = f64 0x3ddb7cdfd9d7bdbb (about 1.0e-10) is below half an ulp of 2^20
 //! (2^-33, about 1.16e-10), so b + eps rounds to b and two equal constants 1048576.0 are NOT equal in the listing's test.
 use fx_eval::checkout::*;

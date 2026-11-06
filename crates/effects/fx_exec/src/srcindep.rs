@@ -1,6 +1,6 @@
-//! INT27 step SI (SIP1 outcome A): the 'ae32' route of a compiled plan that has no Source input and is a single folded
+//! (outcome A): the 'ae32' route of a compiled plan that has no Source input and is a single folded
 //! constant node (out_ch 3). The original's plans at G0, GC, GD, GN with Source at 3 channels are command 0 = allocate 3 / constant / convert-to-dest,
-//! with no Source and no convert-from-source (SIP1, MEASURED in the emulator). The native renders the constant lanes through the destination
+//! with no Source and no convert-from-source (, MEASURED in the emulator). The native renders the constant lanes through the destination
 //! convert, the host Source world given and its planes unread, ONLY when the derived Source class is 3 with 3 planes. Every other plan without a
 //! required input keeps the refusal by name; a Source-independent plan at 4 planes refuses SOURCE-INDEPENDENT-4CH-UNPORTED.
 use fx_eval::CompiledProgram;
@@ -39,7 +39,7 @@ pub fn route_check(cp: &CompiledProgram, names: &[(String, usize)], source_elnum
         return Err(not_an_input("Source"));
     }
     if planes == 4 {
-        return Err(format!("SOURCE-INDEPENDENT-4CH-UNPORTED ({} {}: the native compiled a Source-independent plan at 4 planes; the original's 4-channel plan reads Source (SIP1); W552)", style, binding));
+        return Err(format!("SOURCE-INDEPENDENT-4CH-UNPORTED ({} {}: the native compiled a Source-independent plan at 4 planes; the original's 4-channel plan reads Source)", style, binding));
     }
     if planes == 3 && source_elnum == Some(3) {
         return Ok(true);
@@ -50,7 +50,7 @@ pub fn route_check(cp: &CompiledProgram, names: &[(String, usize)], source_elnum
 /// The meta label of the constant route.
 pub fn label(style: &str, binding: &str, lanes: &[u32; 4]) -> String {
     format!(
-        "label SOURCE-INDEPENDENT-CONST-ROUTE ({} {}: the compiled plan has no Source input and is one folded constant node v3_to_v4_if4 (out_ch 3, lanes {:08x},{:08x},{:08x}); rendered through the destination convert (3-plane zero-arm body at mode 2 by FMT3c, or the mode-3 body), the host Source world given and its planes unread; Source class 3 with 3 planes; booking needs SOURCE-INDEPENDENT-PLAN-RECORDED per row; SIP1, W552, W561)",
+        "label SOURCE-INDEPENDENT-CONST-ROUTE ({} {}: the compiled plan has no Source input and is one folded constant node v3_to_v4_if4 (out_ch 3, lanes {:08x},{:08x},{:08x}); rendered through the destination convert (3-plane zero-arm body at mode 2 by, or the mode-3 body), the host Source world given and its planes unread; Source class 3 with 3 planes; booking needs SOURCE-INDEPENDENT-PLAN-RECORDED per row)",
         style, binding, lanes[0], lanes[1], lanes[2]
     )
 }

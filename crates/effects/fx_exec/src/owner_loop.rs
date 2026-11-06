@@ -1,5 +1,5 @@
-//! INT17 step s11_prerender: byte copy of wave_s9/pdv3_owner_rest/owner_arm/owner_arm.rs below this line (PDV3 PATCH 1).
-//! PDV2: the owner arm of the original plugin ported as one pure function.
+//! step s11_prerender: byte copy of wave_s9/pdv3_owner_rest/owner_arm/owner_arm.rs below this line.
+//! the owner arm of the original plugin ported as one pure function.
 //!
 //! Sources (neutral_1 listing addresses; every statement labelled in ../README.md):
 //!   * definition flag: sets bit 0x20 of [[owner]] for the token "dynamic" (cell);
@@ -33,7 +33,7 @@ pub struct ParamView {
 /// MEASURED in place). Out-of-range values give 0x80000000 on hardware; Rust `as` saturates, so those are refused.
 pub fn param_int(value: f32) -> Option<i32> {
     let x = value + 0.5f32;
-    // INT18: -2147483648.0f32 is in range for cvttss2si (it gives 0x80000000 as a value, not as the indefinite); the
+    // -2147483648.0f32 is in range for cvttss2si (it gives 0x80000000 as a value, not as the indefinite); the
     // earlier bound `x <= -2147483649.0f32` rounded to -2^31 in f32 and refused it
     if x.is_nan() || x >= 2147483648.0f32 || x < -2147483648.0f32 {
         None
@@ -175,7 +175,7 @@ pub fn negotiate(prev_cell_a: u32, prog_opacity_bit: bool, n: Option<&Negotiatio
     f | 0x4
 }
 
-/// Inputs of the later pre-render stage (PDV3, only; PRERENDER.md).
+/// Inputs of the later pre-render stage (, only; PRERENDER.md).
 /// `rect_flag[k]` is the byte at [rbp+10k-] (the empty flag of the k-th 10-byte rectangle record at rbp),
 /// `a8[k]` the dword at [rbp+4k-0xa8] (a byte of the k-th host checkout result, written or zeroed).
 #[derive(Clone, Debug)]
@@ -302,7 +302,7 @@ mod tests {
         assert!(ctx_postdiv_checked >= 4);
     }
 
-    /// TWR1: the four recorded (opacity, output opacity) loop pairs of S_TimeWarpRGB give the recorded owner tuples (the owner cells)
+    /// the four recorded (opacity, output opacity) loop pairs of S_TimeWarpRGB give the recorded owner tuples (the owner cells)
     #[test]
     fn time_warp_opacity_output_opacity_pairs() {
         for (op, out, want) in [(1.0f32, 0.0f32, [1, 3, 1, 0]), (0.0, 0.0, [0, 3, 0, 0]), (2.0, 0.0, [2, 3, 0, 0]), (1.0, 1.0, [1, 0, 1, 0])] {
@@ -411,13 +411,13 @@ mod tests {
 
     #[test]
     fn later_stage_recorded_cells() {
-        // PDV3 records (pvHS, Hue_Sat_Bright_Autogen, two pre-renders): ae32_ready_b 0, prog_mode_word 2, ae32_ready_a 4, late_inputs_a 0,
+        // records (pvHS, Hue_Sat_Bright_Autogen, two pre-renders): ae32_ready_b 0, prog_mode_word 2, ae32_ready_a 4, late_inputs_a 0,
         // rect flag[0] 0, a8[0] 0: no store, the recorded [owner cell] stays 0 at both entries (MEASURED).
         let a = later_stage(&late(0, 4, 2, 0, [0, 1, 86, 0, 0], [0, 0, 2146420336, 0, 275190146])).unwrap();
         assert_eq!(a, LateOut { ae32_ready_d: 0, rbp_cell_a: 0 });
         let b = later_stage(&late(0, 4, 2, 0, [0, 1, 0, 0, 0], [0, 0, 1621312320, 0, 1621178880])).unwrap();
         assert_eq!(b, LateOut { ae32_ready_d: 0, rbp_cell_a: 0 });
-        // PDV3 records (pvBL, Blur_Color, prog_mode_word 1): never stores
+        // records (pvBL, Blur_Color, prog_mode_word 1): never stores
         let c = later_stage(&late(0, 4, 1, 0, [0, 1, 64, 0, 0], [0, 0, 1624846784, 0, 1624802816])).unwrap();
         assert_eq!(c, LateOut { ae32_ready_d: 0, rbp_cell_a: 0 });
     }
@@ -449,7 +449,7 @@ mod tests {
     }
 
     /// The mode byte seen by the second call with the stage in place: a stored 3 turns ctx into 3
-    /// and the cells stay (this is the dependence PDV2's mutant `ae32_ready_d != 0` to `> 1` probes).
+    /// and the cells stay (this is the dependence mutant `ae32_ready_d != 0` to `> 1` probes).
     #[test]
     fn later_stage_feeds_ctx_init() {
         let mut o = setup_arm(false, false, &[]).unwrap();

@@ -1,4 +1,4 @@
-//! INT20 step G3: the route pieces the 'ae32' class-3 path runs (readers14b::read3b for head 0x7e91c0, c14::convert14 with 3 planes at
+//! the route pieces the 'ae32' class-3 path runs (readers14b::read3b for head 0x7e91c0, c14::convert14 with 3 planes at
 //! mode 2, c14::copy_word0 for the row copier) give the same bits as convert_pair's floored class-3 pair on the special-value suite.
 //! So the floor of convert_pair (t_class3.rs, mutants with SHAs) covers the code the route executes.
 

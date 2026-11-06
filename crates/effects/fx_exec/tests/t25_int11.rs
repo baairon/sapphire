@@ -1,5 +1,5 @@
-//! T25 (INT11 s2): the owner-arm function and the native postdivide insertion test against PDV1's 8 original plans
-//! (fixtures/pdv1/PLAN_ORIG_*: the original compiler 0x13370 run in the emulator at ctx+0x774 = 0 and 1, plain and SMART stacks; PDV1).
+//! T25: the owner-arm function and the native postdivide insertion test against 8 original plans
+//! (fixtures/pdv1/PLAN_ORIG_*: the original compiler 0x13370 run in the emulator at ctx+0x774 = 0 and 1, plain and SMART stacks).
 use fx_eval::cpuplan::{plan_text_mode, PlanMode};
 use fx_eval::{build_effect, compile, CompileOptions, Corpus};
 use fx_exec::hostconv14::*;
@@ -52,7 +52,7 @@ fn t25_owner_arm_cells() {
     assert_eq!(owner_arm(&a(false, false, false)), ArmCells { ctx_gate_a: 0, ctx_gate_b: 1, ctx_postdiv_cell: 0 });
     assert_eq!(owner_arm(&a(false, true, false)), ArmCells { ctx_gate_a: 0, ctx_gate_b: 1, ctx_postdiv_cell: 0 });
     // the mode-byte-2 exit: constructor defaults (0, 1, 1)
-    // INT12: the exit is withdrawn (PDV2 PATCH 4): refused by name; INT11's no-loop form keeps its old answer only for the comparison test
+    // the exit is withdrawn: refused by name; the recorded no-loop form keeps its old answer only for the comparison test
     for (o, b) in [(false, false), (true, false), (false, true), (true, true)] {
         assert!(fx_exec::hostconv14::try_owner_arm(&a(o, b, true)).is_err());
     }
@@ -99,9 +99,9 @@ fn t25_postdivide_insertion_matches_pdv1_plans() {
     assert_eq!(checked, 8);
 }
 
-/// INT12 (INT12 amendment item 1): the Opacity loop. BCJ2's Blur_Color records rcD 64x32 and 50x7 (and PDV2's pdBC):
+/// the Opacity loop. Blur_Color records rcD 64x32 and 50x7 (and pdBC):
 /// [owner+0x13e0] = 0, [owner+0x1260] = 18 (bit 2 clear), Opacity record 1.0 (popup answer 2, the default), ctx+0x774 = 1 and owner cells
-/// (1354, 1358, 1398, 139c) = (1, 0, 1, 1). The arm with the loop must give the recorded ctx cell; INT11's arm without it must not.
+/// (1354, 1358, 1398, 139c) = (1, 0, 1, 1). The arm with the loop must give the recorded ctx cell; the recorded arm without it must not.
 #[test]
 fn t25_opacity_loop_bcj2_blur_color() {
     let rec = OwnerArm { owner_arm_nonzero: false, owner_arm_bit2: (18u32 & 4) != 0, mode_byte_exit: false, opacity_bits: Some(1.0f32.to_bits()), output_opacity_bits: None };
@@ -110,7 +110,7 @@ fn t25_opacity_loop_bcj2_blur_color() {
     assert_eq!(with, ArmCells { ctx_gate_a: 1, ctx_gate_b: 0, ctx_postdiv_cell: 1 });
     let without = fx_exec::hostconv14::owner_arm_no_loop(&rec);
     assert_ne!(without.ctx_postdiv_cell, 1, "without the loop the arm must fail the recorded cell");
-    // the owner cells themselves (PDV2's setup_arm) equal BCJ2's record
+    // the owner cells themselves (setup_arm) equal record
     let o = fx_exec::owner_loop::setup_arm(false, false, &[fx_exec::owner_loop::ParamView { name: "opacity".into(), kind: 4, value: 1.0 }]).unwrap();
     assert_eq!((o.ae32_ready_c, o.ae32_ready_d, o.late_out_c, o.late_out_d), (1, 0, 1, 1));
     // the value classes of rule 4: m = 0 (answer 1) gives 1358 = 3 and v = 0; m = 2 (answer 3) v = 0; Diffuse (no opacity parameter) v = 0

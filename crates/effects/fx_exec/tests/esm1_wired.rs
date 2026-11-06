@@ -1,5 +1,5 @@
-//! ESM1: ESH8's stored cases (ESH6 t2/export, emulator outputs) through the WIRED class in fx_exec (kernels::run_any, class edge_aware_sharpen).
-//! Expected values are the original's stored output planes. Refusals are counted by name. INT20: the export is the in-tree fixture fixtures/esh6_t2/export, checked by fixtures/MANIFEST.sha256 (row esh6_t2/EXPORT.sha256) and sha256sum -c before it is read; env ESH6_T2 overrides the directory.
+//! stored cases (t2/export, emulator outputs) through the WIRED class in fx_exec (kernels::run_any, class edge_aware_sharpen).
+//! Expected values are the original's stored output planes. Refusals are counted by name. the export is the in-tree fixture fixtures/esh6_t2/export, checked by fixtures/MANIFEST.sha256 (row esh6_t2/EXPORT.sha256) and sha256sum -c before it is read; env ESH6_T2 overrides the directory.
 use fx_exec::kernels;
 use fx_exec::types::{Arg, ExecError, Image, KParams};
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ fn cst(v: &[f32]) -> Arg<'static> {
     Arg::Const { n: v.len(), lanes: l }
 }
 
-/// INT20: the in-tree fixture, its file list checked against fixtures/MANIFEST.sha256, then every file by sha256sum -c.
+/// the in-tree fixture, its file list checked against fixtures/MANIFEST.sha256, then every file by sha256sum -c.
 fn export_dir() -> String {
     if let Ok(d) = std::env::var("ESH6_T2") {
         return d;

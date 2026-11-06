@@ -1,4 +1,4 @@
-//! SHF1 T2: the sharpen crate against stored emulator runs of the original (harness v2, vex engine, "VEX follows the SDM, not silicon").
+//! T2: the sharpen crate against stored emulator runs of the original (harness v2, vex engine, "VEX follows the SDM, not silicon").
 //! Layers: combine job 0x175e30 alone; wrapper 0x175c80 (blur dispatcher recorded, copy helpers 0x672c60 and 0x670340 real); slot function 0x530530
 //! (flag 0; alias and not alias; wrapper real, blur recorded); slot function with the real blur dispatcher. Planes are compared bit for bit
 //! (NaN as a class, counted); call records are compared field by field. Directory: env SHE2_T2 (default below).
@@ -97,7 +97,7 @@ impl Tot {
 }
 
 
-// ---------------------------------------------------------------------------------------------------------------- SHE2 alias tail
+// ---------------------------------------------------------------------------------------------------------------- alias tail
 struct DrvP {
     alias: bool,
     n: i64,
@@ -184,7 +184,7 @@ fn run_tail(layout: &str) -> (Tot, usize, usize) {
 
 fn go(layout: &str) {
     let (t, below, tail) = run_tail(layout);
-    println!("SHE2 {}: {:?} cases below w*h {} tail cells compared {}", layout, t, below, tail);
+    println!("alias tail {}: {:?} cases below w*h {} tail cells compared {}", layout, t, below, tail);
     assert_eq!(t.diff, 0, "first differing: {:?}", t.first);
     assert!(below > 0 && tail > 0);
 }

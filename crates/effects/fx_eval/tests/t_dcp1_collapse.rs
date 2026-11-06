@@ -1,4 +1,4 @@
-//! DCP1: slot-38 collapse rules of v3_to_v4_if4 (low bit of the node's own element count) and postdivide
+//! slot-38 collapse rules of v3_to_v4_if4 (low bit of the node's own element count) and postdivide
 //! (collapse only when copy_alpha < 0 and the tag is 1 or 3), discriminating each choice.
 use fx_eval::fold::{collapse_arm, copy_alpha_negative};
 use fx_eval::ArgView2;

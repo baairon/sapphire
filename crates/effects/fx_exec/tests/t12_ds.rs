@@ -1,4 +1,4 @@
-//! DS1 unit tests of the exec-downsampled kernels (std only): shape rules, exact cases, value classes, and the V/S class table.
+//! unit tests of the exec-downsampled kernels (std only): shape rules, exact cases, value classes, and the V/S class table.
 use fx_exec::downsampled::*;
 
 #[test]

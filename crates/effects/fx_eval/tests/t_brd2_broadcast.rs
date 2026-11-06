@@ -1,4 +1,4 @@
-//! BRD2: v3_to_v4_if4 broadcasts a scalar first argument only for exactly 3 output channels; 2 channels keep the concatenation [a0 a1].
+//! v3_to_v4_if4 broadcasts a scalar first argument only for exactly 3 output channels; 2 channels keep the concatenation [a0 a1].
 use fx_eval::compile::ArgView2;
 use fx_eval::fold::fold_lanes;
 
@@ -19,7 +19,7 @@ fn scalar_offset_reaches_all_three_planes() {
 
 #[test]
 fn two_channel_keeps_concat_of_distinct_scalars() {
-    // BCJ3 Blur_Mono originals (8 rows): [0.7416992 0.7319031] stays [a0 a1]
+    // Blur_Mono originals (8 rows): [0.7416992 0.7319031] stays [a0 a1]
     let (a, b) = (0.7416992f32, 0.7319031f32);
     let r = fold_lanes("v3_to_v4_if4", &[s(a), s(b)], 2, None).expect("folded");
     assert_eq!(&r[0..2], &[a.to_bits(), b.to_bits()], "n = 2 is the concatenation, not the broadcast");

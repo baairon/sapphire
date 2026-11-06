@@ -29,7 +29,7 @@ fn arm2_flag_clear() {
     assert_eq!(prune_arm("if_neq_const", &[av(true, 3.0, 1), av(false, 3.0, 1), nc(), nc()]), Some(2));
 }
 
-// Probe cases (EQC1 resumed): whole-program compiles of the Blend probe texts; the original's arm per case is MEASURED in results/.
+// Probe cases (resumed): whole-program compiles of the Blend probe texts; the original's arm per case is MEASURED in results/.
 use fx_eval::{build_effect, compile, enumerate_branches_opt, ComboTable, CompileOptions, Corpus};
 use std::collections::BTreeMap;
 

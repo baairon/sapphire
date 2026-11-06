@@ -1,4 +1,4 @@
-//! SHF1 T2: the sharpen crate against stored emulator runs of the original (harness v2, vex engine, "VEX follows the SDM, not silicon").
+//! T2: the sharpen crate against stored emulator runs of the original (harness v2, vex engine, "VEX follows the SDM, not silicon").
 //! Layers: combine job 0x175e30 alone; wrapper 0x175c80 (blur dispatcher recorded, copy helpers 0x672c60 and 0x670340 real); slot function 0x530530
 //! (flag 0; alias and not alias; wrapper real, blur recorded); slot function with the real blur dispatcher. Planes are compared bit for bit
 //! (NaN as a class, counted); call records are compared field by field. Directory: env SHF1_T2 (default below).

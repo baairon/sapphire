@@ -366,7 +366,7 @@ class ConfirmationTest(unittest.TestCase):
             self.assertIsNone(c.check_override(row, computed)[0], row)
         self.assertIsNone(c.check_override([sym, name, "stub", "-", "constant return body"], weak)[1])
         for ids, text in (("calls,know", "test"), ("arity,regs", "enum widths, SDK knowledge"),
-                          ("regs,consts", "the NTV2 SDK declares it")):
+                          ("regs,consts", "the SDK declares it")):
             down, why = c.check_override([sym, name, "confirmed", ids, text], weak)
             self.assertEqual((down[2], why), ("consistent", "confirmed on fewer than two repository kinds"))
         kept = [sym, name, "confirmed", "regs,arity,consts",

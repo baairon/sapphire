@@ -1,5 +1,5 @@
-//! t24 (INT16): UNT2 PATCH 2 (the lane-1 term) and PATCH 3 (the popup rule) in fx_eval::units.
-//! Vectors: data/UNT2_CONV_T2.tsv, a field-for-field copy of UNT2's rig T2 output (wave_s9/unt2_units_rest/out/conv_t2_out.jsonl,
+//! t24: (the lane-1 term) and PATCH 3 (the popup rule) in fx_eval::units.
+//! Vectors: data/UNT2_CONV_T2.tsv, a field-for-field copy of rig T2 output (wave_s9/unt2_units_rest/out/conv_t2_out.jsonl,
 //! SHA-256 bebafd6798719af6f2b945a9016e2f3a21d253d85d43a19cf1b6535e8f49c652): 18,880 cases of the original's conversion function 0x11ca10
 //! run in the emulator (entries disp, vex and sse; lanes 0 and 1; ns 1 and others; arms clear, null and set; types 1 and 2).
 use fx_eval::units::{conv_record, normalize_scale_record, popup_record, units_width, ConvIn, RatioArm};
@@ -57,7 +57,7 @@ fn t24_rig_vectors_bit_equal() {
 
 #[test]
 fn t24_shift_zero_sign_at_host_zero() {
-    // the record of shift_mocha_mask at host 0 (SMR10's compile record): lanes (0, -0) at the plain-free ratio arm, conv_in_b 1.0
+    // the record of shift_mocha_mask at host 0 (the recorded compile record): lanes (0, -0) at the plain-free ratio arm, conv_in_b 1.0
     let mut c = ConvIn { w: 64, conv_in_b: 1.0, arm: RatioArm::Ratio, conv_in_a: 1.0, d_cell_b: 1.0, d_cell_c: 1.0, ptype: 1, ns: 1.0, kind: 5, flags: 0, lane: 0, host: 0.0 };
     assert_eq!(conv_record(&c).unwrap().to_bits(), 0x0000_0000);
     c.lane = 1;
@@ -97,7 +97,7 @@ fn t24_lane1_term_not_vacuous_and_sign_mutant_killed() {
 
 #[test]
 fn t24_popup_one_based() {
-    // UNT2 section 5 (MEASURED): Filter answer 2 -> 1.0, 3 -> 2.0, 1 -> 0.0, 0 -> 0.0, -3 -> 0.0; Combine Masks 1 -> 0.0; Opacity 2 -> 1.0
+    // section 5 (MEASURED): Filter answer 2 -> 1.0, 3 -> 2.0, 1 -> 0.0, 0 -> 0.0, -3 -> 0.0; Combine Masks 1 -> 0.0; Opacity 2 -> 1.0
     for &(a, r) in &[(2, 1.0f32), (3, 2.0), (1, 0.0), (0, 0.0), (-3, 0.0)] {
         assert_eq!(popup_record(a).to_bits(), r.to_bits(), "answer {}", a);
     }

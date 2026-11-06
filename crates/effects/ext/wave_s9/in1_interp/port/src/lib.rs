@@ -1,4 +1,4 @@
-//! interp (IN1): native port of the pixel builtin `interp` (linear interpolation of two images by a third, out = a + (b - a) * t).
+//! interp: native port of the pixel builtin `interp` (linear interpolation of two images by a third, out = a + (b - a) * t).
 //! Class `interp`: vtable symbol, first slot, id getter, factory, object size 0xd0, slot 53 (CPU
 //! entry, feature-word dispatcher), AVX2 body (2,832 B), AVX tier, SSE tier, GPU twin slot 54
 //!  (NOT REBUILT). Listing offsets (neutral_1.asm); VA = offset. std only, no unsafe, explicit parameters (no Default).

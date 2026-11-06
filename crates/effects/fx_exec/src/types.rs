@@ -132,7 +132,7 @@ pub struct KParams {
     pub in_pool: bool,
     /// NV9-A3 / NV9B-A1: sampler geometry; None = the binding chosen by `geom_mode` (Dump: `Geom::dump`, Nv9Old: `Geom::full_frame`)
     pub geom: Option<Geom>,
-    /// NV9B-A1: which default host geometry and xy plane `geom == None` means (default Dump = RD1 / EP-6 item 7)
+    /// NV9B-A1: which default host geometry and xy plane `geom == None` means (default Dump = / EP-6 item 7)
     pub geom_mode: GeomMode,
     /// NV9B-A2: the host aspect a that set_aspect stores (rec = a, rec = 1/a); INFERRED 1.0
     pub host_aspect: f32,
@@ -142,40 +142,40 @@ pub struct KParams {
     pub pad_pixel: [f32; 4],
     /// NV9-A6: blur edge mode cell (pointee, U03): 0 zero, 1 mirror
     pub blur_edge: i32,
-    /// FX-1 (replaces NV9-A6 wrong default 1): blur render scale = [info] = ctx = the FRAME WIDTH (TR1: scale W + mirror edge is 8192 of 8192 bit equal, scale 1, 2, 32 is 0 of 8192).
+    /// FX-1 (replaces NV9-A6 wrong default 1): blur render scale = [info] = ctx = the FRAME WIDTH (scale W + mirror edge is 8192 of 8192 bit equal, scale 1, 2, 32 is 0 of 8192).
     /// A value <= 0 means "bind the frame width" (the default); a positive value is used as given. NV9-BLUR-SCALE-OLD: env NV9_BLUR_SCALE_OLD=1 makes the standin default 1 again.
     pub blur_render_scale: i32,
-    /// NV10-P2 / scalar head count of the original xy ramp (see `x_ramp`), an explicit per-run host input = (32 - (p & 31)) / 4 for the host's row pointer p (0 when p is 32 byte aligned); default 0 (HOST-ALLOC); -1 = the closed-form pixel-centre plane of NV-9b, an explicit non-host option
+    /// / scalar head count of the original xy ramp (see `x_ramp`), an explicit per-run host input = (32 - (p & 31)) / 4 for the host's row pointer p (0 when p is 32 byte aligned); default 0 (HOST-ALLOC); -1 = the closed-form pixel-centre plane of NV-9b, an explicit non-host option
     pub xy_head: i32,
-    /// INT19 S1: XY-HEAD-MODE. OneHead (the pre-WPE3 form: the head `xy_head` for every row) or PerRow (WPE3: row r's head from
+    /// S1: XY-HEAD-MODE. OneHead (the pre-WPE3 form: the head `xy_head` for every row) or PerRow (row r's head from
     /// the row pointer phase0 + r * W * 4). fx_run derives it from the plan's xy shape (kernels2::xy_head_mode_of); the state A constructor keeps OneHead.
     pub xy_head_mode: XyHeadMode,
     /// WPH: base phase mod 32 of the perspective out2 / perspective_alpha out1 planes as per-run host inputs (-1 = not given), and the host cells
     /// [[rec]] (i32), (f64) of perspective_alpha (None = not given); state A tests may still read the WPG1_* env knobs
     pub persp_base: i32,
     pub palpha_base: i32,
-    /// XWP2b (part 2): the perspective out2 / perspective_alpha out1 destination is a row buffer in the counted plan (allocated in the
+    /// (part 2): the perspective out2 / perspective_alpha out1 destination is a row buffer in the counted plan (allocated in the
     /// line list of the exec block that writes it): every row is written at the same pointer, so every row takes the base phase (false = a plane:
-    /// rows at base + row x W x 4, the WPE3 form). Set only on the --xy-base-list route from the placement model's plan text.
+    /// rows at base + row x W x 4, the form). Set only on the --xy-base-list route from the placement model's plan text.
     pub persp_rowbuf: bool,
     pub palpha_rowbuf: bool,
-    /// WPH2: base phase mod 32 of the u plane as its producer writes it (-1 = not given: the geom branch)
+    /// base phase mod 32 of the u plane as its producer writes it (-1 = not given: the geom branch)
     pub xy_base: i32,
     pub palpha_cells: Option<(i32, i32, f64)>,
-    /// DS1: destination plane base address modulo 32 (bytes) of the small planes of exec-downsampled (picks the alignment peel of the down kernel); MEASURED 0 in the emulator runs, a host allocator value otherwise
+    /// destination plane base address modulo 32 (bytes) of the small planes of exec-downsampled (picks the alignment peel of the down kernel); MEASURED 0 in the emulator runs, a host allocator value otherwise
     pub ds_dst_phase: u32,
     /// DS1-OFF: skip the exec-downsampled model (the executor then runs the body at full size, the pre-DS1 behaviour)
     pub ds_off: bool,
-    /// GR1 / INT3-A: `info != 0` of the image object read by class grad . PARAM-UNCAPTURED in GR1 (GR-A1); an explicit input with a labelled STAND-IN default of false (no value was chosen by GR1; false is the value DRW1 measured at host aspect 1.0 in its E1 runs, DRW1 unfinished)
-    /// INT8: test interface only. The executor's info_aspect is the plugin's derivation (set_aspect aspect_block_e, DRW4); Some(v) different from it is an error.
+    /// `info != 0` of the image object read by class grad. PARAM-UNCAPTURED in (GR-A1); an explicit input with a labelled STAND-IN default of false (no value was chosen by; false is the value measured at host aspect 1.0 in its E1 runs unfinished)
+    /// test interface only. The executor's info_aspect is the plugin's derivation (set_aspect aspect_block_e); Some(v) different from it is an error.
     pub kparams_a: Option<bool>,
-    /// SHE3 HOST-COUNT (ctx, ROUTE W x H): the element count of sharpen's combine job. None makes the sharpen arm fail; the executor graph loop fills W x H.
+    /// HOST-COUNT (ctx, ROUTE W x H): the element count of sharpen's combine job. None makes the sharpen arm fail; the executor graph loop fills W x H.
     pub sharpen_count: Option<usize>,
-    /// SHE3: the plan runs sharpen in place (destination ref = first source ref), derived from the executed plan
+    /// the plan runs sharpen in place (destination ref = first source ref), derived from the executed plan
     pub sharpen_alias: bool,
-    /// INT10 (BCX1 PATCH 1): the blur aspect as a host input: Some(f32 at ctx) when the flag at ctx is nonzero, None when it is 0
-    /// (the blur crate multiplies the Y sigma by it, coef/src/driver.rs). ASP1 (MEASURED): SMR7's 1/36 came from a harness bug (num_params written into
-    /// in_data, pixel_aspect_ratio.den); at a 1/1 pixel aspect the cells are 0, 1.0, 1.0, so the claim value is None (HOST-ASPECT-SQUARE). BLE1's state A
+    ///: the blur aspect as a host input: Some(f32 at ctx) when the flag at ctx is nonzero, None when it is 0
+    /// (the blur crate multiplies the Y sigma by it, coef/src/driver.rs). (MEASURED): the recorded 1/36 came from a harness bug (num_params written into
+    /// in_data, pixel_aspect_ratio.den); at a 1/1 pixel aspect the cells are 0, 1.0, 1.0, so the claim value is None (HOST-ASPECT-SQUARE). state A
     /// is None. The state A constructor keeps None (its E-PARITY is for None); a SMART-context run must give the recorded cells (fx_run --blur-aspect-ctx).
     pub blur_aspect: Option<f32>,
 }
@@ -199,7 +199,7 @@ pub struct MipImage {
     pub ripmap: make_mipmap::RipMap,
     /// obj reciprocal table (filter nonzero only), as f32 bits
     pub scale: Option<Vec<u32>>,
-    /// DSZ1: the plain planar image make_mipmap was built from (the base level before padding), kept for blur at Shift 0
+    /// the plain planar image make_mipmap was built from (the base level before padding), kept for blur at Shift 0
     pub base: Image,
 }
 
@@ -259,7 +259,7 @@ pub enum GeomMode {
 }
 
 impl Geom {
-    /// The dump's geometry for an image of w x h and host aspect a (RD1, MEASURED code, f32 operation order):
+    /// The dump's geometry for an image of w x h and host aspect a (, MEASURED code, f32 operation order):
     /// assumption_f = -0.5; assumption_g = W - 0.5; t = fma(0.5, H, -0.5); u = ((assumption_g) - (-0.5)) / (a + a); assumption_h = t - u; rec = 1 / a
     /// (stored in `aspect`which the samplers read as rec); assumption_e = assumption_c = assumption_d = 0 (zero-init, INFERRED, NV9B-A3).
     pub fn dump(w: usize, h: usize, a: f32) -> Geom {
@@ -293,7 +293,7 @@ pub fn xy_pixel_centre(w: usize, h: usize) -> Image {
     Image { n: w * h, planes: vec![px, py] }
 }
 
-/// NV10-P2: the x ramp of the original `variable 2` command (branch ecx == 2), one row of `cnt` floats.
+/// the x ramp of the original `variable 2` command (branch ecx == 2), one row of `cnt` floats.
 /// Source: start s = [ctx], step d = [ctx]; `head` = number of scalar head elements the code stores before its 32 byte aligned
 /// vector body ((32 - (dest & 31)) / 4, 0 when the destination is 32 byte aligned: ALIGN-ASSUMED, the allocator address is a host value).
 /// Order of operations as in the listing: scalar head accumulates, 16 wide body = broadcast(base) + d * lane (lane table 0..7, constants
@@ -303,7 +303,7 @@ pub fn xy_pixel_centre(w: usize, h: usize) -> Image {
 pub fn x_ramp(cnt: usize, head: usize, s: f32, d: f32) -> Vec<f32> {
     let mut out = vec![0.0f32; cnt];
     let mut x4 = s;
-    // DS1 (READ): cnt < 16 takes the plain scalar loop; 16 <= cnt < 29 skips the alignment peel
+    // (READ): cnt < 16 takes the plain scalar loop; 16 <= cnt < 29 skips the alignment peel
     // (head = 0) and takes the 16 wide body, the 8 wide block and the scalar tail; cnt >= 29 as before (NV-10 had assumed the plain loop for cnt < 29).
     let head = if cnt >= 16 && cnt < 29 { 0 } else { head };
     if cnt < 16 || cnt < head + 16 {
@@ -370,17 +370,17 @@ pub fn x_ramp(cnt: usize, head: usize, s: f32, d: f32) -> Vec<f32> {
     out
 }
 
-/// NV10-P2: the xy plane the original generates per row (`variable 2`): x = x_ramp(W, head, s, d) with s = -1 + 1/W, d = 2/W (a = 1),
+/// the xy plane the original generates per row (`variable 2`): x = x_ramp(W, head, s, d) with s = -1 + 1/W, d = 2/W (a = 1),
 /// y = fma(-row, d, y0) with y0 = fma(assumption_h, d, 1) (vfnmsub213ss with [ctx] = -y0, [ctx] = d); constants fitted to the
 /// values the emulator hook read for 50x7 and 64x32 (s, d, [ctx], [ctx] bit equal in both).
 pub fn xy_ramp(w: usize, h: usize, head: usize) -> Image {
     xy_ramp_mode(w, h, head, XyHeadMode::OneHead)
 }
 
-/// INT19 S1: the xy head mode of `variable 2`'s x writer (XY-HEAD-MODE).
-/// OneHead: the plan writes one x row buffer, the head is applied once to that buffer's pointer and every row repeats it (XYB1 part 2, XY-ONE-ROW,
+/// S1: the xy head mode of `variable 2`'s x writer (XY-HEAD-MODE).
+/// OneHead: the plan writes one x row buffer, the head is applied once to that buffer's pointer and every row repeats it (part 2, XY-ONE-ROW,
 /// MEASURED for Transform_and_Blur 63x33 at Full and Half). PerRow: the plan allocates an x plane indexed by row and row r's head comes from that
-/// row's pointer (WPE3, MEASURED by the record for Warp_Perspective).
+/// row's pointer (, MEASURED by the record for Warp_Perspective).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum XyHeadMode {
     OneHead,
@@ -392,7 +392,7 @@ pub fn xy_ramp_mode(w: usize, h: usize, head: usize, mode: XyHeadMode) -> Image 
     let d = 2.0f32 / w as f32;
     let s = -1.0f32 + 1.0f32 / w as f32;
     let y0 = g.assumption_h.mul_add(d, 1.0);
-    // WPE3 (PerRow; MEASURED by the record, XY_PHASE.md): the original writes the xy image one row per `variable 2` call into the
+    // (PerRow; MEASURED by the record, XY_PHASE.md): the original writes the xy image one row per `variable 2` call into the
     // image plane at (plane base + row * W * 4); the x writer takes the head from THAT row pointer's offset mod 32, so the head changes
     // from row to row whenever W * 4 is not a multiple of 32 (W = 33: rows 0..4 have heads 0,7,6,5,4). `head` is the row 0 head; the
     // plane base phase in bytes is (32 - 4 * head) mod 32 (head 0 = a 32 byte aligned plane base, the measured case at every size).
@@ -419,7 +419,7 @@ pub fn xy_ramp_mode(w: usize, h: usize, head: usize, mode: XyHeadMode) -> Image 
     Image { n: w * h, planes: vec![px, py] }
 }
 
-/// WPE3: the x writer's head count for a destination pointer with byte offset `off` (mod 32 used) from a 32 byte boundary:
+/// the x writer's head count for a destination pointer with byte offset `off` (mod 32 used) from a 32 byte boundary:
 /// r10 = 0 when (ptr & 31) == 0, else (32 - (ptr & 31)) / 4 (the ptr & 3 != 0 plain loop cannot occur for f32 rows).
 pub fn row_head(off: usize) -> usize {
     let p = off & 31;

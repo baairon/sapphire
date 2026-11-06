@@ -1,10 +1,10 @@
-//! warp_prefill (WS4): native port of the AVX2 body (listing addresses, VA = listing for data),
+//! warp_prefill: native port of the AVX2 body (listing addresses, VA = listing for data),
 //! the callback that runs per tile (warp slot 33 route, class warp, vtable).
 //!
 //! The body is a per-pixel "log2 of an approximate gradient magnitude" map of one input plane (MEASURED, listing):
 //! for every pixel it forms two directional differences scaled by `v`, offsets them by half of `pre_cell_a_bits` / `pre_cell_b_bits`, takes
 //! magnitudes, combines them as `max + 0.5 * min` in double precision and writes `exponent + mantissa` (a bit trick
-//! log2) of the result. It is NOT a constant prefill: the WS3 note that the callback "fills with v" was INFERRED and is
+//! log2) of the result. It is NOT a constant prefill: the note that the callback "fills with v" was INFERRED and is
 //! corrected here. Floats are carried as u32 bit patterns so NaN payloads survive; every operation follows the SSE
 //! silicon NaN rule (first source operand wins, quieted; generated NaN is the default QNaN 0xffc00000).
 //! std only, no unsafe. ROUTE AVX2-ONLY (the dispatcher and the SSE twin are not ported).
@@ -24,9 +24,9 @@ pub struct Params {
     pub width: i32,   // the width cell, also the row stride (floats)
     pub height: i32,  // the height cell
     pub flag: u32,    // [a cell] (r14d): nonzero = "min" variant, zero = "sum" variant
-    pub pre_cell_a_bits: u32,      // [a cell] f32 bits (WS3: 0.0 on the slot 33 route)
-    pub pre_cell_b_bits: u32,      // [a cell] f32 bits (WS3: 0.0)
-    pub v: u32,       // [a cell] f32 bits ((hi - lo) * 0.25 on the slot 33 route, WS3)
+    pub pre_cell_a_bits: u32,      // [a cell] f32 bits (0.0 on the slot 33 route)
+    pub pre_cell_b_bits: u32,      // [a cell] f32 bits (0.0)
+    pub v: u32,       // [a cell] f32 bits ((hi - lo) * 0.25 on the slot 33 route)
     pub start: i32,   // partition callee output 1 ([rbp]) CALLEE-MODELLED
     pub count: i32,   // partition callee output 2 ([rbp])
 }

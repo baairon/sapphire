@@ -1,5 +1,5 @@
 //! FLD3-FORM: the folded v3_to_v4_if4 node with n = 3, a one-lane argument 0 and a one-lane argument 1 is
-//! [a0 a0 a0 a1]: argument 0 broadcast to lanes 0 to 2, argument 1 in lane 3. MEASURED by BCJ5's FLD3 records (Blur_Color_Autogen node 67,
+//! [a0 a0 a0 a1]: argument 0 broadcast to lanes 0 to 2, argument 1 in lane 3. MEASURED by records (Blur_Color_Autogen node 67,
 //! literal read from the original compiler's plan in the emulator): brightness 1.0 with scale_opacity 1.0 gives [1 1 1 1]; 1.21 (bits 3f9ae180)
 //! with 1.0 gives [1.21 1.21 1.21 1]; 1.21 with 0.6875 gives [1.21 1.21 1.21 0.6875]. The wrong candidate forms (broadcast with lane 3 = 1,
 //! product, own lane with zeros, concatenation) are mutants; record C separates broadcast and product from the measured form.
@@ -45,7 +45,7 @@ fn fld3_earlier_measured_zero_argument_1_unchanged() {
     assert_eq!(r, [0.7f32.to_bits(), 0.7f32.to_bits(), 0.7f32.to_bits(), 0]);
 }
 
-// FLD3M: Blur_Mono_Autogen node 68 (BCJ5 records gA to gD; plans read from the original compiler in the emulator): n = 1, one-lane arguments, the folded
+// FLD3M: Blur_Mono_Autogen node 68 (records gA to gD; plans read from the original compiler in the emulator): n = 1, one-lane arguments, the folded
 // constant is the pair [a0 a1]: [1 1] at the defaults and with mix_with_source 0.4519, [1 0.6875] with scale_opacity 0.6875, [1.21 0.6875] with brightness 1.21
 // as well. The candidate forms one lane (own, concat truncated), broadcast of argument 0, product and swapped lanes are mutants; the bindings gB and gD kill them.
 #[test]

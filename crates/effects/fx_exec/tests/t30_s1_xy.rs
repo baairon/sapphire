@@ -1,5 +1,5 @@
-//! INT19 S1: WPE3's per-row head of the original `variable 2` xy x writer, scoped by XY-HEAD-MODE.
-//! The first four tests are WPE3's t26_wpe3_xy.rs (79 original x rows read from the emulator at 0xda745, run e_f1) with xy_ramp's PerRow
+//! S1: per-row head of the original `variable 2` xy x writer, scoped by XY-HEAD-MODE.
+//! The first four tests are t26_wpe3_xy.rs (79 original x rows read from the emulator at 0xda745, run e_f1) with xy_ramp's PerRow
 //! form called by name; the rest test the OneHead form and the mode derivation from the plan.
 use fx_eval::{build_effect, Corpus};
 use fx_exec::kernels2::xy_head_mode_of;

@@ -1,4 +1,4 @@
-//! DSW1 (wave_s9 dsw1_dropshadow_wire): hand tests of the newly wired classes comp_premult (crate comp_premult, CPM1) and copy (crate copy_slot52 over the
+//! (wave_s9 dsw1_dropshadow_wire): hand tests of the newly wired classes comp_premult (crate comp_premult) and copy (crate copy_slot52 over the
 //! plane service). Expected values are computed here with independent expressions (dyadic values, so every operation is exact), not by calling the crates.
 use fx_exec::kernels::run_any;
 use fx_exec::kernels2::Out;

@@ -23,7 +23,7 @@ pub struct Corpus {
     pub defun_idx: HashMap<String, usize>,
     pub failures: Vec<Failure>,
     pub layout_rows: usize,
-    /// LYM1: the layout_effect rows (va, text), kept for the registered-program merge (layoutmerge.rs)
+    /// the layout_effect rows (va, text), kept for the registered-program merge (layoutmerge.rs)
     pub layout_texts: Vec<(String, String)>,
     /// the native layout rows (programs_native), as the layout reader's token tree
     pub layout_sx: Vec<Vec<crate::layoutmerge::Sx>>,

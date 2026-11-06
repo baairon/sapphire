@@ -1,4 +1,4 @@
-//! DRW5 T2 compare: the native caller port + set_aspect against the emulated original (t2/emu_caller.tsv, cases t2/cases.tsv).
+//! T2 compare: the native caller port + set_aspect against the emulated original (t2/emu_caller.tsv, cases t2/cases.tsv).
 use fx_exec::aspect::*;
 use std::fs;
 

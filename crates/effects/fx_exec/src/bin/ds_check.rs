@@ -1,4 +1,4 @@
-//! DS1 R-PARITY judge: reads case files written by tools/mkcases.py (original kernel input and output captured from the emulator) and
+//! R-PARITY judge: reads case files written by tools/mkcases.py (original kernel input and output captured from the emulator) and
 //! compares the Rust port bit for bit. usage: ds_check CASE_DIR [mutant]
 //! case file: u32 kind (0 down, 1 up), W, H, w2, h2, dst_phase, nin, nexp, then f32 in[nin], f32 exp[nexp]
 //! down: in = big (W x H), exp = small (w2 x h2). up: in = small, exp = big (W x H), compared on rows < min(H, 2*h2 - 1) (the caller's row copy is separate).

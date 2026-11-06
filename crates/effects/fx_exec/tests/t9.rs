@@ -155,7 +155,7 @@ fn warp_rel_by_hand_zero_and_one_pixel_shifts() {
             assert_eq!(dy.planes[0][y * 8 + x], src.planes[0][sy * 8 + x], "dy at {},{}", x, y);
         }
     }
-    // INT3 step 9b/9c: the footprint path (argument 3 nonzero with an image) now takes c1/c2 from the WPG2 slot 33 crate (OPERAND-MAP-INFERRED A9; wiring evidence only):
+    // step 9b/9c: the footprint path (argument 3 nonzero with an image) now takes c1/c2 from the slot 33 crate (OPERAND-MAP-INFERRED A9; wiring evidence only):
     // the old assertion (typed Unsupported, "NOT REBUILT") described the state this step replaces, so the call must now complete
     let coords = Image { n: 16, planes: vec![vec![0.0; 16], vec![0.0; 16]] };
     let e = run_any("warp_rel", 1, &[Arg::Mip(&mip), Arg::Img(&coords), cst(&[2.0, 2.0]), cst(&[1.0])], 16, (8, 2), &kp());
@@ -319,7 +319,7 @@ fn blur_sigma_zero_copy_and_the_edge_parameter_is_sensitive() {
     let mut k0 = kp();
     k0.blur_edge = 0;
     let z = img(run_any("blur", 1, &args, w * h, (w, h), &k0).unwrap());
-    assert_ne!(bits(&m), bits(&z), "NV9-A6: edge mode zero vs mirror changes the border");
+    assert_ne!(bits(&m), bits(&z), "edge mode zero vs mirror changes the border");
     assert!(m.planes[0].iter().all(|x| x.is_finite()));
 }
 
@@ -502,7 +502,7 @@ fn milestone_status_matrix_nv9() {
                     if mask_const {
                         b.const_inputs.insert("Mask".into(), vec![1.0]);
                     }
-                    let tag = if mask_const { "Mask=const 1 (NV3-A5)" } else { "Mask=image" };
+                    let tag = if mask_const { "Mask=const 1" } else { "Mask=image" };
                     let cp = match compile_for(&g, &b) {
                         Ok(c) => c,
                         Err(e) => {

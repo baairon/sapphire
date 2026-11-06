@@ -1,4 +1,4 @@
-//! add_rgb (BLW1): native port of slot 53 of class add_rgb (vtable), (800 B incl. 14 B padding,
+//! add_rgb: native port of slot 53 of class add_rgb (vtable), (800 B incl. 14 B padding,
 //! about 205 instructions), plain legacy SSE (movss/addss), no dispatcher, no feature-word test, no VEX, no FMA, no x87, no
 //! rip-relative data read (MEASURED, neutral_1.asm). Listing addresses; data VA = offset (unused here, no data reads).
 //!
@@ -51,7 +51,7 @@ pub struct PadCall {
 pub fn assumptions() -> Vec<(&'static str, &'static str)> {
     vec![
         ("ADD-A1", " (host plane wrapper: fills or copies one extra channel plane) is NOT ported: the port records its argument tuple (mode, idx) and leaves that plane untouched; the oracle hooks it with record_args (no write). The executor runs the finished plane_service crate for it (as for scale_rgb)"),
-        ("ADD-A2", "the vcall [vtable] (channel count) is an explicit parameter `nch`; n_in, n_out must be 1..=4 and plane arrays hold 4 planes (shipped contract, W205 c); n >= 1 is modelled only under the test feature wide_counts (BLE1 FM2-lens probes); other values are outside the original (it indexes by min(c, n-1) and reads null pointer slots)"),
+        ("ADD-A2", "the vcall [vtable] (channel count) is an explicit parameter `nch`; n_in, n_out must be 1..=4 and plane arrays hold 4 planes (shipped contract); n >= 1 is modelled only under the test feature wide_counts (FM2-lens probes); other values are outside the original (it indexes by min(c, n-1) and reads null pointer slots)"),
         ("ADD-A3", "the plane structs [this], [this] are modelled as Option<Vec<plane>>; a missing struct or slot is a null pointer and faults only when a loop with n > 0 dereferences it, like the original"),
         ("ADD-A4", "NaN payloads are compared as a class (x86 addss operand-order payload rules are not modelled); non-NaN results are bit exact"),
         ("ADD-A5", "class identity: is slot 53 of add_rgb by vtable pair (MEASURED, class_vtable_pairs.tsv); the meaning 'add an offset to the colour channels' is INFERRED from the name and the body"),
@@ -87,9 +87,9 @@ fn put(p: &mut [f32], i: usize, v: f32, what: &'static str) -> Result<(), Fault>
 }
 
 fn contract(o: &Obj, out: &[Vec<f32>]) -> Result<(), Fault> {
-    // BLE1 (FM2 lens): the listing tests n_in and n_out only with signed compares against 2 and 4 and indexes by min(c, n-1), so every
+    // (lens): the listing tests n_in and n_out only with signed compares against 2 and 4 and indexes by min(c, n-1), so every
     // n >= 1 is well defined as long as the channel loop stays below 4; only n < 1 (index -1) and fewer than 4 output planes are refused.
-    // / BLE2-H1 (INT5): the shipped contract is 1..=4; the n >= 1 relaxation (BLE1's FM2-lens probes) is the test-only feature `wide_counts`.
+    // / the shipped contract is 1..=4; the n >= 1 relaxation (FM2-lens probes) is the test-only feature `wide_counts`.
     let wide = cfg!(feature = "wide_counts");
     if (wide && (o.n_in < 1 || o.n_out < 1)) || (!wide && (!(1..=4).contains(&o.n_in) || !(1..=4).contains(&o.n_out))) || out.len() < 4 {
         return Err(Fault::Contract("n_in/n_out outside the contract (1..=4; n >= 1 under feature wide_counts) or fewer than 4 output planes"));
@@ -245,7 +245,7 @@ mod tests {
         assert!(matches!(add_rgb(&obj(3, -2, false, false), 5, 3, &mut outp()), Err(Fault::Contract(_))));
     }
 
-    // INT14: the shipped-contract refusal holds only without the test feature wide_counts (which models n >= 1)
+    // the shipped-contract refusal holds only without the test feature wide_counts (which models n >= 1)
     #[cfg(not(feature = "wide_counts"))]
     #[test]
     fn counts_five_and_six_are_outside_the_shipped_contract() {

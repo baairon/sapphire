@@ -1,5 +1,5 @@
-//! INT29 step TW: FRAME-INDEX-REQUIRED at compile on the verified render path, and the get_frame request keyed by (frame, stored)
-//! through the executor on Time_Warp_RGB_Autogen at F = 2.5, step 2 (TWS1 F25's requests: frames 3, 2, 1, arguments 7, 5, 3).
+//! FRAME-INDEX-REQUIRED at compile on the verified render path, and the get_frame request keyed by (frame, stored)
+//! through the executor on Time_Warp_RGB_Autogen at F = 2.5, step 2 (F25's requests: frames 3, 2, 1, arguments 7, 5, 3).
 use fx_exec::exec::{compile_for, execute_compiled, Binding, HostFrames, Inputs};
 use fx_exec::twframe::TwRoute;
 use fx_exec::Image;

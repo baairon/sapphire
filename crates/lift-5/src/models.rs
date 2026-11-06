@@ -196,7 +196,7 @@ pub fn load_models(path: &Path) -> Vec<(bool, u64, Kind)> {
 
 /// Call models beyond the per target ones (scripts/pinpatch.py install_models is the original side):
 /// `indret v..` every call to a world address returns list[mix(rdx, 0x4000) % len]; `outval SITE v..` after the call at SITE the stack
-/// address arguments receive list[mix(rdx, 0x3000 + k) % len]; `stackpin OFF KIND X` initial stack words at RSP0 + OFF.
+/// address arguments receive list[mix(rdx, 0x3000 + k) % len]; `stackpin OFF KIND X` initial stack words at + OFF.
 #[derive(Debug, Clone, Default)]
 pub struct Cm {
     pub indret: Vec<u64>,

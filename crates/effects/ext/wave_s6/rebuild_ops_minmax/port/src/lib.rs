@@ -1,4 +1,4 @@
-//! ops_minmax (OP2): native port of the operator classes `max` (vtable, slot 53, AVX2 body), `min` (
+//! ops_minmax: native port of the operator classes `max` (vtable, slot 53, AVX2 body), `min` (
 //! ), `abs` and `negate` . Listing offsets, VA = offset.
 //! std only, no unsafe, explicit parameters (no Default), S3-style `render` per class module. See README.md and SPEC.md.
 pub mod abs;

@@ -1,4 +1,4 @@
-//! DS3: the tail census. Writes DS_TAIL_CENSUS_RAW.tsv (path in env DS3_CENSUS_OUT) for every program at blur_res 1 and 2, do_postdiv true and false.
+//! the tail census. Writes DS_TAIL_CENSUS_RAW.tsv (path in env DS3_CENSUS_OUT) for every program at blur_res 1 and 2, do_postdiv true and false.
 mod t_ds3_common;
 use t_ds3_common::*;
 use fx_exec::exec::compile_for;

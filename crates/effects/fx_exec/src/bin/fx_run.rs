@@ -19,7 +19,7 @@ fn main() {
 }
 
 /// The registered default of an unbound normalize_scale parameter as record lanes: the native range definition's default text (one value per
-/// lane), else the NS row's single text default, each through `unbound_default_record` (INT16-A5 rule) at the unit width.
+/// lane), else the NS row's single text default, each through `unbound_default_record`  at the unit width.
 fn ns_registered_default(prog: &str, name: &str, uw: f32) -> Option<Vec<f32>> {
     let ns = fx_eval::units::ns_of(prog, name)?;
     let texts: Vec<f32> = match effects_rtdata::range_defs().find(|r| r.program == prog && r.parameter == name) {
@@ -118,8 +118,8 @@ fn run(a0: &[String]) -> i32 {
         eprintln!("usage: fx_run [<programs.tsv> | -] <program> --size WxH --out PREFIX [options], see the source header");
         return 2;
     }
-    // INT17 step 5: STYLE-SELECT. --effect-answer N --effect-count K declare the host popup "Effect" answer and
-    // the program count [owner]; the selected program must be the one run, else STYLE-SELECT-MISMATCH. Absent: check-only (INT16-A3).
+    // STYLE-SELECT. --effect-answer N --effect-count K declare the host popup "Effect" answer and
+    // the program count [owner]; the selected program must be the one run, else STYLE-SELECT-MISMATCH. Absent: check-only.
     let (a_style, style_label) = match style_select_args(a0) {
         Ok(x) => x,
         Err(e) => {
@@ -133,7 +133,7 @@ fn run(a0: &[String]) -> i32 {
     let (mut w, mut h) = (0usize, 0usize);
     let mut out = String::new();
     let mut b = Binding::defaults();
-    // INT6: no harness default Mask = 1; the bound-input mask below decides, a clear bit takes the program-text default.
+    // no harness default Mask = 1; the bound-input mask below decides, a clear bit takes the program-text default.
     let mut bound_mask: Option<u32> = None;
     let mut mask_bad = false;
     let mut bind_supplied = false;
@@ -144,20 +144,20 @@ fn run(a0: &[String]) -> i32 {
     let (mut prev, mut xy, mut synth): (Option<String>, Option<String>, Option<u64>) = (None, None, None);
     let rest: Vec<&String> = a[3..].iter().collect();
     let mut round_old = false;
-    // INT5: DIF1 host count and frame of Diffuse's seed [ctx] = [ctx] * cvttss2si32([ctx]); DIFM1 source bitmask; CELL-GT1 band cell and margin
+    // host count and frame of Diffuse's seed [ctx] = [ctx] * cvttss2si32([ctx]) source bitmask; CELL-GT1 band cell and margin
     let mut host_count: Option<i32> = None;
     let mut host_frame: Option<f32> = None;
-    // INT29 step TW: the request inputs of the get_frame route (--tw-route) and the host frames keyed by request (--frame-req)
+    // the request inputs of the get_frame route (--tw-route) and the host frames keyed by request (--frame-req)
     let mut tw_route_s: Option<String> = None;
     let mut frame_reqs: Vec<(String, String)> = Vec::new();
     // step FH: host frames on the 'ae32' route as the harness's ae32 words, converted by the head and class of their input
     let mut frame_words: Vec<(String, String)> = Vec::new();
     let (mut cell, mut margin): (usize, usize) = (1, 0);
-    // INT1 CONVERT wiring: None = CONVERT-STANDIN (planes go straight in and out, the NV-9 route); Some(mode byte) = native convert pair on host memory
+    // CONVERT wiring: None = CONVERT-STANDIN (planes go straight in and out, the NV-9 route); Some(mode byte) = native convert pair on host memory
     let mut convert: Option<i8> = std::env::var("INT1_CONVERT").ok().and_then(|v| v.parse().ok());
     let mut seed_given = false;
     let mut ds_phase_opt: Option<u32> = None;
-    // INT11: the 'ae32' interface (format 14 in, code 14 out). Every input is required in this mode; nothing has a default.
+    // the 'ae32' interface (format 14 in, code 14 out). Every input is required in this mode; nothing has a default.
     let mut ae: Ae32Args = Ae32Args::default();
     let mut i = 0;
     while i < rest.len() {
@@ -180,13 +180,13 @@ fn run(a0: &[String]) -> i32 {
                 }
                 i += 1;
             }
-            "--no-layout-merge" => {} // LYM1: A/B gate only, read again below
+            "--no-layout-merge" => {} // A/B gate only, read again below
             // opt-in: an unbound normalize_scale parameter takes its registered default from the native definitions instead of the PARAM-UNITS refusal
             "--ns-default-unbound" => ae.ns_default_unbound = true,
             "--hc" => b.host_curves_unkeyed = true,
-            "--hc-zero-legacy" => b.hc_zero_legacy = true, // INT8 HC-ZERO-LEGACY (named state A option)
+            "--hc-zero-legacy" => b.hc_zero_legacy = true, // HC-ZERO-LEGACY (named state A option)
             "--hc-keyed" => {
-                // HCK1: keyed host curve answers, TSV rows: curve name, time f32 bits (hex), lanes (hex words, comma separated)
+                // keyed host curve answers, TSV rows: curve name, time f32 bits (hex), lanes (hex words, comma separated)
                 let mut m: std::collections::BTreeMap<(String, u32), Vec<f32>> = Default::default();
                 for l in std::fs::read_to_string(&val).unwrap_or_default().lines().filter(|l| !l.is_empty() && !l.starts_with("curve\t")) {
                     let f: Vec<&str> = l.split('\t').collect();
@@ -225,20 +225,20 @@ fn run(a0: &[String]) -> i32 {
                 i += 1;
             }
             "--src-chan" => {
-                // SHF1: HOST-CONTEXT-MINIMAL: Source bound with N channels (3 for no_alpha_only programs: Sharpen_Fast, Sharpen_Best_Quality, Z_Glow; the original rejects 4)
+                // HOST-CONTEXT-MINIMAL: Source bound with N channels (3 for no_alpha_only programs: Sharpen_Fast, Sharpen_Best_Quality, Z_Glow; the original rejects 4)
                 b.input_elnum.insert("Source".to_string(), val.parse().unwrap_or(4));
                 b.input_elnum.insert("Foreground".to_string(), val.parse().unwrap_or(4));
                 i += 1;
             }
             "--const-in" => {
-                // DSW6: bind an input to a constant, Name=v (an unbound input with a numeric default, e.g. Drop_Shadow Background 0)
+                // bind an input to a constant, Name=v (an unbound input with a numeric default, e.g. Drop_Shadow Background 0)
                 if let Some((n, v)) = val.split_once('=') {
                     b.const_inputs.insert(n.into(), v.split(',').map(|x| x.parse::<f32>().unwrap_or(0.0)).collect());
                 }
                 i += 1;
             }
             "--bound-mask" => {
-                // INT6 rule 1: the ONE bound-input mask (hex), required, bit k = declared input k
+                // rule 1: the ONE bound-input mask (hex), required, bit k = declared input k
                 match u32::from_str_radix(val.trim_start_matches("0x"), 16) {
                     Ok(m) if bound_mask.is_none() || bound_mask == Some(m) => bound_mask = Some(m),
                     _ => mask_bad = true,
@@ -246,17 +246,17 @@ fn run(a0: &[String]) -> i32 {
                 i += 1;
             }
             "--host-count" => {
-                // DIF1: [ctx]. LABELLED STATE A TEST INTERFACE: the verified render path derives it as W x H; this option exists only to run state A (count W)
+                // [ctx]. LABELLED STATE A TEST INTERFACE: the verified render path derives it as W x H; this option exists only to run state A (count W)
                 host_count = val.parse().ok();
                 i += 1;
             }
             "--host-frame" => {
-                // DIF1: [ctx] as a float, truncated with cvttss2si32
+                // [ctx] as a float, truncated with cvttss2si32
                 host_frame = val.parse().ok();
                 i += 1;
             }
             "--tw-route" => {
-                // INT29 step TW: dur_frames,limit_cell,local_time_step,host_id,f4,r8,r9 from the run's record (no field has a default)
+                // dur_frames,limit_cell,local_time_step,host_id,f4,r8,r9 from the run's record (no field has a default)
                 tw_route_s = Some(val);
                 i += 1;
             }
@@ -267,7 +267,7 @@ fn run(a0: &[String]) -> i32 {
                 i += 1;
             }
             "--frame-req" => {
-                // INT29 step TW: FRAME,STORED=path, the host frame answering the request (frame after the limit, stored time)
+                // FRAME,STORED=path, the host frame answering the request (frame after the limit, stored time)
                 if let Some((n, p)) = val.split_once('=') {
                     frame_reqs.push((n.into(), p.into()));
                 }
@@ -292,8 +292,8 @@ fn run(a0: &[String]) -> i32 {
             "--ranges-off" => b.ranges_off = true,
             "--mask-image" => mask_image = true, // legacy (only with --bind-supplied): the explicit Mask image is bound although its mask bit is clear
             "--ctx-time" | "--ctx-word2" | fx_exec::judge_keys::OPT_CTX_OWNER_MODE | "--ctx-has-data" => i += 1,
-            "--xy-base-list" | "--xy-render" => i += 1, // XWP2: parsed beside XY-HEAD-MODE // parsed by CompileContext::from_args
-            "--word2-cert" | "--cert-job" | "--cert-sidecar" | "--sidecar-record" => i += 1, // INT13, INT15: parsed by word2_certified
+            "--xy-base-list" | "--xy-render" => i += 1, // parsed beside XY-HEAD-MODE // parsed by CompileContext::from_args
+            "--word2-cert" | "--cert-job" | "--cert-sidecar" | "--sidecar-record" => i += 1, // parsed by word2_certified
             "--ranges" => {
                 // REAL default; REC-HARNESS is the named state A option
                 match fx_eval::ranges::range_set_from_args(&a) {
@@ -379,7 +379,7 @@ fn run(a0: &[String]) -> i32 {
                 i += 1;
             }
             "--blur-aspect-ctx" => {
-                // INT10 (BCX1 PATCH 1): the recorded lw ctx cells FLAG (decimal) and BITS (hex f32 bits): Some(f32) iff FLAG != 0
+                //: the recorded lw ctx cells FLAG (decimal) and BITS (hex f32 bits): Some(f32) iff FLAG != 0
                 let p: Vec<&str> = val.split(',').collect();
                 let fl: Option<i64> = p.first().and_then(|s| s.trim().parse().ok());
                 let bt: Option<u32> = p.get(1).and_then(|s| u32::from_str_radix(s.trim().trim_start_matches("0x"), 16).ok());
@@ -393,7 +393,7 @@ fn run(a0: &[String]) -> i32 {
                 i += 1;
             }
             "--do-postdiv" => {
-                // INT10 (BCX1 PATCH 2): the compiler's __do_postdiv__ cell from the SMART context (0 or 1); absent = the state A derivation
+                //: the compiler's __do_postdiv__ cell from the SMART context (0 or 1); absent = the state A derivation
                 b.do_postdiv = match val.as_str() {
                     "0" => Some(false),
                     "1" => Some(true),
@@ -429,7 +429,7 @@ fn run(a0: &[String]) -> i32 {
         return 1;
     }
     if margin > 0 {
-        eprintln!("convert: margin count {} above 0 is outside the claim (W211 e)", margin);
+        eprintln!("convert: margin count {} above 0 is outside the claim", margin);
         return 1;
     }
     if ds_phase_opt.is_some() && std::env::var("DS2_PHASE").is_ok() {
@@ -443,21 +443,21 @@ fn run(a0: &[String]) -> i32 {
     }
     if !seed_given && w > 0 {
         if let Some(fr) = host_frame {
-            // DIF1:: [ctx] = [ctx] * cvttss2si32([ctx]) (32 bit imul wrap, ctx = 0); static2 adds it to its seed.
+            //: [ctx] = [ctx] * cvttss2si32([ctx]) (32 bit imul wrap, ctx = 0); static2 adds it to its seed.
             // The count is W x H unless the state A test option --host-count gives it.
             let cnt = host_count.unwrap_or((w * h) as i32);
             b.kp.static2_seed_a = cnt.wrapping_mul(fx_common::x86::cvttss2si32(fr));
         } else if host_count.is_some() {
-            eprintln!("--host-frame is required with --host-count (no default frame, W267 d)");
+            eprintln!("--host-frame is required with --host-count (no default frame)");
             return 2;
         } else if legacy_seed_w {
-            // LEGACY-SEED-W: the NV10-P3 seed [ctx] = W of state A suites. A named option, never a default, never in a counted run.
+            // LEGACY-SEED-W: the seed [ctx] = W of state A suites. A named option, never a default, never in a counted run.
             b.kp.static2_seed_a = w as i32;
         } else {
             seed_missing = true; // an error only if the compiled plan runs static2 (checked after the compile)
         }
     }
-    // INT13: --ctx-word2 1 is accepted; the native compiles it by its word 2 = 0 path only for a (program, size,
+    // --ctx-word2 1 is accepted; the native compiles it by its word 2 = 0 path only for a (program, size,
     // binding) row of the certificate file (--word2-cert FILE), else STACK-WORD2-NOT-IMPLEMENTED.
     let a_w2: Vec<String>;
     let mut w2_label: Option<String> = None;
@@ -481,7 +481,7 @@ fn run(a0: &[String]) -> i32 {
         }
     }
     if mask_bad || bound_mask.is_none() {
-        eprintln!("the bound-input mask is required and must be one hex value: --bound-mask HEX (or --mask-byte N, STATE-A-MASK); missing, unparsable or conflicting masks are an error (Batch 36 rule 1)");
+        eprintln!("the bound-input mask is required and must be one hex value: --bound-mask HEX (or --mask-byte N, STATE-A-MASK); missing, unparsable or conflicting masks are an error");
         return 2;
     }
     let bmask = bound_mask.unwrap();
@@ -491,8 +491,8 @@ fn run(a0: &[String]) -> i32 {
         return 2;
     }
     let n = w * h;
-    // LYM1 (LAY1): the registered program as the original's parser sees it: the layout_effect row ALONE (its `:extra` parameters
-    // join the program's parameter array). --no-layout-merge reproduces the def_effect-only program of INT16 (A/B gate only).
+    // the registered program as the original's parser sees it: the layout_effect row ALONE (its `:extra` parameters
+    // join the program's parameter array). --no-layout-merge reproduces the def_effect-only program of (A/B gate only).
     let layout_merge = !a.iter().any(|x| x == "--no-layout-merge");
     let lay_info: Option<fx_eval::layoutmerge::LayoutInfo> = if layout_merge {
         match lym_resolve(&path, &prog) {
@@ -505,8 +505,8 @@ fn run(a0: &[String]) -> i32 {
     } else {
         None
     };
-    // INT26 step OP: the host answer form. --cset Opacity=V (the checkout display name, V the host's checkout integer)
-    // gives the loop value by OPC1's conversion; a given --owner-opacity is then a check (OWNER-OPACITY-LOOP-MISMATCH).
+    // the host answer form. --cset Opacity=V (the checkout display name, V the host's checkout integer)
+    // gives the loop value by conversion; a given --owner-opacity is then a check (OWNER-OPACITY-LOOP-MISMATCH).
     // step L2b: each --cset display name maps to opacity, input_opacity or output_opacity by the program's registered
     // display names; any other name is not a host answer on this route
     for (n, v) in ae.csets.clone() {
@@ -526,7 +526,7 @@ fn run(a0: &[String]) -> i32 {
                 ae.host_opacity_param = Some(p);
             }
             None => {
-                eprintln!("CSET-NAME-NOT-ON-ROUTE: --cset {}: not the display name of {}'s opacity, input_opacity or output_opacity popup (STYLE_PARAM_INDEX.tsv, W547, step L2b)", n, prog);
+                eprintln!("CSET-NAME-NOT-ON-ROUTE: --cset {}: not the display name of {}'s opacity, input_opacity or output_opacity popup (STYLE_PARAM_INDEX.tsv)", n, prog);
                 return 2;
             }
         }
@@ -542,7 +542,7 @@ fn run(a0: &[String]) -> i32 {
         match ae.opacity {
             Some(Some(ob)) if ob != conv => {
                 eprintln!(
-                    "OWNER-OPACITY-LOOP-MISMATCH (host answer: checkout integer {}: the conversion gives opacity {}, --owner-opacity gives {}; OWN1, W531)",
+                    "OWNER-OPACITY-LOOP-MISMATCH (host answer: checkout integer {}: the conversion gives opacity {}, --owner-opacity gives {})",
                     v,
                     f32::from_bits(conv),
                     f32::from_bits(ob)
@@ -550,14 +550,14 @@ fn run(a0: &[String]) -> i32 {
                 return 2;
             }
             Some(None) => {
-                eprintln!("OWNER-OPACITY-LOOP-MISMATCH (host answer: checkout integer {} given with --owner-opacity none; OWN1, W531)", v);
+                eprintln!("OWNER-OPACITY-LOOP-MISMATCH (host answer: checkout integer {} given with --owner-opacity none)", v);
                 return 2;
             }
             _ => ae.opacity = Some(Some(conv)),
         }
     }
     if let (Some(li), true) = (lay_info.as_ref(), ae.active()) {
-        // LYM3 OWNER-OPACITY-DERIVED, corrected by INT31 step L2: the owner arm's opacity, input_opacity and output_opacity are
+        // OWNER-OPACITY-DERIVED, corrected by the owner arm's opacity, input_opacity and output_opacity are
         // f32(max(v - 1, 0)) for v the one-based popup checkout integer: the bound answer (host-answer form), or for an unbound row the host's registered
         // default from data/STYLE_PARAM_INDEX.tsv (never the layout text default). --owner-opacity stays as a cross-check that must equal the derived value.
         let setv = |n: &str| b.overrides.get(n).and_then(|v| v.first().copied());
@@ -576,7 +576,7 @@ fn run(a0: &[String]) -> i32 {
                     in_op_used = true;
                 }
                 if let (Some(hv), Some(Some(cb)), true) = (ae.host_opacity, ae.opacity, ae.host_opacity_param.as_deref() == Some(ex.name.as_str())) {
-                    // INT28 step L2 with step OP: under the host answer form (--cset Opacity=V) the record value is OPC1's conversion of the checkout
+                    // with step OP: under the host answer form (--cset Opacity=V) the record value is conversion of the checkout
                     // integer (max(v - 1, 0), set above); a --set of the same parameter must equal it (the earlier OPACITY-SET-MISMATCH text kept)
                     if let Some(sv) = setv(&ex.name) {
                         if sv.to_bits() != cb {
@@ -601,7 +601,7 @@ fn run(a0: &[String]) -> i32 {
                     let db = owner_loop_value(v).to_bits();
                     if let Some(sv) = setv(&ex.name) {
                         if sv.to_bits() != db {
-                            eprintln!("OPACITY-SET-MISMATCH: --set {}={} differs from the registered default's loop value {} (STYLE_PARAM_INDEX.tsv, W595)", ex.name, sv, f32::from_bits(db));
+                            eprintln!("OPACITY-SET-MISMATCH: --set {}={} differs from the registered default's loop value {} (STYLE_PARAM_INDEX.tsv)", ex.name, sv, f32::from_bits(db));
                             return 2;
                         }
                     }
@@ -628,17 +628,17 @@ fn run(a0: &[String]) -> i32 {
             }
         }
         if let (Some(hv), false) = (ae.host_out_opacity, out_op_used) {
-            eprintln!("CSET-NAME-NOT-ON-ROUTE: --cset Output Opacity={}: {} has no output_opacity parameter (step L2b, W616)", hv, prog);
+            eprintln!("CSET-NAME-NOT-ON-ROUTE: --cset Output Opacity={}: {} has no output_opacity parameter", hv, prog);
             return 2;
         }
         if let (Some(p), false) = (ae.host_opacity_param.as_ref(), in_op_used) {
-            eprintln!("CSET-NAME-NOT-ON-ROUTE: --cset of {}: {} has no {} parameter in its layout (step L2b, W616)", p, prog, p);
+            eprintln!("CSET-NAME-NOT-ON-ROUTE: --cset of {}: {} has no {} parameter in its layout", p, prog, p);
             return 2;
         }
         match (ae.opacity, derived_op) {
             (Some(Some(ob)), Some(db)) if ob != db => {
                 eprintln!(
-                    "OWNER-OPACITY-MISMATCH: --owner-opacity {} differs from the merged record's {} = {} (the bound value or the layout default); the option is only a cross-check (LYM3, W449 (b))",
+                    "OWNER-OPACITY-MISMATCH: --owner-opacity {} differs from the merged record's {} = {} (the bound value or the layout default); the option is only a cross-check",
                     f32::from_bits(ob),
                     derived_name,
                     f32::from_bits(db)
@@ -655,7 +655,7 @@ fn run(a0: &[String]) -> i32 {
             _ => {}
         }
     }
-    // INT11: the 'ae32' interface. Validated here: every input present, no option of another route, no environment switch.
+    // the 'ae32' interface. Validated here: every input present, no option of another route, no environment switch.
     let mut ae32: Option<Ae32Ready> = if ae.active() {
         let given: Vec<(&str, &str)> = (0..rest.len())
             .filter(|&j| rest[j].starts_with("--"))
@@ -681,12 +681,12 @@ fn run(a0: &[String]) -> i32 {
     let g = match c.find_effect(&prog, None).map(|ei| build_effect(&c, ei)) {
         Some(Ok(mut g)) => {
             if let Some(li) = lay_info.as_ref() {
-                // LYM2: the layout-row parse as genotype-parser.lua builds it (merge_layout): layout order, extras at their position, `:hardcode` parameters
+                // the layout-row parse as genotype-parser.lua builds it (merge_layout): layout order, extras at their position, `:hardcode` parameters
                 // removed with the constant in their value node
                 match fx_eval::layoutmerge::merge_layout(&mut g, li) {
                     Ok(rep) => {
-                        if std::env::var_os("LYM2_REPORT").is_some() { eprintln!("LAYOUT-ROW-MERGED ({}: params in layout order {}; :extra {:?}; :hardcode {:?}; :modify {}; LYM2)", prog, rep.order.len(), rep.extras, rep.hardcoded, rep.modify_count); }
-                        // INT21 step L: the vector:hardcode label, on the same report switch (the survey reads the first output line)
+                        if std::env::var_os("LYM2_REPORT").is_some() { eprintln!("LAYOUT-ROW-MERGED ({}: params in layout order {}; :extra {:?}; :hardcode {:?}; :modify {})", prog, rep.order.len(), rep.extras, rep.hardcoded, rep.modify_count); }
+                        // the vector:hardcode label, on the same report switch (the survey reads the first output line)
                         if std::env::var_os("LYM2_REPORT").is_some() && !rep.hardcoded_vec.is_empty() { eprintln!("label {} ({}: {:?})", fx_eval::layoutmerge::LAYOUT_HARDCODE_VECTOR_LABEL, prog, rep.hardcoded_vec); }
                     }
                     Err(e) => {
@@ -702,9 +702,9 @@ fn run(a0: &[String]) -> i32 {
             return 1;
         }
     };
-    // INT19 S1: XY-HEAD-MODE derived from the plan's xy shape (kernels2::xy_head_mode_of; PerRow for Warp_Perspective plans)
+    // S1: XY-HEAD-MODE derived from the plan's xy shape (kernels2::xy_head_mode_of; PerRow for Warp_Perspective plans)
     b.kp.xy_head_mode = fx_exec::kernels2::xy_head_mode_of(&g);
-    // XWP2: --xy-base-list B[r1],B[r1],... one entry per default-xy writer of the placement model in execution order (base phase in bytes,
+    // --xy-base-list B[r1],B[r1],... one entry per default-xy writer of the placement model in execution order (base phase in bytes,
     // 0 to 31; r1 = a preserve writer's render 1 image reused), --xy-render 1|2 (default 1). The run's own record gives the bases (XY-BASE-FED-AT-REPREDICT).
     let xy_list_text: Option<String> = { let v: Vec<String> = std::env::args().collect(); v.iter().position(|x| x == "--xy-base-list").and_then(|p| v.get(p + 1).cloned()) };
     let mut xy_list_lab: Option<String> = None;
@@ -717,19 +717,19 @@ fn run(a0: &[String]) -> i32 {
             match n.parse::<i32>() {
                 Ok(b) if (0..=31).contains(&b) => list.push((b, r1)),
                 _ => {
-                    eprintln!("XY-BASE-LIST-BAD ({}: entry {:?}; each entry is 0 to 31, optionally followed by r1; W746)", prog, e);
+                    eprintln!("XY-BASE-LIST-BAD ({}: entry {:?}; each entry is 0 to 31, optionally followed by r1)", prog, e);
                     return 2;
                 }
             }
         }
         if list.is_empty() || !(1..=2).contains(&render) {
-            eprintln!("XY-BASE-LIST-BAD ({}: empty list or render {} not 1 or 2; W746)", prog, render);
+            eprintln!("XY-BASE-LIST-BAD ({}: empty list or render {} not 1 or 2)", prog, render);
             return 2;
         }
         if ae.xy_base.is_none() {
             ae.xy_base = Some(list[0].0);
         }
-        xy_list_lab = Some(format!("label XY-BASE-FED-AT-REPREDICT ({}: --xy-base-list {} render {}: one entry per default-xy writer of the placement model, head mode from the placement (plane PerRow, row buffer OneHead), preserve writers reused from render 1; XWP2, W746)", prog, t, render));
+        xy_list_lab = Some(format!("label XY-BASE-FED-AT-REPREDICT ({}: --xy-base-list {} render {}: one entry per default-xy writer of the placement model, head mode from the placement (plane PerRow, row buffer OneHead), preserve writers reused from render 1)", prog, t, render));
         *fx_exec::exec::XY_LIST.lock().unwrap() = Some((list, render));
     }
     // WPH: the per-run plane base phases and perspective_alpha host cells are options on the 'ae32' route
@@ -738,48 +738,48 @@ fn run(a0: &[String]) -> i32 {
         if let Some(n) = ae.palpha_base { b.kp.palpha_base = n; }
         if let Some(n) = ae.xy_base { b.kp.xy_base = n; }
         b.kp.palpha_cells = ae.palpha_cells;
-        // WPH2 v2: every plan that reads the default xy (the xy special node, or perspective) needs --xy-base; no 'ae32' line reaches xy_grid
+        // v2: every plan that reads the default xy (the xy special node, or perspective) needs --xy-base; no 'ae32' line reaches xy_grid
         if ae.xy_base.is_none() && g.nodes.iter().any(|n| (n.kind == fx_eval::build::NodeKind::Special && n.name == "xy") || (n.kind == fx_eval::build::NodeKind::Function && n.name.strip_suffix("_if_needed").unwrap_or(&n.name) == "perspective")) {
-            eprintln!("XY-BASE-UNGIVEN ({}: the plan reads the default xy; the base phase of its x writer's destination is a per-run host input (ALIGN-HOST-PER-RUN); W665, W682)", prog);
+            eprintln!("XY-BASE-UNGIVEN ({}: the plan reads the default xy; the base phase of its x writer's destination is a per-run host input (ALIGN-HOST-PER-RUN))", prog);
             return 2;
         }
         for (kern, given) in [("perspective", ae.persp_base.is_some()), ("perspective_alpha", ae.palpha_base.is_some())] {
             let reaches = g.nodes.iter().any(|n| n.kind == fx_eval::build::NodeKind::Function && n.name.strip_suffix("_if_needed").unwrap_or(&n.name) == kern);
             if reaches && !given {
-                eprintln!("PERSP-BASE-UNGIVEN ({}: the plan reaches {}; its output plane base phase is a per-run host input (ALIGN-HOST-PER-RUN); W634)", prog, kern);
+                eprintln!("PERSP-BASE-UNGIVEN ({}: the plan reaches {}; its output plane base phase is a per-run host input (ALIGN-HOST-PER-RUN))", prog, kern);
                 return 2;
             }
         }
     }
-    // INT14 (SMR10 finding): an unknown parameter name fails closed. Every --set NAME (and every --host-param NAME,
+    // an unknown parameter name fails closed. Every --set NAME (and every --host-param NAME,
     // which the 'ae32' route has already placed in the overrides) must be a parameter of the built program; a misspelt name used to give the
     // default plan with no error. Label: UNKNOWN-PARAM-NAME (applied on every route, a superset of the verified render paths).
     {
         let known: Vec<&str> = g.params.iter().map(|p| p.name.as_str()).collect();
         let bad: Vec<&String> = b.overrides.keys().filter(|n| !known.contains(&n.as_str())).collect();
         if !bad.is_empty() {
-            eprintln!("UNKNOWN-PARAM-NAME: {:?} is not a parameter of {} (its parameters: {:?}); --set and --host-param names must be record names (INT14)", bad, prog, known);
+            eprintln!("UNKNOWN-PARAM-NAME: {:?} is not a parameter of {} (its parameters: {:?}); --set and --host-param names must be record names", bad, prog, known);
             return 2;
         }
-        // INT14: MOCHA-OFF-SCOPE on the verified render path ('ae32'): mocha_project != 0 or show_mocha_mask_only != 0 is
+        // MOCHA-OFF-SCOPE on the verified render path ('ae32'): mocha_project != 0 or show_mocha_mask_only != 0 is
         // outside the claimed region (rule 1, MOCHA-OFF) and is refused by name; the text defaults of both are 0.
         if ae32.is_some() {
             for nm in ["mocha_project", "show_mocha_mask_only"] {
                 if let Some(v) = b.overrides.get(nm) {
                     if v.iter().any(|x| *x != 0.0) {
-                        eprintln!("MOCHA-OFF-SCOPE: {} = {:?} on the claim route is outside the claimed region (mocha_project != 0 or show_mocha_mask_only != 0; Batch 50 rule 2, INT14)", nm, v);
+                        eprintln!("MOCHA-OFF-SCOPE: {} = {:?} on the claim route is outside the claimed region (mocha_project != 0 or show_mocha_mask_only != 0)", nm, v);
                         return 2;
                     }
                 }
             }
         }
     }
-    // INT13 (INT12 NEXT 1 (a), (c), (e)): the owner arm's inputs derived from the program definition; the recorded
+    // the owner arm's inputs derived from the program definition; the recorded
     // --owner-arm and --owner-opacity fields are checks
     if let Some(h) = b.host_curve_values.as_mut() {
         h.ae32 = ae32.is_some(); // on the verified render path the global is HOST-APP's cell, 1
     }
-    // step TPU2: a host point parameter is a host input. On the verified render path its lanes come from the run's recorded point
+    // step a host point parameter is a host input. On the verified render path its lanes come from the run's recorded point
     // lines through the ported point conversion (hostcurve::fold, the point route); no native default and no --set.
     if ae32.is_some() {
         let mut pts: Vec<(String, Vec<f32>)> = Vec::new();
@@ -790,13 +790,13 @@ fn run(a0: &[String]) -> i32 {
                 continue;
             }
             if b.overrides.contains_key(&p.name) {
-                eprintln!("TICKMAP-POINT-SET-REFUSED ({}: {}: a host point parameter is a host input from its point lines, never --set; W708)", g.name, p.name);
+                eprintln!("TICKMAP-POINT-SET-REFUSED ({}: {}: a host point parameter is a host input from its point lines, never --set)", g.name, p.name);
                 return 2;
             }
             let h = match b.host_curve_values.as_ref() {
                 Some(h) => h,
                 None => {
-                    eprintln!("TICKMAP-POINT-HOST-INPUT-UNSOURCED ({}: {}: the host point parameter needs the run's recorded point lines in --host-curve-values; W708)", g.name, p.name);
+                    eprintln!("TICKMAP-POINT-HOST-INPUT-UNSOURCED ({}: {}: the host point parameter needs the run's recorded point lines in --host-curve-values)", g.name, p.name);
                     return 2;
                 }
             };
@@ -804,23 +804,23 @@ fn run(a0: &[String]) -> i32 {
             match fx_eval::hostcurve::fold(&g.name, &p.name, 0.0, &[0.0, 0.0], 2, h, &mut d) {
                 Some(l) => pts.push((p.name.clone(), l)),
                 None => {
-                    eprintln!("TICKMAP-POINT-HOST-INPUT-UNSOURCED ({}: {}: {}; W708)", g.name, p.name, d.join(" | "));
+                    eprintln!("TICKMAP-POINT-HOST-INPUT-UNSOURCED ({}: {}: {})", g.name, p.name, d.join(" | "));
                     return 2;
                 }
             }
         }
         for (n, l) in pts {
             if let Some(r) = ae32.as_mut() {
-                r.labels.push(format!("label POINT-PARAM-FROM-HOST ({}: {}: lanes {} from the run's point lines through the ported point route; W708 (e))", g.name, n,
+                r.labels.push(format!("label POINT-PARAM-FROM-HOST ({}: {}: lanes {} from the run's point lines through the ported point route)", g.name, n,
                     l.iter().map(|v| format!("{:08x}", v.to_bits())).collect::<Vec<_>>().join(",")));
             }
             b.overrides.insert(n, l);
         }
     }
-    // step TPU2b (CURVE-PARAM-DIRECT-READ): a parameter that is a host curve (a non-point TICKMAP_PARAM_RECORDS row of the program)
+    // step (CURVE-PARAM-DIRECT-READ): a parameter that is a host curve (a non-point TICKMAP_PARAM_RECORDS row of the program)
     // also feeds the program's direct reads of it. Its lanes are the curve's value at the current time from the host-curve input, through the
     // tick map (hostcurve::fold at t = 0: the 16.16 conversion, the unit nibble and the record's negate flag), as the original's parameter
-    // record shows it (rotate = -host Rotate, z_dist = host Z Dist; BMR1 FEED_RULES.tsv, 30 of 30 records). Never --set.
+    // record shows it (rotate = -host Rotate, z_dist = host Z Dist; FEED_RULES.tsv, 30 of 30 records). Never --set.
     if ae32.is_some() {
         if let Some(h) = b.host_curve_values.as_ref() {
             let mut cps: Vec<(String, Vec<f32>)> = Vec::new();
@@ -835,7 +835,7 @@ fn run(a0: &[String]) -> i32 {
                     continue;
                 }
                 if b.overrides.contains_key(&p.name) {
-                    eprintln!("TICKMAP-CURVE-SET-REFUSED ({}: {}: a host curve parameter's direct reads take the curve at the current time, never --set; W746)", g.name, p.name);
+                    eprintln!("TICKMAP-CURVE-SET-REFUSED ({}: {}: a host curve parameter's direct reads take the curve at the current time, never --set)", g.name, p.name);
                     return 2;
                 }
                 let n: usize = f.nlanes as usize;
@@ -843,14 +843,14 @@ fn run(a0: &[String]) -> i32 {
                 match fx_eval::hostcurve::fold(&g.name, &p.name, 0.0, &vec![0.0f32; n], n, h, &mut d) {
                     Some(l) => cps.push((p.name.clone(), l)),
                     None => {
-                        eprintln!("TICKMAP-CURVE-DIRECT-READ-UNSOURCED ({}: {}: {}; W746)", g.name, p.name, d.join(" | "));
+                        eprintln!("TICKMAP-CURVE-DIRECT-READ-UNSOURCED ({}: {}: {})", g.name, p.name, d.join(" | "));
                         return 2;
                     }
                 }
             }
             for (n, l) in cps {
                 if let Some(r) = ae32.as_mut() {
-                    r.labels.push(format!("label CURVE-PARAM-DIRECT-READ ({}: {}: lanes {} from the host curve at the current time; W746)", g.name, n,
+                    r.labels.push(format!("label CURVE-PARAM-DIRECT-READ ({}: {}: lanes {} from the host curve at the current time)", g.name, n,
                         l.iter().map(|v| format!("{:08x}", v.to_bits())).collect::<Vec<_>>().join(",")));
                 }
                 b.overrides.insert(n, l);
@@ -867,7 +867,7 @@ fn run(a0: &[String]) -> i32 {
         match owner_inputs_derived(&g, &r.arm) {
             Ok(mut ls) => {
                 if lay_info.is_some() {
-                    // LYM3: with the layout row merged the opacity values are the record's, not a recorded input
+                    // with the layout row merged the opacity values are the record's, not a recorded input
                     ls.retain(|l| !l.starts_with("label OWNER-ARM-RECORDED"));
                     let tag = std::path::Path::new(&r.out).file_name().map(|x| x.to_string_lossy().trim_end_matches(".ae32.u32").to_string()).unwrap_or_default();
                     for (nm, v, reg) in &ae.opacity_notes {
@@ -881,9 +881,9 @@ fn run(a0: &[String]) -> i32 {
                 return 2;
             }
         }
-        // INT18: THE CHECKOUT RULE ON THE ROUTE. A --host-param whose record the fetch gate
+        // THE CHECKOUT RULE ON THE ROUTE. A --host-param whose record the fetch gate
         // leaves unfetched at this run's [owner] (the bound mask) is not consumed: the record keeps its parse-time value, taken as the
-        // text default's record (fx_eval::units::unbound_default_record, INFERRED INT16-A5; 0 for every stored prediction row's unfetched parameter).
+        // text default's record (fx_eval::units::unbound_default_record, INFERRED; 0 for every stored prediction row's unfetched parameter).
         // The fetch test is fx_eval::checkout::try_refresh (owner non-NULL on the route). A decision that would rest on [owner]
         // (ba >= 0, bit clear, show_with_mocha) is refused by name: the cell is not an input of this route.
         {
@@ -892,7 +892,7 @@ fn run(a0: &[String]) -> i32 {
             ins.sort();
             let in_names: Vec<&str> = ins.iter().map(|x| x.1).collect();
             if bmask > 0xff {
-                eprintln!("CHECKOUT-MASK-WIDE: the bound mask 0x{:x} does not fit the byte [owner] the fetch gate reads (INT18)", bmask);
+                eprintln!("CHECKOUT-MASK-WIDE: the bound mask 0x{:x} does not fit the byte [owner] the fetch gate reads", bmask);
                 return 2;
             }
             for (n, _) in r.host_params.clone() {
@@ -913,7 +913,7 @@ fn run(a0: &[String]) -> i32 {
                     }
                 };
                 if !fetched && bytes.ba >= 0 && bytes.bc & 1 == 1 {
-                    eprintln!("CHECKOUT-124B-UNRECORDED: {} of {} (ba {}, presence bit clear, show_with_mocha): the fetch decision rests on bit 0x10 of [owner], which is not an input of this route (INT18 stand-in INT18-A2)", n, prog, bytes.ba);
+                    eprintln!("CHECKOUT-124B-UNRECORDED: {} of {} (ba {}, presence bit clear, show_with_mocha): the fetch decision rests on bit 0x10 of [owner], which is not an input of this route (stand-in)", n, prog, bytes.ba);
                     return 2;
                 }
                 if fetched {
@@ -922,12 +922,12 @@ fn run(a0: &[String]) -> i32 {
                 let (td, ns) = match fx_eval::units::ns_entry(&prog, &n) {
                     Some(x) => x,
                     None => {
-                        eprintln!("CHECKOUT-NOT-FETCHED-DEFAULT-UNREAD: {} of {} is not fetched and its text default is not a scalar of the normalize_scale table (INT18)", n, prog);
+                        eprintln!("CHECKOUT-NOT-FETCHED-DEFAULT-UNREAD: {} of {} is not fetched and its text default is not a scalar of the normalize_scale table", n, prog);
                         return 2;
                     }
                 };
                 if td != 0.0 {
-                    // INT20 step G (INT18-A1): the cached lane at [rec] on the unfetched arm is not recorded
+                    // the cached lane at [rec] on the unfetched arm is not recorded
                     eprintln!("CHECKOUT-NOT-FETCHED-NONZERO-DEFAULT ({}: {}): not fetched and its text default {} is not 0; refused until a record shows the lane at [rec] on the unfetched arm", prog, n, td);
                     return 2;
                 }
@@ -936,18 +936,18 @@ fn run(a0: &[String]) -> i32 {
                 let hostlbl = format!("param {} host ", n);
                 r.labels.retain(|l| !l.starts_with(&hostlbl));
                 r.labels.push(format!(
-                    "label CHECKOUT-NOT-FETCHED ({}: {}, host value ignored as by the original's fetch gate; UNT5 model; ba {} bc {} at [owner] 0x{:02x})",
+                    "label CHECKOUT-NOT-FETCHED ({}: {}, host value ignored as by the original's fetch gate model; ba {} bc {} at [owner] 0x{:02x})",
                     prog, n, bytes.ba, bytes.bc, bmask
                 ));
-                r.labels.push(format!("param {} record [\"0x{:08x}\"] PARAM-BY-RECORD (not fetched: the text default {} as the record, ns {} width {}; INFERRED INT16-A5)", n, rec.to_bits(), td, ns, r.uw));
+                r.labels.push(format!("param {} record [\"0x{:08x}\"] PARAM-BY-RECORD (not fetched: the text default {} as the record, ns {} width {}; INFERRED)", n, rec.to_bits(), td, ns, r.uw));
             }
         }
         let ae32_ready_a = b.ctx.as_ref().map(|c| c.owner_mode_byte).unwrap_or(0);
         let rec_mode = r.route.dest.as_ref().map(|d| d.mode).unwrap_or(-1);
         let bound_in: Vec<(usize, String)> = g.inputs.iter().enumerate().filter(|(k, _)| *k < 32 && (bmask >> *k) & 1 == 1).map(|(k, i)| (k, i.name.clone())).collect();
-        // DCP1 (DX2): the special node Output carries the destination's plane count on the 'ae32' route (the donor of v3_to_v4_if4 in
+        // the special node Output carries the destination's plane count on the 'ae32' route (the donor of v3_to_v4_if4 in
         // Drop_Shadow is Output: the destination has 4 planes in the record, the minimal-context default of 3 would fold the node at 3 lanes).
-        // step DX2 v2: the bound-count rule of v3_to_v4_if4 runs on this route only
+        // step v2: the bound-count rule of v3_to_v4_if4 runs on this route only
         b.v3_bound_count = true;
         if let Some(d) = r.route.dest.as_ref() {
             if !cfg!(feature = "dx2_output_default_mut") {
@@ -965,7 +965,7 @@ fn run(a0: &[String]) -> i32 {
         match mode_byte_derived(&g, &r.arm, ae32_ready_a, r.late.as_ref(), r.modein, r.host_inplace.unwrap_or(0) == 1, r.wh, rec_mode, &bound_in, r.class_cells, &r.class_record, &g3in, &mut class3_inputs) {
             Ok(ls) => {
                 r.labels.extend(ls);
-                // INT20 step G3 (RDR10 PATCH 1): a class-3 input is compiled as an input node of elnum 3
+                //: a class-3 input is compiled as an input node of elnum 3
                 for n in &class3_inputs {
                     b.input_elnum.insert(n.clone(), 3);
                 }
@@ -976,9 +976,9 @@ fn run(a0: &[String]) -> i32 {
             }
         }
     }
-    // INT6 rule 1: bit k = declared input k. Bound: the run's image (--in, or --synth), converted like Source. Clear: the program-text default (a number) as a constant input.
+    // rule 1: bit k = declared input k. Bound: the run's image (--in, or --synth), converted like Source. Clear: the program-text default (a number) as a constant input.
     let mut alias_bound: Vec<String> = Vec::new();
-    // INT31 step AL: on the 'ae32' route the alias binds the target's node (resolved against the 'ae32' sources and `ins`)
+    // on the 'ae32' route the alias binds the target's node (resolved against the 'ae32' sources and `ins`)
     let ae_alias: Vec<(String, String, String, String)> = match ae32.as_ref() {
         Some(r) => {
             let tag = std::path::Path::new(&r.out).file_name().map(|x| x.to_string_lossy().trim_end_matches(".ae32.u32").to_string()).unwrap_or_default();
@@ -1021,7 +1021,7 @@ fn run(a0: &[String]) -> i32 {
         if bind_supplied && inp.name != "Mask" {
             continue; // STATE-A-BIND-SUPPLIED keeps the legacy harness: only Mask had a text-default constant
         }
-        // ALS1 INPUT-DEFAULT-ALIAS: an unbound input whose text default `( X Y)` names another declared input Y
+        // INPUT-DEFAULT-ALIAS: an unbound input whose text default `( X Y)` names another declared input Y
         // binds Y's planes (converted like Y below). No default, or a default that is neither a number nor an input name, is unchanged.
         // Resolved through a chain of aliases (bounded by the input count); a target that is itself unbound without any image refuses by name.
         if let Some(dn) = inp.default.as_deref().filter(|_| !(cfg!(feature = "al_const_mut") && ae32.is_some())) {
@@ -1070,7 +1070,7 @@ fn run(a0: &[String]) -> i32 {
     let _ = fx_eval::compile::ifneq_arg1_nonconst_take();
     let _ = fx_eval::compile::ifneq_trace_take();
     let _ = fx_eval::fold::v3_take();
-    // INT29 step TW (TWF1 PATCH 1): on the 'ae32' route F (--host-frame, required there) is the explicit get_frame_number input
+    //: on the 'ae32' route F (--host-frame, required there) is the explicit get_frame_number input
     // (FRAME-INDEX-REQUIRED), and a plan that reads get_frame needs the request inputs of the run's record.
     let tw_route = match tw_route_s.as_deref().map(parse_tw_route) {
         None => None,
@@ -1080,7 +1080,7 @@ fn run(a0: &[String]) -> i32 {
                 Some(q)
             }
             None => {
-                eprintln!("FRAME-REQUEST-INPUT-UNRECORDED (--tw-route needs F from --host-frame; W559)");
+                eprintln!("FRAME-REQUEST-INPUT-UNRECORDED (--tw-route needs F from --host-frame)");
                 return 2;
             }
         },
@@ -1095,7 +1095,7 @@ fn run(a0: &[String]) -> i32 {
             b.host.insert("get_frame_number".to_string(), vec![f]);
         }
         if ae32.is_some() && tw_route.is_none() && g.nodes.iter().any(|x| x.name == "get_frame") {
-            eprintln!("FRAME-REQUEST-INPUT-UNRECORDED ({}: the plan reads get_frame; the request inputs (--tw-route: duration in frames, the limit cell, local_time_step, the host id, the step flag, r8d, r9d) are not given from the run's record; TWF2, W559)", prog);
+            eprintln!("FRAME-REQUEST-INPUT-UNRECORDED ({}: the plan reads get_frame; the request inputs (--tw-route: duration in frames, the limit cell, local_time_step, the host id, the step flag, r8d, r9d) are not given from the run's record)", prog);
             return 2;
         }
     }
@@ -1106,7 +1106,7 @@ fn run(a0: &[String]) -> i32 {
             return 1;
         }
     };
-    // INT32 step DF: the fed 16.16 value of every unbound fixed-slider (host type 2, non-normalize_scale) parameter, one
+    // the fed 16.16 value of every unbound fixed-slider (host type 2, non-normalize_scale) parameter, one
     // diagnostic line each, for the per-run check against the run's own checkout bytes (PARAM-DEFAULT-BITS-MISMATCH is the checker's label).
     if let Some(r) = ae32.as_mut() {
         for p in &g.params {
@@ -1121,15 +1121,15 @@ fn run(a0: &[String]) -> i32 {
             }
         }
     }
-    // INT21 step Q: the precondition of is ported (fx_eval prune_arm's count conjunct, EQC1); step G's refusal is
-    // removed. A non-constant second argument of if_neq_const (EQC1's c7 form, not probed) is refused on the verified render path.
-    // INT22 step B: v3_to_v4_if4 folds of an unmeasured form are refused on the verified render path; every fold is
+    // the precondition of is ported (fx_eval prune_arm's count conjunct); step G's refusal is
+    // removed. A non-constant second argument of if_neq_const (c7 form, not probed) is refused on the verified render path.
+    // v3_to_v4_if4 folds of an unmeasured form are refused on the verified render path; every fold is
     // printed as a census label (form M4, M3Z, M2S or UNMEASURED-FORM). The survey route keeps the patched result.
     {
         let v3 = fx_eval::fold::v3_take();
         if ae32.is_some() {
             if let Some(x) = v3.iter().find(|x| x.5 == "UNMEASURED-FORM") {
-                let m = format!("V3TOV4IF4-NARROW-UNMEASURED ({}: node {}: n {}, argument 0 lanes {} ({}), argument 1 {}; the original's folded result for this form is not measured; measured forms: n = 4; n = 3 with a scalar argument 0 and argument 1 = 0; n = 3 with a 3-lane argument 0 and argument 1 = 1.0, argument 1 not placed; n = 3 with a one-lane argument 0 and a one-lane argument 1, argument 0 broadcast to lanes 0 to 2 and argument 1 in lane 3 (FLD3); n = 1 with one-lane arguments, the pair [argument 0, argument 1] (FLD3M); n = 2 with scalar arguments; BRD1, BRD2, W509, W515, W523)", prog, x.0, x.1, x.2, x.6.iter().map(|w| format!("{:08x}", w)).collect::<Vec<_>>().join(","), x.3.iter().map(|w| format!("{:08x}", w)).collect::<Vec<_>>().join(","));
+                let m = format!("V3TOV4IF4-NARROW-UNMEASURED ({}: node {}: n {}, argument 0 lanes {} ({}), argument 1 {}; the original's folded result for this form is not measured; measured forms: n = 4; n = 3 with a scalar argument 0 and argument 1 = 0; n = 3 with a 3-lane argument 0 and argument 1 = 1.0, argument 1 not placed; n = 3 with a one-lane argument 0 and a one-lane argument 1, argument 0 broadcast to lanes 0 to 2 and argument 1 in lane 3; n = 1 with one-lane arguments, the pair [argument 0, argument 1] (FLD3M); n = 2 with scalar arguments)", prog, x.0, x.1, x.2, x.6.iter().map(|w| format!("{:08x}", w)).collect::<Vec<_>>().join(","), x.3.iter().map(|w| format!("{:08x}", w)).collect::<Vec<_>>().join(","));
                 eprintln!("{}", m);
                 // the whole line also in PREFIX.refusal.txt (no meta is written for a refused run)
                 let _ = std::fs::write(format!("{}.refusal.txt", out), format!("{}\n", m));
@@ -1138,12 +1138,12 @@ fn run(a0: &[String]) -> i32 {
         }
         if let Some(r) = ae32.as_mut() {
             for x in &v3 {
-                // INT24: the node's program-text path beside its id
+                // the node's program-text path beside its id
                 r.labels.push(format!("diagnostic V3TOV4IF4-FOLD\tnode {}\tn {}\targ0_lanes {}\targ1 {}\tresult {}\tform {}\targ0 {}\tpath {}", x.0, x.1, x.2, x.3.iter().map(|w| format!("{:08x}", w)).collect::<Vec<_>>().join(","), x.4.iter().map(|w| format!("{:08x}", w)).collect::<Vec<_>>().join(","), x.5, x.6.iter().map(|w| format!("{:08x}", w)).collect::<Vec<_>>().join(","), fx_exec::ops_census::node_path_fold(&cp, &g, x.0)));
             }
         }
     }
-    // INT24: every run-primitive of +, *, -, / and dissolve printed as an OPS-ARITH-RUN census label on the verified render path, and the
+    // every run-primitive of +, *, -, / and dissolve printed as an OPS-ARITH-RUN census label on the verified render path, and the
     // tripwire OPS-ARITH-SCALAR-SCALAR-UNJUDGED: a +, *, - or / run-primitive with both operands non-plane is refused there.
     if ae32.is_some() {
         let rows = fx_exec::ops_census::ops_rows(&cp);
@@ -1167,10 +1167,10 @@ fn run(a0: &[String]) -> i32 {
             return 2;
         }
         if let Some(r) = ae32.as_mut() {
-            r.labels.push("label IFNEQ-CONST-FIELDS-MEASURED ([this] = argument 0's constant flag, 1 at c1 to c5 and 0 at c6 with argument 0 = x; [this] and [this] = the lane counts of arguments 0 and 1 for constant operands (1 and 3 at c1, 3 and 3 at c2, 4 and 4 at c5) and 4 for a non-constant operand (c6); [this] = argument 1's constant flag, measured set at c1 to c6; writers (flag) and (count) for a constant operand, for a non-constant one, each storing through the operand's [op] and [op], the cells reads; the original's arm equals the patched native's frozen arm at c1 to c6 and differs from the unpatched native's at c1; probe vehicle Blend (the routine is shared by every program); a non-constant argument 1 is refused natively (IFNEQ-CONST-ARG1-NONCONST) until EQC1's c7 probe; EQC1, W480, W487)".to_string());
+            r.labels.push("label IFNEQ-CONST-FIELDS-MEASURED ([this] = argument 0's constant flag, 1 at c1 to c5 and 0 at c6 with argument 0 = x; [this] and [this] = the lane counts of arguments 0 and 1 for constant operands (1 and 3 at c1, 3 and 3 at c2, 4 and 4 at c5) and 4 for a non-constant operand (c6); [this] = argument 1's constant flag, measured set at c1 to c6; writers (flag) and (count) for a constant operand, for a non-constant one, each storing through the operand's [op] and [op], the cells reads; the original's arm equals the patched native's frozen arm at c1 to c6 and differs from the unpatched native's at c1; probe vehicle Blend (the routine is shared by every program); a non-constant argument 1 is refused natively (IFNEQ-CONST-ARG1-NONCONST) until c7 probe)".to_string());
         }
     }
-    // INT25 (INT21-A2): every if_neq_const decision of this compile as a census label on the verified render path (observe only)
+    // every if_neq_const decision of this compile as a census label on the verified render path (observe only)
     {
         let tr = fx_eval::compile::ifneq_trace_take();
         if let Some(r) = ae32.as_mut() {
@@ -1179,31 +1179,31 @@ fn run(a0: &[String]) -> i32 {
             }
         }
     }
-    // INT18: the lane-count scan of this compile, printed on the verified render path (observe only)
+    // the lane-count scan of this compile, printed on the verified render path (observe only)
     {
         let (calls, diff) = fx_eval::compile::eq_const_scan_take();
         if let Some(r) = ae32.as_mut() {
-            r.labels.push(format!("label EQ-CONST-SCAN ({}: {} eq_const calls with two constant operands, {} with differing operand counts; W422 (c), INT18)", prog, calls, diff));
+            r.labels.push(format!("label EQ-CONST-SCAN ({}: {} eq_const calls with two constant operands, {} with differing operand counts)", prog, calls, diff));
         }
     }
     // WPH: the fed per-run inputs, printed in the meta
     if let Some(r) = ae32.as_mut() {
         if ae.persp_base.is_some() || ae.palpha_base.is_some() || ae.palpha_cells.is_some() {
-            r.labels.push(format!("label WPH-HOST-INPUTS (persp_base {:?}, palpha_base {:?}, palpha_cells {:?}, xy_base {:?}; per-run host inputs ALIGN-HOST-PER-RUN and [[rec]]; W634)", ae.persp_base, ae.palpha_base, ae.palpha_cells, ae.xy_base));
+            r.labels.push(format!("label WPH-HOST-INPUTS (persp_base {:?}, palpha_base {:?}, palpha_cells {:?}, xy_base {:?}; per-run host inputs ALIGN-HOST-PER-RUN and [[rec]])", ae.persp_base, ae.palpha_base, ae.palpha_cells, ae.xy_base));
         }
     }
-    // INT19 S1: the XY-HEAD-MODE label on the verified render path
+    // S1: the XY-HEAD-MODE label on the verified render path
     if let Some(r) = ae32.as_mut() {
         if let Some(l) = &xy_list_lab {
             r.labels.push(l.clone());
         }
-        r.labels.push(format!("label XY-HEAD-MODE ({}: {:?}; OneHead for programs whose plan writes one x row buffer, PerRow for programs whose plan allocates an x plane indexed by row: MEASURED by XYB1 part 2 hooks; WPE3, XYB1; derived from the plan's perspective primitives, INT19)", prog, b.kp.xy_head_mode));
+        r.labels.push(format!("label XY-HEAD-MODE ({}: {:?}; OneHead for programs whose plan writes one x row buffer, PerRow for programs whose plan allocates an x plane indexed by row: MEASURED by part 2 hooks; derived from the plan's perspective primitives)", prog, b.kp.xy_head_mode));
     }
-    // INT18 (PROGRAM-FLAG-READ): [prog] bit 4 derived from the class table (report only on this tree; no compile input reads it)
+    // (PROGRAM-FLAG-READ): [prog] bit 4 derived from the class table (report only on this tree; no compile input reads it)
     if let Some(r) = ae32.as_mut() {
-        r.labels.push(format!("label PROGRAM-FLAG-READ ({}: [prog] bit 4 = {} derived from the class flag word 0x40000 of the program's function nodes; motion_blur is the only class with it; W301, INT18)", prog, fx_eval::layout::program_flag_bit4(&g) as u8));
+        r.labels.push(format!("label PROGRAM-FLAG-READ ({}: [prog] bit 4 = {} derived from the class flag word 0x40000 of the program's function nodes; motion_blur is the only class with it)", prog, fx_eval::layout::program_flag_bit4(&g) as u8));
     }
-    // INT13: on the verified render path ('ae32') a plan constant with count below 1 is refused by name (CONST-COUNT-OFF-CONTRACT);
+    // on the verified render path ('ae32') a plan constant with count below 1 is refused by name (CONST-COUNT-OFF-CONTRACT);
     // the count -1 binding of exec.rs const_val (CONST-COUNT-NEGATIVE-OFF-CLAIM) is for the survey only.
     {
         let below: Vec<(usize, i32)> = cp
@@ -1214,12 +1214,12 @@ fn run(a0: &[String]) -> i32 {
             .map(|nd| (nd.idx, nd.elnum))
             .collect();
         if ae32.is_some() && !below.is_empty() {
-            eprintln!("CONST-COUNT-OFF-CONTRACT: the claim route refuses plan constants with count below 1: {:?} (Batch 49 rule 9)", below);
+            eprintln!("CONST-COUNT-OFF-CONTRACT: the claim route refuses plan constants with count below 1: {:?}", below);
             return 2;
         }
     }
     if seed_missing && cp.nodes.iter().any(|nd| nd.name.contains("static2")) {
-        eprintln!("the plan runs static2: --host-frame (with the count W x H) is required; LEGACY-SEED-W (--legacy-seed-w) is the named option for the W172 state A seed [ctx] = W");
+        eprintln!("the plan runs static2: --host-frame (with the count W x H) is required; LEGACY-SEED-W (--legacy-seed-w) is the named option for the state A seed [ctx] = W");
         return 2;
     }
     let mut images = BTreeMap::new();
@@ -1229,7 +1229,7 @@ fn run(a0: &[String]) -> i32 {
             if let Some(r) = &ae32 {
                 if let Some(k) = r.names.iter().position(|x| *x == nd.name) {
                     // the 'ae32' source reader fills this input (execute_ae32); its plane count is the record's
-                    // SVB1: a class-3 input (elnum 3) on the variant-B 4-plane head is read as 4 planes and handed over as 3 lanes
+                    // a class-3 input (elnum 3) on the variant-B 4-plane head is read as 4 planes and handed over as 3 lanes
                     let vb4_h = r.route.sources[k].reader_head == fx_exec::hostconv14::VB4_HEAD && r.route.sources[k].planes == 4 && ch == 3;
                     if r.route.sources[k].planes != ch && !vb4_h {
                         eprintln!("'ae32' source {} has {} planes recorded, the plan's input node has {}", nd.name, r.route.sources[k].planes, ch);
@@ -1353,7 +1353,7 @@ fn run(a0: &[String]) -> i32 {
             }
         }
     }
-    // INT1: native convert-from-source on the Source input (planes are re-interleaved to host memory B,G,R,A first)
+    // native convert-from-source on the Source input (planes are re-interleaved to host memory B,G,R,A first)
     if convert.is_some() {
         let bit_of = |nm: &str| g.inputs.iter().position(|i| i.name == nm).map(|k| k < 32 && (bmask >> k) & 1 == 1).unwrap_or(false);
         let mut names: Vec<&str> = ["Source", "Foreground", "Matte", "Mask"].into_iter().filter(|x| *x != "Mask" || bit_of("Mask")).collect();
@@ -1386,7 +1386,7 @@ fn run(a0: &[String]) -> i32 {
         }
     }
     if let Some(r) = &ae32 {
-        // INT27 step SI (SIP1): a plan without Source that is one folded constant node renders through the destination
+        //: a plan without Source that is one folded constant node renders through the destination
         // convert only at Source class 3 with 3 planes; every other missing input keeps the refusal by name (fx_exec::srcindep).
         let si_names: Vec<(String, usize)> = r.names.iter().cloned().zip(r.route.sources.iter().map(|s| s.planes)).collect();
         let si_style = if prog.starts_with("Hue_Sat_Bright") { "S_HueSatBright".to_string() } else { prog.to_string() };
@@ -1512,7 +1512,7 @@ fn run(a0: &[String]) -> i32 {
     }
 }
 
-/// INT11 and ENVFENCE: environment variables any binary of the tree reads (grep of `env::var` over fx_exec, fx_eval and crates); the 'ae32' route
+/// and ENVFENCE: environment variables any binary of the tree reads (grep of `env::var` over fx_exec, fx_eval and crates); the 'ae32' route
 /// refuses to run while any of them is set (no environment switch on the verified render path).
 const ENV_SWITCHES: [&str; 40] = [
     "DSW5_CLONE", "DSW5_CLONE_SCOPE", "NV10_BW_WHOLE", "DS1_OFF", "NV9_BLUR_SCALE_OLD", "CV_MUT", "COV_MUT", "DS2_PHASE", "DS_MUT", "FX_SETS_ORIG_NUMBER",
@@ -1540,13 +1540,13 @@ struct Ae32Args {
     srcs: Vec<(String, String)>,
     planes: Option<usize>,
     gate: Option<(bool, bool, bool)>,
-    /// INT12: the checked-out record value of the kind-4 "opacity" / "input_opacity" parameter (f32 bits), or none
+    /// the checked-out record value of the kind-4 "opacity" / "input_opacity" parameter (f32 bits), or none
     opacity: Option<Option<u32>>,
-    /// LYM1: record value of the layout `output_opacity` parameter (Time_Warp_RGB), f32 bits; None = the program has none
+    /// record value of the layout `output_opacity` parameter (Time_Warp_RGB), f32 bits; None = the program has none
     out_opacity: Option<u32>,
-    /// LYM3: the owner arm's opacity was derived from the merged record (no --owner-opacity given)
+    /// the owner arm's opacity was derived from the merged record (no --owner-opacity given)
     opacity_derived: bool,
-    /// INT31 step L2: per derived extra (name, the checkout integer v, None for the bound answer or Some((display name, record, style)) for the registered default)
+    /// per derived extra (name, the checkout integer v, None for the bound answer or Some((display name, record, style)) for the registered default)
     opacity_notes: Vec<(String, i32, Option<(String, String, String)>)>,
     row_gate_cell: Option<u32>,
     head: Option<Option<u64>>,
@@ -1556,7 +1556,7 @@ struct Ae32Args {
     copier: Option<Option<usize>>,
     out: Option<String>,
     host_params: Vec<(String, f32)>,
-    /// NSS1: the lane-1 host value of a two-lane normalize_scale parameter given as --host-param NAME=X,Y
+    /// the lane-1 host value of a two-lane normalize_scale parameter given as --host-param NAME=X,Y
     host_lane1: Vec<(String, f32)>,
     ratio: Option<(f64, f64)>,
     /// WPH
@@ -1564,24 +1564,24 @@ struct Ae32Args {
     palpha_base: Option<i32>,
     xy_base: Option<i32>,
     palpha_cells: Option<(i32, i32, f64)>,
-    /// INT17 (PDV3 PATCH 1): the later pre-render stage's index [prog] and its arrays (rect flags, checkout bytes) on the claim host model
-    /// INT20 step G: [prog], [prog], * from the style's input-class record; the recorded class bytes (per-run check)
-    /// INT20 step G3: the class-3 record (plane-count builder hits, allocate command images and elnum, [prog])
+    ///: the later pre-render stage's index [prog] and its arrays (rect flags, checkout bytes) on the claim host model
+    /// [prog], [prog], * from the style's input-class record; the recorded class bytes (per-run check)
+    /// the class-3 record (plane-count builder hits, allocate command images and elnum, [prog])
     class3_rec: Option<(u32, u32, u32, u8)>,
     class_cells: Option<(Option<u8>, Option<u8>, Option<u8>)>,
     class_record: Vec<(String, u8)>,
     late: Option<(i8, Vec<u8>, Vec<u32>)>,
-    /// INT17: [ctx] and [[ctx]], read by only when the mode byte is 2
+    /// [ctx] and [[ctx]], read by only when the mode byte is 2
     modein: Option<(u32, u32)>,
     /// M3P: the host datum, 1 = the output world is the input world's buffer (in place); None = 0
     host_inplace: Option<u32>,
     dest_sw: Option<u32>,
-    /// INT26 step OP: the host's Opacity checkout integer (--cset Opacity=V), converted by OPC1's port
+    /// the host's Opacity checkout integer (--cset Opacity=V), converted by port
     host_opacity: Option<i32>,
     host_opacity_param: Option<String>,
     host_out_opacity: Option<i32>,
     csets: Vec<(String, i32)>,
-    /// INT26 step OP: the recorded [prog] (kind-4 arm selector); absent means the integer arm (the per-style cell)
+    /// the recorded [prog] (kind-4 arm selector); absent means the integer arm (the per-style cell)
     arm_cell_a: Option<u32>,
 }
 
@@ -1590,9 +1590,9 @@ struct Ae32Ready {
     names: Vec<String>,
     out: String,
     labels: Vec<String>,
-    /// INT13: the owner arm inputs the route used (checked against the program definition after the build)
+    /// the owner arm inputs the route used (checked against the program definition after the build)
     arm: fx_exec::hostconv14::OwnerArm,
-    /// INT17: the later stage's inputs and the mode-byte inputs (PDV3 PATCH 1)
+    /// the later stage's inputs and the mode-byte inputs
     class3_rec: Option<(u32, u32, u32, u8)>,
     rec_head: Option<u64>,
     class_cells: Option<(Option<u8>, Option<u8>, Option<u8>)>,
@@ -1601,7 +1601,7 @@ struct Ae32Ready {
     modein: Option<(u32, u32)>,
     host_inplace: Option<u32>,
     wh: (usize, usize),
-    /// INT18: the --host-param values as given and the units width, for the checkout rule after the build
+    /// the --host-param values as given and the units width, for the checkout rule after the build
     host_params: Vec<(String, f32)>,
     uw: f32,
 }
@@ -1681,7 +1681,7 @@ impl Ae32Args {
                 self.planes = Some(v.parse().map_err(|_| "--src-planes takes the recorded plane count")?);
             }
             "--owner-arm" => {
-                // INT11: OWNER-ARM-RECORDED inputs: [owner] (decimal, non-zero or 0), bit 2 of [owner] (0 or 1),
+                // OWNER-ARM-RECORDED inputs: [owner] (decimal, non-zero or 0), bit 2 of [owner] (0 or 1),
                 // the mode-byte-2 exit (0 or 1: the constructor defaults stand)
                 once(self.gate.is_some())?;
                 let p: Vec<&str> = v.split(',').collect();
@@ -1697,7 +1697,7 @@ impl Ae32Args {
                 self.gate = Some((o != 0, b2 == 1, x2 == 1));
             }
             "--owner-opacity" => {
-                // INT12: the Opacity loop's input, OWNER-ARM-RECORDED: the record value of the program's kind-4
+                // the Opacity loop's input, OWNER-ARM-RECORDED: the record value of the program's kind-4
                 // parameter "opacity" or "input_opacity" (the popup answer minus 1 by POPUP-ONE-BASED), or "none" if the program registers none
                 once(self.opacity.is_some())?;
                 self.opacity = Some(if v == "none" {
@@ -1755,7 +1755,7 @@ impl Ae32Args {
                 self.host_params.push((n.to_string(), x.parse().map_err(|_| format!("--host-param {}: not a number", n))?));
             }
             "--cset" => {
-                // INT26 step OP, step L2b: the host answer by the checkout DISPLAY name; the name is resolved against the
+                // , step L2b: the host answer by the checkout DISPLAY name; the name is resolved against the
                 // program's own parameter-to-display-name table (STYLE_PARAM_INDEX.tsv) once the program is known (cset_param)
                 let (n, x) = v.split_once('=').ok_or("--cset takes DISPLAYNAME=V (the host checkout integer)")?;
                 if self.csets.iter().any(|(m, _)| m == n) {
@@ -1825,10 +1825,10 @@ impl Ae32Args {
         }
         for r in REQUIRED {
             if r == "--owner-opacity" && self.host_opacity.is_some() {
-                continue; // INT26 step OP: the host answer gives the loop value
+                continue; // the host answer gives the loop value
             }
             if r == "--owner-opacity" && self.opacity.is_some() {
-                continue; // LYM3 OWNER-OPACITY-DERIVED (step L2): taken from the merged record
+                continue; // OWNER-OPACITY-DERIVED (step L2): taken from the merged record
             }
             if !given.iter().any(|(o, _)| *o == r) {
                 return Err(format!("the 'ae32' route requires {} (no default)", r));
@@ -1881,17 +1881,17 @@ impl Ae32Args {
         let nsrows: Vec<(String, f32)> = fx_eval::units::ns_rows_of(&prog);
         for (n, x) in &self.host_params {
             if let Some(lane) = fx_eval::units::angle_host_lane(prog, n, *x) {
-                // WSR1: host angle -> record lane = -host (MEASURED in the S_WarpPerspective records)
+                // host angle -> record lane = -host (MEASURED in the S_WarpPerspective records)
                 b.overrides.insert(n.clone(), vec![lane]);
-                labels.push(format!("param {} host 0x{:08x} as bound angle lane 0x{:08x} (negated host value) ANGLE-LANE-NEGATED (WSR1; W729)", n, x.to_bits(), lane.to_bits()));
+                labels.push(format!("param {} host 0x{:08x} as bound angle lane 0x{:08x} (negated host value) ANGLE-LANE-NEGATED", n, x.to_bits(), lane.to_bits()));
                 continue;
             }
-            fx_eval::ranges::host_value_index_check(prog, n)?; // INT28 step PI
+            fx_eval::ranges::host_value_index_check(prog, n)?; // 
             let ns = fx_eval::units::ns_of(prog, n).ok_or_else(|| format!("PARAM-UNITS: {} is not a normalize_scale parameter of {}; bind it with --set", n, prog))?;
             let lane1 = self.host_lane1.iter().find(|(m, _)| m == n).map(|(_, y)| *y);
             if let Some(y) = lane1 {
-                // NSS1: a two-lane ns 1 parameter (Drop_Shadow shift): lane 0 = x * ((2 / W) * 1), lane 1 = -(y * ((2 / W) * 1)); the
-                // original's lane 1 is lane 0 x (conv_in_b x A / -B) with conv_in_b = A = B = 1 on the claim state (UNT2 conv_record)
+                // a two-lane ns 1 parameter (Drop_Shadow shift): lane 0 = x * ((2 / W) * 1), lane 1 = -(y * ((2 / W) * 1)); the
+                // original's lane 1 is lane 0 x (conv_in_b x A / -B) with conv_in_b = A = B = 1 on the claim state (conv_record)
                 if ns != 1.0 {
                     return Err(format!("PARAM-UNITS-NOT-JUDGED: {} has normalize_scale {} (two host lanes are judged for ns 1 only)", n, ns));
                 }
@@ -1900,21 +1900,21 @@ impl Ae32Args {
                 }
                 for hv in [*x, y] {
                     if let Some(k) = fx_eval::units::host_value_off_grid(prog, n, hv) {
-                        return Err(format!("HOST-VALUE-OFF-GRID ({} {}: --host-param {} is {} / 65536 with k not an integer; W663)", prog, n, hv, k));
+                        return Err(format!("HOST-VALUE-OFF-GRID ({} {}: --host-param {} is {} / 65536 with k not an integer)", prog, n, hv, k));
                     }
                 }
                 let uw2 = if cfg!(feature = "nss1_w64_mut") { 64.0f32 } else { uw };
                 let r0 = fx_eval::units::normalize_scale_record(*x, uw2, ns, false);
                 let r1 = -fx_eval::units::normalize_scale_record(y, uw2, ns, false);
                 b.overrides.insert(n.clone(), vec![r0, r1]);
-                labels.push(format!("param {} host 0x{:08x},0x{:08x} as bound ns {} width {} compiled {:.9},{:.9} (0x{:08x},0x{:08x}) PARAM-UNITS-TWO-LANE (NSS1)", n, x.to_bits(), y.to_bits(), ns, uw, r0, r1, r0.to_bits(), r1.to_bits()));
+                labels.push(format!("param {} host 0x{:08x},0x{:08x} as bound ns {} width {} compiled {:.9},{:.9} (0x{:08x},0x{:08x}) PARAM-UNITS-TWO-LANE", n, x.to_bits(), y.to_bits(), ns, uw, r0, r1, r0.to_bits(), r1.to_bits()));
                 continue;
             }
             if ns != 2.0 && ns != 4.0 {
                 return Err(format!("PARAM-UNITS-NOT-JUDGED: {} has normalize_scale {} (the label covers 2 and 4, lane 0)", n, ns));
             }
             if let Some(k) = fx_eval::units::host_value_off_grid(prog, n, *x) {
-                return Err(format!("HOST-VALUE-OFF-GRID ({} {}: --host-param {} is {} / 65536 with k not an integer; a host type 2 slider's checkout is a 16.16 value; W663)", prog, n, x, k));
+                return Err(format!("HOST-VALUE-OFF-GRID ({} {}: --host-param {} is {} / 65536 with k not an integer; a host type 2 slider's checkout is a 16.16 value)", prog, n, x, k));
             }
             if b.overrides.contains_key(n) {
                 return Err(format!("{} given both as --host-param and --set", n));
@@ -1931,12 +1931,12 @@ impl Ae32Args {
             match b.overrides.get(n) {
                 Some(v) => labels.push(param_by_record_label(n, v)),
                 None => {
-                    // SHJ5 SDS widened: an unbound NS host type 2 slider takes its registered bits / 65536 before the width scaling
+                    // SDS widened: an unbound NS host type 2 slider takes its registered bits / 65536 before the width scaling
                     if let Some(h) = fx_eval::units::unbound_ns_host(prog, n) {
                         let ns = fx_eval::units::ns_of(prog, n).unwrap_or(4.0);
                         let rec = fx_eval::units::normalize_scale_record(h, uw, ns, false);
                         b.overrides.insert(n.clone(), vec![rec]);
-                        labels.push(format!("label PARAM-DEFAULT-REGISTERED-16-16 ({} {}: unbound normalize_scale host type 2 slider; host {} / 65536 = {}, before the width scaling; record 0x{:08x}; W605, W663)", prog, n, (h as f64 * 65536.0) as i64, h as f64, rec.to_bits()));
+                        labels.push(format!("label PARAM-DEFAULT-REGISTERED-16-16 ({} {}: unbound normalize_scale host type 2 slider; host {} / 65536 = {}, before the width scaling; record 0x{:08x})", prog, n, (h as f64 * 65536.0) as i64, h as f64, rec.to_bits()));
                     } else if let (true, Some(lanes)) = (self.ns_default_unbound, ns_registered_default(prog, n, uw)) {
                         b.overrides.insert(n.clone(), lanes.clone());
                         labels.push(format!("label PARAM-DEFAULT-REGISTERED-NS ({} {}: unbound normalize_scale parameter; registered default through the unbound-default rule at width {}; record lanes {:?}; opt-in --ns-default-unbound)", prog, n, uw, lanes));
@@ -1977,10 +1977,10 @@ impl Ae32Args {
     }
 }
 
-/// INT13: derive the owner arm's inputs from the built program and check the recorded fields against them.
-/// def_dynamic: the token "dynamic" in the definition's flags ([owner] = 0 for the 13 styles, MEASURED-DYLIB, PDV2).
-/// opacity parameter: a parameter named "opacity" or "input_opacity" sets bit 0x40 of [prog] (PDV2); its record value stays
-/// OWNER-ARM-RECORDED (--owner-opacity) until PDV3's array read is resolved. bit 2 of [owner]: owner_loop::negotiate at the stated host
+/// derive the owner arm's inputs from the built program and check the recorded fields against them.
+/// def_dynamic: the token "dynamic" in the definition's flags ([owner] = 0 for the 13 styles, MEASURED-DYLIB).
+/// opacity parameter: a parameter named "opacity" or "input_opacity" sets bit 0x40 of [prog]; its record value stays
+/// OWNER-ARM-RECORDED (--owner-opacity) until array read is resolved. bit 2 of [owner]: owner_loop::negotiate at the stated host
 /// model: gate closed without the opacity parameter (NEGOTIATION-GATE-CLOSED), else HOST-NEGOTIATION-ZERO (zero answer record, ret 0),
 ///  = 1 (HOST-APP), cell = 1 (MEASURED-DYLIB); [owner] enters as 0.
 fn owner_inputs_derived(g: &fx_eval::build::Genotype, arm: &fx_exec::hostconv14::OwnerArm) -> Result<Vec<String>, String> {
@@ -2006,24 +2006,24 @@ fn owner_inputs_derived(g: &fx_eval::build::Genotype, arm: &fx_exec::hostconv14:
     if bit2 != arm.owner_arm_bit2 {
         return Err(format!("OWNER-INPUT-MISMATCH: the negotiation model gives bit 2 of [owner] = {}, the recorded field is {}", bit2 as u8, arm.owner_arm_bit2 as u8));
     }
-    labels.push(format!("label OWNER-INPUTS-DERIVED (def_dynamic {} from the definition flags; opacity parameters {:?}; bit 2 = {} by owner_loop::negotiate; the recorded --owner-arm fields checked equal; INT13)", def_dynamic as u8, opac, bit2 as u8));
+    labels.push(format!("label OWNER-INPUTS-DERIVED (def_dynamic {} from the definition flags; opacity parameters {:?}; bit 2 = {} by owner_loop::negotiate; the recorded --owner-arm fields checked equal)", def_dynamic as u8, opac, bit2 as u8));
     labels.push(if bit40 {
-        "label HOST-NEGOTIATION-ZERO (the host model offers the Image Format Negotiation Suite (version 1) and answers [suite] with return 0 and a 0x20-byte answer record written as zeros: flag byte 0, empty format string, mode word 0; the test then takes ecx = 0 and exits with bits 0x4 and 0x8 of [owner] unchanged; the twins' test ported (negotiate); PDV2, PDV3)".to_string()
+        "label HOST-NEGOTIATION-ZERO (the host model offers the Image Format Negotiation Suite (version 1) and answers [suite] with return 0 and a 0x20-byte answer record written as zeros: flag byte 0, empty format string, mode word 0; the test then takes ecx = 0 and exits with bits 0x4 and 0x8 of [owner] unchanged; the twins' test ported (negotiate))".to_string()
     } else {
         "label NEGOTIATION-GATE-CLOSED (no opacity parameter: bit 0x40 of [prog] clear; no acquire of the suite; the per-run suite-slot list is the record's check)".to_string()
     });
     labels.push(if bit40 {
-        format!("label OWNER-ARM-RECORDED ({}: the Opacity loop's record value from --owner-opacity until PDV3's array read is ruled (Batch 48 rule 4))", g.name)
+        format!("label OWNER-ARM-RECORDED ({}: the Opacity loop's record value from --owner-opacity until array read is ruled)", g.name)
     } else {
         "label OWNER-PARAMS-DERIVED (no kind-4 opacity or input_opacity parameter in the program: the loop's opacity branch is not taken; v = 0)".to_string()
     });
-    labels.push("label POSTDIV-DERIVED (ctx = [owner] by the ported owner arm: setup function (SMART_PRE_RENDER, its entry hit recorded per run), the arm for the 13 styles ([owner] = 0: no definition carries the token \"dynamic\", MEASURED-DYLIB), then the parameter loop with the opacity branch : m = cvttss2si(record + 0.5f); v = 1 iff a kind-4 parameter named opacity or input_opacity in the program's parameter array has m = 1 and bit 2 of [owner] is clear; bit 2 from the ported negotiation test at the claim host's answer (W390); writes the ctx cells on every route; checked against the recorded owner and ctx cells at every compile; PDV1, PDV2, W371, W380)".to_string());
+    labels.push("label POSTDIV-DERIVED (ctx = [owner] by the ported owner arm: setup function (SMART_PRE_RENDER, its entry hit recorded per run), the arm for the 13 styles ([owner] = 0: no definition carries the token \"dynamic\", MEASURED-DYLIB), then the parameter loop with the opacity branch : m = cvttss2si(record + 0.5f); v = 1 iff a kind-4 parameter named opacity or input_opacity in the program's parameter array has m = 1 and bit 2 of [owner] is clear; bit 2 from the ported negotiation test at the claim host's answer; writes the ctx cells on every route; checked against the recorded owner and ctx cells at every compile)".to_string());
     Ok(labels)
 }
 
-/// INT13: the word 2 certificate gate. Ok(None): word 2 is not 1 (the arguments stand). Ok(Some((args, label))): a certified
+/// the word 2 certificate gate. Ok(None): word 2 is not 1 (the arguments stand). Ok(Some((args, label))): a certified
 /// job, the arguments with --ctx-word2 0 and the label.
-/// INT15: A CERTIFICATE ROW CERTIFIES ONE JOB. fx_run takes --word2-cert FILE --cert-job "<job line>" --cert-sidecar FILE.
+/// A CERTIFICATE ROW CERTIFIES ONE JOB. fx_run takes --word2-cert FILE --cert-job "<job line>" --cert-sidecar FILE.
 ///   The job key is the job identity as run, from the job line PROG|TAG|W|H|SETS|EXTRA: program, tag, WxH, the full sorted binding (every H: host
 ///   name and value and every record name), curtime, pattern, worldfmt, smem and now (presteps excluded: the counted and certificate jobs may differ).
 ///   Certificate rows (TSV, '#' comments): program, job key, counted run tag, certificate job tag, counted presteps, certificate presteps,
@@ -2041,9 +2041,9 @@ fn word2_certified(a: &[String], prog: &str, w: usize, h: usize) -> Result<Optio
         return Ok(None);
     }
     let refuse = |why: String| -> String {
-        format!("STACK-WORD2-NOT-IMPLEMENTED: stack word 2 = 1 enables the node-grouping pass (in the planner) which is not ported; {} (Batch 49 rule 14)", why)
+        format!("STACK-WORD2-NOT-IMPLEMENTED: stack word 2 = 1 enables the node-grouping pass (in the planner) which is not ported; {}", why)
     };
-    let mism = |why: String| -> String { format!("CERT-KEY-MISMATCH: {} (Batch 51 rule 1, W418: a certificate row certifies one job; no borrowed rows)", why) };
+    let mism = |why: String| -> String { format!("CERT-KEY-MISMATCH: {} (a certificate row certifies one job; no borrowed rows)", why) };
     let opt = |name: &str| -> Option<String> { a.iter().position(|x| x == name).and_then(|p| a.get(p + 1)).cloned() };
     let cf = match opt("--word2-cert") {
         Some(c) => c,
@@ -2095,8 +2095,8 @@ fn word2_certified(a: &[String], prog: &str, w: usize, h: usize) -> Result<Optio
     if sget("native").as_deref() != Some(nkey.as_str()) {
         return Err(mism(format!("this command's converted arguments [{}] are not the sidecar's [{}]", nkey, sget("native").unwrap_or_default())));
     }
-    // INT16: the sidecar must be the one the stored prediction set's record names, by path and SHA-256 (SIDECAR-NOT-OF-RECORD)
-    let sonr = |why: String| -> String { format!("SIDECAR-NOT-OF-RECORD: {} (Batch 52 rule 5, W434)", why) };
+    // the sidecar must be the one the stored prediction set's record names, by path and SHA-256 (SIDECAR-NOT-OF-RECORD)
+    let sonr = |why: String| -> String { format!("SIDECAR-NOT-OF-RECORD: {}", why) };
     let recf = opt("--sidecar-record").ok_or_else(|| sonr("no --sidecar-record file given".into()))?;
     let rect = std::fs::read_to_string(&recf).map_err(|e| sonr(format!("cannot read the sidecar record {}: {}", recf, e)))?;
     let scsha = sha256_hex(st.as_bytes());
@@ -2118,13 +2118,13 @@ fn word2_certified(a: &[String], prog: &str, w: usize, h: usize) -> Result<Optio
         }
         let hex = |s: &str| s.len() == 64 && s.chars().all(|ch| ch.is_ascii_hexdigit());
         if !hex(c[6]) || !hex(c[7]) || c[8] != "EQUAL" {
-            return Err(mism(format!("the certificate row for [{}] is not a W113 EQUAL pair with two plan SHA-256 values", jk)));
+            return Err(mism(format!("the certificate row for [{}] is not a plan-equal pair with two plan SHA-256 values", jk)));
         }
         let mut v = a.to_vec();
         v[pos + 1] = "0".to_string();
-        let w113 = if c[6] == c[7] { format!("W113 EQUAL (identical recorded plan text, SHA-256 {})", c[6]) } else { "W113 EQUAL (plancmp)".to_string() };
+        let w113 = if c[6] == c[7] { format!("PLAN-EQUAL (identical recorded plan text, SHA-256 {})", c[6]) } else { "PLAN-EQUAL (plancmp)".to_string() };
         let label = format!(
-            "label STACK-WORD2-INERT-ORIG ({}: stack word 2 = 1 in the compile by the ported formula (HOST-FIELD, W315); the grouping pass is not ported; for this job the original's plan compiled at word 2 = 0 by certificate job {} (presteps {}, sha256 {}) equals the plan recorded by counted run {} at word 2 = 1 (presteps {}, sha256 {}) under W113, and the native plan is taken at the word 2 = 0 input; certificate {}; job key [{}]; native key [{}] from sidecar {} (sidecar of record, sha256 {}, record {}); {}; Batch 51 rule 1 (W418), Batch 52 rule 5 (W430, W434), Batch 50 rule 8; PCX2, WPG12, SMR9, SMR10)",
+            "label STACK-WORD2-INERT-ORIG ({}: stack word 2 = 1 in the compile by the ported formula (HOST-FIELD); the grouping pass is not ported; for this job the original's plan compiled at word 2 = 0 by certificate job {} (presteps {}, sha256 {}) equals the plan recorded by counted run {} at word 2 = 1 (presteps {}, sha256 {}) as an equal plan pair, and the native plan is taken at the word 2 = 0 input; certificate {}; job key [{}]; native key [{}] from sidecar {} (sidecar of record, sha256 {}, record {}); {})",
             prog, c[3], c[5], c[6], c[2], c[4], c[7], cf, jk, nkey, sc, scsha, recf, w113
         );
         return Ok(Some((v, label)));
@@ -2132,13 +2132,13 @@ fn word2_certified(a: &[String], prog: &str, w: usize, h: usize) -> Result<Optio
     Err(mism(format!("no certificate row for {} job [{}] in {}", prog, jk, cf)))
 }
 
-/// INT15: one token after `name` in a job line's EXTRA field.
+/// one token after `name` in a job line's EXTRA field.
 fn extra_field(extra: &str, name: &str) -> Option<String> {
     let t: Vec<&str> = extra.split_whitespace().collect();
     t.iter().position(|x| *x == name).and_then(|p| t.get(p + 1)).map(|s| s.to_string())
 }
 
-/// INT15: the job key of a job line PROG|TAG|W|H|SETS|EXTRA[|...]: program, tag, WxH, the sorted binding, curtime, pattern,
+/// the job key of a job line PROG|TAG|W|H|SETS|EXTRA[|...]: program, tag, WxH, the sorted binding, curtime, pattern,
 /// worldfmt, smem and now. Every field is required.
 fn job_key(job: &str) -> Result<String, String> {
     let f: Vec<&str> = job.split('|').collect();
@@ -2155,7 +2155,7 @@ fn job_key(job: &str) -> Result<String, String> {
     Ok(k)
 }
 
-/// INT15: SHA-256 (FIPS 180-4) of a byte string as lowercase hex, for the certificate key's source field (no crate dependency).
+/// SHA-256 (FIPS 180-4) of a byte string as lowercase hex, for the certificate key's source field (no crate dependency).
 fn sha256_hex(m: &[u8]) -> String {
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
@@ -2200,9 +2200,9 @@ fn sha256_hex(m: &[u8]) -> String {
     hs.iter().map(|x| format!("{:08x}", x)).collect()
 }
 
-/// INT17 step 5: strip --effect-answer N and --effect-count K from the arguments and judge them by fx_exec::style (BCJ3's render-path rule,
+/// strip --effect-answer N and --effect-count K from the arguments and judge them by fx_exec::style (render-path rule,
 /// ). Both or neither. Declared: the selected program must equal the run's core program, else STYLE-SELECT-MISMATCH.
-/// Undeclared for a program of a measured multi-style table: check-only stand-in label (INT16-A3). Other programs: no label.
+/// Undeclared for a program of a measured multi-style table: check-only stand-in label. Other programs: no label.
 fn style_select_args(a: &[String]) -> Result<(Vec<String>, Option<String>), String> {
     let mut v = Vec::with_capacity(a.len());
     let (mut ans, mut cnt): (Option<i32>, Option<i16>) = (None, None);
@@ -2235,7 +2235,7 @@ fn style_select_args(a: &[String]) -> Result<(Vec<String>, Option<String>), Stri
     let tabled = fx_exec::style::STYLE_TABLE.iter().find(|(_, t)| t.contains(&core)).map(|(e, _)| *e);
     match (ans, cnt) {
         (Some(n), Some(k)) => {
-            // INT32 step BOPS (BOP1): a def that a style runs by style_program (Blur_Only's def) is judged by that style's table
+            //: a def that a style runs by style_program (Blur_Only's def) is judged by that style's table
             let by_style = if tabled.is_none() {
                 fx_exec::style::STYLE_TABLE.iter().flat_map(|(_, t)| t.iter()).find(|st| fx_exec::style::style_program(st) == Some(prog)).copied()
             } else {
@@ -2244,21 +2244,21 @@ fn style_select_args(a: &[String]) -> Result<(Vec<String>, Option<String>), Stri
             let (eff, idx, sel) = fx_exec::style::select(by_style.unwrap_or(prog), k, n)?;
             if by_style.is_some() || (sel != core && fx_exec::style::style_program(sel) == Some(prog)) {
                 if fx_exec::style::style_program(sel) != Some(prog) {
-                    return Err(format!("STYLE-SELECT-MISMATCH: {} runs {} but the Effect answer {} selects style index {} ({}); INT32", eff, prog, n, idx, sel));
+                    return Err(format!("STYLE-SELECT-MISMATCH: {} runs {} but the Effect answer {} selects style index {} ({})", eff, prog, n, idx, sel));
                 }
-                return Ok((v, Some(format!("label STYLE-PROGRAM ({}: Effect answer {} of {} gives style index {} = {}, which runs the def {}; BOP1, W570; INT32)", eff, n, k, idx, sel, prog))));
+                return Ok((v, Some(format!("label STYLE-PROGRAM ({}: Effect answer {} of {} gives style index {} = {}, which runs the def {})", eff, n, k, idx, sel, prog))));
             }
             if sel != core {
                 return Err(format!("STYLE-SELECT-MISMATCH: {} runs {} but [owner] = {} with Effect answer {} selects style index {} ({})", eff, prog, k, n, idx, sel));
             }
-            Ok((v, Some(format!("label STYLE-SELECT ({}: [owner] = {}, Effect answer {} gives style index {} = {}, the program run; render path, BCJ3 MEASURED; INT17)", eff, k, n, idx, sel))))
+            Ok((v, Some(format!("label STYLE-SELECT ({}: [owner] = {}, Effect answer {} gives style index {} = {}, the program run; render path MEASURED)", eff, k, n, idx, sel))))
         }
-        (None, None) => Ok((v, tabled.map(|e| format!("label STYLE-SELECT-UNDECLARED ({}: {} is in the measured program table; no Effect answer declared, check-only stand-in, INT16-A3; INT17)", e, prog)))),
+        (None, None) => Ok((v, tabled.map(|e| format!("label STYLE-SELECT-UNDECLARED ({}: {} is in the measured program table; no Effect answer declared, check-only stand-in)", e, prog)))),
         _ => Err("STYLE-SELECT: --effect-answer and --effect-count are given together or not at all".into()),
     }
 }
 
-/// INT17 step s11_prerender (PDV3 PATCH 1): [prog] by PROG_MODE_WORD-RULE-READ, the later pre-render stage
+/// step s11_prerender: [prog] by PROG_MODE_WORD-RULE-READ, the later pre-render stage
 ///  (owner_loop::later_stage) between the two calls, the mode byte by owner_loop::ctx_init, and the destination
 /// body selected by it. The recorded --ae32-dest mode is a check.
 fn mode_byte_derived(
@@ -2288,14 +2288,14 @@ fn mode_byte_derived(
         }
     }
     labels.push(format!(
-        "label PROG_MODE_WORD-RULE-READ ({}: [prog] = {} derived from the definition flags (creator 2, rgba_ok 1, set_alpha_to_one 3; 2 becomes 3 when [prog] == 0, premise [prog] != 0, recorded per run by PDV3 PATCH 4); the recorded value is a per-run check; PDV3, W409)",
+        "label PROG_MODE_WORD-RULE-READ ({}: [prog] = {} derived from the definition flags (creator 2, rgba_ok 1, set_alpha_to_one 3; 2 becomes 3 when [prog] == 0, premise [prog] != 0, recorded per run by); the recorded value is a per-run check)",
         g.name, g3_in_a
     ));
     let mut params: Vec<ParamView> = match arm.opacity_bits {
         Some(b) => vec![ParamView { name: "opacity".to_string(), kind: 4, value: f32::from_bits(b) }],
         None => vec![],
     };
-    // TWR1: the program's output_opacity loop value follows opacity in registered order (arm), the same list
+    // the program's output_opacity loop value follows opacity in registered order (arm), the same list
     // hostconv14::try_owner_arm builds; without it [owner] stayed 0 where the original holds 3.
     if let Some(b) = arm.output_opacity_bits {
         params.push(ParamView { name: "output_opacity".to_string(), kind: 4, value: f32::from_bits(b) });
@@ -2312,12 +2312,12 @@ fn mode_byte_derived(
     let lo = later_stage(&li).map_err(|e| format!("PRERENDER-LATE-{:?}: [prog] = {} outside the stage's arrays", e, late_inputs_a))?;
     o.ae32_ready_d = lo.ae32_ready_d;
     labels.push(format!(
-        "label PRERENDER-LATE-STAGE (ported, owner_loop::later_stage: inputs [owner] {}, [owner] {}, [prog] {}, [prog] {}; out [owner] {}, flag {}; {}; PDV3)",
+        "label PRERENDER-LATE-STAGE (ported, owner_loop::later_stage: inputs [owner] {}, [owner] {}, [prog] {}, [prog] {}; out [owner] {}, flag {}; {})",
         li.ae32_ready_b, ae32_ready_a, g3_in_a, late_inputs_a, lo.ae32_ready_d, lo.rbp_cell_a,
         if lo.rbp_cell_a == 0 { "no-store exit" } else { "store branch (PRERENDER-STORE-BRANCH-UNOBSERVED: tested by constructed inputs only)" }
     ));
     let r8 = if o.ae32_ready_d != 0 { o.ae32_ready_d } else { g3_in_a };
-    // M3P: ctx and desc derived from the host datum (--host-inplace, default 0) by RDR12's rule when the mode
+    // M3P: ctx and desc derived from the host datum (--host-inplace, default 0) by the mode
     // byte inputs are read (r8 == 2); --mode-inputs is only a recorded check, refused on mismatch.
     let (fx_run_cell_f, d_cell_a) = if (r8 & 0xff) == 2 {
         let d = fx_exec::mode_select::derive(r8 as u32, host_inplace, wh.0, wh.1)?;
@@ -2327,10 +2327,10 @@ fn mode_byte_derived(
             }
         }
         labels.push(format!(
-            "label HOST-INPLACE-DERIVED ({}: --host-inplace {}; ctx = {} and desc = {} by (RDR12 line 7: 590 value {}, desc 2 by writer, in[idx] 2 and desc 0 as RJ1 claim-route constants, in[idx] the host world {}x{}, data pointers equal exactly when in place); the recorded --mode-inputs {}; M3P, W496)",
+            "label HOST-INPLACE-DERIVED ({}: --host-inplace {}; ctx = {} and desc = {} by (line 7: 590 value {}, desc 2 by writer, in[idx] 2 and desc 0 as claim-route constants, in[idx] the host world {}x{}, data pointers equal exactly when in place); the recorded --mode-inputs {}; M3P)",
             g.name, host_inplace as u32, d.0, d.1, r8, wh.0, wh.1, match modein { Some(x) => format!("({}, {}) checked equal", x.0, x.1), None => "not given".into() }
         ));
-        // INT27: only S_HueSatBright (HSR2's RJ1 record) has its own record of the five terms; every other style books nothing
+        // only S_HueSatBright (record) has its own record of the five terms; every other style books nothing
         // until its own record shows them.
         if let Some(t) = fx_exec::mode_select::terms_unrecorded_label(&g.name) {
             labels.push(t);
@@ -2348,12 +2348,12 @@ fn mode_byte_derived(
         return Err(format!("MODE-BYTE-MISMATCH: the derived mode byte {} ([owner] {}, [prog] {}) differs from the recorded destination mode {} (a finding)", m, o.ae32_ready_d, g3_in_a, rec_mode));
     }
     labels.push(format!(
-        "label MODE-BYTE-DERIVED (ctx = {} by from [owner] {} and [prog] {}; the destination body is selected by it; the recorded mode {} checked equal; PDV3, Batch 51 rule 10)",
+        "label MODE-BYTE-DERIVED (ctx = {} by from [owner] {} and [prog] {}; the destination body is selected by it; the recorded mode {} checked equal)",
         m, o.ae32_ready_d, g3_in_a, rec_mode
     ));
-    // INT20 step G: INPUT-CLASS-GUARD (RDR8 PATCH 2 and 4): every bound input's class derived before any kernel is chosen
+    // INPUT-CLASS-GUARD: every bound input's class derived before any kernel is chosen
     if setup_cell_b != o.ae32_ready_d {
-        return Err(format!("INPUT-CLASS-1358-ORDER-UNRECORDED: the later stage changed [owner] from {} to {}; the order of and the later stage is not recorded (INT20-A2)", setup_cell_b, o.ae32_ready_d));
+        return Err(format!("INPUT-CLASS-1358-ORDER-UNRECORDED: the later stage changed [owner] from {} to {}; the order of and the later stage is not recorded", setup_cell_b, o.ae32_ready_d));
     }
     {
         use fx_exec::input_class::{guard_one, input_class_guard, ClassCells, RowCells, CLASS_IMPLEMENTED};
@@ -2371,11 +2371,11 @@ fn mode_byte_derived(
         for (n, k) in class_record {
             match derived.iter().find(|d| d.1 == *n) {
                 Some(d) if d.2 == *k => {}
-                Some(d) => return Err(format!("INPUT-CLASS-RECORD-MISMATCH ({} input {}: derived class {}, recorded class byte {}; a finding that stops this style's bookings, W450 (b) 3)", g.name, n, d.2, k)),
+                Some(d) => return Err(format!("INPUT-CLASS-RECORD-MISMATCH ({} input {}: derived class {}, recorded class byte {}; a finding that stops this style's bookings)", g.name, n, d.2, k)),
                 None => return Err(format!("INPUT-CLASS-RECORD-MISMATCH ({} input {}: a recorded class byte for an input that is not bound)", g.name, n)),
             }
         }
-        // INT20 step G3: class 4 as at step G; class 3 admitted only on the ported path (variant B head, body at mode 2,
+        // class 4 as at step G; class 3 admitted only on the ported path (variant B head, body at mode 2,
         // alpha slot from the host source row); class 1 and 2 refused; every other case refused by name, never a fallback.
         let _ = input_class_guard;
         for (k, n, c) in &derived {
@@ -2394,16 +2394,16 @@ fn mode_byte_derived(
             if (pi, pe) != (ri, re) {
                 return Err(format!("INPUT-CLASS-ALLOC-MISMATCH ({}: planned allocate command {} image(s), elnum {}; record {} image(s), elnum {})", g.name, pi, pe, ri, re));
             }
-            labels.push(format!("label ALLOCATE-PLANNED ({}: {} image(s), elnum {}; the record's allocate command checked equal; RDR10)", g.name, pi, pe));
+            labels.push(format!("label ALLOCATE-PLANNED ({}: {} image(s), elnum {}; the record's allocate command checked equal)", g.name, pi, pe));
         }
         labels.push(format!(
-            "label INPUT-CLASS-GUARD ({}: bound inputs {:?} derive classes {:?} by the rule and the caller's class-1 test from [owner] {}, [owner] {}, [prog] {}, record cells [prog] {}, [prog] {}, * {}; claim routes refused unless every bound input derives the class the kernels implement; per-run record check {}; RDR7, RDR8, W450 (b))",
+            "label INPUT-CLASS-GUARD ({}: bound inputs {:?} derive classes {:?} by the rule and the caller's class-1 test from [owner] {}, [owner] {}, [prog] {}, record cells [prog] {}, [prog] {}, * {}; claim routes refused unless every bound input derives the class the kernels implement; per-run record check {})",
             g.name, derived.iter().map(|d| d.1.as_str()).collect::<Vec<_>>(), derived.iter().map(|d| d.2).collect::<Vec<_>>(), setup_cell_a, setup_cell_b, g3_in_a,
             fx_run_cell_c.map(|x| format!("0x{:02x}", x)).unwrap_or("not read or unrecorded".into()), fx_run_cell_d.map(|x| format!("0x{:02x}", x)).unwrap_or("not read or unrecorded".into()),
             fx_run_cell_g.map(|x| format!("0x{:02x}", x)).unwrap_or("not read or unrecorded".into()),
             if class_record.is_empty() { "not given (no input-class record on this job line)".to_string() } else { format!("{} of {} equal", class_record.len(), class_record.len()) }
         ));
-        labels.push("label INPUT-CLASS-CTX-ROWS-ZERO (ctx rows and [owner+2i] are 0 on the 'ae32' host model: MEASURED in HSR1's hsrD record and CAP2's record; INFERRED for other styles; INT20-A3)".to_string());
+        labels.push("label INPUT-CLASS-CTX-ROWS-ZERO (ctx rows and [owner+2i] are 0 on the 'ae32' host model: MEASURED in hsrD record and record; INFERRED for other styles)".to_string());
     }
     if m == 3 {
         labels.push("label MODE3-BODY (the destination body for mode byte 3 named by a hook record at the dispatcher's body entry; INFERRED routine P; floor as the 3-plane code 14 rows if it is P; recorded in the first answer 1 counted run)".to_string());
@@ -2411,10 +2411,10 @@ fn mode_byte_derived(
     Ok(labels)
 }
 
-/// INT29 step TW: --tw-route dur_frames,limit_cell,local_time_step,host_id,f4,r8,r9 (seven fields, each required; F comes from --host-frame).
+/// --tw-route dur_frames,limit_cell,local_time_step,host_id,f4,r8,r9 (seven fields, each required; F comes from --host-frame).
 fn parse_tw_route(v: &str) -> Result<fx_exec::twframe::TwRoute, String> {
     let f: Vec<&str> = v.split(',').collect();
-    let bad = || format!("FRAME-REQUEST-INPUT-UNRECORDED (--tw-route {}: seven fields dur_frames,limit_cell,local_time_step,host_id,f4,r8,r9 from the run's record; W559)", v);
+    let bad = || format!("FRAME-REQUEST-INPUT-UNRECORDED (--tw-route {}: seven fields dur_frames,limit_cell,local_time_step,host_id,f4,r8,r9 from the run's record)", v);
     if f.len() != 7 {
         return Err(bad());
     }
@@ -2422,19 +2422,19 @@ fn parse_tw_route(v: &str) -> Result<fx_exec::twframe::TwRoute, String> {
     Ok(fx_exec::twframe::TwRoute { big_f: 0.0, dur_frames: f[0].parse::<f32>().map_err(|_| bad())?, limit_cell: i(1)?, step: i(2)?, kind: i(3)?, f4: i(4)?, r8: i(5)?, r9: i(6)? })
 }
 
-/// INT29: the head label of a class-3 input, the same at modes 2 and 3: R3 names
+/// the head label of a class-3 input, the same at modes 2 and 3: R3 names
 /// SOURCE-HEAD-R3-ON-CLASS3, variant B names CONVERT-VARIANT-B-UNWEIGHTED.
 fn class3_head_label(style: &str, name: &str, r3: bool, vb4: bool) -> String {
     if vb4 {
-        format!("label SOURCE-HEAD-VB4-ON-CLASS3 ({} input {}: the class-3 Foreground is read by the variant-B 4-plane head (read4b, FMT3e, no alpha weight), derived from the gate cells and checked against the run's head hook; the three colour lanes are handed to the class-3 body; SVB1, W744)", style, name)
+        format!("label SOURCE-HEAD-VB4-ON-CLASS3 ({} input {}: the class-3 Foreground is read by the variant-B 4-plane head (read4b, no alpha weight), derived from the gate cells and checked against the run's head hook; the three colour lanes are handed to the class-3 body)", style, name)
     } else if r3 {
-        format!("label SOURCE-HEAD-R3-ON-CLASS3 ({}: the class-3 Source is read by head (R3, FMT3a, R-PARITY and FLOOR-MET, W341), derived from planes 3 and the owner-arm gate and executed per the head hooks (DRR2 dr2h: 2 entries; : 0 hits); weighted rows MEASURED 64 of 64 per plane on 2 calls; DRR2, W476; input {})", style, name)
+        format!("label SOURCE-HEAD-R3-ON-CLASS3 ({}: the class-3 Source is read by head (R3, R-PARITY and FLOOR-MET), derived from planes 3 and the owner-arm gate and executed per the head hooks (dr2h: 2 entries; : 0 hits); weighted rows MEASURED 64 of 64 per plane on 2 calls; input {})", style, name)
     } else {
-        format!("label CONVERT-VARIANT-B-UNWEIGHTED ({} input {}: head, the second and third dwords, through the finite test, no alpha read, no weight; MEASURED RDR10 r1b)", style, name)
+        format!("label CONVERT-VARIANT-B-UNWEIGHTED ({} input {}: head, the second and third dwords, through the finite test, no alpha read, no weight; MEASURED r1b)", style, name)
     }
 }
 
-/// INT20 step G3: what the class-3 admission reads from the route (the recorded head, the sources' derived heads and plane counts, the destination).
+/// what the class-3 admission reads from the route (the recorded head, the sources' derived heads and plane counts, the destination).
 struct G3In {
     class3_rec: Option<(u32, u32, u32, u8)>,
     rec_head: Option<u64>,
@@ -2443,7 +2443,7 @@ struct G3In {
     copier: Option<usize>,
 }
 
-/// INT20 step G3 (RDR10 PATCH 1 and 2, DRR2): admit a class-3 bound input only on the ported path.
+///: admit a class-3 bound input only on the ported path.
 fn class3_admit(style: &str, _k: usize, name: &str, g3_in_a: u32, mode: i32, g3: &G3In) -> Result<Vec<String>, String> {
     let (hits, _, _, fx_run_cell_e) = g3.class3_rec.ok_or_else(|| format!("INPUT-CLASS-CELL-UNRECORDED ({}: the class-3 record (builder hits, allocate command, [prog]; --class3-record))", style))?;
     if hits != 0 {
@@ -2454,27 +2454,27 @@ fn class3_admit(style: &str, _k: usize, name: &str, g3_in_a: u32, mode: i32, g3:
     }
     let k = g3.sources.iter().position(|s| s.0 == name).ok_or_else(|| format!("INPUT-CLASS-NOT-PORTED ({} input {}: class 3 for an input that is not an 'ae32' source)", style, name))?;
     let (_, head, planes) = &g3.sources[k];
-    // INT21 step G3R: R3 (readers14 read3 body) on the class-3 path, admitted only when the record's
+    // R3 (readers14 read3 body) on the class-3 path, admitted only when the record's
     // head hooks show (the record's head is the check, never the input; hostconv14::ae32_to_image reads R3 by readers14 for 3 planes).
     let r3 = *head == fx_exec::hostconv14::R3_HEAD;
-    // SVB1: the variant-B 4-plane head on the class-3 path, admitted only when the run's record head hook shows it
+    // the variant-B 4-plane head on the class-3 path, admitted only when the run's record head hook shows it
     let vb4 = *head == fx_exec::hostconv14::VB4_HEAD;
     if *head != fx_exec::hostconv14::VB3_HEAD && !r3 && !vb4 {
         return Err(format!("SOURCE-VARIANT-UNPORTED ({} input {}: derived head 0x{:x}; only variant B, variant B 4-plane (by record) and R3 are ported for class 3)", style, name, head));
     }
     if vb4 && g3.rec_head != Some(fx_exec::hostconv14::VB4_HEAD) {
-        return Err(format!("SOURCE-HEAD-UNRECORDED ({}: class 3 derived, source head selected, the run's record carries no source-head hook showing it; the head is not taken on the claim route without its record; SVB1, W744)", style));
+        return Err(format!("SOURCE-HEAD-UNRECORDED ({}: class 3 derived, source head selected, the run's record carries no source-head hook showing it; the head is not taken on the claim route without its record)", style));
     }
     if r3 && g3.rec_head != Some(fx_exec::hostconv14::R3_HEAD) {
-        // INT24: the refusal text, fixed byte for byte
-        return Err(format!("SOURCE-HEAD-UNRECORDED ({}: class 3 derived, source head selected, the run's record carries no source-head hook to check it against; the head is not taken on the claim route without its record; G3R, W476, W515)", style));
+        // the refusal text, fixed byte for byte
+        return Err(format!("SOURCE-HEAD-UNRECORDED ({}: class 3 derived, source head selected, the run's record carries no source-head hook to check it against; the head is not taken on the claim route without its record; G3R)", style));
     }
     // no SOURCE-HEAD-MISMATCH refusal; a recorded head that differs is refused by derived_source (SOURCE-VARIANT-MISMATCH)
     let _ = g3.rec_head;
     let want = convert_pair::class3_planes();
-    // SVB1: the 4-plane head hands over its three colour lanes (hostconv14::class3_vb4_lanes); the record's plane count is 4
+    // the 4-plane head hands over its three colour lanes (hostconv14::class3_vb4_lanes); the record's plane count is 4
     if vb4 && !(mode == 3 && g3.dest_planes == 3) {
-        return Err(format!("MODE-BODY-NOT-PORTED ({}: class 3 on the variant-B 4-plane head is admitted at mode byte 3 with a 3-plane destination only; got mode {} and {} destination planes; SVB1)", style, mode, g3.dest_planes));
+        return Err(format!("MODE-BODY-NOT-PORTED ({}: class 3 on the variant-B 4-plane head is admitted at mode byte 3 with a 3-plane destination only; got mode {} and {} destination planes)", style, mode, g3.dest_planes));
     }
     if vb4 && *planes != 4 {
         return Err(format!("INPUT-CLASS-PLANES-MISMATCH ({}: {}: variant B reads 4 planes, the record gives {})", style, name, planes));
@@ -2482,7 +2482,7 @@ fn class3_admit(style: &str, _k: usize, name: &str, g3_in_a: u32, mode: i32, g3:
     if !vb4 && *planes != want {
         return Err(format!("INPUT-CLASS-PLANES-MISMATCH ({}: {}: derived {} planes for class 3, the record gives {})", style, name, want, planes));
     }
-    // M3P2: at mode byte 3 a 1-plane destination runs the ported code-14 one-plane zero-arm body (FMT3c)
+    // M3P2: at mode byte 3 a 1-plane destination runs the ported code-14 one-plane zero-arm body
     let one_plane_m3 = mode == 3 && g3.dest_planes == 1 && !cfg!(feature = "m3p2_refusal_kept_mut");
     if !(mode == 2 || mode == 3) || !(g3.dest_planes == 3 || one_plane_m3) {
         return Err(format!("MODE-BODY-NOT-PORTED ({}: class 3 with mode byte {} and {} destination planes; ported: body at mode 2 and body at mode 3, 3 planes, and the one-plane zero-arm body at mode 3, 1 plane)", style, mode, g3.dest_planes));
@@ -2492,36 +2492,36 @@ fn class3_admit(style: &str, _k: usize, name: &str, g3_in_a: u32, mode: i32, g3:
             return Err(format!("COPIER-ORDER-UNRECORDED ({}: a row copier record at mode 3; the one-plane body writes word 0 itself)", style));
         }
         return Ok(vec![
-            format!("label INPUT-CLASS-PLANES-DERIVED ({} input {}: class 3 by the caller rule from [prog] {} and the record cells; planes {} set through the binding's input elnum before compile; the recorded --src-planes checked equal; RDR10)", style, name, g3_in_a, want),
+            format!("label INPUT-CLASS-PLANES-DERIVED ({} input {}: class 3 by the caller rule from [prog] {} and the record cells; planes {} set through the binding's input elnum before compile; the recorded --src-planes checked equal)", style, name, g3_in_a, want),
             class3_head_label(style, name, r3, vb4),
-            format!("label MODE3-CLASS3-ROUTED-1P ({}: class 3 at mode byte 3 with a 1-plane destination runs the code-14 one-plane zero-arm body (FMT3c's port, R-PARITY cited: FMT3c's T2, plane count 1, tier A, mode 3, 639 of 639 cases PASS), MEASURED by the OP1 record of BCJ5 (oM1c: the one-plane body 64 entries, the three-plane body 0); words 1 to 3 = plane 0, word 0 = 1.0, no row copier; FLOOR-OPEN under W433 (b) until the reader pair; W626, W666)", style),
-            "label FLOOR-OPEN (convert_pair c14 one-plane tier A body: FLOOR-PARTIAL in FMT3c, 122 of 651 mutants unproven over the four plain bodies; W433 (b); the reader pair of W626 (h) 3 reads the UNCLASSIFIED tier A survivors before the Mono OP1 count)".to_string(),
+            format!("label MODE3-CLASS3-ROUTED-1P ({}: class 3 at mode byte 3 with a 1-plane destination runs the code-14 one-plane zero-arm body (port, R-PARITY cited: T2, plane count 1, tier A, mode 3, 639 of 639 cases PASS), MEASURED by the record of (oM1c: the one-plane body 64 entries, the three-plane body 0); words 1 to 3 = plane 0, word 0 = 1.0, no row copier; FLOOR-OPEN until the reader pair)", style),
+            "label FLOOR-OPEN (convert_pair c14 one-plane tier A body: FLOOR-PARTIAL in, 122 of 651 mutants unproven over the four plain bodies; the reader pair (h) 3 reads the UNCLASSIFIED tier A survivors before the Mono count)".to_string(),
         ]);
     }
     if mode == 3 {
-        // M3P: body (RJ1 rj1M3F: 64 hits, 0 hits of) stores 1.0 in slot 0; no row copier follows it
+        // M3P: body (rj1M3F: 64 hits, 0 hits of) stores 1.0 in slot 0; no row copier follows it
         if g3.copier.is_some() {
-            return Err(format!("COPIER-ORDER-UNRECORDED ({}: a row copier record at mode 3; the RJ1 mode-3 record shows 0 hits of and the body writes slot 0 itself)", style));
+            return Err(format!("COPIER-ORDER-UNRECORDED ({}: a row copier record at mode 3; the mode-3 record shows 0 hits of and the body writes slot 0 itself)", style));
         }
         return Ok(vec![
-            format!("label INPUT-CLASS-PLANES-DERIVED ({} input {}: class 3 by the caller rule from [prog] {} and the record cells; planes {} set through the binding's input elnum before compile; the recorded --src-planes checked equal; RDR10)", style, name, g3_in_a, want),
-            // INT29: the mode-3 label follows the head as the mode-2 branch does (the read follows it: hostconv14.rs ae32_to_image)
+            format!("label INPUT-CLASS-PLANES-DERIVED ({} input {}: class 3 by the caller rule from [prog] {} and the record cells; planes {} set through the binding's input elnum before compile; the recorded --src-planes checked equal)", style, name, g3_in_a, want),
+            // the mode-3 label follows the head as the mode-2 branch does (the read follows it: hostconv14.rs ae32_to_image)
             class3_head_label(style, name, r3, vb4),
-            format!("label MODE3-CLASS3-ROUTED ({}: an in-place host (output world data pointer equal to the input world's) makes ctx = 0 at render (RDR12), so derives mode byte 3; when [owner] is already 3 (the Output Opacity answer's loop value 0 through, or the input arm) takes the mode byte from the owner cell, the arm is not entered and the host datum is not read (Time_Warp_RGB_Autogen, W722); the class-3 path then runs the code-14 three-plane body (routed to the existing FMT3c code-14 body, slot 0 = 1.0, not re-ported), MEASURED by the mode-3 record of HSR2 RJ1 (rj1M3F: 64 hits, 0, 0); the host datum is fx_run's --host-inplace; HOST-INPLACE-DERIVED; M3P, W496)", style),
-            "label FLOOR-MET (convert_pair: code-14 three-plane tier A body, 45 of 45 mutants killed or read equivalent by two readers, MUT1 and RDR5, W433 (a); route cited, not re-ported)".to_string(),
+            format!("label MODE3-CLASS3-ROUTED ({}: an in-place host (output world data pointer equal to the input world's) makes ctx = 0 at render, so derives mode byte 3; when [owner] is already 3 (the Output Opacity answer's loop value 0 through, or the input arm) takes the mode byte from the owner cell, the arm is not entered and the host datum is not read (Time_Warp_RGB_Autogen); the class-3 path then runs the code-14 three-plane body (routed to the existing code-14 body, slot 0 = 1.0, not re-ported), MEASURED by the mode-3 record of (rj1M3F: 64 hits, 0, 0); the host datum is fx_run's --host-inplace; HOST-INPLACE-DERIVED; M3P)", style),
+            "label FLOOR-MET (convert_pair: code-14 three-plane tier A body, 45 of 45 mutants killed or read equivalent by two readers and; route cited, not re-ported)".to_string(),
         ]);
     }
-    // INT27: the mode-2 copier requirement, dropped by M3P's PATCH (its PATCH.md says it is kept for mode 2); restored with the s26_op text
+    // the mode-2 copier requirement, dropped by M3P's PATCH (its PATCH.md says it is kept for mode 2); restored with the s26_op text
     // (the G3 control copier_none ran rc 0 on the first s27_g3m chain instead of refusing).
     if g3.copier != Some(k) {
         return Err(format!("DEST-ALPHA-FROM-SOURCE-ROW-UNRECORDED ({}: the class-3 body leaves slot 0; the row copier from source {} is required, the record gives {:?})", style, k, g3.copier));
     }
     Ok(vec![
-        format!("label INPUT-CLASS-PLANES-DERIVED ({} input {}: class 3 by the caller rule from [prog] {} and the record cells; planes {} set through the binding's input elnum before compile; the recorded --src-planes checked equal; RDR10)", style, name, g3_in_a, want),
+        format!("label INPUT-CLASS-PLANES-DERIVED ({} input {}: class 3 by the caller rule from [prog] {} and the record cells; planes {} set through the binding's input elnum before compile; the recorded --src-planes checked equal)", style, name, g3_in_a, want),
         class3_head_label(style, name, r3, vb4),
-        format!("label DEST-ALPHA-FROM-SOURCE-ROW ({}: mode 2, body leaves slot 0 unwritten; copies the host source row's slot 0; MEASURED RDR10 r1b and r1c at the identity binding and RDR11 h25 at Hue Shift 0.25, alpha 0.25 to 1.0, and alx, alpha -0.5 to 2.5)", style),
+        format!("label DEST-ALPHA-FROM-SOURCE-ROW ({}: mode 2, body leaves slot 0 unwritten; copies the host source row's slot 0; MEASURED r1b and r1c at the identity binding and h25 at Hue Shift 0.25, alpha 0.25 to 1.0, and alx, alpha -0.5 to 2.5)", style),
         format!("label CLASS3-BUILDERS-NOT-ON-ROUTE ({}: 0 plane-count builder hits in the record)", style),
-        "label FLOOR-MET (convert_pair: variant B and the mode-2 three-plane body; t_class3 with special values, 5 of 5 mutants killed with binary SHAs, INT20 runs/g3_floor; route pieces equal by t33_class3_route)".to_string(),
+        "label FLOOR-MET (convert_pair: variant B and the mode-2 three-plane body; t_class3 with special values, 5 of 5 mutants killed with binary SHAs; route pieces equal by t33_class3_route)".to_string(),
     ])
 }
 
@@ -2546,7 +2546,7 @@ fn corpus_for(path: &str) -> Result<Corpus, String> {
     Ok(Corpus::from_programs_tsv(&text))
 }
 
-/// LYM1: the layout row registered for `prog` (header's last name = the program), parsed; None when the corpus has no such row.
+/// the layout row registered for `prog` (header's last name = the program), parsed; None when the corpus has no such row.
 fn lym_resolve(path: &str, prog: &str) -> Result<Option<fx_eval::layoutmerge::LayoutInfo>, String> {
     if path == NATIVE_PROGRAMS {
         return fx_eval::programs_native::layout_info(prog);
@@ -2568,7 +2568,7 @@ mod int29_tests {
         G3In { class3_rec: Some((0, 0, 0, 1)), rec_head: Some(head), sources: vec![("Source".to_string(), head, convert_pair::class3_planes())], dest_planes: 3, copier: None }
     }
     /// at mode 3 the label names the head the run reads; the R3 head and the variant B head give different labels
-    /// (before INT29 both printed CONVERT-VARIANT-B-UNWEIGHTED, so this test fails on s27_si's text).
+    /// (before both printed CONVERT-VARIANT-B-UNWEIGHTED, so this test fails on s27_si's text).
     #[test]
     fn mode3_label_follows_head() {
         let r3 = class3_admit("S", 0, "Source", 2, 3, &g3(fx_exec::hostconv14::R3_HEAD)).unwrap();
@@ -2578,7 +2578,7 @@ mod int29_tests {
         assert!(vb.iter().any(|l| l.starts_with("label CONVERT-VARIANT-B-UNWEIGHTED")));
         assert!(!vb.iter().any(|l| l.starts_with("label SOURCE-HEAD-R3-ON-CLASS3")));
     }
-    /// SVB1: VB4 is admitted on class 3 only by the record head at mode 3 / 3 planes; every other unported head still refuses by name.
+    /// VB4 is admitted on class 3 only by the record head at mode 3 / 3 planes; every other unported head still refuses by name.
     #[test]
     fn svb1_vb4_admitted_by_record_only() {
         let ok = class3_admit("S", 0, "Source", 2, 3, &{ let mut a = g3(fx_exec::hostconv14::VB4_HEAD); a.sources[0].2 = 4; a }).unwrap();
@@ -2639,7 +2639,7 @@ mod int29_tests {
         assert!(class3_admit("S", 0, "Source", 2, 2, &a).unwrap().iter().any(|l| l.starts_with("label SOURCE-HEAD-R3-ON-CLASS3")));
         assert!(class3_admit("S", 0, "Source", 2, 2, &b).unwrap().iter().any(|l| l.starts_with("label CONVERT-VARIANT-B-UNWEIGHTED")));
     }
-    /// INT29 step TW: every --tw-route field is required.
+    /// every --tw-route field is required.
     #[test]
     fn tw_route_fields_required() {
         assert!(parse_tw_route("240,0,2,0,0,0,1").is_ok());
@@ -2648,8 +2648,8 @@ mod int29_tests {
     }
 }
 
-/// HPT1: the render-history driver. `--host-times t1,t2,..` runs the renders in order; per render the record decides KEEP or RESTART
-/// (fx_exec::history). Options, each from the run's record with no default (INT29 step H):
+/// the render-history driver. `--host-times t1,t2,..` runs the renders in order; per render the record decides KEEP or RESTART
+/// (fx_exec::history). Options, each from the run's record with no default:
 /// `--host-step S` (local_time_step, in_data; never time_step), `OPT_PROG_FLAG V` (the program flag byte; bit value 4 is the
 /// history flag), `--host-alloc V` (the allocator cell; nonzero is present, 0 the free path), `--host-depth N` (the depth n), `--host-id H`
 /// (the host id; the verified render path is ported for id 1). `--host-sizes WxH,..` (default: `--size`). Any `--in`, `--frame` or `--prev` value
@@ -2740,7 +2740,7 @@ fn run_history(a0: &[String]) -> i32 {
                     let same = std::fs::read(&gp).ok() == std::fs::read(pf).ok();
                     check = if same { "equal".into() } else { "HISTORY-INPUT-MISMATCH".into() };
                     if !same {
-                        eprintln!("HISTORY-INPUT-MISMATCH (render {}: the given --prev {} differs from the native's own previous destination {}; W516 (d))", k + 1, gp, pf);
+                        eprintln!("HISTORY-INPUT-MISMATCH (render {}: the given --prev {} differs from the native's own previous destination {})", k + 1, gp, pf);
                         return 1;
                     }
                 }
@@ -2772,7 +2772,7 @@ fn run_history(a0: &[String]) -> i32 {
     0
 }
 
-/// INT29 step H: the label texts with their cited addresses, kept as data.
+/// the label texts with their cited addresses, kept as data.
 const RENDER_HISTORY_PORTED: &str = include_str!("../../data/RENDER_HISTORY_PORTED.txt");
 const HOST_DETECT_ID_UNEXPECTED: &str = include_str!("../../data/HOST_DETECT_ID_UNEXPECTED.txt");
 
@@ -2784,16 +2784,16 @@ fn parse_cell(v: &str) -> Option<u64> {
     }
 }
 
-/// INT29 step H: every history input from the run's record, refused by name when absent; the host id must be 1.
+/// every history input from the run's record, refused by name when absent; the host id must be 1.
 fn history_required(tag: &str, step: Option<i32>, flag: Option<u32>, depth: Option<i32>, alloc: Option<bool>, host_id: Option<i64>) -> Result<(i32, u32, i32, bool), String> {
-    let step = step.ok_or_else(|| format!("HISTORY-HOST-DATA-MISSING (S_Trails {}: --host-step, local_time_step, is required with --host-times; W576)", tag))?;
-    let flag = flag.ok_or_else(|| format!("HISTORY-FLAG-UNRECORDED (S_Trails {}: [prog] is not given from the run's record; W576)", tag))?;
-    let depth = depth.ok_or_else(|| format!("HISTORY-HOST-CELL-UNRECORDED (S_Trails {}: the depth n is not given from the run's record; W576)", tag))?;
-    let alloc = alloc.ok_or_else(|| format!("HISTORY-HOST-CELL-UNRECORDED (S_Trails {}: the allocator cell is not given from the run's record; W576)", tag))?;
+    let step = step.ok_or_else(|| format!("HISTORY-HOST-DATA-MISSING (S_Trails {}: --host-step, local_time_step, is required with --host-times)", tag))?;
+    let flag = flag.ok_or_else(|| format!("HISTORY-FLAG-UNRECORDED (S_Trails {}: [prog] is not given from the run's record)", tag))?;
+    let depth = depth.ok_or_else(|| format!("HISTORY-HOST-CELL-UNRECORDED (S_Trails {}: the depth n is not given from the run's record)", tag))?;
+    let alloc = alloc.ok_or_else(|| format!("HISTORY-HOST-CELL-UNRECORDED (S_Trails {}: the allocator cell is not given from the run's record)", tag))?;
     match host_id {
         Some(1) => Ok((step, flag, depth, alloc)),
         Some(v) => Err(HOST_DETECT_ID_UNEXPECTED.trim().replace("<v>", &v.to_string())),
-        None => Err(format!("HISTORY-HOST-CELL-UNRECORDED (S_Trails {}: the host id is not given from the run's record; W576, W527)", tag)),
+        None => Err(format!("HISTORY-HOST-CELL-UNRECORDED (S_Trails {}: the host id is not given from the run's record)", tag)),
     }
 }
 
@@ -2818,7 +2818,7 @@ mod int29_history_tests {
     }
 }
 
-/// INT31 step AL: the input alias rule on the 'ae32' route, for every program. An unbound input whose def-text default
+/// the input alias rule on the 'ae32' route, for every program. An unbound input whose def-text default
 /// names another declared input binds that input's node (the same planes, class, head and conversion); no image is constructed for it.
 /// The chain of defaults is resolved against the inputs the 'ae32' host world binds (`ae_names`) and `ins_names`. Returns per aliased input
 /// (input, the default it names, the final target, the record evidence). A record that shows the input's own layer (its bound-mask bit set,
@@ -2841,7 +2841,7 @@ fn ae32_input_aliases(prog: &str, tag: &str, inputs: &[fx_eval::build::InputRec]
             continue; // bound by its record and its line: the alias does not apply
         }
         if bit || given(&inp.name) {
-            return Err(format!("INPUT-ALIAS-RECORD-MISMATCH ({} {}: the record shows a {} layer bound; the alias does not apply; W589)", prog, tag, inp.name));
+            return Err(format!("INPUT-ALIAS-RECORD-MISMATCH ({} {}: the record shows a {} layer bound; the alias does not apply)", prog, tag, inp.name));
         }
         let mut cur = dn.clone();
         let mut hops = 0usize;
@@ -2865,7 +2865,7 @@ fn ae32_input_aliases(prog: &str, tag: &str, inputs: &[fx_eval::build::InputRec]
     Ok(out)
 }
 
-/// INT31 step AL: every use of an aliased input's node reads the target's input node instead (the original's plan reads IN:<target> at the use);
+/// every use of an aliased input's node reads the target's input node instead (the original's plan reads IN:<target> at the use);
 /// the aliased input node is left unreferenced, so the reachable compile has no node for it.
 fn alias_input_nodes(g: &mut fx_eval::build::Genotype, al: &[(String, String, String, String)]) {
     for (inp, _, tgt, _) in al {
@@ -2888,10 +2888,10 @@ fn alias_input_nodes(g: &mut fx_eval::build::Genotype, al: &[(String, String, St
     }
 }
 
-/// INT31 step AL: the per-run label in its general form.
+/// the per-run label in its general form.
 fn input_alias_label(prog: &str, tag: &str, a: &(String, String, String, String)) -> String {
     format!(
-        "label INPUT-ALIAS-TO-SOURCE-NODE ({} {}: the unbound input {} defaults to {} by the def text '( {} {} )'; the record shows no {} layer ({}); the native binds the {} node itself (the same planes, class, head and conversion); the run's recorded plan reads IN:{} at the {} use; ALS1, AUD3, W589, W600)",
+        "label INPUT-ALIAS-TO-SOURCE-NODE ({} {}: the unbound input {} defaults to {} by the def text '( {} {} )'; the record shows no {} layer ({}); the native binds the {} node itself (the same planes, class, head and conversion); the run's recorded plan reads IN:{} at the {} use)",
         prog, tag, a.0, a.2, a.0, a.1, a.0, a.3, a.2, a.2, a.0
     )
 }
@@ -2992,19 +2992,19 @@ fn popup_answer_check(prog: &str, display: &str, v: i32) -> Result<(), String> {
     let lo_bad = v < lo && !cfg!(feature = "popup_range_nolow_mut");
     let hi_bad = v > hi && !cfg!(feature = "popup_range_nohigh_mut");
     if lo_bad || hi_bad {
-        return Err(format!("POPUP-ANSWER-OUT-OF-RANGE ({}: '{}' answer {} outside 1..{}; W630)", prog, display, v, n));
+        return Err(format!("POPUP-ANSWER-OUT-OF-RANGE ({}: '{}' answer {} outside 1..{})", prog, display, v, n));
     }
     Ok(())
 }
 
-/// INT31 step L2: the registered default checkout integer of PROG's popup NAME (record name), with its display name, record and style.
+/// the registered default checkout integer of PROG's popup NAME (record name), with its display name, record and style.
 fn registered_default(prog: &str, name: &str) -> Option<(i32, String, String, String)> {
     let r = effects_rtdata::style_param(prog, name)?;
     let v = r.default_checkout_integer?;
     Some((v, r.display_name.to_string(), r.record.to_string(), r.style.to_string()))
 }
 
-/// INT31 step L2: the checkout integer v of an owner opacity extra: the bound answer (host-answer form) or the registered default.
+/// the checkout integer v of an owner opacity extra: the bound answer (host-answer form) or the registered default.
 /// `text_default` is the layout text default, used only by the mutant l2_textconv_mut (the converted text default).
 fn owner_opacity_v(prog: &str, name: &str, host: Option<i32>, text_default: f32) -> Result<(i32, Option<(String, String, String)>), String> {
     if let Some(a) = host {
@@ -3017,11 +3017,11 @@ fn owner_opacity_v(prog: &str, name: &str, host: Option<i32>, text_default: f32)
     }
     match registered_default(prog, name) {
         Some((v, disp, rec, style)) => Ok((v, Some((disp, rec, style)))),
-        None => Err(format!("OPACITY-DEFAULT-UNRECORDED ({}: the host's registered default of '{}' is not in STYLE_PARAM_INDEX.tsv; W592)", prog, name)),
+        None => Err(format!("OPACITY-DEFAULT-UNRECORDED ({}: the host's registered default of '{}' is not in STYLE_PARAM_INDEX.tsv)", prog, name)),
     }
 }
 
-/// INT31 step L2: OP's conversion f32(max(v - 1, 0)) of the one-based checkout integer.
+/// OP's conversion f32(max(v - 1, 0)) of the one-based checkout integer.
 fn owner_loop_value(v: i32) -> f32 {
     if cfg!(feature = "l2_nominus_mut") {
         return v as f32;
@@ -3073,7 +3073,7 @@ fn output_opacity_checked(prog: &str, set: Option<f32>, host: Option<i32>, text_
         let differs = if cfg!(feature = "l2b_value_eq_mut") { sv != f32::from_bits(db) } else { sv.to_bits() != db };
         if differs {
             return Err(format!(
-                "OPACITY-SET-MISMATCH: --set output_opacity={} differs from {} loop value {} ({}, W595, W616)",
+                "OPACITY-SET-MISMATCH: --set output_opacity={} differs from {} loop value {} ({})",
                 sv,
                 if host.is_some() { "the host answer's" } else { "the registered default's" },
                 f32::from_bits(db),
@@ -3099,7 +3099,7 @@ fn cset_param(prog: &str, display: &str) -> Option<String> {
     None
 }
 
-/// Step L2b: the loop value a --cset answer gives (OPC1's conversion for opacity and input_opacity, f32(max(v - 1, 0)) for output_opacity).
+/// Step L2b: the loop value a --cset answer gives (conversion for opacity and input_opacity, f32(max(v - 1, 0)) for output_opacity).
 #[cfg(test)]
 fn cset_loop_value(prog: &str, display: &str, v: i32) -> Option<(String, f32)> {
     let p = cset_param(prog, display)?;
@@ -3107,7 +3107,7 @@ fn cset_loop_value(prog: &str, display: &str, v: i32) -> Option<(String, f32)> {
     Some((p, x))
 }
 
-/// INT31 step L2: OWNER-OPACITY-DERIVED in 's text.
+/// OWNER-OPACITY-DERIVED in 's text.
 fn owner_opacity_label(prog: &str, tag: &str, name: &str, v: i32, reg: Option<&(String, String, String)>) -> String {
     let style = reg.map(|r| r.2.clone()).or_else(|| registered_default(prog, name).map(|r| r.3)).unwrap_or_else(|| prog.to_string());
     let src = match reg {
@@ -3115,7 +3115,7 @@ fn owner_opacity_label(prog: &str, tag: &str, name: &str, v: i32, reg: Option<&(
         Some((disp, rec, _)) => format!("the registered default v = {} of '{}' (STYLE_PARAM_INDEX.tsv, from {})", v, disp, rec),
     };
     format!(
-        "label OWNER-OPACITY-DERIVED ({} {}: the owner arm's {} = f32(max(v - 1, 0)) for v the one-based popup checkout integer: {}; the claimed 3-choice opacity popups register v = 2 (1.0) and Time_Warp_RGB's Output Opacity v = 1 of 2 (0.0); --owner-opacity, when given, checked equal; OPC1, LYM3, W449, W592, W595)",
+        "label OWNER-OPACITY-DERIVED ({} {}: the owner arm's {} = f32(max(v - 1, 0)) for v the one-based popup checkout integer: {}; the claimed 3-choice opacity popups register v = 2 (1.0) and Time_Warp_RGB's Output Opacity v = 1 of 2 (0.0); --owner-opacity, when given, checked equal)",
         style, tag, name, src
     )
 }
@@ -3192,7 +3192,7 @@ mod int31_l2_tests {
         let e = output_opacity_checked("Not_A_Program", Some(0.0), None, 0.0).unwrap_err();
         assert!(e.starts_with("OPACITY-DEFAULT-UNRECORDED (Not_A_Program: the host's registered default of 'output_opacity'"), "{}", e);
     }
-    // The bound row (TWC1's O2: Output Opacity=2) in the host answer form: v = 2 gives 1.0; --set 1.0 passes, --set 0.0 refuses.
+    // The bound row (O2: Output Opacity=2) in the host answer form: v = 2 gives 1.0; --set 1.0 passes, --set 0.0 refuses.
     #[test]
     fn l2b_output_opacity_bound_answer() {
         let (bits, v, reg) = output_opacity_checked("Time_Warp_RGB_Autogen", Some(1.0), Some(2), 0.0).unwrap();
@@ -3275,10 +3275,10 @@ mod g2_popup_tests {
     }
         for v in [0, 4, -1, i32::MAX, i32::MIN] {
             let e = popup_answer_check("Trails_Autogen", "Opacity", v).unwrap_err();
-            assert_eq!(e, format!("POPUP-ANSWER-OUT-OF-RANGE (Trails_Autogen: 'Opacity' answer {} outside 1..3; W630)", v));
+            assert_eq!(e, format!("POPUP-ANSWER-OUT-OF-RANGE (Trails_Autogen: 'Opacity' answer {} outside 1..3)", v));
         }
         let e = popup_answer_check(TW, "Output Opacity", 3).unwrap_err();
-        assert_eq!(e, "POPUP-ANSWER-OUT-OF-RANGE (Time_Warp_RGB_Autogen: 'Output Opacity' answer 3 outside 1..2; W630)");
+        assert_eq!(e, "POPUP-ANSWER-OUT-OF-RANGE (Time_Warp_RGB_Autogen: 'Output Opacity' answer 3 outside 1..2)");
         assert!(popup_answer_check(TW, "Output Opacity", 0).is_err());
     }
     // every host type 7 row of the table carries a popup_choices count (59 of 59 today); a type 7 row without one fails.
@@ -3320,7 +3320,7 @@ mod g2_popup_tests {
 /// Step FH: raw host frame planes (--frame-req) on the 'ae32' route refuse; host frames there come as words (--frame-words).
 fn frame_content_check(prog: &str, ae32: bool, raw_frames: usize) -> Result<(), String> {
     if ae32 && raw_frames > 0 {
-        return Err(format!("FRAME-CONTENT-UNCONVERTED ({}: a host frame was given as raw planes on the 'ae32' route; host frames are converted by the input's head like its Source frame; TWC1, W607)", prog));
+        return Err(format!("FRAME-CONTENT-UNCONVERTED ({}: a host frame was given as raw planes on the 'ae32' route; host frames are converted by the input's head like its Source frame)", prog));
     }
     Ok(())
 }
@@ -3331,7 +3331,7 @@ mod int32_fh_tests {
     #[test]
     fn fh_raw_frames_refused_on_ae32_only() {
         let e = frame_content_check("Time_Warp_RGB_Autogen", true, 1).unwrap_err();
-        assert_eq!(e, "FRAME-CONTENT-UNCONVERTED (Time_Warp_RGB_Autogen: a host frame was given as raw planes on the 'ae32' route; host frames are converted by the input's head like its Source frame; TWC1, W607)");
+        assert_eq!(e, "FRAME-CONTENT-UNCONVERTED (Time_Warp_RGB_Autogen: a host frame was given as raw planes on the 'ae32' route; host frames are converted by the input's head like its Source frame)");
         assert!(frame_content_check("Time_Warp_RGB_Autogen", false, 1).is_ok());
         assert!(frame_content_check("Time_Warp_RGB_Autogen", true, 0).is_ok());
     }
@@ -3376,7 +3376,7 @@ mod int32_bops_tests {
     fn bops_answer_2_runs_the_blur_only_def() {
         let (v, l) = style_select_args(&args("Blur_Motion_Curves_No_Transform_Autogen", "2")).unwrap();
         assert_eq!(v.len(), 5);
-        assert_eq!(l.unwrap(), "label STYLE-PROGRAM (S_BlurMoCurves: Effect answer 2 of 2 gives style index 1 = Blur_Only, which runs the def Blur_Motion_Curves_No_Transform_Autogen; BOP1, W570; INT32)");
+        assert_eq!(l.unwrap(), "label STYLE-PROGRAM (S_BlurMoCurves: Effect answer 2 of 2 gives style index 1 = Blur_Only, which runs the def Blur_Motion_Curves_No_Transform_Autogen)");
         // answer 1 selects Transform_and_Blur: the Blur_Only def does not run there
         assert!(style_select_args(&args("Blur_Motion_Curves_No_Transform_Autogen", "1")).unwrap_err().starts_with("STYLE-SELECT-MISMATCH"));
         // the Transform_and_Blur def at answer 1 keeps the ordinary label

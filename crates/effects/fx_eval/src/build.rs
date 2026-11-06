@@ -91,7 +91,7 @@ pub struct InputRec {
     pub pos: usize,
     pub node: usize,
     pub default: Option<String>,
-    /// LYM3: the layout row's name for this input (the original's program object holds this name, e.g. Matte for Mask); equals `name` on the def path
+    /// the layout row's name for this input (the original's program object holds this name, e.g. Matte for Mask); equals `name` on the def path
     pub layout_name: String,
 }
 
@@ -104,7 +104,7 @@ pub struct ParamRec {
     pub info: FlagInfo,
     /// the default is the program text's own default
     pub binding: &'static str,
-    /// LYM3: the layout row's name for this record (the original's array holds this name; `:modify NAME CANON` renames); equals `name` on the def path
+    /// the layout row's name for this record (the original's array holds this name; `:modify NAME CANON` renames); equals `name` on the def path
     pub layout_name: String,
 }
 
@@ -119,7 +119,7 @@ pub struct Genotype {
     pub flags: Vec<String>,
     /// bare-word parameter defaults (identifier rhs): the original creates no param for them
     pub word_defaults: Vec<String>,
-    /// LYM3: the def's input names in def order when the layout row's input group replaced the def's (empty on the def path); tables measured in
+    /// the def's input names in def order when the layout row's input group replaced the def's (empty on the def path); tables measured in
     /// def order (PARAM_INPUTS.tsv) are translated through it
     pub def_input_order: Vec<String>,
 }

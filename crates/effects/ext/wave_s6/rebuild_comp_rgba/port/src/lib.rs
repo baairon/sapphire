@@ -1,4 +1,4 @@
-//! comp_rgba (CR1): native port of builtin class comp_rgba, vtable, slot 53, AVX2 body and its tail-called
+//! comp_rgba: native port of builtin class comp_rgba, vtable, slot 53, AVX2 body and its tail-called
 //! bodies (listing offsets, VA = offset for data).
 //!
 //! The class composites an operand A (count `ca` at this) under an operand B (count `cb` at this, premultiplied) per pixel:
@@ -265,7 +265,7 @@ pub fn render(p: &Params, host: &Host, a: &[&[f32]], b: &[&[f32]], outs: &mut [&
     Ok(Outcome::Rendered { outs: oc })
 }
 
-/// What the recorded pad calls do through the finished plane service crate (PL1, flat modes). The block the class virtual returns is an
+/// What the recorded pad calls do through the finished plane service crate (, flat modes). The block the class virtual returns is an
 /// explicit input (CALLEE-MODELLED); the alpha fill with value 1.0 is re-expressed as a constant fill of n floats (flat ROI).
 /// PAD-UNVERIFIED: the T2 compares the call record only.
 #[derive(Debug, PartialEq)]

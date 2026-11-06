@@ -1,4 +1,4 @@
-//! FMT3c: the on-route destination bodies of format code 14 (zero stack-word arm) for 4, 3, 2 and 1 planes.
+//! the on-route destination bodies of format code 14 (zero stack-word arm) for 4, 3, 2 and 1 planes.
 //! Ported from the listing: 4 planes (A, B, C), 2 planes (A, B, C),
 //! 3 planes (shared, tier bodies inside) and 1 plane (shared). The tiers store the same words; the
 //! vector blocks versus scalar remainder split is output-invisible (checked by the T2, not assumed).

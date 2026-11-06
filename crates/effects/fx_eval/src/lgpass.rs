@@ -69,7 +69,7 @@ pub fn size_of(n: &LNode) -> i32 {
 
 struct Ctx {
     nodes: Vec<LNode>,
-    /// STK2: the group id per node id (absent = -1); equal keys are required for the same linewise group 
+    /// the group id per node id (absent = -1); equal keys are required for the same linewise group 
     keys: HashMap<usize, i64>,
 }
 
@@ -93,7 +93,7 @@ impl Ctx {
         j
     }
     fn key_eq(&self, a: usize, b: usize) -> bool {
-        // (= -1) and (= 0) are uniform in the modelled programs; is the preserve group id (STK2, READ)
+        // (= -1) and (= 0) are uniform in the modelled programs; is the preserve group id (, READ)
         self.keys.get(&self.nodes[a].id).copied().unwrap_or(-1) == self.keys.get(&self.nodes[b].id).copied().unwrap_or(-1)
     }
     /// does any node in [s,e) take node `target_id` as image argument
@@ -142,7 +142,7 @@ pub fn run_pass(input: Vec<LNode>) -> Vec<LNode> {
     run_pass_keys(input, HashMap::new())
 }
 
-/// STK2: the pass with the group ids per node id
+/// the pass with the group ids per node id
 pub fn run_pass_keys(input: Vec<LNode>, keys: HashMap<usize, i64>) -> Vec<LNode> {
     let mut c = Ctx { nodes: input, keys };
     let n = c.n();

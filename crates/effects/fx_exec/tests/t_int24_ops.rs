@@ -1,4 +1,4 @@
-//! INT24: the claim-route tripwire OPS-ARITH-SCALAR-SCALAR-UNJUDGED and the OPS_SCALAR_PAIRS census rows.
+//! the claim-route tripwire OPS-ARITH-SCALAR-SCALAR-UNJUDGED and the OPS_SCALAR_PAIRS census rows.
 //! Constructed rows for the tripwire text and its trigger set; one real compile (Hue_Sat_Bright_Autogen, state A defaults as plan_dump) for the rows.
 use fx_exec::ops_census::{census_line, ops_rows, scalar_scalar_tripwire, OpsRow};
 
@@ -12,7 +12,7 @@ fn tripwire_fires_on_both_non_plane() {
         let m = scalar_scalar_tripwire("P", &[row(op, [false, false])]).expect("tripwire");
         assert_eq!(
             m,
-            format!("OPS-ARITH-SCALAR-SCALAR-UNJUDGED (P: node 12: {} with both operands non-plane, counts 3,1, nout 3; this operand pair is outside ops_arith's judged R cases; PLR4, W526)", op)
+            format!("OPS-ARITH-SCALAR-SCALAR-UNJUDGED (P: node 12: {} with both operands non-plane, counts 3,1, nout 3; this operand pair is outside ops_arith's judged R cases)", op)
         );
     }
 }
@@ -37,7 +37,7 @@ fn census_rows_of_a_real_plan() {
     let g = fx_eval::build_effect(&c, c.find_effect("Hue_Sat_Bright_Autogen", None).unwrap()).unwrap();
     let mut o = fx_eval::CompileOptions::default();
     o.const_inputs.insert("Mask".into(), vec![1.0]);
-    // FLD2 binding A at Source 3 channels (the default binding is an identity plan with no run-primitive)
+    // binding A at Source 3 channels (the default binding is an identity plan with no run-primitive)
     o.input_elnum.insert("Source".into(), 3);
     o.overrides.insert("scale_colors".into(), vec![0.8125, 1.0625, 0.9375]);
     o.overrides.insert("brightness".into(), vec![1.0]);

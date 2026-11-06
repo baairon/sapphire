@@ -1,4 +1,4 @@
-//! make_mipmap (MM1): native port of the pyramid builder of the class make_mipmap (vtable).
+//! make_mipmap: native port of the pyramid builder of the class make_mipmap (vtable).
 //!
 //! Scope (SPEC.md): slot 34 callee -> AVX2 driver body and its two launched kernels (AVX2 tiers).
 //! The image object is a RIPMAP: a grid of NL x NP planes. Plane (l, j) has width widths[l] (halved along x with l) and height
@@ -129,9 +129,9 @@ fn is_snan_bits(a: u32) -> bool {
 
 /// NaN rule measured against the VEX engine (T2 diag): one SNaN and one QNaN gives the QNaN; two QNaN or two SNaN give the first operand
 /// (quieted); one NaN gives that NaN (quieted); otherwise the IEEE sum (inf - inf gives the host default NaN)
-/// NaN pair rule switch (MM2): false = the port rule above (one SNaN and one QNaN gives the QNaN, otherwise the first operand), true = the rule of the
+/// NaN pair rule switch: false = the port rule above (one SNaN and one QNaN gives the QNaN, otherwise the first operand), true = the rule of the
 /// emulator's float core (Unicorn/QEMU softfloat, x87 style: QNaN beats SNaN, then the larger significand, then the positive sign), measured to explain the
-/// NaN payload residue of MM1 (avx/notes.md: "Unicorn selects the NaN by the x87 rule, SDM and hardware use the first source operand")
+/// NaN payload residue of (avx/notes.md: "Unicorn selects the NaN by the x87 rule, SDM and hardware use the first source operand")
 static NAN_X87: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub fn set_nan_rule_x87(on: bool) {

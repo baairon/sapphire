@@ -38,7 +38,7 @@ pub enum PlanMode {
     CpuDriver,
 }
 
-/// AG1: argument positions that only donate a type (fold.rs `can_fold` exemption): coerce_up and coerce_to arg 1, v3_to_v4_if4 arg 2 and up.
+/// argument positions that only donate a type (fold.rs `can_fold` exemption): coerce_up and coerce_to arg 1, v3_to_v4_if4 arg 2 and up.
 pub fn donor_pos(prim: &str, k: usize) -> bool {
     match prim.strip_suffix("_if_needed").unwrap_or(prim) {
         "coerce_up" | "coerce_to" => k >= 1,
@@ -49,14 +49,14 @@ pub fn donor_pos(prim: &str, k: usize) -> bool {
     }
 }
 
-/// a donor that is an input or special variable (not a computed node): no image dependency, printed as the -999 constant (AG1, MEASURED on
+/// a donor that is an input or special variable (not a computed node): no image dependency, printed as the -999 constant (, MEASURED on
 /// Time_Warp_RGB_Autogen: coerce_up arg 1 = Source prints `[ -999 -999 -999 -999 ]`, no convert-from-source)
 pub(crate) fn is_donor_arg(prim: &str, k: usize, kind: &str) -> bool {
     !old("DONOR") && donor_pos(prim, k) && matches!(kind, "input" | "special")
 }
 
-/// DS1: the exec-downsampled factor of a compiled program: 2^blur_res when the program has a constant node named `blur_res` (popup
-/// Full / Half / Quarter, record range 0..2, MEASURED in AG1 and NEG2), else 1. `NV3E_DS=old` switches the rule off (NV-3e layout).
+/// the exec-downsampled factor of a compiled program: 2^blur_res when the program has a constant node named `blur_res` (popup
+/// Full / Half / Quarter, record range 0..2, MEASURED in and), else 1. `NV3E_DS=old` switches the rule off (NV-3e layout).
 pub fn ds_factor(cp: &CompiledProgram) -> u32 {
     if old("DS") {
         return 1;
@@ -73,7 +73,7 @@ pub fn ds_factor(cp: &CompiledProgram) -> u32 {
     1
 }
 
-/// FLD1 (INFERRED from DSW4's set_arg_const read and the -0 into blur_warp argument 6 of rc and bc): a constant lane bound to an INTEGER
+/// (INFERRED from set_arg_const read and the -0 into blur_warp argument 6 of rc and bc): a constant lane bound to an INTEGER
 /// typed class argument ([desc] = 1) is stored as cvttss2si(lane) (truncation toward zero; -0 becomes +0), so the plan shows the truncated integer.
 /// The pairs are defined in effects_rtdata::classes::INT_TYPED_ARGS (from the descriptor dumps). Switch (mixed typing between instances) is excluded by the table.
 pub fn int_typed_arg(prim: &str, k: usize) -> bool {
@@ -83,7 +83,7 @@ pub fn int_typed_arg(prim: &str, k: usize) -> bool {
     effects_rtdata::int_typed_arg(prim.strip_suffix("_if_needed").unwrap_or(prim), k)
 }
 
-/// DSW4: argument `k` of `prim` is image only (descriptor kind field = 1, constant field = 0)
+/// argument `k` of `prim` is image only (descriptor kind field = 1, constant field = 0)
 pub fn image_only_arg(prim: &str, k: usize) -> bool {
     effects_rtdata::img_only_arg(prim.strip_suffix("_if_needed").unwrap_or(prim), k)
 }
@@ -102,13 +102,13 @@ fn random_access(prim: &str) -> bool {
 }
 
 
-/// FLD1 (INFERRED from the node rows of cd, md and ta of RNG1's batch, plus SHE3's h3): when a folded FUNCTION constant is bound to an image-only
-/// class argument (DSW4's rule), the original appends a copy node of the same class and lanes (kind 2, flag set) that stands as the materialised
+/// (INFERRED from the node rows of cd, md and ta of batch, plus the recorded h3): when a folded FUNCTION constant is bound to an image-only
+/// class argument (rule), the original appends a copy node of the same class and lanes (kind 2, flag set) that stands as the materialised
 /// image. This returns the lanes of those copies, one per (consumer, argument) binding. Parameter constants (kind 1) are not counted.
 pub fn materialised_copies(cp: &CompiledProgram) -> Vec<[u32; 4]> {
     let nodes = &cp.nodes;
     let mut v = Vec::new();
-    // INT4 reconcile (W-DSW5): the (consumer, argument) copies are the clone nodes of the compile pass (cp.clones); only the root copy stays here (FLD1).
+    // reconcile (W-DSW5): the (consumer, argument) copies are the clone nodes of the compile pass (cp.clones); only the root copy stays here.
     // the root: convert-to-dest reads an image (MEASURED ca and ma: root alias to a folded blur, copy node 103 appended; param roots (n2, f10) are kind 1 and not counted)
     let r = &nodes[cp.root];
     if r.kind == "const" && r.folded && !r.cls.is_empty() {
@@ -131,16 +131,16 @@ struct Item {
     n: usize,
     lw: bool,
     deps: Vec<usize>, // item indices (images read)
-    /// the id printed in `:refN` (the node index; the DS1 duplicate of the xy variable gets a fresh one)
+    /// the id printed in `:refN` (the node index; the duplicate of the xy variable gets a fresh one)
     rid: usize,
-    /// DS1: (node argument, item) replacement of an argument by the duplicate xy item
+    /// (node argument, item) replacement of an argument by the duplicate xy item
     alias: Option<(usize, usize)>,
 }
 
 /// NV-3g rule M (RULE-INFERRED, DigitalDamage nf1 and nf2 against Rays, Warp_Chroma, Warp_Perspective, InfiniteZoom): a make_mipmap image has the mip-chain format 3 only when a consumer reads it at a random access position (warp family); a mipmap used only linewise (DigitalDamage: diff, copy_alpha in the same block) is format 2 like every other image
 fn fcode_n(cp: &CompiledProgram, idx: usize) -> u32 {
     let nd = &cp.nodes[idx];
-    // WPG12 PATCH 1 (FORMAT-READ, pass): the format comes from the propagation pass; rule M is the named ablation WPG12_OLDFMT=1 (off in counted runs)
+    // (FORMAT-READ, pass): the format comes from the propagation pass; rule M is the named ablation WPG12_OLDFMT=1 (off in counted runs)
     if nd.prim == "make_mipmap" && idx != cp.root && std::env::var_os("WPG12_OLDFMT").is_none() {
         return fmt_pass(cp)[idx];
     }
@@ -151,7 +151,7 @@ fn fcode_n(cp: &CompiledProgram, idx: usize) -> u32 {
     2
 }
 
-/// WPG12 (READ): the format propagation pass (walk: preorder, children in argument order, a node is marked visited after its
+/// (READ): the format propagation pass (walk: preorder, children in argument order, a node is marked visited after its
 /// children). Slot 22 (vtable) of the consumer class gives the format of argument k from the consumer's own format; slot 29 says
 /// whether a class accepts a format. CPU path only (= 0). Classes: make_mipmap slot22 (k = 0 gives 2, else 3), slot29 
 /// (2 or 3); the warp family slot22 (k = 0 gives 3, else the
@@ -232,7 +232,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
     let nn = nodes.len();
     let is_out = |i: usize| nodes[i].kind == "special" && nodes[i].name == "Output";
     let is_func = |i: usize| !matches!(nodes[i].kind, "input" | "special" | "const");
-    // materialised constants (DSW4, rule READ + MEASURED): a constant argument bound to a class argument whose descriptor does not allow a scalar
+    // materialised constants (, rule READ + MEASURED): a constant argument bound to a class argument whose descriptor does not allow a scalar
     // ([desc field] == 0, image only; set_arg_const refuses it) is materialised as a `constant` image command.
     // Table data/IMG_ONLY_ARGS.tsv comes from the descriptors of every class object after the original compile (tools/desc_dump.py).
     let mut mat = vec![false; nn];
@@ -245,7 +245,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             }
         }
     }
-    // DSW3 (MEASURED shape, Drop_Shadow n2: the whole program collapses to the constant [0 0 0]): a constant ROOT is materialised as a constant image that
+    // (MEASURED shape, Drop_Shadow n2: the whole program collapses to the constant [0 0 0]): a constant ROOT is materialised as a constant image that
     // convert-to-dest reads (original: allocate, (constant [ .. ] :ref), convert-to-dest, one exec-linewise command)
     if nodes[cp.root].kind == "const" {
         mat[cp.root] = true;
@@ -253,7 +253,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
     // items
     let mut items: Vec<Item> = Vec::new();
     let mut item_of: HashMap<usize, usize> = HashMap::new();
-    // DS1: hoisted nodes (FITTED, see `ds_hoist`) run at full resolution before the exec-downsampled command, on their own copy of the xy variable
+    // hoisted nodes (FITTED, see `ds_hoist`) run at full resolution before the exec-downsampled command, on their own copy of the xy variable
     let hoist: Vec<usize> = if ds_factor(cp) > 1 { ds_hoist(cp) } else { Vec::new() };
     let xy_idx: Option<usize> = nodes.iter().find(|m| m.kind != "func" && m.kind != "auto" && m.kind != "const" && m.name == "xy").map(|m| m.idx);
     let dup_rid = nodes.len() + 1000;
@@ -282,7 +282,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
         match n.kind {
             "input" | "special" => {
                 // an input read only by get_frame is a clip descriptor `(clip slot elnum)`, not an image (MEASURED, Time_Warp_RGB)
-                // AG1: an input used only as a donor argument (coerce_up arg 1, v3_to_v4_if4 arg 2) is not an image either
+                // an input used only as a donor argument (coerce_up arg 1, v3_to_v4_if4 arg 2) is not an image either
                 let only_clip = nodes.iter().filter(|m| is_func(m.idx) && m.args.contains(&n.idx)).all(|m| m.prim == "get_frame" || (!old("DONOR") && m.args.iter().enumerate().all(|(k, &a)| a != n.idx || donor_pos(&m.prim, k)))) && nodes.iter().any(|m| is_func(m.idx) && m.args.contains(&n.idx));
                 if only_clip {
                     continue;
@@ -314,7 +314,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             }
         }
     }
-    // STK2 (stack word 2 = 1): the preserve-group model (preserve.rs); programs it does not cover run the word 2 = 0 path (plancmp refuses them by name)
+    // (stack word 2 = 1): the preserve-group model (preserve.rs); programs it does not cover run the word 2 = 0 path (plancmp refuses them by name)
     let pres: Option<crate::preserve::Pres> = if cp.ctx_word2 && crate::preserve::model_refusal(cp).is_none() { Some(crate::preserve::analyze(cp, cp.ctx_has_data)) } else { None };
     let mut mark = mark_set(cp);
     if let Some(p) = pres.as_ref() {
@@ -357,13 +357,13 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
         let nd = &nodes[it.n];
         lnodes.push(crate::lgpass::LNode {
             id: it.rid,
-            // DSW4 (f03, MEASURED + READ): a FOLDED function node keeps node kind 2 and its class in the original (NODE row of the f03 mocha_render
+            // (f03, MEASURED + READ): a FOLDED function node keeps node kind 2 and its class in the original (NODE row of the f03 mocha_render
             // node 88: kind=2, b160=1), so pass 1 asks its class flag word: mocha_render (flags 0xb1, bit 0 set) is not linewise and the materialised constant stands
             // in its own command, not in the block of its consumer
             is_func: it.k == IK::Run || (it.k == IK::Const && nd.folded && !nd.cls.is_empty()),
             prim: if it.k == IK::Run { nd.prim.clone() } else if it.k == IK::Const && nd.folded { nd.cls.clone() } else { String::new() },
             elnum: nd.elnum.max(1),
-            // NV-3g rule R (RULE-FITTED, Rays b/nf1/nf2; H1 [best > created] was tried and REFUTED by MASK1 Transform_and_Blur_Autogen mk4_m1): the xy variable image counts as format 4 (size el * 4) in the memory budget of the linewise pass
+            // NV-3g rule R (RULE-FITTED, Rays b/nf1/nf2; H1 [best > created] was tried and REFUTED by Transform_and_Blur_Autogen mk4_m1): the xy variable image counts as format 4 (size el * 4) in the memory budget of the linewise pass
             fmt: if nd.kind == "special" && nd.name == "xy" { 4 } else { fcode_n(cp, nd.idx) as u8 },
             args: if it.k == IK::Run { nd.args.iter().enumerate().filter(|(k, &a)| !is_donor_arg(&nd.prim, *k, nodes[a].kind)).map(|(_, &a)| match it.alias { Some((x, _)) if a == x => dup_rid, _ => a }).collect() } else { vec![] },
             g: -1,
@@ -398,13 +398,13 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             }
         }
     }
-    // DS1: exec-downsampled. The convert-from-source inputs and the convert-to-dest stay at full resolution OUTSIDE the command (MEASURED
-    // T09 / B09 / AG1 a2 / NEG2 plans); everything else is the body of the command, scheduled as before.
+    // exec-downsampled. The convert-from-source inputs and the convert-to-dest stay at full resolution OUTSIDE the command (MEASURED
+    // T09 / B09 / a2 / plans); everything else is the body of the command, scheduled as before.
     let dsf = ds_factor(cp);
     let cmds_full = cmds.clone();
     let mut ds_dest: Option<usize> = None;
     let mut kpre = 0usize;
-    // DS3: the tail items leave the command body (see `ds_tail_split`)
+    // the tail items leave the command body (see `ds_tail_split`)
     let (tail_nodes, body_root_node) = ds_tail_split(cp);
     let tail_items: Vec<usize> = (0..ni).filter(|&i| items[i].k == IK::Run && tail_nodes.contains(&items[i].n)).collect();
     // items that run at full resolution before the command: the convert-from-source inputs, the duplicate xy variable, the hoisted nodes
@@ -466,7 +466,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             }
         }
     }
-    // STK2: a member of a preserve group is never reused in place and its image is never reused (ASSUMED: the preserved image must survive)
+    // a member of a preserve group is never reused in place and its image is never reused (ASSUMED: the preserved image must survive)
     let pm_item = |i: usize| pres.as_ref().map_or(false, |p| p.key[items[i].n] >= 0);
     let is_head = |i: usize| pres.as_ref().map_or(false, |p| p.head[items[i].n]);
     // storage with in place
@@ -545,7 +545,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
                     if nd.prim.strip_suffix("_if_needed").unwrap_or(&nd.prim) == "time_warp" && k == 0 && matches!(an.kind, "input" | "special") {
                         a.push(format!("(clip {} {})", slot_of.get(&an.idx).copied().unwrap_or(0), an.elnum));
                     } else if is_donor_arg(&nd.prim, k, an.kind) && !(an.kind == "special" && an.name == "Output") {
-                        // AG1 DONOR: the type donor prints as a constant -999 per channel of the donor and is not an image dependency
+                        // DONOR: the type donor prints as a constant -999 per channel of the donor and is not an image dependency
                         a.push(format!("[ {} ]", vec!["-999"; an.elnum.clamp(1, 4) as usize].join(" ")));
                     } else if an.kind == "special" && an.name == "Output" {
                         a.push("[ -999 ]".to_string());
@@ -586,7 +586,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
     }
     let mut freed: HashMap<usize, bool> = HashMap::new();
     let mut allocated: HashMap<usize, bool> = HashMap::new();
-    // DS1: images allocated outside the exec-downsampled command: the convert-from-source inputs and the destination of the command
+    // images allocated outside the exec-downsampled command: the convert-from-source inputs and the destination of the command
     let ds_dest_store: Option<usize> = match (ds_dest, body_root_node.and_then(|b| item_of.get(&b).copied())) {
         (Some(_), Some(bi)) if !tail_items.is_empty() => Some(storage[bi]),
         (Some(d), _) => Some(storage[items[d].deps[0]]),
@@ -598,7 +598,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             allocated.insert(s, true);
         }
     }
-    // STK2: the group id of every command (uniform by construction of the keyed pass); a group split into several runs of commands is not wrapped
+    // the group id of every command (uniform by construction of the keyed pass); a group split into several runs of commands is not wrapped
     let pgk: Vec<i64> = cmds
         .iter()
         .map(|(_, its)| {
@@ -668,7 +668,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
                 }
             }
         }
-        // STK2: close a preserve container after the last command of its group (the group's commands are collected in emission order)
+        // close a preserve container after the last command of its group (the group's commands are collected in emission order)
         if pgk[ci] >= 0 && (ci + 1 == cmds.len() || pgk[ci + 1] != pgk[ci]) && pwrap.contains(&pgk[ci]) {
             if let (Some(&s0), Some(h)) = (pstart.get(&pgk[ci]), (0..ni).find(|&i| is_head(i) && pres.as_ref().map_or(false, |p| p.key[items[i].n] == pgk[ci]))) {
                 let inner = out.split_off(s0);
@@ -696,7 +696,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             if tail_items.is_empty() {
                 top.push(format!("(exec-linewise 1 1\\n  {}\\n  {}\\n  {}\\n)", wrap1(&none), wrap1(&vec![body(ds_dest.unwrap())]), wrap1(&none)));
             } else {
-                // DS3: the tail in its own exec-linewise on fresh images, then convert-to-dest; the command destination is freed afterwards
+                // the tail in its own exec-linewise on fresh images, then convert-to-dest; the command destination is freed afterwards
                 let al: Vec<String> = tail_items.iter().map(|&i| alloc_txt(i)).collect();
                 let mut bd: Vec<String> = tail_items.iter().map(|&i| body(i)).collect();
                 bd.push(body(ds_dest.unwrap()));
@@ -724,7 +724,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
         let lanes: Vec<String> = n.lanes.iter().map(|b| format!("{:08x}", b)).collect();
         s.push_str(&format!("NODE\t{}\t{}\tkind={}\tprim={}\tout_ch={}\targs={}\tlanes={}\t{}={}\tfolded={}\n", n.idx, n.name, n.kind, if n.prim == "-" { "" } else { &n.prim }, n.elnum, n.args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(","), lanes.join(""), crate::judge_keys::PLAN_KEY_NODE_FLAG, n.b160 as u8, n.folded as u8));
     }
-    // DSW4 (f03, MEASURED on the DSW3 f03 original: nodes 27 and 88 are both `m1` folded to [0]): a folded constant that an image-only argument needs as an image
+    // (f03, MEASURED on the f03 original: nodes 27 and 88 are both `m1` folded to [0]): a folded constant that an image-only argument needs as an image
     // AND that has a consumer at a scalar-capable argument exists twice in the original (the literal node and a clone appended at the end that carries the image).
     // INFERRED: the clone is made only when both kinds of use exist (a sole image-only use keeps the single node: older corpora match with one row).
     {
@@ -736,7 +736,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
         }
     }
     if dup_item.is_some() {
-        // DS1: the duplicate of the xy variable the hoisted nodes read (id past the node ids), named like its original for the canonical compare
+        // the duplicate of the xy variable the hoisted nodes read (id past the node ids), named like its original for the canonical compare
         s.push_str(&format!("NODE\t{}\txy\tkind=special\tprim=\tout_ch=2\targs=\tlanes={}\t{}=0\tfolded=0\n", dup_rid, "0".repeat(32), crate::judge_keys::PLAN_KEY_NODE_FLAG));
     }
     let mut eval: Vec<String> = Vec::new();
@@ -795,12 +795,12 @@ fn mark_set(cp: &CompiledProgram) -> std::collections::HashSet<usize> {
     mark
 }
 
-/// DS3: the printed id of the duplicate xy variable that DS1's hoist reads at full size (the plan builder gives it a fresh id above every node index).
+/// the printed id of the duplicate xy variable that hoist reads at full size (the plan builder gives it a fresh id above every node index).
 pub fn ds_dup_rid(cp: &CompiledProgram) -> usize {
     cp.nodes.len() + 1000
 }
 
-/// DS3: the compiler's tail of an exec-downsampled program, read from the program's own node kinds only. The compiler appends its tail nodes
+/// the compiler's tail of an exec-downsampled program, read from the program's own node kinds only. The compiler appends its tail nodes
 /// with the kind `auto`; the chain from the final root down the first image argument, up to the first node whose kind is not `auto`, is
 /// the tail, and that node is the body root. The tail runs after the command, in its own linewise command, on a fresh image (the recorded
 /// plans of every exec-downsampled Blur Motion Curves and Transform and Blur row, see the E1 plan_text of f_BR3T_50x7 and the eight others).
@@ -835,8 +835,8 @@ pub fn ds_tail(cp: &CompiledProgram) -> Vec<usize> {
     ds_tail_split(cp).0
 }
 
-/// DS1 FITTED RULE (not read from the compiler, which does this in the pass around): the nodes that the original evaluates at FULL
-/// resolution before the exec-downsampled command. MEASURED on Blur_Motion_Curves_No_Transform at blur_res 1 and 2 (EP-10 B09, NEG2 B09 / B15):
+/// FITTED RULE (not read from the compiler, which does this in the pass around): the nodes that the original evaluates at FULL
+/// resolution before the exec-downsampled command. MEASURED on Blur_Motion_Curves_No_Transform at blur_res 1 and 2 (EP-10 B09 B09 / B15):
 /// the vector `dv = xy*s1 - xy*s0` (nodes `*`, `*`, `-`) is computed at full size on its own copy of the xy variable, then downsampled with the
 /// source image, while `xy - dv` and `xy + dv` run inside the command on the small xy. Transform_and_Blur has no such node (everything inside).
 /// Rule: a computed node g whose leaves are only xy and constants (pure) is hoisted when it is an argument of a computed node that also takes

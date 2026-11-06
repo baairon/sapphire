@@ -1,5 +1,5 @@
-//! INT25 step s25_p (INT24 finding 1): the program-text path of a folded node is read from the genotype. Real compile of
-//! Hue_Sat_Bright_Autogen at FLD2's binding A (Source 3 channels), whose two v3_to_v4_if4 nodes (genotype 67 and 70) fold.
+//! step s25_p the program-text path of a folded node is read from the genotype. Real compile of
+//! Hue_Sat_Bright_Autogen at binding A (Source 3 channels), whose two v3_to_v4_if4 nodes (genotype 67 and 70) fold.
 use fx_exec::ops_census::{genotype_path, node_path_fold, node_path_gid};
 
 fn pt() -> &'static str { effects_vecdir::path_str("record_extract/programs/programs.tsv") }
@@ -45,7 +45,7 @@ fn genotype_path_names_parameters_and_unknown_ids() {
         return;
     }
     let g = hsb();
-    // genotype node 67 = v3_to_v4_if4 of nodes 65 (`*`), 66 (the scalar 1) and 0 (input Source) (INT21 gdump_tree line 74)
+    // genotype node 67 = v3_to_v4_if4 of nodes 65 (`*`), 66 (the scalar 1) and 0 (input Source) (gdump_tree line 74)
     assert_eq!(g.nodes[67].children, vec![65, 66, 0]);
     let p = genotype_path(&g, 67);
     assert!(p.starts_with("_v3_to_v4_if4: v3_to_v4_if4 ( * "), "{}", p);

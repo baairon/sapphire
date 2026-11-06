@@ -1,10 +1,10 @@
-//! INT10 (BCX1 PATCH 2): native port of class postdivide's slot 53 function (vtable), copy_alpha < 0 route.
+//!: native port of class postdivide's slot 53 function (vtable), copy_alpha < 0 route.
 //!
-//! Read from the listing (INT10):
+//! Read from the listing:
 //! - nout = virtual slot 31 (call [rax]) = the combo tag; elnum e = [this]; view = [this]; source plane k = [view+8k];
 //!   the alpha plane is the view cell = plane e - 1; copy_alpha = [this]; n = [info] (jle: n <= 0 writes nothing).
 //! - copy_alpha >= 0 takes the alpha from another image: `postdiv_into` refuses it (POSTDIV-COPY-ALPHA-SOURCE);
-//!   `postdiv_copy_alpha_into` ports the recorded route only (POSTDIV-COPY-ALPHA-PORTED, PDA1): see its doc.
+//!   `postdiv_copy_alpha_into` ports the recorded route only (POSTDIV-COPY-ALPHA-PORTED): see its doc.
 //! - e = 1 or 3 (`and r8d, ~2; cmp 1`) first copies nout planes through and then runs the same arm: refused here
 //!   (POSTDIV-ELNUM-FOLDED: the compiler folds postdivide on elnum 1 and 3 to its argument, fold.rs, so the executor never meets it).
 //! - per pixel i, with a = alpha[i], eps = = 0x39000000 (2^-13) and one = = 1.0f:
@@ -35,7 +35,7 @@ impl std::fmt::Display for PdError {
     }
 }
 
-/// T2 mutants (INT10): each changes one rule of the listing; `None` is the port.
+/// T2 mutants: each changes one rule of the listing; `None` is the port.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PdMut {
     None,

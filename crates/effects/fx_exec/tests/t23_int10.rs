@@ -1,4 +1,4 @@
-//! INT10 s1: the postdivide class through the executor dispatch, and the blur aspect host input's state A value.
+//! s1: the postdivide class through the executor dispatch, and the blur aspect host input's state A value.
 use fx_exec::kernels::run_any;
 use fx_exec::{Arg, Image, KParams};
 

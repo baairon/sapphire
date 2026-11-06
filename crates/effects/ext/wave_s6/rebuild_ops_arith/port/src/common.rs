@@ -1,4 +1,4 @@
-//! Shared helpers of the four operator classes `+ - * /` (OP1). All four slot-53 AVX2 bodies have one shape (MEASURED, listing
+//! Shared helpers of the four operator classes `+ - * /`. All four slot-53 AVX2 bodies have one shape (MEASURED, listing
 //!  diffed): a scalar main loop over up to 3 (or nout) channels with channel clamping and the two
 //! constant-operand flags, then an optional extension of channel 3 when one operand has 3 channels and the other 4.
 //! Listing offsets in comments are those of the `+` body unless a class is named.

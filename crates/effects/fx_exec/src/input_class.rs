@@ -1,7 +1,7 @@
-//! INT20 step G (RDR8 PATCH 1 to 4 with 's amendments): the per-input class derived natively from the rule and the
-//! caller's class-1 test, transcribed from RDR8's CLASS.md and input_class_model.py (listing neutral_1.asm text).
+//! (to 4 with 's amendments): the per-input class derived natively from the rule and the
+//! caller's class-1 test, transcribed from CLASS.md and input_class_model.py (listing neutral_1.asm text).
 //! Label: "INPUT-CLASS-GUARD (per-input class derived natively from the rule; verified render paths refused unless every bound input
-//! derives the class the kernels implement; RDR7, RDR8)".
+//! derives the class the kernels implement)".
 //!
 //! Cells: [owner], [owner], [prog] come from the route's derivation; the ctx row cells (
 //! [owner+2i]) from the 'ae32' host model; [prog], [prog] and the byte at * from the style's input-class

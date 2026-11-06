@@ -19,7 +19,7 @@ pub fn assumptions() -> Vec<CAssumption> {
         CAssumption { id: "BC3", basis: "flag_cell_a!=0 lerp term per channel = fma(v0-v1, frac, -v0) * wgt, subtracted from the channel sum (s = s - term); flag_cell_a==0: s = alpha*v + s", label: "MEASURED listing" },
         CAssumption { id: "BC4", basis: "vcomiss ... jb on the row/column bound sends NaN to the else branch; the port uses (a >= b) as the first branch (false for NaN). A's port uses !(a<b); NaN is outside the T2 grid", label: "INFERRED from listing; not compared" },
         CAssumption { id: "BC5", basis: "zero-length stub: after P1 returns, planes 0, 1 and 2 at the sample index are each multiplied by a4 (A: plane 0 only); P1 n (image) is an explicit input (A's B13), T2 uses n = 3", label: "MEASURED " },
-        CAssumption { id: "BC6", basis: "host statics ..2b, (ws), (hs) explicit inputs (W44), same as A (B9, B12)", label: "ASSUMPTION" },
+        CAssumption { id: "BC6", basis: "host statics ..2b, (ws), (hs) explicit inputs, same as A (B9, B12)", label: "ASSUMPTION" },
         CAssumption { id: "BC7", basis: "FMA sites of C (listing grep of every vf*fma/fms/fnm): 20 sites: (S2,S3,S4); X-major; Y-major; modelled with mul_add; no rcp/rsqrt/x87", label: "MEASURED listing (see SPEC.md)" },
     ]
 }

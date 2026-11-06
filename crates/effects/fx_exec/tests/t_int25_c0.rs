@@ -1,7 +1,7 @@
-//! INT25: the c0 control on fx_run's 'ae32' compile path. EQC1's c0 text (Blend, the unchanged node
+//! the c0 control on fx_run's 'ae32' compile path. c0 text (Blend, the unchanged node
 //! `( if_neq_const Matte 1 m0 default_matte )`) with Matte unbound: fx_run binds an unbound input whose text default is a number as that
-//! constant (Binding.const_inputs, fx_run.rs, the INT6 rule 1 loop), then compiles through fx_exec::compile_for. The original ran this state
-//! with flags 1 and 1, counts 1 and 1 and arm 3 (EQC1 PROBE_RESULTS.tsv row c0, MEASURED there). A different arm is a finding.
+//! constant (Binding.const_inputs, fx_run.rs, the rule 1 loop), then compiles through fx_exec::compile_for. The original ran this state
+//! with flags 1 and 1, counts 1 and 1 and arm 3 (PROBE_RESULTS.tsv row c0, MEASURED there). A different arm is a finding.
 use fx_eval::{build_effect, Corpus};
 use fx_exec::{compile_for, Binding};
 
@@ -57,7 +57,7 @@ fn c0_matte_bound_as_image_takes_arm_2() {
     if !effects_vecdir::have_all(&["fx_eval/tests/eqc1_probe/progs_c0.tsv"]) {
         return;
     }
-    // discrimination half: Matte bound as a 4-plane image is not constant, so the flag gate gives arm 2 (EQC1 c6 shape)
+    // discrimination half: Matte bound as a 4-plane image is not constant, so the flag gate gives arm 2 (c6 shape)
     let _l = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let g = blend_c0();
     let b = claim_binding(&g, 0b111);

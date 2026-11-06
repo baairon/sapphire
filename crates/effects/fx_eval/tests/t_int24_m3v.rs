@@ -1,5 +1,5 @@
-//! INT24 widening step: M3V for every 3-lane argument 0 at argument 1 bit equal to 1.0 (own lanes, argument 1 not placed),
-//! at FLD2's two argument-0 lane sets (wave_s9/fld2_m3v_record LANES.tsv: binding A [0.8125 1.0625 0.9375], binding B the `*` product
+//! widening step: M3V for every 3-lane argument 0 at argument 1 bit equal to 1.0 (own lanes, argument 1 not placed),
+//! at two argument-0 lane sets (wave_s9/fld2_m3v_record LANES.tsv: binding A [0.8125 1.0625 0.9375], binding B the `*` product
 //! [1.0390625 0.6015625 0.875]); argument 1 other than 1.0 with a 3-lane argument 0 stays refused. Also refusal text.
 use fx_eval::compile::ArgView2;
 use fx_eval::fold::{fold_lanes, v3_form};
@@ -35,7 +35,7 @@ fn m3v_fld2_binding_b_own_lanes() {
 
 #[test]
 fn m3v_distinct_lanes_vector_arg1_equal_one() {
-    // INT23's first assert of refused_n3_vector_arg0_distinct_lanes, now M3V; and a bit-equal 2-lane argument 1 of 1.0
+    // the recorded first assert of refused_n3_vector_arg0_distinct_lanes, now M3V; and a bit-equal 2-lane argument 1 of 1.0
     assert_eq!(v3_form(&[v([0.75f32.to_bits(), 0.7f32.to_bits(), 0.75f32.to_bits()]), s(1.0)], 3), "M3V");
     let a1 = ArgView2 { is_const: true, lanes: [1.0, 1.0, 0.0, 0.0], n: 2, elnum: Some(2) };
     assert_eq!(v3_form(&[v(FLD2_A), a1], 3), "M3V");
@@ -43,7 +43,7 @@ fn m3v_distinct_lanes_vector_arg1_equal_one() {
 
 #[test]
 fn refused_n3_three_lane_arg0_arg1_not_one() {
-    // FLD2's brightness 0.875 (inside the `*` node, not a V3ToV4If4 argument) and other values stay refused
+    // brightness 0.875 (inside the `*` node, not a V3ToV4If4 argument) and other values stay refused
     for x in [0.875f32, 0.0, -1.0, 1.0000001, 2.0] {
         assert_eq!(v3_form(&[v(FLD2_A), s(x)], 3), "UNMEASURED-FORM", "argument 1 {}", x);
     }
@@ -69,7 +69,7 @@ fn layout_modify_value_text_prints_name_and_value() {
     let mut g = build_effect(&c, c.find_effect(prog, None).unwrap()).unwrap();
     let e = merge_layout(&mut g, &li).unwrap_err();
     assert!(e.starts_with("LAYOUT-MODIFY-VALUE-UNSUPPORTED (Texture_Chroma_Spiral_Autogen: :modify "), "{}", e);
-    assert!(e.ends_with(" in the layout row; the original's handling of a :modify value is not ported; no claimed program carries one, MEASURED IFNEQ_AFTER_Q.tsv against STYLE_MAP.tsv; W518)"), "{}", e);
+    assert!(e.ends_with(" in the layout row; the original's handling of a :modify value is not ported; no claimed program carries one, MEASURED IFNEQ_AFTER_Q.tsv against STYLE_MAP.tsv)"), "{}", e);
     assert!(!e.contains(": 0 carries a value"), "{}", e);
-    assert_eq!(fx_eval::layoutmerge::modify_value_refusal("P", ":modify a = 3"), "LAYOUT-MODIFY-VALUE-UNSUPPORTED (P: :modify a = 3 in the layout row; the original's handling of a :modify value is not ported; no claimed program carries one, MEASURED IFNEQ_AFTER_Q.tsv against STYLE_MAP.tsv; W518)");
+    assert_eq!(fx_eval::layoutmerge::modify_value_refusal("P", ":modify a = 3"), "LAYOUT-MODIFY-VALUE-UNSUPPORTED (P: :modify a = 3 in the layout row; the original's handling of a :modify value is not ported; no claimed program carries one, MEASURED IFNEQ_AFTER_Q.tsv against STYLE_MAP.tsv)");
 }

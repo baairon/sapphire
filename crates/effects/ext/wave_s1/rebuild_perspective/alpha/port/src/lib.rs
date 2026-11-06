@@ -15,7 +15,7 @@
 
 pub use libm_sincos::sincosf_x;
 
-/// The one native for (crate libm_sincos, SC1) in the shape `perspective_alpha_with` takes. Always `Some`: every f32 is handled
+/// The one native for (crate libm_sincos) in the shape `perspective_alpha_with` takes. Always `Some`: every f32 is handled
 /// (finite |theta| >= 8192 goes through the ported), so `Error::SincosOutOfContract` only comes from a caller supplied closure.
 pub fn sincos_native(x: f32) -> Option<(f32, f32)> {
     Some(sincosf_x(x))
@@ -220,9 +220,9 @@ pub struct Assumption {
 pub fn assumptions() -> Vec<Assumption> {
     vec![
         Assumption { id: "PX2-A1", va: ", 32 B", value: "vector clamp maximum 1.0f x8 (same cell and value as SC2-A1); T2 also varies it (0.75f) on both sides", basis: "NOT captured (lookup.py U32); stand-in on both sides" },
-        Assumption { id: "PX2-A2", va: ", 768 B;, 3,840 B", value: "INHERITED from SC1 (crate libm_sincos): SC1-A1 sincosf table entries 16..63 and SC1-A2 double table entries 4..63, ASSUMED-SEMANTIC; this crate holds no table (src/sincos.rs retired by W50)", basis: "NOT captured; SC1 README assumptions 1 and 2; the emulator image of T2 carries the same stand-in data files" },
+        Assumption { id: "PX2-A2", va: ", 768 B;, 3,840 B", value: "INHERITED from (crate libm_sincos): SC1-A1 sincosf table entries 16..63 and SC1-A2 double table entries 4..63, ASSUMED-SEMANTIC; this crate holds no table (src/sincos.rs retired)", basis: "NOT captured README assumptions 1 and 2; the emulator image of T2 carries the same stand-in data files" },
         Assumption { id: "PX2-A3", va: ", bytes 4..16", value: "only 4 of 16 bytes captured; the read is a 4 byte vmulss, so the value is MEASURED (2pi)", basis: ", lookup.py N4/U12" },
-        Assumption { id: "PX2-A4", va: "", value: "finite |theta| >= 8192 (|params_b| > 5215.19; the earlier note said 1303 and forgot the factor 0.25 * 2pi = 1.5708) runs the double sincos and the reducer, ported inside libm_sincos and executed in the emulator: covered by T2 (RERUN_SC1.md)", basis: "; SC1" },
+        Assumption { id: "PX2-A4", va: "", value: "finite |theta| >= 8192 (|params_b| > 5215.19; the earlier note said 1303 and forgot the factor 0.25 * 2pi = 1.5708) runs the double sincos and the reducer, ported inside libm_sincos and executed in the emulator: covered by T2 (RERUN_SC1.md)", basis: "" },
         Assumption { id: "PX2-A5", va: "", value: "flag != 0: the tail call (ramp route) and the flag path of (jump to, fill route) are not ported; arguments are compared by the call-record check only", basis: "" },
         Assumption { id: "PX2-A6", va: "", value: "the flag 0 fill ends in (tail jump) or (call, when != 0): both modelled as memset(dst, 0, bytes) in the emulator and as a zero fill in the port (same as HX-A1 in the blur crate)", basis: "; callee bodies not read" },
         Assumption { id: "PX2-A7", va: "", value: "feature word 0x9d97ff selects the AVX2 body (dispatcher not ported)", basis: "" },

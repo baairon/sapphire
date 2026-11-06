@@ -1,5 +1,5 @@
 //! M3P2: the 'ae32' destination at mode 3 with a 1-plane destination runs the code-14 one-plane zero-arm body
-//! (words 1 to 3 = plane 0 bit for bit, word 0 = 1.0, no row copier). The body's T2 is FMT3c's; this checks the wiring and the mutants.
+//! (words 1 to 3 = plane 0 bit for bit, word 0 = 1.0, no row copier). The body's T2 is; this checks the wiring and the mutants.
 use fx_exec::hostconv14::*;
 use fx_exec::Image;
 
