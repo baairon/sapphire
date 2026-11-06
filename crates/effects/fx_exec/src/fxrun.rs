@@ -112,25 +112,36 @@ impl Device {
     }
 }
 
-/// Keeps the thread's selected backend installed while it lives.
-pub struct BackendGuard(());
-
-/// Selects the backend for `kind` and installs it on the calling thread (the backend is thread local, so the
-/// thread that renders calls this). This is the single seam of `--device`: with the device seam present its body is
-/// `let (b, _handle) = crate::backend::select(kind.into()); BackendGuard(crate::backend::install(b))` (`fx_device::DeviceKind`
-/// has the same variants). Until then only the cpu exists. It must not write to standard error: the caller can hold the
-/// stderr lock while the render thread runs, so a message about the choice comes from [`device_note`] on the calling thread.
-pub fn select_and_install(_kind: Device) -> BackendGuard {
-    BackendGuard(())
+impl From<Device> for fx_device::DeviceKind {
+    fn from(d: Device) -> Self {
+        match d {
+            Device::Cpu => fx_device::DeviceKind::Cpu,
+            Device::Gpu => fx_device::DeviceKind::Gpu,
+            Device::GpuIndex(n) => fx_device::DeviceKind::GpuIndex(n),
+            Device::Auto => fx_device::DeviceKind::Auto,
+        }
+    }
 }
 
-/// The note printed once when `kind` is not served by a backend of this build (`None` for the cpu or a served device).
-pub fn device_note(kind: Device) -> Option<String> {
+/// Keeps the thread's selected backend installed while it lives.
+pub struct BackendGuard(Option<crate::backend::Installed>);
+
+/// Selects the backend for `kind` and installs it on the calling thread (the backend is thread local, so the
+/// thread that renders calls this). This is the single seam of `--device`. The cpu installs nothing, so the executor
+/// takes the reference path. It must not write to standard error: the caller can hold the stderr lock while the render
+/// thread runs.
+pub fn select_and_install(kind: Device) -> BackendGuard {
     if kind == Device::Cpu {
-        None
-    } else {
-        Some(format!("note: --device {:?} has no backend in this build, rendering on the cpu", kind))
+        return BackendGuard(None);
     }
+    let (b, _handle) = crate::backend::select(kind.into());
+    BackendGuard(Some(crate::backend::install(b)))
+}
+
+/// The note printed once when `kind` is not served by a backend of this build (`None`: every kind is served; a device
+/// that fails its probe falls back to the cpu inside `select`).
+pub fn device_note(_kind: Device) -> Option<String> {
+    None
 }
 
 /// A persistent worker thread (with the stack the runner needs) that executes stage runs one after another.
@@ -3661,7 +3672,9 @@ mod device_tests {
         assert_eq!(Device::parse("gpu="), None);
         assert_eq!(Device::parse("tpu"), None);
         assert_eq!(device_note(Device::Cpu), None);
-        assert!(device_note(Device::Auto).unwrap().contains("no backend"));
+        assert_eq!(device_note(Device::Auto), None);
+        assert_eq!(fx_device::DeviceKind::from(Device::GpuIndex(2)), fx_device::DeviceKind::GpuIndex(2));
+        assert_eq!(fx_device::DeviceKind::from(Device::Auto), fx_device::DeviceKind::Auto);
     }
 
     #[test]

@@ -38,6 +38,37 @@ pub enum Val {
     /// the make_mipmap result: a ripmap object (NV9-A2), not a plain planar image
     Mip(Rc<MipImage>),
     Const { n: usize, lanes: [u32; 4] },
+    /// an image resident on the device (only the device backend makes one); `DevVal::materialize` brings it to the host
+    Dev(Rc<DevVal>),
+}
+
+/// A planar image on the device with a lazily filled host copy.
+#[derive(Debug)]
+pub struct DevVal {
+    pub dev: fx_device::DevImage,
+    host: std::cell::OnceCell<Image>,
+}
+
+impl DevVal {
+    pub fn new(dev: fx_device::DevImage) -> DevVal {
+        DevVal { dev, host: std::cell::OnceCell::new() }
+    }
+    pub fn channels(&self) -> usize {
+        self.dev.channels()
+    }
+    /// The host copy when it has been made.
+    pub fn host(&self) -> Option<&Image> {
+        self.host.get()
+    }
+    /// Downloads once and returns the host copy.
+    pub fn materialize(&self) -> Result<&Image, ExecError> {
+        if let Some(i) = self.host.get() {
+            return Ok(i);
+        }
+        let planes = self.dev.download().map_err(|e| ExecError::Kernel { class: "device".into(), msg: e.to_string() })?;
+        let _ = self.host.set(Image { n: self.dev.n, planes });
+        Ok(self.host.get().expect("just set"))
+    }
 }
 
 /// A borrowed operand for the kernels.
@@ -84,6 +115,15 @@ impl Val {
             Val::Img(i) => Arg::Img(i.as_ref()),
             Val::Mip(m) => Arg::Mip(m.as_ref()),
             Val::Const { n, lanes } => Arg::Const { n: *n, lanes: *lanes },
+            Val::Dev(d) => Arg::Img(d.host().expect("a device image is materialized before it is used as a host argument")),
+        }
+    }
+
+    /// The operand count the selector sees (channels of an image, lanes of a constant), without bringing a device image to the host.
+    pub fn count(&self) -> i32 {
+        match self {
+            Val::Dev(d) => d.channels() as i32,
+            other => other.as_arg().count(),
         }
     }
 }

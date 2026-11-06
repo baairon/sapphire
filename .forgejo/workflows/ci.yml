@@ -39,7 +39,7 @@ jobs:
       # The tools run on Debian's python3 (3.11 or later), so they use no
       # 3.12-only syntax.
       - run: |
-          apt-get update && apt-get install -y --no-install-recommends python3 xz-utils
+          apt-get update && apt-get install -y --no-install-recommends python3 xz-utils pocl-opencl-icd ocl-icd-libopencl1 clinfo
           curl -sSfL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-gpl-9.0.tar.xz | tar -xJ -C /opt
           echo /opt/ffmpeg-n9.0-latest-linux64-gpl-9.0/bin >> "$GITHUB_PATH"
 
@@ -66,6 +66,14 @@ jobs:
       # SHA-256 of every output must equal tools/fx_golden.tsv (this repository's own Linux renders); a difference
       # names the style.
       - run: python3 -I tools/fx_golden.py
+
+      # The device foundation: source lint, host simulator, probe and self-check corpus (no device needed), then, with PoCL
+      # installed above, the allowlisted ops against the CPU kernels and the 13 styles rendered through the device backend
+      # to the same hashes. Tests that need a device print NOT RUN where no platform is present.
+      - run: |
+          cargo test --release -p fx_device -- --test-threads=1
+          cargo test --release -p fx_exec device -- --test-threads=1
+          SAPPHIRE_DEVICE=gpu python3 -I tools/fx_golden.py
 
       # The Python tools need no packages beyond the standard library to
       # compile, so a syntax slip anywhere in them fails here.

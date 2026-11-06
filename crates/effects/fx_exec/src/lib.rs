@@ -7,6 +7,10 @@
 //! `execute_compiled` on a plan you compiled yourself; `cmds::execute_commands` runs an EP-3 text plan.
 
 pub mod aspect;
+/// the execution backend seam (CPU reference, OpenCL device with per node fallback)
+pub mod backend;
+/// the per op device table: kernels, allowlist, cpu_only reasons and the self-check
+pub mod device_ops;
 pub mod fxrun;
 pub mod cmds;
 pub mod nanrule;

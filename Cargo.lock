@@ -203,6 +203,10 @@ name = "fx_common"
 version = "0.0.0"
 
 [[package]]
+name = "fx_device"
+version = "0.1.0"
+
+[[package]]
 name = "fx_eval"
 version = "0.1.0"
 dependencies = [
@@ -231,6 +235,7 @@ dependencies = [
  "effects_vecdir",
  "esh8_exec",
  "fx_common",
+ "fx_device",
  "fx_eval",
  "grad",
  "hue_shift",

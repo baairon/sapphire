@@ -303,11 +303,13 @@ fn broadcast(a: &Arg, ch: usize, n: usize) -> Result<Image, ExecError> {
 /// are divided by f and whose frame width (blur render scale) is the small width, the root planes are doubled L times. Everything else
 /// (convert-from-source before, convert-to-dest after) stays at full resolution in the callers. `kp.ds_off` / env DS1_OFF=1 = pre-DS1.
 pub fn execute_compiled(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: &HostFrames) -> Result<ExecOutput, ExecError> {
+    crate::backend::ensure_env_backend();
     let f = fx_eval::cpuplan::ds_factor(cp);
-    if f > 1 && !binding.kp.ds_off {
-        return execute_downsampled(cp, binding, inputs, host, f);
+    let r = if f > 1 && !binding.kp.ds_off { execute_downsampled(cp, binding, inputs, host, f) } else { execute_plain(cp, binding, inputs, host) };
+    if r.is_ok() {
+        crate::backend::note_report();
     }
-    execute_plain(cp, binding, inputs, host)
+    r
 }
 
 fn scaled_geom(g: &Geom, f: u32) -> Geom {
@@ -406,7 +408,8 @@ fn sharpen_alias_of(cp: &CompiledProgram) -> Result<bool, ExecError> {
 }
 
 fn execute_plain(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: &HostFrames) -> Result<ExecOutput, ExecError> {
-    Ok(eval_graph(cp, binding, inputs, host, None, &BTreeMap::new())?.0)
+    // the values of the nodes are not read after the root: a device backend keeps its intermediates resident and only the root comes back
+    Ok(eval_graph_core(cp, binding, inputs, host, None, &BTreeMap::new(), &std::collections::BTreeSet::new(), None)?.0)
 }
 
 /// The node loop. `only` = evaluate just these computed nodes (inputs, constants and special variables always); `pre` = values supplied for nodes
@@ -418,6 +421,19 @@ fn eval_graph(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: &H
 /// `skip` = computed nodes that are not evaluated (the tail of the exec-downsampled command, which runs after the upsample); `root_sel` = the node read as
 /// the result instead of the program root, also when `only` is given (the body root at the small size, the program root for the tail at full size).
 fn eval_graph_r(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: &HostFrames, only: Option<&std::collections::BTreeSet<usize>>, pre: &BTreeMap<usize, Val>, skip: &std::collections::BTreeSet<usize>, root_sel: Option<usize>) -> Result<(ExecOutput, Vec<Option<Val>>), ExecError> {
+    let (out, mut vals) = eval_graph_core(cp, binding, inputs, host, only, pre, skip, root_sel)?;
+    // callers that read the node values get host images (a device backend's resident values come back here)
+    for v in vals.iter_mut() {
+        if let Some(Val::Dev(d)) = v {
+            let im = d.materialize()?.clone();
+            *v = Some(Val::Img(Rc::new(im)));
+        }
+    }
+    Ok((out, vals))
+}
+
+fn eval_graph_core(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: &HostFrames, only: Option<&std::collections::BTreeSet<usize>>, pre: &BTreeMap<usize, Val>, skip: &std::collections::BTreeSet<usize>, root_sel: Option<usize>) -> Result<(ExecOutput, Vec<Option<Val>>), ExecError> {
+    crate::backend::with_backend(|b| b.begin());
     let n = inputs.width.checked_mul(inputs.height).ok_or(ExecError::Shape("frame size overflow".into()))?;
     let tables = Tables::embedded();
     let mut pos_of: BTreeMap<usize, usize> = BTreeMap::new();
@@ -469,7 +485,7 @@ fn eval_graph_r(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: 
             "const" => const_val(nd)?,
             "func" | "auto" if nd.b160 || nd.folded => const_val(nd)?,
             "func" | "auto" => {
-                let mut args: Vec<Arg> = Vec::with_capacity(nd.args.len());
+                let mut argvals: Vec<Val> = Vec::with_capacity(nd.args.len());
                 for (ak, a) in nd.args.iter().enumerate() {
                     let q = *pos_of.get(a).ok_or_else(|| ExecError::BadPlan(format!("node {} argument {} not in plan", nd.idx, a)))?;
                     if q >= p {
@@ -480,22 +496,23 @@ fn eval_graph_r(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: 
                     if !xyv.is_empty() && an.kind == "special" && an.name == "xy" {
                         match xyw.iter().position(|w| w.0.contains(&(nd.gid, ak))) {
                             Some(wi) => {
-                                args.push(xyv[wi].as_arg());
+                                argvals.push(xyv[wi].clone());
                                 continue;
                             }
                             None => return Err(ExecError::BadPlan(format!("XY-WRITER-UNMAPPED (node {} gid {} slot {} reads xy and no writer of the placement model lists it)", nd.idx, nd.gid, ak))),
                         }
                     }
-                    args.push(v.as_arg());
+                    argvals.push(v.clone());
                 }
                 let c = kernels::normalize_class(&nd.prim).to_string();
                 if !kernels::is_supported(&c) {
                     return Err(ExecError::Unsupported { class: c, reason: "no kernel wrapper in fx_exec (builtin not wired or not rebuilt)".into() });
                 }
-                let operands: Vec<i32> = args.iter().map(|a| a.count()).collect();
-                let (img, tag) = if HOST_CLASSES.contains(&c.as_str()) {
+                let operands: Vec<i32> = argvals.iter().map(|a| a.count()).collect();
+                let (outval, tag): (Val, i32) = if HOST_CLASSES.contains(&c.as_str()) {
+                    let args = crate::backend::host_args(&argvals)?;
                     let (i, t) = run_host(&c, nd.elnum, &args, n, host, &mut saved)?;
-                    (Out::Img(i), t)
+                    (Val::Img(Rc::new(i)), t)
                 } else {
                     let tag = tables.select_counts(&c, &operands);
                     if tag < 0 {
@@ -516,16 +533,31 @@ fn eval_graph_r(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: 
                             kpe.palpha_rowbuf = rb;
                         }
                     }
-                    (kernels::run_any(&c, tag, &args, n, (inputs.width, inputs.height), &kpe)?, tag)
+                    // the backend seam: a device backend may run the node and keep the result resident; any decline runs this one node on the CPU
+                    let call = crate::backend::NodeCall { idx: nd.idx, class: &c, tag, n, dims: (inputs.width, inputs.height), kp: &kpe };
+                    let v = match crate::backend::with_backend(|b| b.try_run(&call, &argvals)) {
+                        Some(Ok(v)) => v,
+                        _ => {
+                            let args = crate::backend::host_args(&argvals)?;
+                            match kernels::run_any(&c, tag, &args, n, (inputs.width, inputs.height), &kpe)? {
+                                Out::Img(i) => Val::Img(Rc::new(i)),
+                                Out::Mip(m) => Val::Mip(Rc::new(m)),
+                            }
+                        }
+                    };
+                    (v, tag)
                 };
-                if nd.elnum > 0 && img.channels() != nd.elnum as usize {
-                    diagnostics.push(format!("node {} {}: output has {} channels, the compiler's elnum is {}", nd.idx, c, img.channels(), nd.elnum));
+                let out_channels = match &outval {
+                    Val::Img(i) => i.channels(),
+                    Val::Mip(m) => m.channels,
+                    Val::Dev(d) => d.channels(),
+                    Val::Const { n, .. } => *n,
+                };
+                if nd.elnum > 0 && out_channels != nd.elnum as usize {
+                    diagnostics.push(format!("node {} {}: output has {} channels, the compiler's elnum is {}", nd.idx, c, out_channels, nd.elnum));
                 }
-                trace.push(RunRec { node: nd.idx, class: c, operands, tag, out_channels: img.channels() });
-                match img {
-                    Out::Img(i) => Val::Img(Rc::new(i)),
-                    Out::Mip(m) => Val::Mip(Rc::new(m)),
-                }
+                trace.push(RunRec { node: nd.idx, class: c, operands, tag, out_channels });
+                outval
             }
             "special" if nd.name == "xy" => {
                 // NV9-A3: the xy variable (2 channel coordinate plane): the caller's `xy` image, else the grid of the host geometry
@@ -551,6 +583,7 @@ fn eval_graph_r(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: 
         Val::Img(i) => (**i).clone(),
         Val::Const { lanes, n: ln } => Image::from_const(lanes, (*ln).max(1), n),
         Val::Mip(_) => return Err(ExecError::Shape("the destination is a ripmap object".into())),
+        Val::Dev(d) => d.materialize()?.clone(),
     };
     Ok((ExecOutput { dest, saved_prev_dest: saved, trace, diagnostics }, vals))
 }
