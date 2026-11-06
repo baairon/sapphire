@@ -469,7 +469,9 @@ fn sharpen_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result
         for v in outv.iter_mut() {
             dp.push(fx_common::plane::PlaneMut::new(v.as_mut_slice(), w, h, w).map_err(|e| kerr("sharpen", e))?);
         }
-        sharpen::render_alias(&sp, &planes, &mut dp, kp.sharpen_alias).map_err(|e| kerr("sharpen", e))?;
+        // a default NaN of the ARM pattern in the blur is an invalid operation unless the source already holds that pattern
+        let x86_nan = crate::nanrule::ACTIVE && !src.planes.iter().any(|p| crate::nanrule::has_arm_nan(p));
+        sharpen::render_alias_nan(&sp, &planes, &mut dp, kp.sharpen_alias, x86_nan).map_err(|e| kerr("sharpen", e))?;
     }
     Ok(Image { n: w * h, planes: outv })
 }
@@ -571,7 +573,7 @@ fn monochrome_a_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Imag
 /// Distort_RGB text `(grad (monochrome Lens) blur_lens scale 1)` and field map): argument 0 = the source plane (one channel, combo row
 /// (1,1,1,1)), argument 1 = this (amount, parameter 0), argument 2 = this (gain multiplier, parameter 1), argument 3 = this
 /// (subpixel, parameter 2). Output channel 0 = dx, channel 1 = dy (selector tag 2; INFERRED reads the binding in the README). The blurred
-/// plane (aux) is scratch and dropped. Width 1 frames are refused (GR-A3 / HIGH-STAKES 3 CONTRACT-LIMIT until Opus decides).
+/// plane (aux) is scratch and dropped. A frame of width 1 is refused (the gradient needs a neighbouring column).
 fn grad_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Image, ExecError> {
     // MUTANT-SWITCH: `mu(id)` is a constant false unless the build has the feature `drw2_mut`; then COV_MUT=id selects one edit at run time.
     #[cfg(feature = "drw2_mut")]

@@ -166,13 +166,17 @@ pub fn split_all(value: &str) -> Result<Vec<KeyText>, String> {
     value.split(';').map(split_key).collect()
 }
 
-/// The time base of a rate `num/den` in lowest terms: (ticks a frame, ticks a second).
-pub fn time_base(num: u128, den: u128) -> (i64, f64) {
-    if den == 1 {
-        (100, 100.0 * num as f64)
-    } else {
-        (den as i64, num as f64)
+/// The largest key time, rate numerator or rate denominator accepted: every f64 integer up to here is exact and the
+/// difference of two key times cannot overflow an i64.
+const TICK_LIMIT: u128 = 1 << 53;
+
+/// The time base of a rate `num/den` in lowest terms: (ticks a frame, ticks a second). A numerator or denominator above
+/// 2^53 is refused.
+pub fn time_base(num: u128, den: u128) -> Result<(i64, f64), String> {
+    if num > TICK_LIMIT || den > TICK_LIMIT {
+        return Err(format!("the rate {}/{} is out of range (numerator and denominator are at most 2^53)", num, den));
     }
+    Ok(if den == 1 { (100, 100.0 * num as f64) } else { (den as i64, num as f64) })
 }
 
 /// A keyed parameter, ready to be read at any frame.
@@ -199,8 +203,12 @@ impl Track {
                 return Err(format!("cannot parse `{}`", text));
             }
             let per_tick = |h: Option<Handle>| h.map(|h| Handle { speed: h.speed / ticks_per_second, influence: h.influence });
+            let scaled = (k.frame * ticks_per_frame as f64).round();
+            if !(scaled.abs() <= TICK_LIMIT as f64) {
+                return Err(format!("frame {} is out of range (its time is beyond 2^53 ticks)", k.frame));
+            }
             keys.push(Key {
-                tick: (k.frame * ticks_per_frame as f64).round() as i64,
+                tick: scaled as i64,
                 text,
                 lanes,
                 hold: k.hold,
@@ -219,7 +227,7 @@ impl Track {
     /// The value at output frame `frame`, as `--param` text: a key's own text where the curve is a
     /// key's value, else the interpolated lanes (shortest round-trip decimal of each f64).
     pub fn text_at(&self, frame: u64) -> String {
-        match self.lanes_at(frame as i64 * self.ticks_per_frame) {
+        match self.lanes_at((frame as i64).saturating_mul(self.ticks_per_frame)) {
             Ok(i) => self.keys[i].text.clone(),
             Err(lanes) => lanes.iter().map(|x| format!("{}", x)).collect::<Vec<_>>().join(","),
         }
@@ -361,11 +369,22 @@ mod tests {
 
     #[test]
     fn time_base_and_points() {
-        assert_eq!(time_base(24, 1), (100, 2400.0));
-        assert_eq!(time_base(30000, 1001), (1001, 30000.0));
+        assert_eq!(time_base(24, 1), Ok((100, 2400.0)));
+        assert_eq!(time_base(30000, 1001), Ok((1001, 30000.0)));
         let p = Track::parse("0,0@0;4,2@4", Shape::Point, 100, 2400.0).unwrap();
         assert_eq!(p.text_at(2), "2,1");
         let h = Track::parse("1@0;3@2", Shape::Hold, 100, 2400.0).unwrap();
         assert_eq!(h.text_at(1), "1");
+    }
+
+    #[test]
+    fn times_and_rates_beyond_2_53_are_refused() {
+        let e = Track::parse("0@-5e16;2@5e16", Shape::Float { min: 0.0, max: 1000.0 }, 100, 2400.0).unwrap_err();
+        assert!(e.contains("out of range"), "{}", e);
+        assert!(Track::parse("0@-1e14;2@1e14", Shape::Float { min: 0.0, max: 1000.0 }, 100, 2400.0).is_err());
+        assert!(Track::parse("0@-4e13;2@4e13", Shape::Float { min: 0.0, max: 1000.0 }, 100, 2400.0).is_ok());
+        assert!(time_base(1, 9223372036854775813).unwrap_err().contains("out of range"));
+        assert!(time_base(1 << 54, 1).is_err());
+        assert!(time_base(1 << 53, 1 << 53).is_ok());
     }
 }

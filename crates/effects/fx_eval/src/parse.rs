@@ -726,6 +726,9 @@ pub fn orig_atof(text: &str, fma: bool) -> Option<f32> {
             if en {
                 e = -e;
             }
+            // 10^400 is already infinite and 10^-400 already zero in f64, so a larger exponent changes no result
+            // and is not worth building the big integer for.
+            let e = e.clamp(-400, 400);
             v = ((v as f64) * crate::detmath::pow10_f64(e)) as f32;
             break;
         } else {
@@ -737,4 +740,32 @@ pub fn orig_atof(text: &str, fma: bool) -> Option<f32> {
         return None;
     }
     Some(if neg { -v } else { v })
+}
+
+#[cfg(test)]
+mod atof_tests {
+    use super::orig_atof;
+
+    #[test]
+    fn huge_exponents_saturate_at_once() {
+        let t = std::time::Instant::now();
+        for (text, want) in [("1e309", f32::INFINITY), ("1e-400", 0.0), ("1e999999", f32::INFINITY), ("1e2147483647", f32::INFINITY), ("1e-2147483647", 0.0), ("-1e999999", f32::NEG_INFINITY)] {
+            assert_eq!(orig_atof(text, false), Some(want), "{}", text);
+        }
+        assert!(t.elapsed().as_millis() < 10 * 6, "{:?}", t.elapsed());
+    }
+
+    #[test]
+    fn the_clamp_changes_no_result() {
+        for m in ["1", "3.4028235", "1.17549435", "9", "123456", "0.00001"] {
+            for e in (-1200..=1200).step_by(7).chain([-400, 400, -399, 399, -330, -325, 308, 309]) {
+                let text = format!("{}e{}", m, e);
+                let old = {
+                    let v = orig_atof(&format!("{}", m), false).unwrap();
+                    ((v as f64) * crate::detmath::pow10_f64(e)) as f32
+                };
+                assert_eq!(orig_atof(&text, false).unwrap().to_bits(), old.to_bits(), "{}", text);
+            }
+        }
+    }
 }
