@@ -14,9 +14,7 @@
 //! expect to be unloaded); a missing library or entry point is a [`ClError`], never a panic.
 //!
 //! Constants, types and signatures are written from the Khronos OpenCL 1.2 specification (no header
-//! file); `tests/device_cl.rs` cross-checks them against the devices of the machine it runs on
-//! (returned sizes of every scalar query, strings that must start with `OpenCL`, the device's own
-//! platform handle, error codes provoked on purpose, buffer flags read back).
+//! file); `tests/device.rs` exercises them against the devices of the machine it runs on.
 //!
 //! Rules of the wrappers: every driver status becomes a [`ClError`]; reads and writes are blocking,
 //! so no host memory is referenced after a call returns; a launch sets every argument of the
@@ -32,7 +30,7 @@ use std::cell::Cell;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 /// Process wide lock for the calls that create driver objects (platform and device queries, context, queue, program
-/// build). PoCL crashes when two threads create them at the same time (MEASURED on PoCL 5.0 in CI), so every such call
+/// build, kernel creation, and the release of programs and kernels). PoCL crashes when two threads create them at the same time (MEASURED on PoCL 5.0 in CI), so every such call
 /// takes it; the lock is re-entrant on one thread so a build that creates a context itself does not deadlock.
 static CREATE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -1213,6 +1211,7 @@ unsafe impl Sync for Program {}
 
 impl Drop for Program {
     fn drop(&mut self) {
+        let _create = serialize_creation();
         // SAFETY: the handle is ours; kernels hold their own reference.
         unsafe {
             (self.api.release_program)(self.handle);
@@ -1352,6 +1351,7 @@ unsafe impl Send for Kernel {}
 
 impl Drop for Kernel {
     fn drop(&mut self) {
+        let _create = serialize_creation();
         // SAFETY: the handle is ours; a queued launch keeps what it needs alive.
         unsafe {
             (self.api.release_kernel)(self.handle);
@@ -1392,6 +1392,7 @@ pub enum Arg<'a> {
 impl Kernel {
     /// The kernel `name` of `program`.
     pub fn new(program: &Program, name: &str) -> Result<Kernel, ClError> {
+        let _create = serialize_creation();
         let api = program.api;
         let c = CString::new(name).map_err(|_| ClError::Usage("the kernel name contains NUL".into()))?;
         let mut err = 0i32;

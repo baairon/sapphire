@@ -12,7 +12,7 @@
 //! transcribed one to one. The driver arithmetic (radii, coefficients, final scale) runs on the host with the CPU functions.
 
 /// Blur: window routine, horizontal pass, vertical pass, scale.
-pub const K3_BLUR: &str = r#"
+pub const NEIGHBOURHOOD_BLUR: &str = r#"
 /* MIRRORS_MUL_ADD: blur_rows::box_row (vfmsub213ss at out[0], blend), blur_rows_y::column_window, blend */
 #define BW_AT(p, i) (p)[(size_t)(i) * st]
 
@@ -332,7 +332,7 @@ __kernel void scale_f32(__global const float* src, __global float* dst, uint n, 
 "#;
 
 /// masked_blur: mask clamp, premultiply and the combine job.
-pub const K3_MASKED: &str = r#"
+pub const NEIGHBOURHOOD_MASKED: &str = r#"
 /* MIRRORS_MUL_ADD: masked_blur::combine_px */
 float mb_min_x86(float a, float b) {
     return (a < b) ? a : b;
@@ -393,7 +393,7 @@ __kernel void mb_combine_f32(__global const float* m, __global const float* bb, 
 "#;
 
 /// grad: the gradient stencil over the blurred plane (flag_1 = 1 route).
-pub const K3_GRAD: &str = r#"
+pub const NEIGHBOURHOOD_GRAD: &str = r#"
 /* x5 is 1.0 when the info aspect cell is set, else 2.0 (the mutants of the CPU crate are not reachable here). */
 __kernel void grad_stencil_f32(__global const float* b, __global float* dx, __global float* dy, uint w, uint h, float x5) {
     size_t gid = get_global_id(0);
@@ -446,7 +446,7 @@ __kernel void grad_stencil_f32(__global const float* b, __global float* dx, __gl
 "#;
 
 /// sharpen: the combine job over the blurred plane (in place in `out`), the tail keeps the blur or the input.
-pub const K3_SHARPEN: &str = r#"
+pub const NEIGHBOURHOOD_SHARPEN: &str = r#"
 /* MIRRORS_MUL_ADD: sharpen::combine::combine_elem */
 __kernel void sharpen_combine_f32(__global const float* x, __global float* out, uint count, uint n, float g, int alias) {
     size_t i = get_global_id(0);
@@ -471,7 +471,7 @@ __kernel void sharpen_combine_f32(__global const float* x, __global float* out, 
 "#;
 
 /// static2: the integer hash noise, two planes.
-pub const K3_STATIC2: &str = r#"
+pub const NEIGHBOURHOOD_STATIC2: &str = r#"
 __kernel void static2_f32(__global const uint* tab, __global float* o0, __global float* o1, uint n, uint base) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -490,7 +490,7 @@ __kernel void static2_f32(__global const uint* tab, __global float* o0, __global
 
 /// edge_aware_sharpen: weight planes, running sums, the variable window box filter along rows and columns, and the
 /// tanh-like transform. The driver (iterations, plane bookkeeping, radii) runs on the host with the CPU functions.
-pub const K3_ESH: &str = r#"
+pub const NEIGHBOURHOOD_ESH: &str = r#"
 /* MIRRORS_MUL_ADD: esh3_jobs::job_2, esh3_jobs::exp_tanh_elem, esh5b_passjobs::filter3, esh6_driver::slot52 */
 float esh_minss(float a, float b) {
     return (a < b) ? a : b;
@@ -756,16 +756,16 @@ __kernel void esh_add_f32(__global const float* aa, __global float* out, uint n)
 
 #[cfg(test)]
 mod tests {
-    /// The two double literals of K3_ESH are the CPU constants (esh3_jobs::LOW, HIGH): sign 0, exponent field and 52 bit mantissa.
+    /// The two double literals of NEIGHBOURHOOD_ESH are the CPU constants (esh3_jobs::LOW, HIGH): sign 0, exponent field and 52 bit mantissa.
     #[test]
     fn the_hex_double_constants_are_the_cpu_ones() {
         let low = 0x3ddb_7cdf_d9d7_bdbbu64;
         assert_eq!(low >> 52, 1023 - 34);
         assert_eq!(low & ((1u64 << 52) - 1), 0xb7cdfd9d7bdbb);
-        assert!(super::K3_ESH.contains("0x1.b7cdfd9d7bdbbp-34"));
+        assert!(super::NEIGHBOURHOOD_ESH.contains("0x1.b7cdfd9d7bdbbp-34"));
         let high = 0x3fef_ffff_fff2_4190u64;
         assert_eq!(high >> 52, 1023 - 1);
         assert_eq!(high & ((1u64 << 52) - 1), 0xffffffff24190);
-        assert!(super::K3_ESH.contains("0x1.ffffffff24190p-1"));
+        assert!(super::NEIGHBOURHOOD_ESH.contains("0x1.ffffffff24190p-1"));
     }
 }

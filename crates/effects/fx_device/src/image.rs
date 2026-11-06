@@ -108,6 +108,12 @@ impl Session {
         let context = Context::new(device)?;
         let queue = Queue::new(&context)?;
         let program = crate::progcache::build(&context, device, source, options)?;
+        // The self-check passes are valid only for the binary this session runs: register its digest for the cache key.
+        if source == kernels::device_program() && options == BUILD_OPTIONS {
+            if let Ok(binary) = program.binary() {
+                crate::checkcache::register_binary(info, crate::progcache::fnv(&binary));
+            }
+        }
         let mem = Arc::new(MemTrack { used: AtomicU64::new(0), budget: probe::memory_budget(info) });
         Ok(Session { context, queue, program, info: info.clone(), mem })
     }

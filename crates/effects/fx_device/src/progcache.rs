@@ -1,6 +1,6 @@
 // Provenance: adapted from twixtor plugins/retime-engine/src/device/progcache.rs (8087d06).
-//! The program cache: device binaries of built programs kept in one file per program in a folder
-//! of the user's temporary directory (`sapphire-opencl-programs`), so a run loads the binary the driver
+//! The program cache: device binaries of built programs kept in one file per program in the `opencl-programs` folder
+//! of the user's cache directory ([`crate::checkcache::folder`]), so a run loads the binary the driver
 //! built in an earlier run instead of compiling the source again.
 //!
 //! An entry holds its whole key, compared exactly when it is read: the device (platform name and
@@ -11,8 +11,9 @@
 //! binary comes from. Entries are written to a unique temporary name and renamed into place.
 //! `SAPPHIRE_DEVICE_PROGRAM_CACHE=0` turns the cache off.
 //!
-//! The gates stay as they are: the self-check runs its kernels from whatever binary was loaded,
-//! and the first frame of a run is cross checked against the CPU.
+//! The output is protected by the self-check, which runs the kernels of the binary that was actually loaded or built,
+//! and by the NaN rule and the per-node CPU fallback in the executor. The self-check cache is keyed on the digest of
+//! that binary, so a replaced entry reruns the self-check.
 
 use crate::cl::{self, ClError, Context, Program};
 use std::path::{Path, PathBuf};
@@ -22,7 +23,14 @@ const MAGIC: &[u8] = b"sapphire opencl program 1\n";
 
 /// FNV-1a over `bytes`.
 pub fn fnv(bytes: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    fnv_update(FNV_BASIS, bytes)
+}
+
+/// The FNV-1a offset basis.
+pub const FNV_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+
+/// Continues an FNV-1a digest `h` over `bytes`.
+pub fn fnv_update(mut h: u64, bytes: &[u8]) -> u64 {
     for &b in bytes {
         h ^= u64::from(b);
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
@@ -51,7 +59,7 @@ fn enabled() -> bool {
 
 /// The folder of the cache.
 pub fn folder() -> PathBuf {
-    std::env::temp_dir().join("sapphire-opencl-programs")
+    crate::checkcache::folder().join("opencl-programs")
 }
 
 fn push_field(out: &mut Vec<u8>, field: &[u8]) {
@@ -101,12 +109,25 @@ pub fn entry_path(dir: &Path, key: &str, options: &str, source: &str) -> PathBuf
     dir.join(format!("{:016x}.bin", fnv(&id)))
 }
 
+/// Creates `dir` and its parents; the cache folders get mode 0700 on Unix.
+pub fn create_private_dir(dir: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir_all(dir)
+    }
+}
+
 /// Writes an entry under a unique temporary name and renames it into place; errors are ignored
 /// (the next run builds from source again).
 pub fn store(path: &Path, bytes: &[u8]) {
     static SEQ: AtomicU64 = AtomicU64::new(0);
     let Some(dir) = path.parent() else { return };
-    if std::fs::create_dir_all(dir).is_err() {
+    if create_private_dir(dir).is_err() {
         return;
     }
     let tmp = path.with_extension(format!("{}.{}.tmp", std::process::id(), SEQ.fetch_add(1, Ordering::SeqCst)));

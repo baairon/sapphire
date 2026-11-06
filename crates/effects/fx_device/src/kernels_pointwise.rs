@@ -1,4 +1,4 @@
-//! Device kernels of the pointwise and elementwise ops (builder k1): arithmetic, comparisons and selects, lane routing,
+//! Device kernels of the pointwise and elementwise ops: arithmetic, comparisons and selects, lane routing,
 //! interpolation and compositing, colour.
 //!
 //! Every kernel computes each output sample with the operations of the CPU kernel it ports, in the CPU's order. Operand
@@ -8,7 +8,7 @@
 //! Constants are passed as 32 bit words and reinterpreted, so NaN payloads and signed zeros arrive unchanged.
 
 /// Fill, binary arithmetic with the extension channel, unary bit ops, compare select, median ladders, reductions.
-pub const K1_PW: &str = r#"
+pub const POINTWISE_PW: &str = r#"
 __kernel void k1_fill_f32(__global uint* dst, uint bits, uint n) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -421,7 +421,7 @@ __kernel void k1_reduce_f32(__global const float* p0, __global const float* p1, 
 "#;
 
 /// Kernels without a fused multiply add: range fill, postdivide, the f64 free pieces.
-pub const K1_PW2: &str = r#"
+pub const POINTWISE_PW2: &str = r#"
 __kernel void k1_fillr_f32(__global uint* dst, uint bits, uint lo, uint hi) {
     size_t i = get_global_id(0);
     if (i < lo || i >= hi) {
@@ -463,7 +463,7 @@ __kernel void k1_postdiv_f32(__global const float* pk, __global const float* pa,
 /// Kernels that fuse. Each fma below stands for one `mul_add` of the CPU function named in its comment.
 /// MIRRORS_MUL_ADD: interp::run lerp, screen_super::screen, comp_rgba::mix, comp_premult::pick, dissolve::blend,
 /// sat_scale::pixels, hue_shift::pixel, hue_shift_preserve_luma::sector, monochrome::luma, scale_rgb::snap
-pub const K1_FMA: &str = r#"
+pub const POINTWISE_FMA: &str = r#"
 /* MIRRORS_MUL_ADD: interp::run lerp, screen_super::screen, comp_rgba::mix, comp_premult::pick, dissolve::blend,
    sat_scale::pixels, hue_shift::pixel, hue_shift_preserve_luma::sector, monochrome::luma, scale_rgb::snap */
 typedef struct { float x; float y; float z; } k1_f3;
