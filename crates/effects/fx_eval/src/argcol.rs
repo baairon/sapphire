@@ -140,7 +140,7 @@ fn print_tol(p: f32) -> f32 {
     if p == 0.0 || !p.is_finite() {
         return 0.0;
     }
-    0.5 * 10f32.powi(p.abs().log10().floor() as i32 - 5)
+    0.5 * crate::detmath::pow10_f32(crate::detmath::floor_log10(p) - 5)
 }
 
 /// INT9: the chosen node's constant arguments agree with the printed text within print precision (MAPPING-TEXT-MISMATCH guard)
