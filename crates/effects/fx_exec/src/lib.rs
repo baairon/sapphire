@@ -8,6 +8,7 @@
 
 pub mod aspect;
 pub mod cmds;
+pub mod nanrule;
 pub mod downsampled;
 pub mod exec;
 pub mod twframe;
