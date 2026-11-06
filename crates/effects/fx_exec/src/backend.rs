@@ -106,8 +106,14 @@ pub trait Backend {
     fn try_run(&mut self, call: &NodeCall, args: &[Val]) -> Result<Val, Fallback>;
     /// Brings a device value to the host so the CPU can read it.
     fn materialize(&mut self, v: &Val) -> Result<(), ExecError> {
-        if let Val::Dev(d) = v {
-            d.materialize()?;
+        match v {
+            Val::Dev(d) => {
+                d.materialize()?;
+            }
+            Val::DevMip(d) => {
+                d.materialize()?;
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -242,7 +248,7 @@ impl DeviceBackend {
                 Val::Img(i) => device_ops::ArgShape::Img { channels: i.channels() },
                 Val::Dev(d) => device_ops::ArgShape::Img { channels: d.channels() },
                 Val::Const { n, .. } => device_ops::ArgShape::Const { n: *n },
-                Val::Mip(_) => device_ops::ArgShape::Mip,
+                Val::Mip(_) | Val::DevMip(_) => device_ops::ArgShape::Mip,
             })
             .collect();
         (op.accepts)(call, &shapes).map_err(|why| Fallback::Unsupported(why.to_string()))?;
@@ -258,6 +264,8 @@ impl DeviceBackend {
             .zip(&held)
             .map(|(a, h)| match (a, h) {
                 (Val::Const { n, lanes }, _) => DevArg::Const { n: *n, lanes: *lanes },
+                (Val::Mip(m), _) => DevArg::Mip(m.as_ref()),
+                (Val::DevMip(m), _) => DevArg::DevMip(m.as_ref()),
                 (_, Some(d)) => DevArg::Img(&d.dev),
                 _ => unreachable!("an operand that is neither an image nor a constant was refused by accepts"),
             })
@@ -265,6 +273,11 @@ impl DeviceBackend {
         let out = (op.run)(&self.ctx.session, call, &dargs).map_err(map_err)?;
         if out.has_nan().map_err(map_err)? {
             return Err(Fallback::NanOutput);
+        }
+        if call.class == "make_mipmap" {
+            // the pyramid stays resident as a ripmap object for the device samplers; a CPU consumer brings it to the host
+            let rip = crate::device_ops_k2b::wrap_ripmap(call, &dargs, out).map_err(map_err)?;
+            return Ok(Val::DevMip(Rc::new(rip)));
         }
         Ok(Val::Dev(Rc::new(DevVal::new(out))))
     }
@@ -356,8 +369,14 @@ pub fn with_backend<R>(f: impl FnOnce(&mut dyn Backend) -> R) -> Option<R> {
 /// Host arguments for a CPU run of a node whose operands may be device images: materializes them first.
 pub fn host_args<'a>(vals: &'a [Val]) -> Result<Vec<Arg<'a>>, ExecError> {
     for v in vals {
-        if let Val::Dev(d) = v {
-            d.materialize()?;
+        match v {
+            Val::Dev(d) => {
+                d.materialize()?;
+            }
+            Val::DevMip(d) => {
+                d.materialize()?;
+            }
+            _ => {}
         }
     }
     Ok(vals.iter().map(|v| v.as_arg()).collect())

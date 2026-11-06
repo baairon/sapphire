@@ -60,8 +60,15 @@ warp_f1 = { path = "../ext/wave_s1/rebuild_shared_warp/f1" }
 static2 = { path = "../ext/wave_s6/rebuild_static2/port" }
 monochrome = { path = "../ext/wave_s6/rebuild_monochrome/port" }
 rotate = { path = "../ext/wave_s6/rebuild_rotate/port" }
+libm_sincos = { path = "../ext/wave_s4/rebuild_sincos/port" }
 ops_coerce = { path = "../ext/wave_s6/rebuild_ops_coerce/port" }
 blur = { path = "../ext/wave_glow_blur/rebuild_blur/blur" }
+blur_coef = { path = "../ext/wave_glow_blur/rebuild_blur/coef" }
+esh3_jobs = { path = "../crate/esh3_jobs" }
+esh4_powf = { path = "../crate/esh4b_powf_fma" }
+esh5_core = { path = "../crate/esh5_core" }
+esh5b_passjobs = { path = "../crate/esh5b_passjobs" }
+esh6_driver = { path = "../crate/esh6_driver" }
 esh8_exec = { path = "../crate/esh8_exec" }
 fx_common = { path = "../ext/rebuild_common" }
 

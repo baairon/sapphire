@@ -97,10 +97,45 @@ pub const SOURCES: &[Source] = &[
     Source { name: "kernels::ONE_MINUS_F32", text: ONE_MINUS_F32, mirrors_mul_add: false },
     Source { name: "kernels::ANY_NAN_F32", text: ANY_NAN_F32, mirrors_mul_add: false },
     Source { name: "kernels::BASE", text: BASE, mirrors_mul_add: false },
+    Source { name: "kernels_k1::K1_PW", text: crate::kernels_k1::K1_PW, mirrors_mul_add: false },
+    Source { name: "kernels_k1::K1_PW2", text: crate::kernels_k1::K1_PW2, mirrors_mul_add: false },
+    Source { name: "kernels_k1::K1_FMA", text: crate::kernels_k1::K1_FMA, mirrors_mul_add: true },
+    Source { name: "kernels_k2::K2_HELPERS", text: crate::kernels_k2::K2_HELPERS, mirrors_mul_add: false },
+    Source { name: "kernels_k2::K2_WARP", text: crate::kernels_k2::K2_WARP, mirrors_mul_add: true },
+    Source { name: "kernels_k2::K2_ROTATE", text: crate::kernels_k2::K2_ROTATE, mirrors_mul_add: true },
+    Source { name: "kernels_k2::K2_PERSP", text: crate::kernels_k2::K2_PERSP, mirrors_mul_add: true },
+    Source { name: "kernels_k2b::K2B_MIPMAP", text: crate::kernels_k2b::K2B_MIPMAP, mirrors_mul_add: false },
+    Source { name: "kernels_k2b::K2B_BLUR_WARP", text: crate::kernels_k2b::K2B_BLUR_WARP, mirrors_mul_add: true },
+    Source { name: "kernels_k3::K3_BLUR", text: crate::kernels_k3::K3_BLUR, mirrors_mul_add: true },
+    Source { name: "kernels_k3::K3_MASKED", text: crate::kernels_k3::K3_MASKED, mirrors_mul_add: true },
+    Source { name: "kernels_k3::K3_GRAD", text: crate::kernels_k3::K3_GRAD, mirrors_mul_add: false },
+    Source { name: "kernels_k3::K3_SHARPEN", text: crate::kernels_k3::K3_SHARPEN, mirrors_mul_add: true },
+    Source { name: "kernels_k3::K3_STATIC2", text: crate::kernels_k3::K3_STATIC2, mirrors_mul_add: false },
+    Source { name: "kernels_k3::K3_ESH", text: crate::kernels_k3::K3_ESH, mirrors_mul_add: true },
 ];
 
 /// The parts that make up the one device program (every kernel above, after the prelude).
-pub const PROGRAM_PARTS: &[&str] = &[COPY_F32, ONE_MINUS_F32, ANY_NAN_F32, BASE];
+pub const PROGRAM_PARTS: &[&str] = &[
+    COPY_F32,
+    ONE_MINUS_F32,
+    ANY_NAN_F32,
+    BASE,
+    crate::kernels_k1::K1_PW,
+    crate::kernels_k1::K1_PW2,
+    crate::kernels_k1::K1_FMA,
+    crate::kernels_k2::K2_HELPERS,
+    crate::kernels_k2::K2_WARP,
+    crate::kernels_k2::K2_ROTATE,
+    crate::kernels_k2::K2_PERSP,
+    crate::kernels_k2b::K2B_MIPMAP,
+    crate::kernels_k2b::K2B_BLUR_WARP,
+    crate::kernels_k3::K3_BLUR,
+    crate::kernels_k3::K3_MASKED,
+    crate::kernels_k3::K3_GRAD,
+    crate::kernels_k3::K3_SHARPEN,
+    crate::kernels_k3::K3_STATIC2,
+    crate::kernels_k3::K3_ESH,
+];
 
 /// One program text: the prelude, then `parts` in order.
 pub fn program(parts: &[&str]) -> String {

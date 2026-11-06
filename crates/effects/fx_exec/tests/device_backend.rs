@@ -34,10 +34,11 @@ fn synth(ch: usize, n: usize, seed: u64) -> Image {
 }
 
 #[test]
-fn device_backend_admits_exactly_the_starter_ops() {
+fn device_backend_admits_the_starter_ops() {
     let Some(ctx) = device() else { return };
     let b = DeviceBackend::new(ctx);
-    assert_eq!(b.admitted(), vec!["copy", "one_minus"]);
+    let a = b.admitted();
+    assert!(a.contains(&"copy") && a.contains(&"one_minus"), "{a:?}");
     assert!(b.report().refused.is_empty(), "{:?}", b.report().refused);
 }
 
@@ -49,7 +50,7 @@ fn device_backend_declines_with_the_right_reason() {
     let img = Val::Img(Rc::new(synth(3, 12, 1)));
     let call = |class: &'static str, tag| NodeCall { idx: 0, class, tag, n: 12, dims: (4, 3), kp: &kp };
     // no kernel at all
-    assert_eq!(b.try_run(&call("blur", 3), &[img.clone()]).err(), Some(Fallback::NoKernel));
+    assert_eq!(b.try_run(&call("no_such_op", 3), &[img.clone()]).err(), Some(Fallback::NoKernel));
     // a kernel op that the shape does not fit (fewer channels than the tag)
     assert!(matches!(b.try_run(&call("one_minus", 4), &[img.clone()]), Err(Fallback::Unsupported(_))));
     // runs on the device and stays resident

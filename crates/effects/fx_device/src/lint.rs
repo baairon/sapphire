@@ -140,7 +140,9 @@ pub fn lint_all() -> Vec<String> {
             out.push(format!("{}: {f}", s.name));
         }
     }
-    for f in lint(&crate::kernels::device_program(), false) {
+    // the whole program contains the fused kernels: allowed exactly when some registered source is flagged and marked
+    let any_fused = crate::kernels::SOURCES.iter().any(|s| s.mirrors_mul_add);
+    for f in lint(&crate::kernels::device_program(), any_fused) {
         out.push(format!("device_program: {f}"));
     }
     out
