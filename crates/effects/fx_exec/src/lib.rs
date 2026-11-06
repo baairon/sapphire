@@ -30,6 +30,7 @@ pub mod kernels;
 /// OPS_SCALAR_PAIRS census rows, the OPS-ARITH-SCALAR-SCALAR-UNJUDGED tripwire, program-text node paths
 pub mod ops_census;
 pub mod kernels2;
+pub mod par;
 pub mod input_class;
 pub mod selector;
 /// STYLE-SELECT 

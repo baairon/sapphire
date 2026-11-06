@@ -141,6 +141,25 @@ pub fn lane_sigma(amount: f32, render_scale: i32) -> f32 {
 /// render (flag 0): per plane c in 0..plane_count one blur_core call. src and dst planes must share one width and
 /// height; strided planes are repacked into dense scratch (dst is copied in first, as the original works in place on dst) and back.
 /// PARITY is claimed on dense planes.
+/// Planes with fewer samples than this are blurred serially.
+const PAR_MIN_SAMPLES: usize = 1 << 16;
+
+/// Thread budget for the per-plane split: `SAPPHIRE_THREADS` when set to a positive integer (1 = serial), else the available parallelism.
+fn par_min_samples() -> usize {
+    std::env::var("SAPPHIRE_PAR_MIN").ok().and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(PAR_MIN_SAMPLES)
+}
+
+fn plane_threads() -> usize {
+    if let Ok(v) = std::env::var("SAPPHIRE_THREADS") {
+        if let Ok(k) = v.trim().parse::<usize>() {
+            if k >= 1 {
+                return k;
+            }
+        }
+    }
+    std::thread::available_parallelism().map(|k| k.get()).unwrap_or(1)
+}
+
 pub fn render(p: &BlurParams, src: &[Plane], dst: &mut [PlaneMut]) -> Result<(), FxError> {
     let n = p.plane_count;
     if n > 4 || src.len() < n || dst.len() < n {
@@ -157,10 +176,8 @@ pub fn render(p: &BlurParams, src: &[Plane], dst: &mut [PlaneMut]) -> Result<(),
     let passes = pass_count(p.filter_shape);
     let sx = lane_sigma(p.amount[0], p.render_scale);
     let sy = lane_sigma(p.amount[1], p.render_scale);
-    for c in 0..n {
+    let do_plane = |c: usize, s: &Plane, d: &mut PlaneMut| -> Result<(), FxError> {
         let gain = plane_gain(p, c);
-        let s = &src[c];
-        let d = &mut dst[c];
         let sbuf: Vec<f32>;
         let sslice: &[f32] = if s.stride == w {
             &s.data[..w * h]
@@ -183,6 +200,26 @@ pub fn render(p: &BlurParams, src: &[Plane], dst: &mut [PlaneMut]) -> Result<(),
             for y in 0..h {
                 d.row_mut(y).copy_from_slice(&dbuf[y * w..(y + 1) * w]);
             }
+        }
+        Ok(())
+    };
+    // The planes are independent (each plane has its own source, destination and gain), so they may run on separate threads.
+    let threads = plane_threads();
+    if threads > 1 && n > 1 && w * h >= par_min_samples() {
+        let do_plane = &do_plane;
+        let results: Vec<Result<(), FxError>> = std::thread::scope(|sc| {
+            let hs: Vec<_> = dst[..n].iter_mut().enumerate().map(|(c, d)| {
+                let s = &src[c];
+                sc.spawn(move || do_plane(c, s, d))
+            }).collect();
+            hs.into_iter().map(|h| h.join().unwrap_or(Err(FxError::Geometry))).collect()
+        });
+        for r in results {
+            r?;
+        }
+    } else {
+        for c in 0..n {
+            do_plane(c, &src[c], &mut dst[c])?;
         }
     }
     Ok(())
