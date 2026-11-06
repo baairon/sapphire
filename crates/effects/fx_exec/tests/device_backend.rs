@@ -12,7 +12,7 @@ fn device() -> Option<std::sync::Arc<fx_device::DeviceCtx>> {
     match fx_device::select(DeviceKind::Gpu) {
         Handle::Device(d) => Some(d),
         other => {
-            println!("NOT RUN: no usable OpenCL device ({})", other.describe());
+            not_run(&format!("no usable OpenCL device ({})", other.describe()));
             None
         }
     }
@@ -106,4 +106,12 @@ fn device_backend_renders_plans_to_the_cpu_bytes() {
         ran += 1;
     }
     assert!(ran > 0, "no native effect ran on the CPU in this test");
+}
+
+/// A test that needs a device and found none: it prints NOT RUN, or fails when `SAPPHIRE_REQUIRE_DEVICE=1`.
+fn not_run(why: &str) {
+    if std::env::var("SAPPHIRE_REQUIRE_DEVICE").as_deref() == Ok("1") {
+        panic!("device required but unavailable: {why}");
+    }
+    println!("NOT RUN: {why}");
 }

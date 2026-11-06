@@ -1,6 +1,6 @@
 //! Device ops of the sampling and warp family: warp_rel, warp, rotate, perspective, perspective_alpha.
 //!
-//! Kernels live in `fx_device::kernels_k2`. Each op here has `accepts` (shape level), `run` (value level: a constant that
+//! Kernels live in `fx_device::kernels_warp`. Each op here has `accepts` (shape level), `run` (value level: a constant that
 //! puts the node outside the kernel's contract returns `DevError::Unsupported`, so the executor runs the CPU kernel) and a
 //! self-check over [`cases`], run by [`selfcheck`] against `kernels::run_any`.
 //!
@@ -209,7 +209,7 @@ fn warp_launch(rel: bool, s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Re
     };
     let o = |k: usize| out.plane(k.min(ch - 1));
     s.launch(
-        "k2_warp_f32",
+        "warp_warp_f32",
         c.n,
         &[
             pb.arg(),
@@ -351,7 +351,7 @@ pub fn rotate_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<Dev
         }
     }
     s.launch(
-        "k2_rotate_f32",
+        "warp_rotate_f32",
         n,
         &[
             parg(&args[1], 0, &dm),
@@ -431,7 +431,7 @@ pub fn persp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevI
     let (m1, p, m4, m5, m6, m7) = (a * r0, a * r1, r0 * b, r1 * b, r0, r1);
     let out = DevImage::alloc(s, 2, c.n)?;
     s.launch(
-        "k2_persp_f32",
+        "warp_persp_f32",
         c.n,
         &[
             uv.plane(0).arg(),
@@ -503,7 +503,7 @@ pub fn persp_alpha_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
     let cf = ecx as f32;
     let out = DevImage::alloc(s, 1, c.n)?;
     s.launch(
-        "k2_persp_alpha_f32",
+        "warp_persp_alpha_f32",
         c.n,
         &[uv.plane(1).arg(), out.plane(0).arg(), ClArg::U32(c.n as u32), ClArg::F32(cf), ClArg::F32(pp), ClArg::F32(r1)],
     )?;

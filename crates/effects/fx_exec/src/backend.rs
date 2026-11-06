@@ -276,7 +276,7 @@ impl DeviceBackend {
         }
         if call.class == "make_mipmap" {
             // the pyramid stays resident as a ripmap object for the device samplers; a CPU consumer brings it to the host
-            let rip = crate::device_ops_k2b::wrap_ripmap(call, &dargs, out).map_err(map_err)?;
+            let rip = crate::device_ops_ripmap::wrap_ripmap(call, &dargs, out).map_err(map_err)?;
             return Ok(Val::DevMip(Rc::new(rip)));
         }
         Ok(Val::Dev(Rc::new(DevVal::new(out))))
@@ -292,10 +292,67 @@ pub fn for_device(handle: &DeviceHandle) -> Box<dyn Backend> {
 }
 
 /// `fx_device::select(kind)` and its backend in one call: the entry point for `--device`. The handle is returned too so the caller
-/// can print `describe()` for a refusal.
+/// can print `describe()` for a refusal. The notices this selection owes (see [`queue_notices`]) are printed at the start of the next
+/// execution, on the thread that renders: selection can run before the caller's log is installed and while the caller holds the
+/// standard stream locks.
 pub fn select(kind: fx_device::DeviceKind) -> (Box<dyn Backend>, DeviceHandle) {
     let h = fx_device::select(kind);
+    queue_notices(kind, &h);
     (for_device(&h), h)
+}
+
+thread_local! {
+    static PENDING: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    static REQUIRED_MISSING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn env_is_one(name: &str) -> bool {
+    std::env::var(name).as_deref() == Ok("1")
+}
+
+/// Queues the `device: ` lines for a selection:
+///
+/// * an explicit `gpu` or `gpu=N` that ends on the CPU says why and that the render is on the CPU;
+/// * `auto` says the same only when `SAPPHIRE_DEVICE_REPORT=1`, which also names the device that was opened;
+/// * with `SAPPHIRE_REQUIRE_DEVICE=1`, any request other than `cpu` that installs no device refuses every execution on the thread (`DEVICE-REQUIRED-UNAVAILABLE`, status 3 through `sapphire stage apply`).
+fn queue_notices(kind: fx_device::DeviceKind, h: &DeviceHandle) {
+    if kind == fx_device::DeviceKind::Cpu {
+        return;
+    }
+    if h.is_device() {
+        if env_is_one("SAPPHIRE_DEVICE_REPORT") {
+            PENDING.with(|p| p.borrow_mut().push(h.describe()));
+        }
+        return;
+    }
+    let why = match h {
+        DeviceHandle::Refused { reasons, .. } => reasons.join("; "),
+        _ => "no usable OpenCL device".to_string(),
+    };
+    if env_is_one("SAPPHIRE_REQUIRE_DEVICE") {
+        REQUIRED_MISSING.with(|c| c.set(true));
+        PENDING.with(|p| p.borrow_mut().push(format!("device: DEVICE-REQUIRED-UNAVAILABLE: --device {kind}: {why}")));
+        return;
+    }
+    if kind != fx_device::DeviceKind::Auto || env_is_one("SAPPHIRE_DEVICE_REPORT") {
+        PENDING.with(|p| p.borrow_mut().push(format!("device: {why}; rendering on the CPU")));
+    }
+}
+
+/// Prints the queued notices through the executor's log, the same path as every other line of a run. A missing required device is not
+/// fatal here: [`required_device_missing`] tells the executor to refuse the run, which then ends with the refusal status and the
+/// label on the log.
+fn flush_notices() {
+    let lines: Vec<String> = PENDING.with(|p| std::mem::take(&mut *p.borrow_mut()));
+    for l in &lines {
+        crate::fxrun::elog!("{}", l);
+    }
+}
+
+/// True once a selection on this thread found `SAPPHIRE_REQUIRE_DEVICE=1` and no device: every execution on the thread is refused with
+/// `DEVICE-REQUIRED-UNAVAILABLE`.
+pub fn required_device_missing() -> bool {
+    REQUIRED_MISSING.with(|c| c.get())
 }
 
 thread_local! {
@@ -332,6 +389,7 @@ thread_local! {
 /// `auto`), selects it once and installs it for the thread. Unset or `cpu` changes nothing. An explicit `install` always wins.
 /// `SAPPHIRE_DEVICE_REPORT=1` prints the placement counts after each top level execution ([`note_report`]).
 pub fn ensure_env_backend() {
+    flush_notices();
     if ENV_CHECKED.with(|c| c.replace(true)) {
         return;
     }
@@ -342,21 +400,19 @@ pub fn ensure_env_backend() {
     if kind == fx_device::DeviceKind::Cpu {
         return;
     }
-    let (b, handle) = select(kind);
-    if std::env::var_os("SAPPHIRE_DEVICE_REPORT").is_some() {
-        crate::fxrun::emit(format_args!("fx_exec: note: {}", handle.describe()));
-    }
+    let (b, _handle) = select(kind);
+    flush_notices();
     CURRENT.with(|c| *c.borrow_mut() = Some(b));
 }
 
 /// Prints the placement counts to stderr when `SAPPHIRE_DEVICE_REPORT` is set and a backend is installed.
 pub fn note_report() {
-    if std::env::var_os("SAPPHIRE_DEVICE_REPORT").is_none() {
+    if !env_is_one("SAPPHIRE_DEVICE_REPORT") {
         return;
     }
     if let Some(r) = CURRENT.with(|c| c.borrow().as_ref().map(|b| (b.name(), b.report()))) {
         if r.0 != "cpu" {
-            crate::fxrun::emit(format_args!("fx_exec: note: device report: {}", r.1.line()));
+            crate::fxrun::elog!("{}", r.1.line());
         }
     }
 }
@@ -380,4 +436,35 @@ pub fn host_args<'a>(vals: &'a [Val]) -> Result<Vec<Arg<'a>>, ExecError> {
         }
     }
     Ok(vals.iter().map(|v| v.as_arg()).collect())
+}
+
+#[cfg(test)]
+mod notice_tests {
+    use super::*;
+    use fx_device::DeviceKind;
+
+    fn refused(kind: DeviceKind) -> DeviceHandle {
+        DeviceHandle::Refused { kind, reasons: vec!["no OpenCL platform with a device".into()] }
+    }
+
+    fn logged(kind: DeviceKind, h: &DeviceHandle) -> String {
+        let ((), io) = crate::fxrun::with_stage_io(crate::fxrun::StageIo::default(), || {
+            queue_notices(kind, h);
+            flush_notices();
+        });
+        io.log
+    }
+
+    #[test]
+    fn an_explicit_request_that_ends_on_the_cpu_says_so_and_auto_is_silent() {
+        if env_is_one("SAPPHIRE_DEVICE_REPORT") || env_is_one("SAPPHIRE_REQUIRE_DEVICE") {
+            return;
+        }
+        for kind in [DeviceKind::Gpu, DeviceKind::GpuIndex(1)] {
+            let text = logged(kind, &refused(kind));
+            assert_eq!(text, "device: no OpenCL platform with a device; rendering on the CPU\n", "{kind}");
+        }
+        assert_eq!(logged(DeviceKind::Auto, &DeviceHandle::Cpu), "");
+        assert_eq!(logged(DeviceKind::Cpu, &DeviceHandle::Cpu), "");
+    }
 }

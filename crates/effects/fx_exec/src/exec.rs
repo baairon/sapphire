@@ -304,6 +304,9 @@ fn broadcast(a: &Arg, ch: usize, n: usize) -> Result<Image, ExecError> {
 /// (convert-from-source before, convert-to-dest after) stays at full resolution in the callers. `kp.ds_off` / env DS1_OFF=1 = pre-DS1.
 pub fn execute_compiled(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: &HostFrames) -> Result<ExecOutput, ExecError> {
     crate::backend::ensure_env_backend();
+    if crate::backend::required_device_missing() {
+        return Err(ExecError::Unsupported { class: "device".into(), reason: "DEVICE-REQUIRED-UNAVAILABLE: SAPPHIRE_REQUIRE_DEVICE=1 and no device was installed".into() });
+    }
     let f = fx_eval::cpuplan::ds_factor(cp);
     let r = if f > 1 && !binding.kp.ds_off { execute_downsampled(cp, binding, inputs, host, f) } else { execute_plain(cp, binding, inputs, host) };
     if r.is_ok() {

@@ -19,7 +19,7 @@
 pub const RIPMAP_MIPMAP: &str = r#"
 /* make_mipmap::mm2::base_fill, one work item per base pixel (all channels): format 2 (f32 bits) copy of source row y into
    the interior of plane (0, 0). Plane (0,0) starts at offset 0 of the ripmap buffer. */
-__kernel void k2b_mm_base(__global const float* s0, __global const float* s1, __global const float* s2, __global const float* s3,
+__kernel void ripmap_mm_base(__global const float* s0, __global const float* s1, __global const float* s2, __global const float* s3,
                           __global uint* rip, int w, int h, int c, uint stride) {
     uint gid = (uint)get_global_id(0);
     uint total = (uint)w * (uint)h;
@@ -42,7 +42,7 @@ __kernel void k2b_mm_base(__global const float* s0, __global const float* s1, __
 }
 
 /* the zero fill of a freshly allocated ripmap (the CPU object is filled with 0 bits) */
-__kernel void k2b_mm_fill(__global uint* rip, uint n) {
+__kernel void ripmap_mm_fill(__global uint* rip, uint n) {
     uint gid = (uint)get_global_id(0);
     if (gid >= n) {
         return;
@@ -53,7 +53,7 @@ __kernel void k2b_mm_fill(__global uint* rip, uint n) {
 /* Column pads of one row (interior row y of the plane at `off`), width wl, channels c: left pad pixel, two right pad pixels.
    mode 1 tile (last, first, first), 2 clamp (first, last, last), else the constant pad pixel. One work item per (row, channel).
    Shared by slot 32's base fill and `make_mipmap::pad_cols`. */
-__kernel void k2b_mm_padcols(__global uint* rip, uint off, int wl, int c, uint stride, int rows, int mode, __global const uint* pad) {
+__kernel void ripmap_mm_padcols(__global uint* rip, uint off, int wl, int c, uint stride, int rows, int mode, __global const uint* pad) {
     uint gid = (uint)get_global_id(0);
     uint total = (uint)rows * (uint)c;
     if (gid >= total) {
@@ -88,7 +88,7 @@ __kernel void k2b_mm_padcols(__global uint* rip, uint off, int wl, int c, uint s
 /* make_mipmap::pad_rows for the plane at `off` (stride floats per row, interior height h, c channels): rows 0, h+1, h+2.
    wy 0 constant (zero = all pad pixel lanes compare equal to 0.0: write +0), 1 tile (row h, row 1, row 1), 2 clamp
    (row 1, row h, row h), else nothing. One work item per (pad row, element). */
-__kernel void k2b_mm_padrows(__global uint* rip, uint off, int h, int c, uint stride, int wy, int zero, __global const uint* pad) {
+__kernel void ripmap_mm_padrows(__global uint* rip, uint off, int h, int c, uint stride, int wy, int zero, __global const uint* pad) {
     uint gid = (uint)get_global_id(0);
     uint total = 3u * stride;
     if (gid >= total) {
@@ -135,7 +135,7 @@ __kernel void k2b_mm_padrows(__global uint* rip, uint off, int h, int c, uint st
 
 /* kernel_a: horizontal 2:1 of level l from level l-1 (row level 0), one work item per output sample of the level.
    dst = 0.5 * (b + a) with a the even source pixel and b the odd one (avg(b, a): the sum is taken as b + a). */
-__kernel void k2b_mm_hor(__global uint* rip, uint soff, uint sstride, uint doff, uint dstride, int wl, int h0, int c) {
+__kernel void ripmap_mm_hor(__global uint* rip, uint soff, uint sstride, uint doff, uint dstride, int wl, int h0, int c) {
     uint gid = (uint)get_global_id(0);
     uint per_row = (uint)wl * (uint)c;
     uint total = per_row * (uint)h0;
@@ -153,7 +153,7 @@ __kernel void k2b_mm_hor(__global uint* rip, uint soff, uint sstride, uint doff,
 }
 
 /* kernel_b: vertical 2:1 of plane (l, j) from plane (l, j-1), one work item per output sample. */
-__kernel void k2b_mm_ver(__global uint* rip, uint soff, uint doff, uint stride, int wl, int hj, int c) {
+__kernel void ripmap_mm_ver(__global uint* rip, uint soff, uint doff, uint stride, int wl, int hj, int c) {
     uint gid = (uint)get_global_id(0);
     uint per_row = (uint)wl * (uint)c;
     uint total = per_row * (uint)hj;
@@ -1013,7 +1013,7 @@ void bw_p1(bw_cfg g, int mode_x, int mode_y, int width, int height, int stride, 
     }
 }
 
-__kernel void k2b_blur_warp_f32(__global const float* pl, __global const int* ip, __global const float* fp,
+__kernel void ripmap_blur_warp_f32(__global const float* pl, __global const int* ip, __global const float* fp,
                                 __global const float* p1x, __global const float* p1y, __global const float* p2x, __global const float* p2y,
                                 __global float* o0, __global float* o1, __global float* o2, __global float* o3, __global uint* err) {
     uint gid = (uint)get_global_id(0);
@@ -1090,12 +1090,12 @@ __kernel void k2b_blur_warp_f32(__global const float* pl, __global const int* ip
     float tx = l_p1x + 0x1p+0f;
     float basex = left - (float)roi_x;
     float xr = fma(tx, scx, basex);
-    float x = k2_wrap(xr, img_w, mode_x);
+    float x = warp_wrap(xr, img_w, mode_x);
     float ty = l_p1y - 0x1p+0f;
     float my_ = fma(scy, ty, -geo_h);
     float topy = geo_e - (float)roi_y;
     float yr = topy - my_;
-    float y = k2_wrap(yr, img_h, mode_y);
+    float y = warp_wrap(yr, img_h, mode_y);
     float e2x = fma(l_p2x - l_p1x, scx, x);
     float e2y = fma(-(l_p2y - l_p1y), scy, y);
     float res[4];

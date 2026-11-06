@@ -3,14 +3,14 @@
 
 use fx_device::{Backend as Handle, DeviceKind};
 use fx_exec::backend::{Backend, DeviceBackend};
-use fx_exec::device_ops_k3::ALLOW;
+use fx_exec::device_ops_neighbourhood::ALLOW;
 
 #[test]
 fn the_neighbourhood_kernels_pass_the_self_check_against_the_cpu() {
     let ctx = match fx_device::select(DeviceKind::Gpu) {
         Handle::Device(d) => d,
         other => {
-            println!("NOT RUN: no usable OpenCL device ({})", other.describe());
+            not_run(&format!("no usable OpenCL device ({})", other.describe()));
             return;
         }
     };
@@ -51,7 +51,7 @@ mod esh_units {
         match fx_device::select(DeviceKind::Gpu) {
             Handle::Device(d) => Some(d.session.clone()),
             other => {
-                println!("NOT RUN: no usable OpenCL device ({})", other.describe());
+                super::not_run(&format!("no usable OpenCL device ({})", other.describe()));
                 None
             }
         }
@@ -199,4 +199,12 @@ mod esh_units {
             }
         }
     }
+}
+
+/// A test that needs a device and found none: it prints NOT RUN, or fails when `SAPPHIRE_REQUIRE_DEVICE=1`.
+fn not_run(why: &str) {
+    if std::env::var("SAPPHIRE_REQUIRE_DEVICE").as_deref() == Ok("1") {
+        panic!("device required but unavailable: {why}");
+    }
+    println!("NOT RUN: {why}");
 }

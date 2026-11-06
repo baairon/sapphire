@@ -9,7 +9,7 @@
 
 /// Fill, binary arithmetic with the extension channel, unary bit ops, compare select, median ladders, reductions.
 pub const POINTWISE_PW: &str = r#"
-__kernel void k1_fill_f32(__global uint* dst, uint bits, uint n) {
+__kernel void pointwise_fill_f32(__global uint* dst, uint bits, uint n) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
@@ -17,7 +17,7 @@ __kernel void k1_fill_f32(__global uint* dst, uint bits, uint n) {
     dst[i] = bits;
 }
 
-float k1_div(float x, float y) {
+float pointwise_div(float x, float y) {
     if (y == 0x0p+0f) {
         return 0x1.e848p+19f * x;
     }
@@ -25,7 +25,7 @@ float k1_div(float x, float y) {
 }
 
 /* op: 0 add, 1 sub, 2 mul, 3 div (zero rule), 4 max, 5 min (x86 select), 6 diff (|x - y| by sign mask) */
-float k1_bin_f(uint op, float x, float y) {
+float pointwise_bin_f(uint op, float x, float y) {
     if (op == 0u) {
         return x + y;
     }
@@ -36,7 +36,7 @@ float k1_bin_f(uint op, float x, float y) {
         return x * y;
     }
     if (op == 3u) {
-        return k1_div(x, y);
+        return pointwise_div(x, y);
     }
     if (op == 4u) {
         return (x > y) ? x : y;
@@ -48,29 +48,29 @@ float k1_bin_f(uint op, float x, float y) {
 }
 
 /* mode 0: both planes, 1: a is the constant ca, 2: b is the constant cb (add and mul reload it as the first operand) */
-__kernel void k1_bin_f32(__global const float* pa, __global const float* pb, __global float* out, uint n, uint op, uint mode, uint ca, uint cb) {
+__kernel void pointwise_bin_f32(__global const float* pa, __global const float* pb, __global float* out, uint n, uint op, uint mode, uint ca, uint cb) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
     }
     float r;
     if (mode == 1u) {
-        r = k1_bin_f(op, as_float(ca), pb[i]);
+        r = pointwise_bin_f(op, as_float(ca), pb[i]);
     } else if (mode == 2u) {
         float x = pa[i];
         if (op == 0u || op == 2u) {
-            r = k1_bin_f(op, as_float(cb), x);
+            r = pointwise_bin_f(op, as_float(cb), x);
         } else {
-            r = k1_bin_f(op, x, as_float(cb));
+            r = pointwise_bin_f(op, x, as_float(cb));
         }
     } else {
-        r = k1_bin_f(op, pa[i], pb[i]);
+        r = pointwise_bin_f(op, pa[i], pb[i]);
     }
     out[i] = r;
 }
 
 /* extension channel 3 when the operands have 3 and 4 channels; side 1 = B side (r14), 0 = A side (r12) */
-__kernel void k1_ext_f32(__global const float* src, __global float* out, uint n, uint op, uint side, uint is_const, uint cbits) {
+__kernel void pointwise_ext_f32(__global const float* src, __global float* out, uint n, uint op, uint side, uint is_const, uint cbits) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
@@ -106,7 +106,7 @@ __kernel void k1_ext_f32(__global const float* src, __global float* out, uint n,
 }
 
 /* op 0 abs, 1 negate: sign bit masks */
-__kernel void k1_un_f32(__global const uint* src, __global uint* dst, uint n, uint op) {
+__kernel void pointwise_un_f32(__global const uint* src, __global uint* dst, uint n, uint op) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
@@ -116,7 +116,7 @@ __kernel void k1_un_f32(__global const uint* src, __global uint* dst, uint n, ui
 }
 
 /* if+ (kind 0: a > 0) and if> (kind 1: a > b); slot masks: bit0 a, bit1 b, bit2 x, bit3 y are constants (words ca..cy) */
-__kernel void k1_sel_f32(__global const float* pa, __global const float* pb, __global const float* px, __global const float* py, __global float* out,
+__kernel void pointwise_sel_f32(__global const float* pa, __global const float* pb, __global const float* px, __global const float* py, __global float* out,
                          uint n, uint kind, uint cm, uint ca, uint cb, uint cx, uint cy) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -137,35 +137,35 @@ __kernel void k1_sel_f32(__global const float* pa, __global const float* pb, __g
     }
 }
 
-uint k1_lt(float a, float b) {
+uint pointwise_lt(float a, float b) {
     return (a < b) ? 0xffffffffu : 0u;
 }
 
-float k1_andm(float a, uint m) {
+float pointwise_andm(float a, uint m) {
     return as_float(as_uint(a) & m);
 }
 
-float k1_bl(float a, float b, uint m) {
+float pointwise_bl(float a, float b, uint m) {
     return ((m >> 31) != 0u) ? b : a;
 }
 
-float k1_minss(float a, float b) {
+float pointwise_minss(float a, float b) {
     return (a < b) ? a : b;
 }
 
 /* shapes: 0 S101, 1 S100, 2 S11, 3 S011, 4 S010, 5 S001, 6 S000 (which of a, b, c are constants), as the CPU ladders */
-float k1_cl_scalar(uint s, float p0, float p1, float p2, float c0, float c1, float c2) {
+float pointwise_cl_scalar(uint s, float p0, float p1, float p2, float c0, float c1, float c2) {
     if (s == 0u) {
         float x = p1;
         if (c2 > x) {
             if (x > c0) {
                 return x;
             }
-            return k1_minss(c2, c0);
+            return pointwise_minss(c2, c0);
         } else if (c2 > c0) {
             return c2;
         }
-        return k1_minss(x, c0);
+        return pointwise_minss(x, c0);
     }
     if (s == 1u) {
         float x = p1;
@@ -174,11 +174,11 @@ float k1_cl_scalar(uint s, float p0, float p1, float p2, float c0, float c1, flo
             if (x > c0) {
                 return x;
             }
-            return k1_minss(y, c0);
+            return pointwise_minss(y, c0);
         } else if (y > c0) {
             return y;
         }
-        return k1_minss(x, c0);
+        return pointwise_minss(x, c0);
     }
     if (s == 2u) {
         float x = p2;
@@ -186,11 +186,11 @@ float k1_cl_scalar(uint s, float p0, float p1, float p2, float c0, float c1, flo
             if (c1 > c0) {
                 return c1;
             }
-            return k1_minss(x, c0);
+            return pointwise_minss(x, c0);
         } else if (x > c0) {
             return x;
         }
-        return k1_minss(c1, c0);
+        return pointwise_minss(c1, c0);
     }
     if (s == 3u) {
         float x = p0;
@@ -198,11 +198,11 @@ float k1_cl_scalar(uint s, float p0, float p1, float p2, float c0, float c1, flo
             if (c1 > x) {
                 return c1;
             }
-            return k1_minss(c2, x);
+            return pointwise_minss(c2, x);
         } else if (c2 > x) {
             return c2;
         }
-        return k1_minss(c1, x);
+        return pointwise_minss(c1, x);
     }
     if (s == 4u) {
         float x = p0;
@@ -211,11 +211,11 @@ float k1_cl_scalar(uint s, float p0, float p1, float p2, float c0, float c1, flo
             if (c1 > x) {
                 return c1;
             }
-            return k1_minss(y, x);
+            return pointwise_minss(y, x);
         } else if (y > x) {
             return y;
         }
-        return k1_minss(c1, x);
+        return pointwise_minss(c1, x);
     }
     if (s == 5u) {
         float a = p0;
@@ -224,11 +224,11 @@ float k1_cl_scalar(uint s, float p0, float p1, float p2, float c0, float c1, flo
             if (b > a) {
                 return b;
             }
-            return k1_minss(c2, a);
+            return pointwise_minss(c2, a);
         } else if (c2 > a) {
             return c2;
         }
-        return k1_minss(b, a);
+        return pointwise_minss(b, a);
     }
     float b = p1;
     float c = p2;
@@ -237,147 +237,147 @@ float k1_cl_scalar(uint s, float p0, float p1, float p2, float c0, float c1, flo
         if (b > a) {
             return b;
         }
-        return k1_minss(c, a);
+        return pointwise_minss(c, a);
     } else if (c > a) {
         return c;
     }
-    return k1_minss(b, a);
+    return pointwise_minss(b, a);
 }
 
 /* the mask ladders of the vector body; k is the all ones word */
-float k1_cl_lane(uint s, float p0, float p1, float p2, float c0, float c1, float c2, uint k) {
+float pointwise_cl_lane(uint s, float p0, float p1, float p2, float c0, float c1, float c2, uint k) {
     if (s == 0u) {
         float x = p1;
-        uint m2 = k1_lt(c0, c2);
-        float v3 = k1_minss(c2, c0);
+        uint m2 = pointwise_lt(c0, c2);
+        float v3 = pointwise_minss(c2, c0);
         uint m5 = m2 ^ k;
-        uint m14 = k1_lt(x, c2);
-        uint m10 = k1_lt(c0, x);
+        uint m14 = pointwise_lt(x, c2);
+        uint m10 = pointwise_lt(c0, x);
         uint m9 = m14 & m10;
         uint m11 = k ^ m10;
-        float v12 = k1_andm(x, m9);
+        float v12 = pointwise_andm(x, m9);
         uint m13 = m14 & m11;
         uint m10b = k ^ m14;
-        float v15 = k1_bl(v12, v3, m13);
-        float v1 = k1_minss(x, c0);
+        float v15 = pointwise_bl(v12, v3, m13);
+        float v1 = pointwise_minss(x, c0);
         uint m9b = m10b & m2;
-        float v11 = k1_bl(v15, c2, m9b);
+        float v11 = pointwise_bl(v15, c2, m9b);
         uint m12 = m10b & m5;
-        return k1_bl(v11, v1, m12);
+        return pointwise_bl(v11, v1, m12);
     }
     if (s == 1u) {
         float x = p1;
         float y = p2;
-        uint m5 = k1_lt(c0, x);
-        uint m10 = k1_lt(x, y);
-        float v8 = k1_minss(y, c0);
-        uint m14 = k1_lt(c0, y);
+        uint m5 = pointwise_lt(c0, x);
+        uint m10 = pointwise_lt(x, y);
+        float v8 = pointwise_minss(y, c0);
+        uint m14 = pointwise_lt(c0, y);
         uint m4 = m10 & m5;
         uint m6 = k ^ m5;
-        float v7 = k1_andm(x, m4);
+        float v7 = pointwise_andm(x, m4);
         uint m9 = m10 & m6;
         uint m15 = k ^ m10;
-        float v11 = k1_bl(v7, v8, m9);
-        float v1 = k1_minss(x, c0);
+        float v11 = pointwise_bl(v7, v8, m9);
+        float v1 = pointwise_minss(x, c0);
         uint m13 = m15 & m14;
         uint m14b = k ^ m14;
-        float v4 = k1_bl(v11, y, m13);
+        float v4 = pointwise_bl(v11, y, m13);
         uint m5b = m15 & m14b;
-        return k1_bl(v4, v1, m5b);
+        return pointwise_bl(v4, v1, m5b);
     }
     if (s == 2u) {
         float x = p2;
-        uint m3 = k1_lt(c0, c1);
-        float v6 = k1_minss(c1, c0);
+        uint m3 = pointwise_lt(c0, c1);
+        float v6 = pointwise_minss(c1, c0);
         uint m2 = m3 ^ k;
-        uint m13 = k1_lt(c1, x);
-        float v11 = k1_minss(x, c0);
+        uint m13 = pointwise_lt(c1, x);
+        float v11 = pointwise_minss(x, c0);
         uint m8 = m13 & m3;
-        float v10 = k1_andm(c1, m8);
-        uint m8b = k1_lt(c0, x);
+        float v10 = pointwise_andm(c1, m8);
+        uint m8b = pointwise_lt(c0, x);
         uint m12 = m13 & m2;
-        float v14 = k1_bl(v10, v11, m12);
+        float v14 = pointwise_bl(v10, v11, m12);
         uint m10 = k ^ m13;
         uint m15 = m10 & m8b;
-        float v11b = k1_bl(v14, x, m15);
+        float v11b = pointwise_bl(v14, x, m15);
         uint m1 = k ^ m8b;
         uint m12b = m10 & m1;
-        return k1_bl(v11b, v6, m12b);
+        return pointwise_bl(v11b, v6, m12b);
     }
     if (s == 3u) {
         float x = p0;
         if (c2 > c1) {
-            uint m4 = k1_lt(x, c1);
-            float v3 = k1_minss(c2, x);
-            return k1_bl(v3, c1, m4);
+            uint m4 = pointwise_lt(x, c1);
+            float v3 = pointwise_minss(c2, x);
+            return pointwise_bl(v3, c1, m4);
         }
-        uint m4 = k1_lt(x, c2);
-        float v3 = k1_minss(c1, x);
-        return k1_bl(v3, c2, m4);
+        uint m4 = pointwise_lt(x, c2);
+        float v3 = pointwise_minss(c1, x);
+        return pointwise_bl(v3, c2, m4);
     }
     if (s == 4u) {
         float x = p0;
         float y = p2;
-        uint m10 = k1_lt(c1, y);
-        uint m4 = k1_lt(x, c1);
-        float v7 = k1_minss(y, x);
-        uint m14 = k1_lt(x, y);
-        float v0 = k1_minss(c1, x);
+        uint m10 = pointwise_lt(c1, y);
+        uint m4 = pointwise_lt(x, c1);
+        float v7 = pointwise_minss(y, x);
+        uint m14 = pointwise_lt(x, y);
+        float v0 = pointwise_minss(c1, x);
         uint m3 = m10 & m4;
         uint m5 = k ^ m4;
-        float v6 = k1_andm(c1, m3);
+        float v6 = pointwise_andm(c1, m3);
         uint m8 = m10 & m5;
         uint m15 = k ^ m10;
-        float v11 = k1_bl(v6, v7, m8);
+        float v11 = pointwise_bl(v6, v7, m8);
         uint m13 = m15 & m14;
         uint m14b = k ^ m14;
-        float v3 = k1_bl(v11, y, m13);
+        float v3 = pointwise_bl(v11, y, m13);
         uint m4b = m15 & m14b;
-        return k1_bl(v3, v0, m4b);
+        return pointwise_bl(v3, v0, m4b);
     }
     if (s == 5u) {
         float a = p0;
         float b = p1;
-        uint m11 = k1_lt(b, c2);
-        uint m5 = k1_lt(a, b);
-        float v9 = k1_minss(c2, a);
-        uint m14 = k1_lt(a, c2);
-        float v0 = k1_minss(b, a);
+        uint m11 = pointwise_lt(b, c2);
+        uint m5 = pointwise_lt(a, b);
+        float v9 = pointwise_minss(c2, a);
+        uint m14 = pointwise_lt(a, c2);
+        float v0 = pointwise_minss(b, a);
         uint m4 = m11 & m5;
         uint m6 = k ^ m5;
-        float v7 = k1_andm(b, m4);
+        float v7 = pointwise_andm(b, m4);
         uint m10 = m11 & m6;
         uint m15 = k ^ m11;
-        float v12 = k1_bl(v7, v9, m10);
+        float v12 = pointwise_bl(v7, v9, m10);
         uint m13 = m15 & m14;
         uint m14b = k ^ m14;
-        float v4 = k1_bl(v12, c2, m13);
+        float v4 = pointwise_bl(v12, c2, m13);
         uint m1 = m15 & m14b;
-        return k1_bl(v4, v0, m1);
+        return pointwise_bl(v4, v0, m1);
     }
     float b = p1;
     float c = p2;
     float a = p0;
-    uint m7 = k1_lt(b, c);
-    uint m2 = k1_lt(a, b);
-    float v5 = k1_minss(c, a);
-    uint m13 = k1_lt(a, c);
+    uint m7 = pointwise_lt(b, c);
+    uint m2 = pointwise_lt(a, b);
+    float v5 = pointwise_minss(c, a);
+    uint m13 = pointwise_lt(a, c);
     uint m1 = m7 & m2;
     uint m3 = k ^ m2;
-    float v4 = k1_andm(b, m1);
+    float v4 = pointwise_andm(b, m1);
     uint m6 = m7 & m3;
     uint m14 = k ^ m7;
-    float v8 = k1_bl(v4, v5, m6);
-    float v2 = k1_minss(b, a);
+    float v8 = pointwise_bl(v4, v5, m6);
+    float v2 = pointwise_minss(b, a);
     uint m10 = m14 & m13;
     uint m15 = k ^ m13;
-    float v1 = k1_bl(v8, c, m10);
+    float v1 = pointwise_bl(v8, c, m10);
     uint m3b = m14 & m15;
-    return k1_bl(v1, v2, m3b);
+    return pointwise_bl(v1, v2, m3b);
 }
 
 /* clamp: items below vend run the vector ladders, the rest the scalar ones (a 32 byte aligned destination) */
-__kernel void k1_clamp_f32(__global const float* p0, __global const float* p1, __global const float* p2, __global float* out,
+__kernel void pointwise_clamp_f32(__global const float* p0, __global const float* p1, __global const float* p2, __global float* out,
                            uint n, uint shape, uint vend, uint w0, uint w1, uint w2, uint allones) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -390,14 +390,14 @@ __kernel void k1_clamp_f32(__global const float* p0, __global const float* p1, _
     float c1 = as_float(w1);
     float c2 = as_float(w2);
     if (i < vend) {
-        out[i] = k1_cl_lane(shape, x0, x1, x2, c0, c1, c2, allones);
+        out[i] = pointwise_cl_lane(shape, x0, x1, x2, c0, c1, c2, allones);
     } else {
-        out[i] = k1_cl_scalar(shape, x0, x1, x2, c0, c1, c2);
+        out[i] = pointwise_cl_scalar(shape, x0, x1, x2, c0, c1, c2);
     }
 }
 
 /* max_element (op 0) and min_element (op 1): left fold over the first `count` planes with the x86 select */
-__kernel void k1_reduce_f32(__global const float* p0, __global const float* p1, __global const float* p2, __global const float* p3,
+__kernel void pointwise_reduce_f32(__global const float* p0, __global const float* p1, __global const float* p2, __global const float* p3,
                             __global float* out, uint n, uint count, uint op) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -422,7 +422,7 @@ __kernel void k1_reduce_f32(__global const float* p0, __global const float* p1, 
 
 /// Kernels without a fused multiply add: range fill, postdivide, the f64 free pieces.
 pub const POINTWISE_PW2: &str = r#"
-__kernel void k1_fillr_f32(__global uint* dst, uint bits, uint lo, uint hi) {
+__kernel void pointwise_fillr_f32(__global uint* dst, uint bits, uint lo, uint hi) {
     size_t i = get_global_id(0);
     if (i < lo || i >= hi) {
         return;
@@ -432,7 +432,7 @@ __kernel void k1_fillr_f32(__global uint* dst, uint bits, uint lo, uint hi) {
 
 /* postdivide: mode 0 colour with a divide (one or two outputs), 1 colour times the reciprocal (three or four outputs),
    2 the alpha word; pk is the source plane of this output, pa the alpha plane (plane e - 1) */
-__kernel void k1_postdiv_f32(__global const float* pk, __global const float* pa, __global float* out, uint n, uint mode) {
+__kernel void pointwise_postdiv_f32(__global const float* pk, __global const float* pa, __global float* out, uint n, uint mode) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
@@ -466,10 +466,10 @@ __kernel void k1_postdiv_f32(__global const float* pk, __global const float* pa,
 pub const POINTWISE_FMA: &str = r#"
 /* MIRRORS_MUL_ADD: interp::run lerp, screen_super::screen, comp_rgba::mix, comp_premult::pick, dissolve::blend,
    sat_scale::pixels, hue_shift::pixel, hue_shift_preserve_luma::sector, monochrome::luma, scale_rgb::snap */
-typedef struct { float x; float y; float z; } k1_f3;
+typedef struct { float x; float y; float z; } pointwise_f3;
 
 /* interp: fma(b - a, t, a); slot masks bit0 a, bit1 b, bit2 t are constants (words) */
-__kernel void k1_interp_f32(__global const float* pa, __global const float* pb, __global const float* pt, __global float* out,
+__kernel void pointwise_interp_f32(__global const float* pa, __global const float* pb, __global const float* pt, __global float* out,
                             uint n, uint cm, uint wa, uint wb, uint wt) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -481,30 +481,30 @@ __kernel void k1_interp_f32(__global const float* pa, __global const float* pb, 
     out[i] = fma(vb - va, vt, va);
 }
 
-float k1_screen(float a, float b) {
+float pointwise_screen(float a, float b) {
     float om = 0x1p+0f - a;
     float t = fma(om, b, a);
     float inner = (b > t) ? b : t;
     return (a > inner) ? a : inner;
 }
 
-__kernel void k1_screen_f32(__global const float* pa, __global const float* pb, __global float* out, uint n, uint op, uint mode, uint ca, uint cb) {
+__kernel void pointwise_screen_f32(__global const float* pa, __global const float* pb, __global float* out, uint n, uint op, uint mode, uint ca, uint cb) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
     }
     float r;
     if (mode == 1u) {
-        r = k1_screen(as_float(ca), pb[i]);
+        r = pointwise_screen(as_float(ca), pb[i]);
     } else if (mode == 2u) {
-        r = k1_screen(pa[i], as_float(cb));
+        r = pointwise_screen(pa[i], as_float(cb));
     } else {
-        r = k1_screen(pa[i], pb[i]);
+        r = pointwise_screen(pa[i], pb[i]);
     }
     out[i] = r;
 }
 
-__kernel void k1_screen_ext_f32(__global const float* src, __global float* out, uint n, uint op, uint side, uint is_const, uint cbits) {
+__kernel void pointwise_screen_ext_f32(__global const float* src, __global float* out, uint n, uint op, uint side, uint is_const, uint cbits) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
@@ -524,7 +524,7 @@ __kernel void k1_screen_ext_f32(__global const float* src, __global float* out, 
 }
 
 /* comp_rgba: mode 0 mix in single precision, 1 mix with the double precision complement, 2 the alpha channel of the blend routes */
-__kernel void k1_comp_f32(__global const float* pa, __global const float* pb, __global const float* pt, __global float* out,
+__kernel void pointwise_comp_f32(__global const float* pa, __global const float* pb, __global const float* pt, __global float* out,
                           uint n, uint cm, uint wa, uint wb, uint wt, uint mode) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -567,7 +567,7 @@ __kernel void k1_comp_f32(__global const float* pa, __global const float* pb, __
 }
 
 /* comp_premult pick(); c3 selects the (-t) * a + a form of the constant a, plane b, constant t arm */
-__kernel void k1_prem_f32(__global const float* pa, __global const float* pb, __global const float* pt, __global float* out,
+__kernel void pointwise_prem_f32(__global const float* pa, __global const float* pb, __global const float* pt, __global float* out,
                           uint n, uint cm, uint wa, uint wb, uint wt, uint c3) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -591,7 +591,7 @@ __kernel void k1_prem_f32(__global const float* pa, __global const float* pb, __
 }
 
 /* dissolve blend(t, a, b) */
-__kernel void k1_dissolve_f32(__global const float* pa, __global const float* pb, __global const float* pt, __global float* out,
+__kernel void pointwise_dissolve_f32(__global const float* pa, __global const float* pb, __global const float* pt, __global float* out,
                               uint n, uint cm, uint wa, uint wb, uint wt) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -612,7 +612,7 @@ __kernel void k1_dissolve_f32(__global const float* pa, __global const float* pb
 }
 
 /* monochrome and monochrome_a luma in double precision, weights 0.3125 0.5 0.1875 */
-__kernel void k1_luma_f32(__global const float* pr, __global const float* pg, __global const float* pb, __global float* out, uint n) {
+__kernel void pointwise_luma_f32(__global const float* pr, __global const float* pg, __global const float* pb, __global float* out, uint n) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
@@ -627,13 +627,13 @@ __kernel void k1_luma_f32(__global const float* pr, __global const float* pg, __
 }
 
 /* sat_scale: flags bit0 constant colour (words cr cg cb), bit1 scalar scale (word sh); lw is luma_const of the colour */
-double k1_sat_lw(double r, double g, double b) {
+double pointwise_sat_lw(double r, double g, double b) {
     double t = 0x1p-1 * g;
     t = fma(r, 0x1.4p-2, t);
     return fma(b, 0x1.8p-3, t);
 }
 
-__kernel void k1_sat_f32(__global const float* pr, __global const float* pg, __global const float* pb, __global const float* pm,
+__kernel void pointwise_sat_f32(__global const float* pr, __global const float* pg, __global const float* pb, __global const float* pm,
                          __global float* o0, __global float* o1, __global float* o2,
                          uint n, uint flags, uint cr, uint cg, uint cb, uint sh, uint lbits) {
     size_t i = get_global_id(0);
@@ -645,7 +645,7 @@ __kernel void k1_sat_f32(__global const float* pr, __global const float* pg, __g
     float g = cc ? as_float(cg) : pg[i];
     float b = cc ? as_float(cb) : pb[i];
     float s = ((flags & 2u) != 0u) ? as_float(sh) : pm[i];
-    float l = cc ? as_float(lbits) : (float)k1_sat_lw((double)r, (double)g, (double)b);
+    float l = cc ? as_float(lbits) : (float)pointwise_sat_lw((double)r, (double)g, (double)b);
     float x0;
     float x1;
     float x2;
@@ -675,16 +675,16 @@ __kernel void k1_sat_f32(__global const float* pr, __global const float* pg, __g
     o2[i] = x2;
 }
 
-float k1_mn(float a, float b) {
+float pointwise_mn(float a, float b) {
     return (a < b) ? a : b;
 }
 
-float k1_mx(float a, float b) {
+float pointwise_mx(float a, float b) {
     return (a > b) ? a : b;
 }
 
-k1_f3 k1_f3_make(float x, float y, float z) {
-    k1_f3 r;
+pointwise_f3 pointwise_f3_make(float x, float y, float z) {
+    pointwise_f3 r;
     r.x = x;
     r.y = y;
     r.z = z;
@@ -692,9 +692,9 @@ k1_f3 k1_f3_make(float x, float y, float z) {
 }
 
 /* hue_shift::pixel */
-k1_f3 k1_hue_pixel(float r, float g, float b, float shift) {
-    float mn = k1_mn(k1_mn(r, g), b);
-    float mx = k1_mx(k1_mx(r, g), b);
+pointwise_f3 pointwise_hue_pixel(float r, float g, float b, float shift) {
+    float mn = pointwise_mn(pointwise_mn(r, g), b);
+    float mx = pointwise_mx(pointwise_mx(r, g), b);
     float neg_mn = -mn;
     float v;
     float hi;
@@ -713,11 +713,11 @@ k1_f3 k1_hue_pixel(float r, float g, float b, float shift) {
     }
     float delta = hi - lo;
     if (hi == 0x0p+0f) {
-        return k1_f3_make(v, v, v);
+        return pointwise_f3_make(v, v, v);
     }
     float s = delta / hi;
     if (s == 0x0p+0f) {
-        return k1_f3_make(v, v, v);
+        return pointwise_f3_make(v, v, v);
     }
     float h;
     if (r == hi) {
@@ -749,20 +749,20 @@ k1_f3 k1_hue_pixel(float r, float g, float b, float shift) {
     float qq = fma(-f, c, v);
     if (i < 3) {
         if (i == 0) {
-            return k1_f3_make(v, tq, p);
+            return pointwise_f3_make(v, tq, p);
         } else if (i == 1) {
-            return k1_f3_make(qq, v, p);
+            return pointwise_f3_make(qq, v, p);
         }
-        return k1_f3_make(p, v, tq);
+        return pointwise_f3_make(p, v, tq);
     } else if (i == 3) {
-        return k1_f3_make(p, qq, v);
+        return pointwise_f3_make(p, qq, v);
     } else if (i == 4) {
-        return k1_f3_make(tq, p, v);
+        return pointwise_f3_make(tq, p, v);
     }
-    return k1_f3_make(v, p, qq);
+    return pointwise_f3_make(v, p, qq);
 }
 
-__kernel void k1_hue_f32(__global const float* pr, __global const float* pg, __global const float* pb, __global const float* pm,
+__kernel void pointwise_hue_f32(__global const float* pr, __global const float* pg, __global const float* pb, __global const float* pm,
                          __global float* o0, __global float* o1, __global float* o2,
                          uint n, uint flags, uint cr, uint cg, uint cb, uint sh) {
     size_t i = get_global_id(0);
@@ -774,24 +774,24 @@ __kernel void k1_hue_f32(__global const float* pr, __global const float* pg, __g
     float g = cc ? as_float(cg) : pg[i];
     float b = cc ? as_float(cb) : pb[i];
     float s = ((flags & 2u) != 0u) ? as_float(sh) : pm[i];
-    k1_f3 o = k1_hue_pixel(r, g, b, s);
+    pointwise_f3 o = pointwise_hue_pixel(r, g, b, s);
     o0[i] = o.x;
     o1[i] = o.y;
     o2[i] = o.z;
 }
 
 /* hue_shift_preserve_luma: the scalar_pixel body (the per sample path of every call that is not a constant colour with a scalar shift) */
-float k1_hsp_luma(float c0, float c1, float c2) {
+float pointwise_hsp_luma(float c0, float c1, float c2) {
     float rt = (c0 > 0x0p+0f) ? (0x1.4p-2f * c0) : 0x0p+0f;
     float gt = (c1 > 0x0p+0f) ? (0x1p-1f * c1) : 0x0p+0f;
     float bt = (c2 > 0x0p+0f) ? (0x1.8p-3f * c2) : 0x0p+0f;
     return (rt + gt) + bt;
 }
 
-k1_f3 k1_hsp_pixel(float r, float g, float b, float shift) {
-    float lold = k1_hsp_luma(r, g, b);
-    float mn = k1_mn(k1_mn(r, g), b);
-    float mx = k1_mx(k1_mx(r, g), b);
+pointwise_f3 pointwise_hsp_pixel(float r, float g, float b, float shift) {
+    float lold = pointwise_hsp_luma(r, g, b);
+    float mn = pointwise_mn(pointwise_mn(r, g), b);
+    float mx = pointwise_mx(pointwise_mx(r, g), b);
     float v;
     float hi;
     float lo;
@@ -879,17 +879,17 @@ k1_f3 k1_hsp_pixel(float r, float g, float b, float shift) {
             o2 = a3;
         }
     }
-    float lnew = k1_hsp_luma(o0, o1, o2);
+    float lnew = pointwise_hsp_luma(o0, o1, o2);
     if (lold != lnew && lnew > 0x0p+0f) {
         float sc = lold / lnew;
         o0 = o0 * sc;
         o1 = o1 * sc;
         o2 = o2 * sc;
     }
-    return k1_f3_make(o0, o1, o2);
+    return pointwise_f3_make(o0, o1, o2);
 }
 
-__kernel void k1_hsp_f32(__global const float* pr, __global const float* pg, __global const float* pb, __global const float* pm,
+__kernel void pointwise_hsp_f32(__global const float* pr, __global const float* pg, __global const float* pb, __global const float* pm,
                          __global float* o0, __global float* o1, __global float* o2,
                          uint n, uint flags, uint cr, uint cg, uint cb, uint sh) {
     size_t i = get_global_id(0);
@@ -901,14 +901,14 @@ __kernel void k1_hsp_f32(__global const float* pr, __global const float* pg, __g
     float g = cc ? as_float(cg) : pg[i];
     float b = cc ? as_float(cb) : pb[i];
     float s = ((flags & 2u) != 0u) ? as_float(sh) : pm[i];
-    k1_f3 o = k1_hsp_pixel(r, g, b, s);
+    pointwise_f3 o = pointwise_hsp_pixel(r, g, b, s);
     o0[i] = o.x;
     o1[i] = o.y;
     o2[i] = o.z;
 }
 
 /* round (kind 0 snap(x, y), 1 snap_one_over(y), 2 snap_unit(x)); mode 0 both planes, 1 x is the constant ca, 2 y is the constant cb */
-float k1_snap(float x, float y) {
+float pointwise_snap(float x, float y) {
     if (y == 0x0p+0f) {
         return x;
     }
@@ -921,14 +921,14 @@ float k1_snap(float x, float y) {
     return (float)fma((double)q, yd, -(double)fabs(y));
 }
 
-float k1_snap_one_over(float y) {
+float pointwise_snap_one_over(float y) {
     if (y == 0x0p+0f) {
         return 0x1p+0f;
     }
     return (float)((double)y * floor((double)(0x1p+0f / y)));
 }
 
-float k1_snap_unit(float x) {
+float pointwise_snap_unit(float x) {
     double xd = (double)x;
     if (!(x < 0x0p+0f)) {
         return (float)floor(xd);
@@ -936,7 +936,7 @@ float k1_snap_unit(float x) {
     return (float)(ceil(xd) - 0x1p+0);
 }
 
-__kernel void k1_round_f32(__global const float* pa, __global const float* pb, __global float* out, uint n, uint kind, uint mode, uint ca, uint cb) {
+__kernel void pointwise_round_f32(__global const float* pa, __global const float* pb, __global float* out, uint n, uint kind, uint mode, uint ca, uint cb) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
@@ -945,11 +945,11 @@ __kernel void k1_round_f32(__global const float* pa, __global const float* pb, _
     float y = (mode == 2u) ? as_float(cb) : pb[i];
     float r;
     if (kind == 0u) {
-        r = k1_snap(x, y);
+        r = pointwise_snap(x, y);
     } else if (kind == 1u) {
-        r = k1_snap_one_over(y);
+        r = pointwise_snap_one_over(y);
     } else {
-        r = k1_snap_unit(x);
+        r = pointwise_snap_unit(x);
     }
     out[i] = r;
 }

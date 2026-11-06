@@ -67,13 +67,17 @@ jobs:
       # names the style.
       - run: python3 -I tools/fx_golden.py
 
-      # The device foundation: source lint, host simulator, probe and self-check corpus (no device needed), then, with PoCL
-      # installed above, the allowlisted ops against the CPU kernels and the 13 styles rendered through the device backend
-      # to the same hashes. Tests that need a device print NOT RUN where no platform is present.
-      - run: |
+      # The device foundation: source lint, host simulator, probe and self-check corpus, then, with PoCL installed above, the
+      # allowlisted ops against the CPU kernels and the 13 styles rendered through the device backend to the same hashes.
+      # SAPPHIRE_REQUIRE_DEVICE=1 turns a missing device into a failure, so an unusable PoCL install cannot pass as NOT RUN.
+      # The device integration tests run one binary at a time on one thread: OpenCL platform discovery is not thread safe.
+      - env:
+          SAPPHIRE_REQUIRE_DEVICE: "1"
+        run: |
           cargo test --release -p fx_device -- --test-threads=1
-          cargo test --release -p fx_exec device -- --test-threads=1
-          SAPPHIRE_DEVICE=gpu python3 -I tools/fx_golden.py
+          cargo test --release -p fx_exec --lib device -- --test-threads=1
+          cargo test --release -p fx_exec --test device_backend --test device_pointwise --test device_warp --test device_ripmap --test device_neighbourhood -- --test-threads=1
+          SAPPHIRE_REQUIRE_DEVICE=1 SAPPHIRE_DEVICE=gpu python3 -I tools/fx_golden.py
 
       # The Python tools need no packages beyond the standard library to
       # compile, so a syntax slip anywhere in them fails here.

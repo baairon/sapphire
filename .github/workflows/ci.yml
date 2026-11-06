@@ -102,11 +102,16 @@ jobs:
 
       # Linux with PoCL: every allowlisted op passes the self-check against the CPU kernel, the seam tests run, and the 13
       # styles render through the device backend (SAPPHIRE_DEVICE=gpu) to the same hashes as the CPU renders above.
+      # SAPPHIRE_REQUIRE_DEVICE=1 turns a missing device into a failure, so an unusable PoCL install cannot pass as NOT RUN.
+      # The device integration tests run one binary at a time on one thread: OpenCL platform discovery is not thread safe.
       - name: Device backend on PoCL (self-check and devcheck)
         if: runner.os == 'Linux'
+        env:
+          SAPPHIRE_REQUIRE_DEVICE: "1"
         run: |
-          cargo test --release -p fx_exec device -- --test-threads=1
-          SAPPHIRE_DEVICE=gpu python -I tools/fx_golden.py
+          cargo test --release -p fx_exec --lib device -- --test-threads=1
+          cargo test --release -p fx_exec --test device_backend --test device_pointwise --test device_warp --test device_ripmap --test device_neighbourhood -- --test-threads=1
+          SAPPHIRE_REQUIRE_DEVICE=1 SAPPHIRE_DEVICE=gpu python -I tools/fx_golden.py
 
       # The 15 effect crates outside the default members (docs/effects): their tests that need no stored data run;
       # the ones that need the original-derived data print NOT RUN.

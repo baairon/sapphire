@@ -1693,7 +1693,7 @@ pub fn run(a0: &[String]) -> i32 {
             }
             Err(e) => {
                 crate::fxrun::elog!("ERR {}", e);
-                1
+                exec_failure_code()
             }
         };
     }
@@ -1760,8 +1760,18 @@ pub fn run(a0: &[String]) -> i32 {
         }
         Err(e) => {
             crate::fxrun::elog!("ERR {}", e);
-            1
+            exec_failure_code()
         }
+    }
+}
+
+/// The status of a failed execution: 2 (a refusal) when the failure is the missing device that `SAPPHIRE_REQUIRE_DEVICE=1` demands,
+/// else 1.
+fn exec_failure_code() -> i32 {
+    if crate::backend::required_device_missing() {
+        2
+    } else {
+        1
     }
 }
 

@@ -1,6 +1,6 @@
 //! Device ops of the ripmap family: make_mipmap (the pyramid stays on the device as a `DevMipVal`) and blur_warp.
 //!
-//! Kernels live in `fx_device::kernels_k2b`. `accepts` is the shape level test; `run` is the value level one: a constant or a
+//! Kernels live in `fx_device::kernels_ripmap`. `accepts` is the shape level test; `run` is the value level one: a constant or a
 //! frame that puts the node outside the kernel's contract returns `DevError::Unsupported` and the executor runs the CPU kernel
 //! (which then reports its own error where it has one). The self-check runs every corpus case on the device and through
 //! `kernels::run_any` and compares every output bit.
@@ -173,11 +173,11 @@ pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
     let padb = Buffer::from_slice(&s.context, &p.pad[..], Access::ReadOnly)?;
     let zero = (0..ch).all(|k| f32::from_bits(p.pad[k]) == 0.0);
     let sp = |k: usize| src.plane(k.min(ch - 1)).arg();
-    s.launch("k2b_mm_fill", total, &[rb.arg(), ClArg::U32(total as u32)])?;
-    s.launch("k2b_mm_base", c.n, &[sp(0), sp(1), sp(2), sp(3), rb.arg(), ClArg::I32(p.w as i32), ClArg::I32(p.h as i32), ClArg::I32(ch as i32), ClArg::U32(stride(0))])?;
+    s.launch("ripmap_mm_fill", total, &[rb.arg(), ClArg::U32(total as u32)])?;
+    s.launch("ripmap_mm_base", c.n, &[sp(0), sp(1), sp(2), sp(3), rb.arg(), ClArg::I32(p.w as i32), ClArg::I32(p.h as i32), ClArg::I32(ch as i32), ClArg::U32(stride(0))])?;
     let padcols = |l: usize, j: usize, rows: usize| -> Result<(), DevError> {
         s.launch(
-            "k2b_mm_padcols",
+            "ripmap_mm_padcols",
             rows * ch,
             &[rb.arg(), ClArg::U32(offs[l * np + j]), ClArg::I32(p.widths[l] as i32), ClArg::I32(ch as i32), ClArg::U32(stride(l)), ClArg::I32(rows as i32), ClArg::I32(p.wx), padb.arg()],
         )?;
@@ -185,7 +185,7 @@ pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
     };
     let padrows = |l: usize, j: usize| -> Result<(), DevError> {
         s.launch(
-            "k2b_mm_padrows",
+            "ripmap_mm_padrows",
             3 * stride(l) as usize,
             &[rb.arg(), ClArg::U32(offs[l * np + j]), ClArg::I32(p.heights[j] as i32), ClArg::I32(ch as i32), ClArg::U32(stride(l)), ClArg::I32(p.wy), ClArg::I32(zero as i32), padb.arg()],
         )?;
@@ -196,7 +196,7 @@ pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
     if p.filter != 0 {
         for l in 1..nl {
             s.launch(
-                "k2b_mm_hor",
+                "ripmap_mm_hor",
                 p.widths[l] * ch * p.heights[0],
                 &[rb.arg(), ClArg::U32(offs[(l - 1) * np]), ClArg::U32(stride(l - 1)), ClArg::U32(offs[l * np]), ClArg::U32(stride(l)), ClArg::I32(p.widths[l] as i32), ClArg::I32(p.heights[0] as i32), ClArg::I32(ch as i32)],
             )?;
@@ -206,7 +206,7 @@ pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
         for j in 1..np {
             for l in 0..nl {
                 s.launch(
-                    "k2b_mm_ver",
+                    "ripmap_mm_ver",
                     p.widths[l] * ch * p.heights[j],
                     &[rb.arg(), ClArg::U32(offs[l * np + j - 1]), ClArg::U32(offs[l * np + j]), ClArg::U32(stride(l)), ClArg::I32(p.widths[l] as i32), ClArg::I32(p.heights[j] as i32), ClArg::I32(ch as i32)],
                 )?;
@@ -255,8 +255,8 @@ pub fn blur_warp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<
         return Err(unsup("eight operands expected"));
     }
     let mipref = match &args[0] {
-        DevArg::Mip(m) => crate::device_ops_k2::MipRef::Host(m),
-        DevArg::DevMip(m) => crate::device_ops_k2::MipRef::Dev(m),
+        DevArg::Mip(m) => crate::device_ops_warp::MipRef::Host(m),
+        DevArg::DevMip(m) => crate::device_ops_warp::MipRef::Dev(m),
         _ => return Err(unsup("the first operand is not a ripmap")),
     };
     let (w, h) = c.dims;
@@ -319,15 +319,15 @@ pub fn blur_warp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<
     let ipb = Buffer::from_slice(&s.context, &ip[..], Access::ReadOnly)?;
     let fpb = Buffer::from_slice(&s.context, &fp[..], Access::ReadOnly)?;
     let uploaded = match &mipref {
-        crate::device_ops_k2::MipRef::Host(m) => {
+        crate::device_ops_warp::MipRef::Host(m) => {
             let plane_f: Vec<f32> = m.ripmap.planes[m.ripmap.idx(0, 0)].iter().map(|b| f32::from_bits(*b)).collect();
             Some(DevImage::upload(s, &[plane_f.as_slice()])?)
         }
-        crate::device_ops_k2::MipRef::Dev(_) => None,
+        crate::device_ops_warp::MipRef::Dev(_) => None,
     };
     let pb = match (&uploaded, &mipref) {
         (Some(u), _) => u.plane(0),
-        (None, crate::device_ops_k2::MipRef::Dev(m)) => m.dev.plane(0),
+        (None, crate::device_ops_warp::MipRef::Dev(m)) => m.dev.plane(0),
         _ => unreachable!("a host ripmap is uploaded"),
     };
     let dm = Buffer::from_slice(&s.context, &[0f32], Access::ReadOnly)?;
@@ -341,7 +341,7 @@ pub fn blur_warp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<
     let err = ErrCell::new(s)?;
     let o = |k: usize| out.plane(k.min(ch - 1)).arg();
     s.launch(
-        "k2b_blur_warp_f32",
+        "ripmap_blur_warp_f32",
         n,
         &[pb.arg(), ipb.arg(), fpb.arg(), pl(&args[1], 0, &dm), pl(&args[1], 1, &dm), pl(&args[2], 0, &dm), pl(&args[2], 1, &dm), o(0), o(1), o(2), o(3), err.arg()],
     )?;
