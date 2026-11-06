@@ -417,7 +417,7 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
     };
     let def = stage::find(&a.stage)
         .ok_or_else(|| Error::unsupported(format!("unknown stage `{}`, `sapphire stage list` shows the registered ones", a.stage)))?;
-    if !a.layers.is_empty() {
+    if !a.layers.is_empty() && def.layers.is_empty() {
         return Err(Error::usage(format!("{} is a frame effect, --layer only apply to temporal effects", def.id)));
     }
     let width = positive_int("--width", a.width.as_deref().ok_or_else(|| Error::usage("missing --width"))?)?;
@@ -446,9 +446,12 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
     }
     let values = stage::check_params(&def, &a.params)?;
     let ffmpeg_filter = def.id == crate::ffstage::ID;
+    let fx = crate::fxstage::is_fx(def.id);
     let mut frame_stage = None;
     let mut ff = None;
-    if ffmpeg_filter {
+    if fx {
+        // the effect stages run as a child process per frame (`fx_run`), see `fxstage`
+    } else if ffmpeg_filter {
         let opts = crate::ffstage::Options::from_values(&values)?;
         let ffmpeg = match a.ffmpeg_path.as_deref() {
             Some(p) => std::path::PathBuf::from(p),
@@ -475,6 +478,11 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
         return Ok(());
     }
     if a.check {
+        if fx {
+            if let Some(m) = crate::fxstage::missing() {
+                return Err(Error::unsupported(format!("the effect stages need fx_run: {}", m)));
+            }
+        }
         return Ok(());
     }
 
@@ -509,6 +517,10 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
             out
         }
     };
+    if fx {
+        crate::fxstage::apply(def.id, spec, &values, &a.layers, frames, &mut ReadRef(input), &mut WriteRef(output))?;
+        return Ok(());
+    }
     if let Some((opts, ffmpeg, rate)) = &ff {
         crate::ffstage::apply(spec, rate, frames, opts, ffmpeg, &mut ReadRef(input), &mut WriteRef(output))?;
         return Ok(());

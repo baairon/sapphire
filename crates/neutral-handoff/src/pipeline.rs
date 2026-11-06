@@ -584,7 +584,7 @@ pub fn run(cfg: &PipelineConfig, hooks: Vec<(String, Box<dyn FrameStage>)>) -> R
                 let (child, stdin, stdout, stderr) = spawn_process(step)?;
                 procs.push(Proc {
                     step: i,
-                    judged: !matches!(step.kind, StepKind::Vfx),
+                    judged: !matches!(step.kind, StepKind::Vfx) && !step.spool,
                     guard: Guard { child, status: None, ended: None },
                     meter: Arc::new(Meter::new()),
                     started: Instant::now(),

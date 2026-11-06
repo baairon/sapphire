@@ -144,6 +144,9 @@ pub struct Step {
     pub spec_in: FrameSpec,
     /// The frames this step writes: equal to `spec_in` unless the stage declares its geometry.
     pub spec_out: FrameSpec,
+    /// The step reads its whole input before it writes (a spooling stage), so the stall watch
+    /// does not judge it while its input is open.
+    pub spool: bool,
 }
 
 impl Step {
@@ -565,7 +568,7 @@ pub fn prepare_with(
                     return Err(Error::unsupported("the effect runs at the input size, so a stage with declared geometry can only follow it").at("vfx"));
                 }
                 let after = if e.kind == Kind::Temporal && request.frames.is_some() { out_frames } else { count };
-                steps.push(Step { name: "vfx".into(), kind: StepKind::Vfx, argv: Vec::new(), frames_in: count, frames_out: after, spec_in: cur, spec_out: cur });
+                steps.push(Step { name: "vfx".into(), kind: StepKind::Vfx, argv: Vec::new(), frames_in: count, frames_out: after, spec_in: cur, spec_out: cur, spool: false });
                 count = after;
             }
             Raw::Stage { index, name, text } => {
@@ -588,6 +591,7 @@ pub fn prepare_with(
                     StepKind::External
                 };
                 let mut geometry: Option<String> = None;
+                let mut spool = false;
                 let mut ff_opts: Option<crate::ffstage::Options> = None;
                 match kind.clone() {
                     StepKind::Builtin { id, params } => {
@@ -605,6 +609,11 @@ pub fn prepare_with(
                             argv = crate::ffstage::command_line(cur, &rate, count, &params, &media.ffmpeg);
                             kind = StepKind::External;
                             ff_opts = Some(opts);
+                        } else if crate::fxstage::is_fx(&id) {
+                            // the effect stages are child processes too (`sapphire stage apply ID`)
+                            argv = crate::fxstage::command_line(&id, cur, &rate, &params);
+                            kind = StepKind::External;
+                            spool = def.spool;
                         }
                     }
                     _ => {
@@ -636,7 +645,7 @@ pub fn prepare_with(
                         .at(&name))
                     }
                 };
-                steps.push(Step { name, kind, argv, frames_in: count, frames_out, spec_in: cur, spec_out });
+                steps.push(Step { name, kind, argv, frames_in: count, frames_out, spec_in: cur, spec_out, spool });
                 cur = spec_out;
                 count = frames_out;
             }
@@ -1346,7 +1355,7 @@ mod tests {
             (Kind::Temporal, Some(n)) => Some(n),
             _ => info.exact_frames(),
         };
-        let steps = vec![Step { name: "vfx".into(), kind: StepKind::Vfx, argv: Vec::new(), frames_in: info.exact_frames(), frames_out, spec_in: spec, spec_out: spec }];
+        let steps = vec![Step { name: "vfx".into(), kind: StepKind::Vfx, argv: Vec::new(), frames_in: info.exact_frames(), frames_out, spec_in: spec, spec_out: spec, spool: false }];
         Prepared {
             request,
             media: Media { ffmpeg: "ffmpeg".into(), ffprobe: "ffprobe".into() },

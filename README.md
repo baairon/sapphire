@@ -6,7 +6,7 @@ The plugin's functions, written in Rust and paired with ffmpeg and twixtor. `too
 
 ## Status
 
-Ten effects run today as native Rust, each matching the original bit for bit on every compared case; the list and what each claim covers are in [docs/effects.md](docs/effects.md). They render through `fx_run`. The effects need no external data: they render from code in this repository alone. The goal is 20 effects, the ten done plus the ten of [docs/roadmap.md](docs/roadmap.md); the other names in the plugin are not planned.
+Ten effects run today as native Rust, each matching the original bit for bit on every compared case; the list and what each claim covers are in [docs/effects.md](docs/effects.md). They render through `fx_run` and as `sapphire stage` commands. The effects need no external data: they render from code in this repository alone. The goal is 20 effects, the ten done plus the ten of [docs/roadmap.md](docs/roadmap.md); the other names in the plugin are not planned.
 
 ## Contents
 
@@ -93,6 +93,23 @@ Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn
 
 The ten native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned ten more are in [docs/roadmap.md](docs/roadmap.md). Stages are the programs that pass raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
 
+Each registered style of the ten effects is also a frames/2 stage, so twixtor and any other wrapper can run it as `sapphire stage apply STAGE` (13 stages; they need `fx_run`, and `stage list` marks them hidden without it):
+
+| Effect | Stages | Kind | Parity claim |
+|---|---|---|---|
+| `S_Blur` | 2 | frame | byte identical on 36 of 48 counted members |
+| `BlurMoCurves` styles | 2 | frame | 26 of 67 |
+| `S_Diffuse` | 1 | frame | 31 of 42 |
+| `S_DistortRGB` | 1 | frame | 26 of 30 |
+| `S_DropShadow` | 1 | frame | 20 of 24 |
+| `S_HueSatBright` | 1 | frame | 118 of 130 |
+| `S_Sharpen` | 2 | frame | 35 of 78 |
+| `S_TimeWarpRGB` | 1 | temporal | 10 of 22 |
+| `S_Trails` | 1 | temporal, spool | 70 of 120 |
+| `S_WarpPerspective` | 1 | frame | 10 of 224 |
+
+The counts are the counted members of the parity record that match the stage's canonical host and are byte identical through `sapphire stage apply` at depth 32 (382 of 382 of those members); the rest are not claimed for the stage. The host of each stage, the offered parameters, the size refusals, the timing and the claim limits are in [docs/stages.md](docs/stages.md#effects-provider).
+
 ### Names
 
 The name bank is the source of truth for every name; the code keeps its `f_XXXXXXXX` symbols ([names](docs/names.md)).
@@ -131,7 +148,7 @@ Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, 
 | `crates/neutral-world` | library | The Rust side of the world harness: the seeded model of everything outside the dump, the `Env` trait every lifted function is written against, world replay and comparison | `lib.rs` (`Env`, `World`, `check`, `Report`) | <!--f:tests_scan_neutral_world-->17<!--/f-->; `tests/synthetic.rs`, `tests/pin.rs` |
 | `crates/neutral-parity` | library | Replay of oracle vectors against ported functions | `lib.rs` (`parse`, `check`, `Report`) | <!--f:tests_scan_neutral_parity-->4<!--/f--> |
 | `crates/neutral-ffmpeg` | library | ffmpeg and ffprobe as child processes: decoder, encoder, filter graph, probe, pixel format table | `decoder.rs`, `encoder.rs`, `filter.rs`, `probe.rs`, `pixfmt.rs` with `pixfmt_table.rs`, `locate.rs`, `process.rs` | <!--f:tests_scan_neutral_ffmpeg-->130<!--/f-->; `tests/*_live.rs` need ffmpeg |
-| `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->199<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
+| `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->211<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
 | `crates/lift-a`, `crates/lift-b`, `crates/lift-1` to `crates/lift-8` | library | The ported functions. The <!--f:lift_crates-->10<!--/f--> lift crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions of the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once; the per-crate detail is in [lifting](docs/lifting.md#crate-layout) | `p1/`, `p2v/`, `missing.rs` (placeholders), `dup.rs`, `x86rt.rs` (`lift_rt.rs` in `lift-a`); `liftcheck/` in `lift-a` (feature `liftcheck`) | per crate in `docs/generated/crates.md`; `#[ignore]` without the stored vector sets |
 
 The effect crates are under `crates/effects` (the evaluator `fx_eval`, the executor and `fx_run` in `fx_exec`, the kernel crates they call, and the test helpers `effects_vecdir` and `effects_rtdata`); they are workspace members, and the ones whose tests need no stored data are default members ([effects](docs/effects.md)).
@@ -154,8 +171,9 @@ Each program's `--help` lists its flags; the contract in full is `docs/handoff.m
 |---|---|---|
 | `selftest-invert` | frame, preserve | `invert_alpha` (checkbox, default off) |
 | `ffmpeg-filter` | frame, declared | `graph` (an ffmpeg filter graph, default `null`), `expect` (`preserve` or `declared`), `unsafe` (`1` runs filters outside the safe list) ([the ffmpeg filter stage](docs/handoff.md#the-ffmpeg-filter-stage)) |
+| 13 effect stages | frame, preserve; two temporal | per stage, see [Effects provider](docs/stages.md#effects-provider) |
 
-In a pipeline, `--stage @selftest-invert` runs that stage in process and `--stage "@ffmpeg-filter graph=G"` runs `sapphire stage apply ffmpeg-filter` as a child process. The syntax of a filter graph is ffmpeg's own (ffmpeg documentation: ffmpeg-filters.html).
+In a pipeline, `--stage @selftest-invert` runs that stage in process and `--stage "@ffmpeg-filter graph=G"` or an effect stage such as `--stage @hue_sat_bright_autogen` runs `sapphire stage apply ...` as a child process. The syntax of a filter graph is ffmpeg's own (ffmpeg documentation: ffmpeg-filters.html).
 
 ### Raw frame format
 
@@ -212,7 +230,7 @@ sapphire runs twixtor's `vfx` and the stages of any tool inside its own pipeline
 
 The `shared` list of `contracts/tool.json` is byte equal in both repositories: the schemas in `contracts/`, `contracts/conformance/cases.json`, `docs/handoff.md`, `docs/handoff-bench.tsv`, `tools/handoff.py`, `tools/conformance.py` and their tests. Change one here, then run `sync`.
 
-sapphire's own stages are `selftest-invert` and `ffmpeg-filter` ([Stage commands](#stage-commands)); a new tool joins as in [stages](docs/stages.md).
+sapphire's own stages are `selftest-invert`, `ffmpeg-filter` and the 13 effect stages ([Stage commands](#stage-commands), [Effects provider](docs/stages.md#effects-provider)); a new tool joins as in [stages](docs/stages.md).
 
 ## Tests
 
@@ -254,7 +272,7 @@ python -I tools/handoff.py doctor
 
 | Step | Expected |
 |---|---|
-| `stage list --json` | a manifest with `"contract": "frames/2"`, provider id `sapphire` and the stages `selftest-invert` and `ffmpeg-filter` |
+| `stage list --json` | a manifest with `"contract": "frames/2"`, provider id `sapphire` and the stages `selftest-invert`, `ffmpeg-filter` and the 13 effect stages (hidden without `fx_run`) |
 | raw pipe and `cmp` | exit 0 and no output from `cmp`: inverting twice returns the input |
 | `--dry-run` | `[plan] stages on clip.mp4: 160x96, 24.000 fps, 8 bpc (rgba), decode \| pre1 \| encode -> ...`, three `[cmd]` lines, then `[dry-run] nothing was written` |
 | `fn_info.py` | the bank name first with the id beside it, then offset, kind, origin, tier, name check `mismatch` and confirmation `mismatch` |

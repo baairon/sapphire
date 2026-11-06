@@ -16,10 +16,10 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | `lift-a` | Lifted functions. | 46 | 7 | 1,205 |
 | `lift-b` | Lifted functions. | 126 | 67 | 1,515 |
 | `neutral-ffmpeg` | Bridge to ffmpeg that runs it as a separate process and moves raw frames over pipes. | 23 | 22 | 130 |
-| `neutral-handoff` | Pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. | 28 | 28 | 199 |
+| `neutral-handoff` | Pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. | 30 | 30 | 211 |
 | `neutral-parity` | Replays oracle test vectors against ported functions. | 1 | 1 | 4 |
 | `neutral-world` | Rust side of the world-parametric parity harness. | 3 | 3 | 17 |
-| **total** |  | 491 | 294 | 5,658 |
+| **total** |  | 493 | 296 | 5,670 |
 
 ## lift-1
 
@@ -97,6 +97,7 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | `crates/neutral-handoff/src/error.rs` | [Error]: how a run of the pipeline or of a stage fails, as one value with a machine readable code. |
 | `crates/neutral-handoff/src/ffstage.rs` | The ffmpeg filter stage ffmpeg-filter (docs/handoff.md#the-ffmpeg-filter-stage): one ffmpeg filter graph over raw frames, on [neutral_ffmpeg::Filter]. |
 | `crates/neutral-handoff/src/format.rs` | [Depth] and [FrameSpec]: the raw frame format shared by ffmpeg, vfx and the stages. |
+| `crates/neutral-handoff/src/fxstage.rs` | The effects stage provider: one frames/2 stage per registered style of the landed effects. |
 | `crates/neutral-handoff/src/geometry.rs` | Declared geometry (docs/handoff.md#geometry, contracts/describe.schema.json). |
 | `crates/neutral-handoff/src/lib.rs` | Pipeline from ffmpeg through twixtor's vfx and back to ffmpeg, plus the stage commands of this repository. |
 | `crates/neutral-handoff/src/main.rs` | The sapphire binary: the pipeline wrapper and the stage subcommand. |
@@ -116,6 +117,7 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | `crates/neutral-handoff/src/bin/fake_vfx.rs` | fake-vfx: a stand-in for twixtor's vfx that the tests of this crate run. |
 | `crates/neutral-handoff/tests/cross_twixtor.rs` | Either tool as a stage of the other, in one pipe: twixtor's vfx run by this pipeline as an ordinary --stage command, and this crate's stage apply run by twix... |
 | `crates/neutral-handoff/tests/frames2.rs` | frames/2 (docs/handoff.md): the stage manifest, --describe, the ffmpeg-filter stage, geometry chained through the wrapper, role and index in reports, and the... |
+| `crates/neutral-handoff/tests/fx_stage_parity.rs` | Parity of the effect stages: every in-profile frozen member goes through sapphire stage apply and its relaid 'ae32' words are compared, by full SHA-256, with... |
 | `crates/neutral-handoff/tests/parity_apply_py.rs` | The pipeline against twixtor's tools/apply.py: for the same input, effect and flags, the same plan, the same command lines, the same refusals and the same fr... |
 | `crates/neutral-handoff/tests/pipeline_fake.rs` | The pipeline against real ffmpeg and a fake vfx: ordering of the stages, the in-process stage, the error object for every way a stage can misbehave (hang, cl... |
 | `crates/neutral-handoff/tests/stage_cli.rs` | The stage subcommand as a process: sapphire stage list --json and sapphire stage apply selftest-invert ..., raw frames on stdin and stdout. |

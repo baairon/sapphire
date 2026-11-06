@@ -46,6 +46,7 @@ output file, verified against the input, then moved into place
 |---|---|---|---|
 | `selftest-invert` | frame, preserve | `invert_alpha` (checkbox, default off) | `src/stage.rs`: the conformance stage; inverting twice returns the input |
 | `ffmpeg-filter` | frame, declared | `graph` (one input, one output, default `null`), `expect` (`preserve` or `declared`), `unsafe` (`1` runs filters outside the safe list) | `src/ffstage.rs` on `neutral_ffmpeg::Filter` |
+| 13 effect stages | frame, preserve (two temporal) | per stage from `data/fx_params.tsv` | `src/fxstage.rs`: a child process per frame over `fx_run`, tables in `data/`; see [Effects provider](../../docs/stages.md#effects-provider) |
 
 | `ffmpeg-filter` rule | Detail |
 |---|---|
@@ -70,6 +71,7 @@ In the pipeline, `--stage @selftest-invert` runs that stage in process; `--stage
 | `plan.rs` | `Request`, `prepare`, the commands and the `--dry-run` text |
 | `stage.rs` | the stage registry, `selftest-invert`, the manifest and the frame loop of `stage apply` |
 | `ffstage.rs` | the `ffmpeg-filter` stage |
+| `fxstage.rs` | the effect stages: tables, relayout, the `fx_run` child |
 | `geometry.rs` | declared geometry, `--describe` answers and their chain |
 | `pipeline.rs` | threads, queues, the watchdog and the root cause of a failure |
 | `verify.rs` | the checks of a finished output |
@@ -80,11 +82,12 @@ In the pipeline, `--stage @selftest-invert` runs that stage in process; `--stage
 
 ## Tests
 
-`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->199<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
+`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->211<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
 
 | File | Checks | Needs |
 |---|---|---|
 | unit tests in `src/` | plan, rates, formats, errors, arguments, paths, geometry, stages | see each module |
+| `tests/fx_stage_parity.rs` | every in profile frozen member through `stage apply`, full SHA-256 against the recorded prediction | `VEC_DIR`, `fx_run` (else NOT RUN) |
 | `tests/stage_cli.rs` | `stage list --json` and `stage apply selftest-invert` as a process | nothing |
 | `tests/pipeline_fake.rs` | stage order, the in-process stage, the error object for every way a stage can misbehave | ffmpeg |
 | `tests/frames2.rs` | the manifest, `--describe`, `ffmpeg-filter`, geometry through the wrapper, `role` and `index`, the exits | ffmpeg |

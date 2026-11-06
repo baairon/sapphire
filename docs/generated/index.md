@@ -8,7 +8,7 @@ Reference pages generated from `docs/data/` and a scan of `crates/`.
 | page | title | bytes |
 |---|---|---|
 | [classes.md](classes.md) | Classes | 1,822 |
-| [crates.md](crates.md) | Crates | 9,872 |
+| [crates.md](crates.md) | Crates | 10,226 |
 | [effects.md](effects.md) | Effect names | 3,992 |
 | [evidence.md](evidence.md) | Evidence | 3,807 |
 | [functions-0x000000.md](functions-0x000000.md) | Functions 0x0 to 0xc404 | 65,048 |

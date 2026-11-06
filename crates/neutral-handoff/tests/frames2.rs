@@ -55,7 +55,8 @@ fn the_stage_manifest_is_frames_2_with_provider_spool_and_geometry() {
         for key in ["id", "kind", "spool", "geometry", "depths", "params", "layers"] {
             assert!(stage.get(key).is_some(), "{} lacks {}", ran.out_text(), key);
         }
-        assert_eq!(stage.get("spool").and_then(|v| v.as_bool()), Some(false));
+        let id = stage.get("id").and_then(|v| v.as_str()).unwrap();
+        assert_eq!(stage.get("spool").and_then(|v| v.as_bool()), Some(id == "trails_autogen"), "spool of {}", id);
     }
     let old = nh(&["stage", "list", "--json", "--contract", "frames/1"], None);
     assert_eq!(Json::parse(&old.out_text()).unwrap().get("contract").and_then(|v| v.as_str()), Some("frames/1"));

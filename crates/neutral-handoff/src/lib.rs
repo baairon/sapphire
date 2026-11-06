@@ -47,6 +47,7 @@ pub mod cli;
 pub mod error;
 pub mod ffstage;
 pub mod format;
+pub mod fxstage;
 pub mod geometry;
 pub mod media;
 pub mod paths;

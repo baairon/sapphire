@@ -128,7 +128,7 @@ fn stage_list_reports_the_contract_and_what_exists() {
     );
     let stages = doc.get("stages").and_then(|v| v.as_array()).unwrap();
     let ids: Vec<&str> = stages.iter().map(|s| s.get("id").and_then(|v| v.as_str()).unwrap()).collect();
-    assert_eq!(ids, ["selftest-invert", "ffmpeg-filter"], "the vocabulary is exactly what exists");
+    assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen"], "the vocabulary is exactly what exists");
     let invert = &stages[0];
     assert_eq!(invert.get("kind").and_then(|v| v.as_str()), Some("frame"));
     let params = invert.get("params").and_then(|v| v.as_array()).unwrap();
