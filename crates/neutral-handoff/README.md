@@ -82,7 +82,7 @@ In the pipeline, `--stage @selftest-invert` runs that stage in process; `--stage
 
 ## Tests
 
-`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->211<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
+`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->212<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
 
 | File | Checks | Needs |
 |---|---|---|

@@ -447,8 +447,8 @@
    "source": "crates/lift-* folders"
   },
   "tests_scan_total": {
-   "value": 5670,
-   "text": "5,670",
+   "value": 5671,
+   "text": "5,671",
    "source": "text scan of crates/ (#[test] lines), not a test run"
   },
   "tests_scan_lift_1": {
@@ -507,8 +507,8 @@
    "source": "text scan of crates/ (#[test] lines), not a test run"
   },
   "tests_scan_neutral_handoff": {
-   "value": 211,
-   "text": "211",
+   "value": 212,
+   "text": "212",
    "source": "text scan of crates/ (#[test] lines), not a test run"
   },
   "tests_scan_neutral_parity": {

@@ -16,10 +16,10 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | `lift-a` | Lifted functions. | 46 | 7 | 1,205 |
 | `lift-b` | Lifted functions. | 126 | 67 | 1,515 |
 | `neutral-ffmpeg` | Bridge to ffmpeg that runs it as a separate process and moves raw frames over pipes. | 23 | 22 | 130 |
-| `neutral-handoff` | Pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. | 30 | 30 | 211 |
+| `neutral-handoff` | Pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. | 30 | 30 | 212 |
 | `neutral-parity` | Replays oracle test vectors against ported functions. | 1 | 1 | 4 |
 | `neutral-world` | Rust side of the world-parametric parity harness. | 3 | 3 | 17 |
-| **total** |  | 493 | 296 | 5,670 |
+| **total** |  | 493 | 296 | 5,671 |
 
 ## lift-1
 

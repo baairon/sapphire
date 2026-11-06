@@ -609,11 +609,39 @@ pub fn parse_curve_missing(stderr: &str) -> Option<CurveKey> {
 /// How many times one frame may be repeated to learn host curve samples before the stage refuses it.
 const CURVE_RERUNS: usize = 64;
 
+/// The default-xy writer count named by `XY-BASE-LIST-MISMATCH (the placement model has N default-xy writers, --xy-base-list gives M)`.
+pub fn parse_xy_writers(stderr: &str) -> Option<usize> {
+    let line = stderr.lines().find(|l| l.contains("XY-BASE-LIST-MISMATCH (the placement model has "))?;
+    let rest = line.split("XY-BASE-LIST-MISMATCH (the placement model has ").nth(1)?;
+    let (n, tail) = rest.split_once(' ')?;
+    if !tail.starts_with("default-xy writers, --xy-base-list gives ") {
+        return None;
+    }
+    n.parse().ok().filter(|&n: &usize| (1..=64).contains(&n))
+}
+
+/// Give `--xy-base-list` `n` entries. The measured list's entries must share one base phase, which every writer then takes
+/// (the measured lists hold one phase per size); anything else is refused by name.
+pub fn fit_xy_list(args: &mut [String], n: usize, index: u64) -> Result<()> {
+    let at = match args.iter().position(|a| a == "--xy-base-list") {
+        Some(at) if at + 1 < args.len() => at + 1,
+        _ => return Err(Error::unsupported(format!("frame {}: XY-BASE-LIST-UNSERVED: fx_run asks for a writer list the stage does not pass", index))),
+    };
+    let entries: Vec<&str> = args[at].split(',').collect();
+    if entries.iter().any(|e| e.ends_with("r1")) || entries.windows(2).any(|w| w[0] != w[1]) {
+        return Err(Error::unsupported(format!("frame {}: XY-BASE-LIST-UNSERVED: the measured list {} has no single base phase to give {} writers", index, args[at], n)));
+    }
+    args[at] = vec![entries[0]; n].join(",");
+    Ok(())
+}
+
 /// What a clip learns from fx_run's own refusals and then reuses for every frame.
 #[derive(Default)]
 struct Learned {
     /// the derived `do_postdiv`
     postdiv: std::cell::Cell<u8>,
+    /// the default-xy writer count of the placement model, when fx_run named one different from the measured `--xy-base-list`
+    xy_writers: std::cell::Cell<Option<usize>>,
     /// host curve samples asked for beyond the frame's own time, as (index, tick minus frame index, step, scale)
     curve: std::cell::RefCell<Vec<(i32, i64, i32, i32)>>,
 }
@@ -714,6 +742,9 @@ fn run_fx(p: &Profile, spec: FrameSpec, index: u64, src: &[u32], layers: &[(Stri
             .output()
             .map_err(|e| Error::tool_missing(format!("cannot run {}: {}", fx_run.display(), e)))
     };
+    if let Some(n) = learned.xy_writers.get() {
+        fit_xy_list(&mut args, n, index)?;
+    }
     let mut ran = exec(&args)?;
     // The owner-arm `do_postdiv` is a required cross-check on the 'ae32' route that fx_run only reveals through
     // its refusal; it is learned once per clip and kept. The samples the route reads from the stage's own constant curve
@@ -721,6 +752,15 @@ fn run_fx(p: &Profile, spec: FrameSpec, index: u64, src: &[u32], layers: &[(Stri
     // with its identity value.
     for _ in 0..8 + CURVE_RERUNS {
         let text = String::from_utf8_lossy(&ran.stderr).into_owned();
+        if ran.status.code() == Some(1) && text.contains("XY-BASE-LIST-MISMATCH") && learned.xy_writers.get().is_none() {
+            // the measured placement lists fewer or more default-xy writers than this plan has: fx_run names the count
+            let line = text.lines().find(|l| l.contains("XY-BASE-LIST-MISMATCH")).unwrap_or("").to_string();
+            let n = parse_xy_writers(&text).ok_or_else(|| Error::unsupported(format!("frame {}: XY-BASE-LIST-UNSERVED: cannot read the writer count from fx_run: {}", index, line)))?;
+            learned.xy_writers.set(Some(n));
+            fit_xy_list(&mut args, n, index)?;
+            ran = exec(&args)?;
+            continue;
+        }
         if own_curve && matches!(ran.status.code(), Some(1) | Some(2)) && text.contains("HOST-CURVE-VALUE-MISSING (") {
             let line = text.lines().find(|l| l.contains("HOST-CURVE-VALUE-MISSING")).unwrap_or("").to_string();
             let key = match parse_curve_missing(&text) {
@@ -760,6 +800,9 @@ fn run_fx(p: &Profile, spec: FrameSpec, index: u64, src: &[u32], layers: &[(Stri
     let first = stderr.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").to_string();
     match ran.status.code() {
         Some(0) => {}
+        Some(1) if stderr.contains("XY-BASE-LIST-MISMATCH") => {
+            return Err(Error::unsupported(format!("frame {}: XY-BASE-LIST-UNSERVED: the placement fx_run asks for cannot be served: {}", index, first)).with_tail(tail))
+        }
         Some(1) if stderr.contains("HOST-CURVE-VALUE-MISSING") => {
             return Err(Error::unsupported(format!("frame {}: HOST-CURVE-SAMPLE-UNSERVED: the host curve does not hold a sample the route reads: {}", index, first)).with_tail(tail))
         }
@@ -1027,6 +1070,18 @@ mod tests {
         assert!(t.starts_with("host effect_ref 1592590336\n"));
         assert!(t.contains("host size_x 64\nhost size_y 32\n"));
         assert!(t.ends_with("value z_dist 22 0 1 24 0 65536\n"));
+    }
+
+    #[test]
+    fn xy_writer_count_is_read_and_served() {
+        let e = "bad plan: XY-BASE-LIST-MISMATCH (the placement model has 3 default-xy writers, --xy-base-list gives 2)";
+        assert_eq!(parse_xy_writers(e), Some(3));
+        assert_eq!(parse_xy_writers("XY-BASE-LIST-MISMATCH (other)"), None);
+        let mut a: Vec<String> = ["--xy-base-list", "0,0"].iter().map(|s| s.to_string()).collect();
+        fit_xy_list(&mut a, 3, 0).unwrap();
+        assert_eq!(a[1], "0,0,0");
+        let mut b: Vec<String> = ["--xy-base-list", "0,16"].iter().map(|s| s.to_string()).collect();
+        assert!(fit_xy_list(&mut b, 3, 0).is_err());
     }
 
     #[test]
