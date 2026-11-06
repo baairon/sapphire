@@ -427,6 +427,9 @@ fn eval_graph_r(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: 
         if let Some(Val::Dev(d)) = v {
             let im = d.materialize()?.clone();
             *v = Some(Val::Img(Rc::new(im)));
+        } else if let Some(Val::DevMip(d)) = v {
+            let m = d.materialize()?.clone();
+            *v = Some(Val::Mip(Rc::new(m)));
         }
     }
     Ok((out, vals))
@@ -551,6 +554,7 @@ fn eval_graph_core(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, hos
                     Val::Img(i) => i.channels(),
                     Val::Mip(m) => m.channels,
                     Val::Dev(d) => d.channels(),
+                    Val::DevMip(d) => d.channels,
                     Val::Const { n, .. } => *n,
                 };
                 if nd.elnum > 0 && out_channels != nd.elnum as usize {
@@ -582,7 +586,7 @@ fn eval_graph_core(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, hos
     let dest = match root {
         Val::Img(i) => (**i).clone(),
         Val::Const { lanes, n: ln } => Image::from_const(lanes, (*ln).max(1), n),
-        Val::Mip(_) => return Err(ExecError::Shape("the destination is a ripmap object".into())),
+        Val::Mip(_) | Val::DevMip(_) => return Err(ExecError::Shape("the destination is a ripmap object".into())),
         Val::Dev(d) => d.materialize()?.clone(),
     };
     Ok((ExecOutput { dest, saved_prev_dest: saved, trace, diagnostics }, vals))

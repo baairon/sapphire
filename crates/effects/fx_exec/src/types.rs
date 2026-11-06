@@ -40,6 +40,80 @@ pub enum Val {
     Const { n: usize, lanes: [u32; 4] },
     /// an image resident on the device (only the device backend makes one); `DevVal::materialize` brings it to the host
     Dev(Rc<DevVal>),
+    /// a ripmap object resident on the device (make_mipmap run by the device backend); `DevMipVal::materialize` brings it to the host
+    DevMip(Rc<DevMipVal>),
+}
+
+/// A ripmap on the device: all NL x NP padded planes of the object in one buffer (plane (l, j) at `offsets[l * np + j]`, plane (0, 0) first),
+/// with the host copy made on demand for the CPU consumers.
+#[derive(Debug)]
+pub struct DevMipVal {
+    pub dev: fx_device::DevImage,
+    pub width: usize,
+    pub height: usize,
+    pub channels: usize,
+    pub filter: i32,
+    pub wrap: [i32; 2],
+    pub widths: Vec<usize>,
+    pub heights: Vec<usize>,
+    pub scale: Option<Vec<u32>>,
+    /// float offset of plane (l, j) in the buffer, index l * heights.len() + j
+    pub offsets: Vec<usize>,
+    host: std::cell::OnceCell<MipImage>,
+}
+
+impl DevMipVal {
+    pub fn new(dev: fx_device::DevImage, width: usize, height: usize, channels: usize, filter: i32, wrap: [i32; 2], widths: Vec<usize>, heights: Vec<usize>, scale: Option<Vec<u32>>) -> DevMipVal {
+        let mut offsets = Vec::with_capacity(widths.len() * heights.len());
+        let mut at = 0usize;
+        for &w in &widths {
+            for &h in &heights {
+                offsets.push(at);
+                at += (h + make_mipmap::EXTRA_ROWS) * (w + 3) * channels;
+            }
+        }
+        DevMipVal { dev, width, height, channels, filter, wrap, widths, heights, scale, offsets, host: std::cell::OnceCell::new() }
+    }
+    /// Floats of plane (l, j).
+    pub fn plane_len(&self, l: usize, j: usize) -> usize {
+        (self.heights[j] + make_mipmap::EXTRA_ROWS) * (self.widths[l] + 3) * self.channels
+    }
+    /// Total floats of all planes.
+    pub fn total(&self) -> usize {
+        self.offsets.last().map(|&o| o + self.plane_len(self.widths.len() - 1, self.heights.len() - 1)).unwrap_or(0)
+    }
+    pub fn host(&self) -> Option<&MipImage> {
+        self.host.get()
+    }
+    /// Downloads once and returns the host ripmap (the base image is the interior of plane (0, 0), which holds the source bits).
+    pub fn materialize(&self) -> Result<&MipImage, ExecError> {
+        if let Some(m) = self.host.get() {
+            return Ok(m);
+        }
+        let mut all = self.dev.download().map_err(|e| ExecError::Kernel { class: "device".into(), msg: e.to_string() })?;
+        let flat = all.pop().unwrap_or_default();
+        let (nl, np, c) = (self.widths.len(), self.heights.len(), self.channels);
+        let mut planes = Vec::with_capacity(nl * np);
+        for l in 0..nl {
+            for j in 0..np {
+                let o = self.offsets[l * np + j];
+                planes.push(flat[o..o + self.plane_len(l, j)].iter().map(|v| v.to_bits()).collect::<Vec<u32>>());
+            }
+        }
+        let rm = make_mipmap::RipMap { c, widths: self.widths.clone(), heights: self.heights.clone(), planes };
+        let n = self.width * self.height;
+        let mut bp = vec![vec![0.0f32; n]; c];
+        for y in 0..self.height {
+            for x in 0..self.width {
+                for k in 0..c {
+                    bp[k][y * self.width + x] = f32::from_bits(rm.planes[0][rm.at(0, x as isize, y as isize, k)]);
+                }
+            }
+        }
+        let m = MipImage { width: self.width, height: self.height, channels: c, filter: self.filter, wrap: self.wrap, ripmap: rm, scale: self.scale.clone(), base: Image { n, planes: bp } };
+        let _ = self.host.set(m);
+        Ok(self.host.get().expect("just set"))
+    }
 }
 
 /// A planar image on the device with a lazily filled host copy.
@@ -116,6 +190,7 @@ impl Val {
             Val::Mip(m) => Arg::Mip(m.as_ref()),
             Val::Const { n, lanes } => Arg::Const { n: *n, lanes: *lanes },
             Val::Dev(d) => Arg::Img(d.host().expect("a device image is materialized before it is used as a host argument")),
+            Val::DevMip(d) => Arg::Mip(d.host().expect("a device ripmap is materialized before it is used as a host argument")),
         }
     }
 
@@ -123,6 +198,7 @@ impl Val {
     pub fn count(&self) -> i32 {
         match self {
             Val::Dev(d) => d.channels() as i32,
+            Val::DevMip(d) => d.channels as i32,
             other => other.as_arg().count(),
         }
     }

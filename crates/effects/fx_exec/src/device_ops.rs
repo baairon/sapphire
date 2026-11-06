@@ -17,6 +17,8 @@ use crate::types::{Arg, Image, KParams};
 use fx_device::cl::Arg as ClArg;
 use fx_device::selfcheck::{adversarial_f32, compare_f32, Mismatch, NanPayloads, Tally};
 use fx_device::{DevError, DevImage, Session};
+use crate::device_ops_k2 as k2;
+use crate::device_ops_k2b as k2b;
 use std::sync::Arc;
 
 /// What an operand looks like, for `accepts`.
@@ -31,6 +33,9 @@ pub enum ArgShape {
 pub enum DevArg<'a> {
     Img(&'a DevImage),
     Const { n: usize, lanes: [u32; 4] },
+    Mip(&'a crate::types::MipImage),
+    /// a ripmap resident on the device (make_mipmap run by the device backend)
+    DevMip(&'a crate::types::DevMipVal),
 }
 
 /// One self-check case: an input image and the call it is run with.
@@ -38,7 +43,12 @@ pub struct SelfCase {
     pub name: String,
     pub dims: (usize, usize),
     pub tag: i32,
+    /// the image operands, in plan order among the images
     pub args: Vec<Image>,
+    /// constant operands as (operand position, lanes in use, lane bits); the operand list interleaves them with `args`
+    pub consts: Vec<(usize, usize, [u32; 4])>,
+    /// the host parameters of the case (None: `KParams::standin()`)
+    pub kp: Option<KParams>,
 }
 
 pub struct DeviceOp {
@@ -56,69 +66,73 @@ pub struct DeviceOp {
 pub static DEVICE_OPS: &[DeviceOp] = &[
     DeviceOp { class: "copy", accepts: copy_accepts, run: copy_run, corpus: copy_corpus },
     DeviceOp { class: "one_minus", accepts: one_minus_accepts, run: one_minus_run, corpus: one_minus_corpus },
+    // K2: sampling and warp ops (device_ops_k2.rs); their self-check runs in device_ops_k2::selfcheck
+    DeviceOp { class: "warp_rel", accepts: k2::warp_rel_accepts, run: k2::warp_rel_run, corpus: k2::empty_corpus },
+    DeviceOp { class: "warp", accepts: k2::warp_accepts, run: k2::warp_run, corpus: k2::empty_corpus },
+    DeviceOp { class: "rotate", accepts: k2::rotate_accepts, run: k2::rotate_run, corpus: k2::empty_corpus },
+    DeviceOp { class: "perspective", accepts: k2::persp_accepts, run: k2::persp_run, corpus: k2::empty_corpus },
+    DeviceOp { class: "perspective_alpha", accepts: k2::persp_alpha_accepts, run: k2::persp_alpha_run, corpus: k2::empty_corpus },
+    // K2B: the ripmap family (device_ops_k2b.rs); make_mipmap leaves its pyramid on the device (Val::DevMip)
+    DeviceOp { class: "make_mipmap", accepts: k2b::make_mipmap_accepts, run: k2b::make_mipmap_run, corpus: k2b::empty_corpus },
+    DeviceOp { class: "blur_warp", accepts: k2b::blur_warp_accepts, run: k2b::blur_warp_run, corpus: k2b::empty_corpus },
+    // K1: pointwise ops (device_ops_k1.rs)
+    crate::device_ops_k1::ADD,
+    crate::device_ops_k1::SUB,
+    crate::device_ops_k1::MUL,
+    crate::device_ops_k1::DIV,
+    crate::device_ops_k1::MAX,
+    crate::device_ops_k1::MIN,
+    crate::device_ops_k1::DIFF,
+    crate::device_ops_k1::ABS,
+    crate::device_ops_k1::NEGATE,
+    crate::device_ops_k1::IF_PLUS,
+    crate::device_ops_k1::IF_GT,
+    crate::device_ops_k1::CLAMP,
+    crate::device_ops_k1::V2,
+    crate::device_ops_k1::V3,
+    crate::device_ops_k1::V4,
+    crate::device_ops_k1::COERCE_UP,
+    crate::device_ops_k1::COERCE_UP_A1,
+    crate::device_ops_k1::COERCE_TO,
+    crate::device_ops_k1::COERCE_TO_ALPHA,
+    crate::device_ops_k1::COERCE_TO_V3,
+    crate::device_ops_k1::COERCE_TO_V4,
+    crate::device_ops_k1::COERCE_UP_TO_V3,
+    crate::device_ops_k1::REMOVE_ALPHA_OP,
+    crate::device_ops_k1::V3_TO_V4,
+    crate::device_ops_k1::V3_TO_V4_IF4,
+    crate::device_ops_k1::ELEMENT_OF,
+    crate::device_ops_k1::MAX_ELEMENT,
+    crate::device_ops_k1::MIN_ELEMENT,
+    crate::device_ops_k1::SCREEN_SUPER,
+    crate::device_ops_k1::INTERP,
+    crate::device_ops_k1::DISSOLVE,
+    crate::device_ops_k1::COMP_PREMULT,
+    crate::device_ops_k1::COMP_RGBA,
+    crate::device_ops_k1::POSTDIVIDE,
+    crate::device_ops_k1::ROUND,
+    crate::device_ops_k1::SCALE_RGB,
+    crate::device_ops_k1::ADD_RGB,
+    crate::device_ops_k1::SAT_SCALE,
+    crate::device_ops_k1::HUE_SHIFT,
+    crate::device_ops_k1::HUE_SHIFT_PRESERVE_LUMA,
+    crate::device_ops_k1::MONOCHROME,
+    crate::device_ops_k1::MONOCHROME_A,
+    // K3: blur family, sharpen, edge_aware_sharpen and static2 (device_ops_k3.rs)
+    crate::device_ops_k3::BLUR,
+    crate::device_ops_k3::MASKED_BLUR,
+    crate::device_ops_k3::GRAD,
+    crate::device_ops_k3::SHARPEN,
+    crate::device_ops_k3::EDGE_AWARE_SHARPEN,
+    crate::device_ops_k3::STATIC2,
 ];
 
 /// Ops allowed to run on a device.
-pub const ALLOWLIST: &[&str] = &["copy", "one_minus"];
+pub const ALLOWLIST: &[&str] = &["copy", "one_minus", "warp_rel", "warp", "rotate", "perspective", "perspective_alpha", "blur", "masked_blur", "grad", "sharpen", "edge_aware_sharpen", "static2", "+", "-", "*", "/", "max", "min", "diff", "abs", "negate", "if+", "if>", "clamp", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "max_element", "min_element", "screen_super", "interp", "dissolve", "comp_premult", "comp_rgba", "postdivide", "round", "scale_rgb", "add_rgb", "sat_scale", "hue_shift", "hue_shift_preserve_luma", "monochrome", "monochrome_a", "make_mipmap", "blur_warp"];
 
 /// Ops with no device kernel, each with the reason. The list shrinks as kernels land. `get_frame`, `get_prev_dest` and
 /// `save_prev_dest` are host data movement (`kernels::HOST_CLASSES`) and are not kernel ops.
 pub const CPU_ONLY: &[(&str, &str)] = &[
-    ("hue_shift", "not ported yet: fused multiply add sites and a per sample hue branch"),
-    ("hue_shift_preserve_luma", "not ported yet: fused multiply add chains and per sample branches"),
-    ("sat_scale", "not ported yet: f64 luma sums with mul_add per pixel"),
-    ("v3_to_v4_if4", "not ported yet: includes a correctly rounded sqrt site and lane routing"),
-    ("+", "not ported yet: elementwise, planned next (combination tag lane selection)"),
-    ("-", "not ported yet: elementwise, planned next (combination tag lane selection)"),
-    ("*", "not ported yet: elementwise, planned next (combination tag lane selection)"),
-    ("/", "not ported yet: elementwise, planned next (combination tag lane selection)"),
-    ("max", "not ported yet: x86 operand order select, no fmax"),
-    ("min", "not ported yet: x86 operand order select, no fmin"),
-    ("diff", "not ported yet: x86 compare and NaN order"),
-    ("clamp", "not ported yet: median ladders per operand shape"),
-    ("abs", "not ported yet: sign bit mask"),
-    ("negate", "not ported yet: sign bit mask"),
-    ("if+", "not ported yet: compare select with raw lane bits"),
-    ("if>", "not ported yet: compare select with raw lane bits"),
-    ("comp_rgba", "not ported yet: sixteen fused multiply add sites"),
-    ("screen_super", "not ported yet: fused multiply add chains"),
-    ("element_of", "not ported yet: truncating index casts and lane gather"),
-    ("v2", "not ported yet: lane routing"),
-    ("v3", "not ported yet: lane routing"),
-    ("v4", "not ported yet: lane routing"),
-    ("interp", "not ported yet: fused multiply add chains"),
-    ("make_mipmap", "not ported yet: ripmap object with padded layouts, not a plain image"),
-    ("blur_warp", "not ported yet: data dependent gathers from a ripmap"),
-    ("warp_rel", "not ported yet: bilinear gathers and ported fmod"),
-    ("static2", "not ported yet: integer hash"),
-    ("monochrome", "not ported yet: f64 weighted sums with mul_add per pixel"),
-    ("rotate", "not ported yet: ported sincos and fused chains"),
-    ("max_element", "not ported yet: fixed order lane reduction"),
-    ("min_element", "not ported yet: fixed order lane reduction"),
-    ("blur", "not ported yet: row serial running box sums in CPU order"),
-    ("dissolve", "not ported yet: fused multiply add"),
-    ("coerce_up", "not ported yet: lane routing with pad fill"),
-    ("coerce_up_a1", "not ported yet: lane routing with pad fill"),
-    ("coerce_to", "not ported yet: lane routing with pad fill"),
-    ("coerce_to_alpha", "not ported yet: lane routing with pad fill"),
-    ("coerce_to_v3", "not ported yet: lane routing"),
-    ("coerce_to_v4", "not ported yet: lane routing"),
-    ("coerce_up_to_v3", "not ported yet: lane routing"),
-    ("remove_alpha", "not ported yet: lane routing"),
-    ("round", "not ported yet: explicit rounding mode helpers"),
-    ("scale_rgb", "not ported yet: f64 steps and rounding snap"),
-    ("add_rgb", "not ported yet: elementwise"),
-    ("masked_blur", "not ported yet: depends on the blur kernel"),
-    ("comp_premult", "not ported yet: fused multiply add chains"),
-    ("grad", "not ported yet: depends on the blur kernel"),
-    ("v3_to_v4", "not ported yet: lane routing"),
-    ("sharpen", "not ported yet: depends on the blur kernel"),
-    ("edge_aware_sharpen", "not ported yet: multi iteration driver, least certain class"),
-    ("monochrome_a", "not ported yet: f64 weighted sums with mul_add per pixel"),
-    ("perspective", "not ported yet: projective gather with x86 NaN first propagation"),
-    ("perspective_alpha", "not ported yet: projective gather with x86 NaN first propagation"),
-    ("warp", "not ported yet: gather with row buffer semantics"),
-    ("postdivide", "not ported yet: elementwise divide by alpha"),
 ];
 
 fn copy_calls_are_identity(tag: i32) -> bool {
@@ -186,7 +200,7 @@ fn unary_corpus() -> Vec<SelfCase> {
         let n = w * h;
         for tag in 1..=4i32 {
             let planes: Vec<Vec<f32>> = (0..tag as usize).map(|p| (0..n).map(|i| vals[(i * 7 + p * 13 + n) % vals.len()]).collect()).collect();
-            out.push(SelfCase { name: format!("{w}x{h} tag {tag}"), dims: (w, h), tag, args: vec![Image { n, planes }] });
+            out.push(SelfCase { name: format!("{w}x{h} tag {tag}"), dims: (w, h), tag, args: vec![Image { n, planes }], consts: vec![], kp: None });
         }
     }
     out
@@ -200,19 +214,57 @@ fn one_minus_corpus() -> Vec<SelfCase> {
     unary_corpus()
 }
 
+/// A self-check operand that is a constant: an image with `n == 0` whose planes 0..3 hold the four lane words and plane 4 the lane count
+/// (see `device_ops_k1::const_image`).
+fn case_const(i: &Image) -> Option<(usize, [u32; 4])> {
+    if i.n == 0 && i.planes.len() == 5 {
+        let l = |k: usize| i.planes[k][0].to_bits();
+        Some((i.planes[4][0] as usize, [l(0), l(1), l(2), l(3)]))
+    } else {
+        None
+    }
+}
+
 /// Runs the op on the device and on the CPU kernel for every corpus case and compares the bits. A device output
 /// with a NaN is allowed only where the CPU output has a NaN too (the executor reruns such a node on the CPU).
 pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String> {
-    let kp = KParams::standin();
+    if k2::handles(op.class) {
+        return k2::selfcheck(session, op);
+    }
+    if k2b::handles(op.class) {
+        return k2b::selfcheck(session, op);
+    }
     let mut tally = Tally { outputs: 0, nan_payloads: NanPayloads::Same };
     for case in (op.corpus)() {
+        let kp = case.kp.unwrap_or_else(KParams::standin);
         let n = case.dims.0 * case.dims.1;
         let call = NodeCall { idx: 0, class: op.class, tag: case.tag, n, dims: case.dims, kp: &kp };
-        let shapes: Vec<ArgShape> = case.args.iter().map(|i| ArgShape::Img { channels: i.channels() }).collect();
+        let total = case.args.len() + case.consts.len();
+        let mut imgs = case.args.iter();
+        let mut order: Vec<Result<&Image, (usize, [u32; 4])>> = Vec::with_capacity(total);
+        for pos in 0..total {
+            match case.consts.iter().find(|c| c.0 == pos) {
+                Some(c) => order.push(Err((c.1, c.2))),
+                None => match imgs.next() {
+                    Some(i) => order.push(match case_const(i) {
+                        Some((cn, lanes)) => Err((cn, lanes)),
+                        None => Ok(i),
+                    }),
+                    None => return Err(format!("{} {}: the corpus case has a gap in its operand positions", op.class, case.name)),
+                },
+            }
+        }
+        let shapes: Vec<ArgShape> = order.iter().map(|o| match o {
+            Ok(i) => ArgShape::Img { channels: i.channels() },
+            Err((cn, _)) => ArgShape::Const { n: *cn },
+        }).collect();
         if let Err(why) = (op.accepts)(&call, &shapes) {
             return Err(format!("{} {}: the corpus case is refused by accepts: {why}", op.class, case.name));
         }
-        let cpu_args: Vec<Arg> = case.args.iter().map(Arg::Img).collect();
+        let cpu_args: Vec<Arg> = order.iter().map(|o| match o {
+            Ok(i) => Arg::Img(i),
+            Err((cn, lanes)) => Arg::Const { n: *cn, lanes: *lanes },
+        }).collect();
         let want = match kernels::run_any(op.class, case.tag, &cpu_args, n, case.dims, &kp) {
             Ok(crate::kernels2::Out::Img(i)) => i,
             Ok(_) => return Err(format!("{} {}: the CPU kernel returned a ripmap", op.class, case.name)),
@@ -221,16 +273,21 @@ pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String>
         let uploads: Result<Vec<DevImage>, DevError> = case
             .args
             .iter()
+            .filter(|i| case_const(i).is_none())
             .map(|i| DevImage::upload(session, &i.planes.iter().map(|p| p.as_slice()).collect::<Vec<_>>()))
             .collect();
         let uploads = uploads.map_err(|e| format!("{} {}: upload: {e}", op.class, case.name))?;
-        let dargs: Vec<DevArg> = uploads.iter().map(DevArg::Img).collect();
+        let mut up = uploads.iter();
+        let dargs: Vec<DevArg> = order.iter().map(|o| match o {
+            Ok(_) => DevArg::Img(up.next().expect("one upload per image")),
+            Err((cn, lanes)) => DevArg::Const { n: *cn, lanes: *lanes },
+        }).collect();
         let got = (op.run)(session, &call, &dargs).and_then(|d| d.download()).map_err(|e| format!("{} {}: {e}", op.class, case.name))?;
         if got.len() != want.planes.len() {
             return Err(format!("{} {}: {} planes on the device, {} on the CPU", op.class, case.name, got.len(), want.planes.len()));
         }
         for (p, (g, w)) in got.iter().zip(&want.planes).enumerate() {
-            let input = |i: usize| case.args.first().and_then(|a| a.planes.get(p)).map(|pl| format!("plane {p} sample {i} = 0x{:08x}", pl[i].to_bits())).unwrap_or_default();
+            let input = |i: usize| case.args.first().and_then(|a| a.planes.get(p)).and_then(|pl| pl.get(i).map(|v| format!("plane {p} sample {i} = 0x{:08x}", v.to_bits()))).unwrap_or_default();
             match compare_f32(op.class, &format!("{} plane {p}", case.name), input, w, g) {
                 Ok(t) => {
                     tally.outputs += t.outputs;
