@@ -36,6 +36,23 @@ A mathematical table the effect needs is computed from its definition, at build 
 - Its offered parameters are rows of `crates/neutral-handoff/data/fx_params.tsv`: stage id, parameter id, the `fx_run` option form and option name. Type and lanes come from `fx_run --describe-params`.
 - `sapphire stage list --json` then lists the stage, and `python -I tools/conformance.py --stage "PATH/sapphire stage apply STAGE"` passes L1 and L3, with only the documented 1x1 size refusals.
 
+## Device
+
+Every operation the executor dispatches (`fx_exec::kernels::SUPPORTED` and `kernels2::WIRED`) is in exactly one of two tables in `crates/effects/fx_exec/src/device_ops.rs`, and the test `every_op_has_a_device_kernel_or_a_cpu_only_entry` fails when an operation is in neither. A new effect that adds an operation therefore adds one of these:
+
+- **A device kernel.** An entry in `DEVICE_OPS` with `accepts` (the tags, operand shapes and parameter values the kernel covers; everything else runs on the CPU for that node), `run` (the launch) and `corpus` (the self-check cases). The OpenCL C source goes in `crates/effects/fx_device/src` and is registered in `kernels::SOURCES` and `PROGRAM_PARTS`. Then add the class to `ALLOWLIST`.
+- **A `CPU_ONLY` entry** with the reason the operation has no kernel. Entries are removed when a kernel lands.
+
+Rules for a kernel:
+
+- **Same bits as the CPU kernel.** The CPU code is the reference: keep its operation order, and use `fma()` only where the CPU code calls `mul_add`. The prelude turns off floating point contraction; `mad`, `native_*` and the fast math options are refused by the lint (`fx_device/src/lint.rs`). `min` and `max` follow the x86 operand order, so no `fmin` or `fmax`. Running sums stay serial in the CPU order.
+- **A self-check corpus.** The corpus covers one pixel, odd and wide frames, every combination tag, parameters at their edges and the adversarial values (subnormals, negative zero, infinities, NaN with payloads). At start the executor runs every allowlisted kernel on the corpus and compares it bit for bit with `kernels::run_any`; a difference keeps the operation off the device. Add a mutation check of your own: change one fused operation or one guard in the kernel and confirm the self-check refuses it.
+- **Decline instead of approximate.** `accepts` or `run` returns a reason for any shape or value the kernel does not reproduce exactly; the node then runs on the CPU.
+- **NaN.** A device output that holds a NaN is rerun on the CPU, which applies the default NaN rule, so a kernel need not reproduce NaN payloads.
+- **A CPU parity change** to an operation removes its `ALLOWLIST` entry unless the kernel changes in the same patch.
+
+The self-check results are cached per device, driver and digest of the kernel sources ([Rendering on a device](guide.md#rendering-on-a-device)), so a changed kernel source is checked again on every machine. Device tests run one at a time (`-- --test-threads=1`) because some OpenCL runtimes crash when two threads create contexts at once; the library also serializes context, queue and program creation behind one lock. Tests that need a device print `NOT RUN` and pass when no OpenCL platform is present.
+
 ## Reference section
 
 Add a section to [Effects](effects.md), in the order of the status table, with the same template as the ten:

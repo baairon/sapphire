@@ -132,7 +132,7 @@ It prints `L1 stage matrix pass` and `L3 failure injection pass`, marks the othe
 
 `sapphire stage list --json` also lists one stage per registered style of the ten landed effects (13 stages). Each stage renders in process through the `fx_exec` library, the same code as `fx_run`, on the verified render path, the host arrangement the recorded renders of the parity record used. A later effect joins by adding rows to `crates/neutral-handoff/data/fx_stages.tsv` and `fx_params.tsv`.
 
-**Requirements.** The stages are linked into `sapphire`; the effects need no external data, and no `fx_run` executable is needed. A run writes no scratch files and no debug side files (only the Trails history route chains its renders through a scratch folder, removed on every exit path). `--device cpu|gpu|auto` picks the backend (default `cpu`); until a device backend is built in, `gpu` and `auto` print one note on stderr and render on the cpu.
+**Requirements.** The stages are linked into `sapphire`; the effects need no external data, and no `fx_run` executable is needed. A run writes no scratch files and no debug side files (only the Trails history route chains its renders through a scratch folder, removed on every exit path). `--device cpu|gpu|gpu=N|auto` picks the backend (default `cpu`); the device path is described in [Rendering on a device](guide.md#rendering-on-a-device) and falls back to the CPU for any node, or the whole run, that a device cannot serve exactly.
 
 **Per frame.** The input frame is written as an 'ae32' word file (A, R, G, B words per pixel, f32 bits, straight alpha). At depth 32 this is a pure byte permutation of the frames/2 planes G, B, R, A. Depths 8 and 16 convert through f32 (`v/255`, `v/65535`, back with round half to even and a clamp) and are not verified. The `fx_run` output words are relaid back the same way.
 
@@ -205,7 +205,24 @@ Through each stage, the counted recorded renders of the parity record that match
 | Keyed values between keys | INFERRED (each frame is a plain run at its value, MEASURED) |
 | Depths 8 and 16 | new conversion, not verified |
 
-**Limits.** The stages render in process, one runner thread per clip. MEASURED (wall time of one 1920x1080 frame through `sapphire stage apply`, best of two runs under shared load on a 12 core server): 0.6 to 1.8 s for seven of the thirteen stages (the hue, blur, sharpen_fast, time warp, trails and shadow ones), 3 to 4.4 s for `diffuse_autogen`, `sharpen_best_quality_autogen`, `warp_perspective_autogen`, `transform_and_blur_autogen` and `blur_motion_curves_no_transform_autogen`, and 8.7 s for `distort_rgb_autogen`. The route is byte identical to the former one process per frame route on the parity record.
+**Limits.** The stages render in process, one runner thread per clip, and the parallel-safe kernels use all cores (`SAPPHIRE_THREADS=1` for one). MEASURED wall time of one 1920x1080 frame through `sapphire stage apply` on a 12 core server under some shared load, two runs per cell, in seconds:
+
+| stage | before PR 4 (s) | after, CPU (s) | after, PoCL device (s) |
+|---|---|---|---|
+| `blur_color_autogen` | 1.27 / 1.22 | 0.72 / 0.76 | 0.74 / 0.73 |
+| `blur_mono_autogen` | 1.02 / 1.01 | 0.64 / 0.66 | 0.71 / 0.69 |
+| `transform_and_blur_autogen` | 11.26 / 11.87 | 1.01 / 1.17 | 0.72 / 0.74 |
+| `blur_motion_curves_no_transform_autogen` | 52.84 / 51.09 | 1.08 / 1.14 | 0.74 / 0.72 |
+| `diffuse_autogen` | 3.02 / 2.90 | 1.90 / 2.34 | 0.72 / 0.69 |
+| `distort_rgb_autogen` | 8.48 / 7.57 | 1.73 / 1.87 | 2.14 / 1.95 |
+| `@drop_shadow` | 1.84 / 1.74 | 1.52 / 1.73 | 0.72 / 0.71 |
+| `hue_sat_bright_autogen` | 0.84 / 0.84 | 0.47 / 0.51 | 0.54 / 0.59 |
+| `sharpen_best_quality_autogen` | 2.79 / 2.71 | 2.40 / 2.38 | 0.86 / 0.88 |
+| `sharpen_fast_autogen` | 1.18 / 1.10 | 0.66 / 0.73 | 0.64 / 0.69 |
+| `time_warp_rgb_autogen` | 1.44 / 1.31 | 0.78 / 0.73 | 0.88 / 0.81 |
+| `trails_autogen` | 1.26 / 1.16 | 0.85 / 0.75 | 0.85 / 0.88 |
+| `warp_perspective_autogen` | 3.87 / 3.49 | 1.37 / 1.31 | 1.44 / 1.46 |
+The default path (`--device cpu`) is byte identical to the former one process per frame route on the parity record. The `PoCL device` column is `--device gpu` on PoCL, an OpenCL runtime on the CPU; it is not GPU speed, which is INFERRED until measured on a GPU. See [Rendering on a device](guide.md#rendering-on-a-device).
 
 Recorded renders that do not match the stage's host arrangement (a different host arrangement, a fractional frame, a `--prev` file given outside the history chain) count in the parity record and are not verified through the stage.
 
