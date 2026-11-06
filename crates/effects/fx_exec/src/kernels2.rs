@@ -281,33 +281,40 @@ fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resul
         flag_x: 0,
         flag_y: 0,
     };
-    let mut wimg = warp_rel::Image { f1, w: w as i32, h: h as i32, d_cell_d: nl as i32, d_cell_e: np as i32, host: warp_rel::Host::Mode0 };
+    let (nl_i, np_i) = (nl as i32, np as i32);
+    let (w_i, h_i) = (w as i32, h as i32);
+    let mk_f1 = || warp_f1::Params { n: f1.n, width_tab: f1.width_tab.clone(), height_tab: f1.height_tab.clone(), t: f1.t.clone(), flag_x: 0, flag_y: 0 };
     let lat = warp_f1::Lattice {
         bufs: (0..nl).map(|l| (0..np).map(|j| mip.ripmap.planes[mip.ripmap.idx(l, j)].iter().map(|b| f32::from_bits(*b)).collect()).collect()).collect(),
     };
-    let mut planes: Vec<Vec<f32>> = vec![vec![0.0; n]; c];
-    for y in 0..h {
-        let obj = warp_rel::Obj {
-            count: w as i32,
-            aspect_block_d: g.aspect,
-            sub_x: 0,
-            sub_y: 0,
-            port_obj_a: y as i32 + g.roi_y,
-            port_obj_b: g.roi_x,
-            assumption_c: g.roi_x,
-            assumption_d: g.roi_y,
-            assumption_f: g.left,
-            assumption_g: g.right,
-            fill: vec![0.0; c],
-        };
-        let fr = warp_rel::Frame { obj, idx: (y * w) as i32 };
-        let mut row: Vec<Vec<f32>> = vec![vec![0.0; w]; c];
-        warp_rel::render(&prim, &fr, &mut wimg, &lat, &mut row).map_err(|e| kerr("warp_rel", e))?;
-        for k in 0..c {
-            planes[k][y * w..(y + 1) * w].copy_from_slice(&row[k]);
+    let nt = crate::par::threads_for(h, n);
+    let parts = crate::par::row_bands(h, nt, |lo, hi| {
+        let mut wimg = warp_rel::Image { f1: mk_f1(), w: w_i, h: h_i, d_cell_d: nl_i, d_cell_e: np_i, host: warp_rel::Host::Mode0 };
+        let mut band: Vec<Vec<f32>> = vec![vec![0.0; (hi - lo) * w]; c];
+        for y in lo..hi {
+            let obj = warp_rel::Obj {
+                count: w as i32,
+                aspect_block_d: g.aspect,
+                sub_x: 0,
+                sub_y: 0,
+                port_obj_a: y as i32 + g.roi_y,
+                port_obj_b: g.roi_x,
+                assumption_c: g.roi_x,
+                assumption_d: g.roi_y,
+                assumption_f: g.left,
+                assumption_g: g.right,
+                fill: vec![0.0; c],
+            };
+            let fr = warp_rel::Frame { obj, idx: (y * w) as i32 };
+            let mut row: Vec<Vec<f32>> = vec![vec![0.0; w]; c];
+            warp_rel::render(&prim, &fr, &mut wimg, &lat, &mut row).map_err(|e| kerr("warp_rel", e))?;
+            for k in 0..c {
+                band[k][(y - lo) * w..(y - lo + 1) * w].copy_from_slice(&row[k]);
+            }
         }
-    }
-    Ok(Image { n, planes })
+        Ok(band)
+    })?;
+    Ok(Image { n, planes: crate::par::join_planes(parts, c, n) })
 }
 
 fn static2_k(args: &[Arg], n: usize, kp: &KParams) -> Result<Image, ExecError> {
@@ -1104,21 +1111,32 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
         flag_x: 0,
         flag_y: 0,
     };
-    let mut img = wpg1_glue::DriverImage { f1, w: w as i32, h: h as i32, d_cell_d: nl as i32, d_cell_e: np as i32 };
+    let mk_img = || wpg1_glue::DriverImage {
+        f1: wpg1_glue::F1Params { n: f1.n, width_tab: f1.width_tab.clone(), height_tab: f1.height_tab.clone(), t: f1.t.clone(), flag_x: 0, flag_y: 0 },
+        w: w as i32,
+        h: h as i32,
+        d_cell_d: nl as i32,
+        d_cell_e: np as i32,
+    };
     let lat = wpg1_glue::Lattice {
         bufs: (0..nl).map(|l| (0..np).map(|j| mip.ripmap.planes[mip.ripmap.idx(l, j)].iter().map(|b| f32::from_bits(*b)).collect()).collect()).collect(),
     };
     let prim = wpg1_glue::WarpPrim { const_coords, const_a1: ca1, const_a2: ca2, a1_arr: a1, a2_arr: a2, c1_arr, c2_arr, flag: flag_byte, mx, my };
-    let mut planes: Vec<Vec<f32>> = vec![vec![0.0; n]; c];
-    for y in 0..h {
-        let rec = wpg1_glue::WarpRec { count: w as i32, aspect_block_d: g.aspect, assumption_e: g.assumption_e, idx: (y * w) as i32, assumption_c: g.roi_x, assumption_d: g.roi_y, assumption_f: g.left, assumption_g: g.right, assumption_h: g.assumption_h };
-        let mut row: Vec<Vec<f32>> = vec![vec![0.0; w]; c];
-        wpg1_glue::slot53_warp(&prim, &rec, None, &mut img, &lat, &mut row).map_err(|e| kerr("warp", e))?;
-        for k in 0..c {
-            planes[k][y * w..(y + 1) * w].copy_from_slice(&row[k]);
+    let nt = crate::par::threads_for(h, n);
+    let parts = crate::par::row_bands(h, nt, |lo, hi| {
+        let mut img = mk_img();
+        let mut band: Vec<Vec<f32>> = vec![vec![0.0; (hi - lo) * w]; c];
+        for y in lo..hi {
+            let rec = wpg1_glue::WarpRec { count: w as i32, aspect_block_d: g.aspect, assumption_e: g.assumption_e, idx: (y * w) as i32, assumption_c: g.roi_x, assumption_d: g.roi_y, assumption_f: g.left, assumption_g: g.right, assumption_h: g.assumption_h };
+            let mut row: Vec<Vec<f32>> = vec![vec![0.0; w]; c];
+            wpg1_glue::slot53_warp(&prim, &rec, None, &mut img, &lat, &mut row).map_err(|e| kerr("warp", e))?;
+            for k in 0..c {
+                band[k][(y - lo) * w..(y - lo + 1) * w].copy_from_slice(&row[k]);
+            }
         }
-    }
-    Ok(Image { n, planes })
+        Ok(band)
+    })?;
+    Ok(Image { n, planes: crate::par::join_planes(parts, c, n) })
 }
 
 thread_local! {
