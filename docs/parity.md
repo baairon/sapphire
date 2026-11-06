@@ -88,10 +88,10 @@ These are measured differences between a port and its original in worlds that vi
 
 | Function | Worlds | Result | File | Follow-up |
 |---|---|---|---|---|
-| `f_0001b438` | 1,609 stack-resident worlds compared (sorted array on the function's own stack, `rdi = 0x7ffff000 + x`) | 32 differ, 0 Rust faults; the first is world 55, call event 6 to 0x100ec014, whose 4th integer argument is 0x0 in the port and 0xc3bd000000000000 in the original; world 108 also returns a different `rax` and takes one extra call | `FINDING_STACK_RESIDENT.md` (kept in the recovery workspace, not in this repository) | model the return address push of the lifted stub calls in the lifted world (INFERRED cause: only the self call writes it, so an array overlapping the dead slot `rsp-8` reads different words) |
-| `f_0002405b` (0x246f8) and `f_00024a39` (0x25004) | 11 stack-resident worlds that take these outcomes | the port faults differently from the original: at 0x246f8 the original writes at 0x0 and the port writes at 0x18; at 0x25004 the original writes at 0x0 and the port reads at 0x0 | `FAULT_PARITY.tsv` and `WORLDS.tsv` (kept in the recovery workspace) | make the faulting access of the port match the original in these worlds |
+| `f_0001b438` | 1,609 stack-resident worlds compared (sorted array on the function's own stack, `rdi = 0x7ffff000 + x`) | 32 differ, 0 Rust faults; the first is world 55, call event 6 to 0x100ec014, whose 4th integer argument is 0x0 in the port and 0xc3bd000000000000 in the original; world 108 also returns a different `rax` and takes one extra call | `FINDING_STACK_RESIDENT.md` (kept outside this repository) | model the return address push of the lifted stub calls in the lifted world (INFERRED cause: only the self call writes it, so an array overlapping the dead slot `rsp-8` reads different words) |
+| `f_0002405b` (0x246f8) and `f_00024a39` (0x25004) | 11 stack-resident worlds that take these outcomes | the port faults differently from the original: at 0x246f8 the original writes at 0x0 and the port writes at 0x18; at 0x25004 the original writes at 0x0 and the port reads at 0x0 | `FAULT_PARITY.tsv` and `WORLDS.tsv` (kept outside this repository) | make the faulting access of the port match the original in these worlds |
 
-The other stack-resident worlds of `f_0002405b` and `f_00024a39` (2,551 and 7,646 compared) show 0 mismatches, and set 15 of `f_0001b438` (unaligned, heap arena) is unaffected (274 of 274). All counts are MEASURED by the builders named in the workspace files.
+The other stack-resident worlds of `f_0002405b` and `f_00024a39` (2,551 and 7,646 compared) show 0 mismatches, and set 15 of `f_0001b438` (unaligned, heap arena) is unaffected (274 of 274). All counts are MEASURED in the files named.
 
 ## Unproven
 

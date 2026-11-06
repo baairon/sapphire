@@ -1,29 +1,23 @@
 # sapphire
 
-> [!IMPORTANT]
-> Ten of the plugin's effects run as native code: `fx_run` (built from `crates/effects/fx_exec`) renders them, and each matches the original plugin bit for bit on every case it was compared on, as judged in an emulator. The status of each effect, how to build and run them and what is not claimed are in [docs/effects.md](docs/effects.md). Running them needs the optional data bundle (the program texts and lookup tables taken from the original plugin, kept out of the main files); without it the code builds and its tests pass, but no effect renders. The other effects do not run, and no stage of the `sapphire` pipeline calls the ten yet.
-
 An independent open source reimplementation of Sapphire behaviour, function by function. It is not affiliated with or endorsed by any other company, product or library.
 
 The plugin's functions, written in Rust and paired with ffmpeg and twixtor. `tools/fn_info.py` looks up any function, `sapphire` runs an ffmpeg decode, twixtor's `vfx`, the stages of any tool and an ffmpeg encode as one pipe, `sapphire stage apply` runs this repository's stages on raw frames, and `tools/handoff.py` and `tools/conformance.py` hand tasks to twixtor and test a stage against the convention.
 
-Sources of truth, for agents and scripts:
+## Status
 
-| Question | Ask |
-|---|---|
-| One function: bank name, offset, size, origin, tier, parity, evidence, name check, confirmation, crate file, callers, callees | `python -I tools/fn_info.py ID\|NAME\|OFFSET [--json]`: the function by id, bank name or offset. |
-| Every function at once | `docs/index/functions.jsonl`: one JSON object a function, every field. |
-| Any figure quoted in a document | `docs/index/facts.json`: the value, text and source of every figure. |
-| The stages this repository provides | `target/release/sapphire stage list --json`: the stage manifest. |
-| Every stage of sapphire and twixtor, with a ready stage command | `python -I tools/handoff.py stages --json`: each stage with the command line a wrapper takes. |
-| What a pipeline run will do | `target/release/sapphire INPUT [EFFECT] ... --dry-run`: the plan and every command, nothing written. |
+Ten effects run today as native Rust, each matching the original bit for bit on every compared case; the list and what each claim covers are in [docs/effects.md](docs/effects.md). They render through `fx_run`. Rendering needs the optional data bundle; without it everything builds and the tests pass, but nothing renders. The goal is 20 effects, the ten done plus the ten of [docs/roadmap.md](docs/roadmap.md); the other names in the plugin are not planned.
 
 ## Contents
 
+- [Status](#status)
+- [Quick start](#quick-start)
+  - [Build](#build)
+  - [Run one effect](#run-one-effect)
 - [Parity](#parity)
-- [Names](#names)
-- [Crate map](#crate-map)
-- [Build](#build)
+- [Effects and stages](#effects-and-stages)
+  - [Names](#names)
+  - [Crate map](#crate-map)
 - [Interface](#interface)
   - [Pipeline](#pipeline)
   - [Stage commands](#stage-commands)
@@ -31,12 +25,45 @@ Sources of truth, for agents and scripts:
   - [Exit codes](#exit-codes)
   - [Python tools](#python-tools)
 - [Handoff](#handoff)
-- [Smoke test](#smoke-test)
 - [Tests](#tests)
+  - [Smoke test](#smoke-test)
 - [Limits](#limits)
 - [Documentation](#documentation)
+  - [Sources of truth](#sources-of-truth)
 - [Legal](#legal)
 - [License](#license)
+
+## Quick start
+
+Build first, then run one effect.
+
+### Build
+
+From the repository root, with a stable Rust toolchain, offline:
+
+```sh
+cargo build --release --offline -p neutral-handoff
+```
+
+On a Windows machine without the MSVC linker the GNU toolchain builds the same code: `cargo +stable-x86_64-pc-windows-gnu build --release --offline -p neutral-handoff`.
+
+| Binary | Path (`.exe` added on Windows) | Used by |
+|---|---|---|
+| `sapphire` | `target/release/sapphire` | the pipeline, the stage provider of `contracts/tool.json`, `tools/handoff.py doctor`, `tools/conformance.py` |
+| `fake-vfx` | `target/release/fake-vfx` | the pipeline tests, as a stand in for twixtor's `vfx` |
+
+`CARGO_TARGET_DIR` moves both; `SAPPHIRE_PATH` points the Python tools at another build. The pipeline and the `neutral-ffmpeg` tests need ffmpeg and ffprobe ([finding ffmpeg](docs/ffmpeg.md#finding-ffmpeg)).
+
+### Run one effect
+
+An effect renders through `fx_run`, built from `crates/effects/fx_exec`. It needs the optional data bundle ([runtime data](docs/effects.md#runtime-data)); the full call and options are in [Build and run](docs/effects.md#build-and-run).
+
+```sh
+cargo build --release --offline -p fx_exec
+target/release/fx_run PROGRAMS.TSV PROGRAM --size WxH --out PREFIX --synth SEED [options]
+```
+
+`PROGRAMS.TSV` is the bundle's `programs.tsv`, `PROGRAM` is a registered program of [docs/effects.md](docs/effects.md), and the output is `PREFIX.dest.f32` with `PREFIX.dest.meta.txt`. Some host context options are required and have no default; a call that omits one is refused with a message that names it.
 
 ## Parity
 
@@ -62,7 +89,11 @@ Known port divergences outside the harness model are listed in [parity](docs/par
 
 Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn_total-->2,702<!--/f--> functions, most of them bundled library code.
 
-## Names
+## Effects and stages
+
+The ten native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned ten more are in [docs/roadmap.md](docs/roadmap.md). Stages are the programs that pass raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
+
+### Names
 
 The name bank is the source of truth for every name; the code keeps its `f_XXXXXXXX` symbols ([names](docs/names.md)).
 
@@ -91,7 +122,7 @@ The name bank is the source of truth for every name; the code keeps its `f_XXXXX
 
 A name is the bank's assignment for its offset. As a test of the mapping as a whole, argument counts fit the bank signatures <!--f:arity_fit_pct-->97.2<!--/f-->% of the time against about <!--f:arity_shift_pct-->68<!--/f-->% with every name shifted by one function, and all <!--f:class_hier_match-->16<!--/f--> class hierarchies match the structure inferred from the code.
 
-## Crate map
+### Crate map
 
 Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, edition 2021, MIT, unpublished. External crates: none. A plain `cargo test` covers the default members, the four `neutral-*` crates.
 
@@ -106,23 +137,6 @@ Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, 
 The effect crates are under `crates/effects` (the evaluator `fx_eval`, the executor and `fx_run` in `fx_exec`, the kernel crates they call, and the test helpers `effects_vecdir` and `effects_rtdata`); they are workspace members, and the ones whose tests need no stored data are default members ([effects](docs/effects.md)).
 
 Each `neutral-*` crate has a readme in its folder. Outside the workspace: `contracts/` (JSON schemas of the handoff convention and `contracts/conformance/cases.json`), `tools/` (Python 3.12 standard library: `handoff.py`, `conformance.py`, `gen_docs.py` with `docgen/`, `check_docs.py`, `fn_info.py`, `confirm_names.py` and their tests) and `docs/`.
-
-## Build
-
-From the repository root, with a stable Rust toolchain, offline:
-
-```sh
-cargo build --release --offline -p neutral-handoff
-```
-
-On a Windows machine without the MSVC linker the GNU toolchain builds the same code: `cargo +stable-x86_64-pc-windows-gnu build --release --offline -p neutral-handoff`.
-
-| Binary | Path (`.exe` added on Windows) | Used by |
-|---|---|---|
-| `sapphire` | `target/release/sapphire` | the pipeline, the stage provider of `contracts/tool.json`, `tools/handoff.py doctor`, `tools/conformance.py` |
-| `fake-vfx` | `target/release/fake-vfx` | the pipeline tests, as a stand in for twixtor's `vfx` |
-
-`CARGO_TARGET_DIR` moves both; `SAPPHIRE_PATH` points the Python tools at another build. The pipeline and the `neutral-ffmpeg` tests need ffmpeg and ffprobe ([finding ffmpeg](docs/ffmpeg.md#finding-ffmpeg)).
 
 ## Interface
 
@@ -200,7 +214,29 @@ The `shared` list of `contracts/tool.json` is byte equal in both repositories: t
 
 sapphire's own stages are `selftest-invert` and `ffmpeg-filter` ([Stage commands](#stage-commands)); a new tool joins as in [stages](docs/stages.md).
 
-## Smoke test
+## Tests
+
+From the repository root:
+
+```sh
+cargo test --release --offline -- --test-threads=2
+python -I tools/test_handoff.py
+python -I tools/test_conformance.py
+python -I tools/test_docgen.py
+python -I tools/gen_docs.py --check
+python -I tools/check_docs.py
+python -I tools/conformance.py --quick
+python -I tools/handoff.py doctor --conformance
+```
+
+- **Default members.** `cargo test` runs `neutral-world`, `neutral-parity`, `neutral-ffmpeg` and `neutral-handoff`. The `lift-*` tests replay stored vector sets that are archived, not in the repository, and are marked `#[ignore]`; running them with the archive: [reproduce](docs/reproduce.md#re-creating-the-evidence).
+- **ffmpeg.** The live tests of `neutral-ffmpeg` and the pipeline tests need ffmpeg and ffprobe and print a `SKIPPED` line without them ([tests that need ffmpeg](docs/ffmpeg.md#tests-that-need-ffmpeg)). One `neutral-ffmpeg` test always prints `SKIPPED`, because the pixel format table generator is not in the repository.
+- **twixtor.** `crates/neutral-handoff/tests/cross_twixtor.rs` runs twixtor's `vfx` as a stage of this pipeline and this crate's `stage apply` inside twixtor's `tools/apply.py`, in every order; it skips with a printed reason when ffmpeg, `vfx`, Python or `apply.py` is missing.
+- **Conformance.** `tools/conformance.py --quick` is the covering subset of about a minute; the other modes are in [Handoff](#handoff).
+
+**Continuous integration.** `.github/workflows/ci.yml` (Linux, macOS and Windows, Python 3.12) and `.forgejo/workflows/ci.yml` (Linux in the `node:24-bookworm` container, with Rust from rustup) install ffmpeg (a static 9.0 build on Linux), run `cargo test --release`, build `sapphire`, compile `tools/`, then run `test_handoff.py`, `test_conformance.py`, `conformance.py --quick --allow-absent-peer`, `test_docgen.py`, `gen_docs.py --check` and `check_docs.py`, on every push to `main` and every pull request, with a 60 minute limit. Both can also be started by hand. A new push to a pull request cancels its run in flight; each push to `main` keeps a run of its own. twixtor is not checked out in CI, so every part that needs it prints a `NOT RUN` line, and `--allow-absent-peer` lets only those parts through.
+
+### Smoke test
 
 Confirms a build end to end. Run from the repository root after [Build](#build), with ffmpeg on `PATH`; scratch files go to the git ignored `target/demo/`.
 
@@ -223,28 +259,6 @@ python -I tools/handoff.py doctor
 | `--dry-run` | `[plan] stages on clip.mp4: 160x96, 24.000 fps, 8 bpc (rgba), decode \| pre1 \| encode -> ...`, three `[cmd]` lines, then `[dry-run] nothing was written` |
 | `fn_info.py` | the bank name first with the id beside it, then offset, kind, origin, tier, name check `mismatch` and confirmation `mismatch` |
 | `doctor` | with twixtor checked out beside this repository, one `[ok]` line per check and `doctor: all required checks passed` |
-
-## Tests
-
-From the repository root:
-
-```sh
-cargo test --release --offline -- --test-threads=2
-python -I tools/test_handoff.py
-python -I tools/test_conformance.py
-python -I tools/test_docgen.py
-python -I tools/gen_docs.py --check
-python -I tools/check_docs.py
-python -I tools/conformance.py --quick
-python -I tools/handoff.py doctor --conformance
-```
-
-- **Default members.** `cargo test` runs `neutral-world`, `neutral-parity`, `neutral-ffmpeg` and `neutral-handoff`. The `lift-*` tests replay stored vector sets that are archived, not in the repository, and are marked `#[ignore]`; running them with the archive: [reproduce](docs/reproduce.md#re-creating-the-evidence).
-- **ffmpeg.** The live tests of `neutral-ffmpeg` and the pipeline tests need ffmpeg and ffprobe and print a `SKIPPED` line without them ([tests that need ffmpeg](docs/ffmpeg.md#tests-that-need-ffmpeg)). One `neutral-ffmpeg` test always prints `SKIPPED`, because the pixel format table generator is not in the repository.
-- **twixtor.** `crates/neutral-handoff/tests/cross_twixtor.rs` runs twixtor's `vfx` as a stage of this pipeline and this crate's `stage apply` inside twixtor's `tools/apply.py`, in every order; it skips with a printed reason when ffmpeg, `vfx`, Python or `apply.py` is missing.
-- **Conformance.** `tools/conformance.py --quick` is the covering subset of about a minute; the other modes are in [Handoff](#handoff).
-
-**Continuous integration.** `.github/workflows/ci.yml` (Linux, macOS and Windows, Python 3.12) and `.forgejo/workflows/ci.yml` (Linux in the `node:24-bookworm` container, with Rust from rustup) install ffmpeg (a static 9.0 build on Linux), run `cargo test --release`, build `sapphire`, compile `tools/`, then run `test_handoff.py`, `test_conformance.py`, `conformance.py --quick --allow-absent-peer`, `test_docgen.py`, `gen_docs.py --check` and `check_docs.py`, on every push to `main` and every pull request, with a 60 minute limit. Both can also be started by hand. A new push to a pull request cancels its run in flight; each push to `main` keeps a run of its own. twixtor is not checked out in CI, so every part that needs it prints a `NOT RUN` line, and `--allow-absent-peer` lets only those parts through.
 
 ## Limits
 
@@ -280,10 +294,24 @@ python -I tools/handoff.py doctor --conformance
 | [`docs/handoff.md`](docs/handoff.md) | How sapphire, twixtor and ffmpeg pass raw frames to each other: contract versions, the frame contract, errors and exits, reports, discovery, geometry, the ffmpeg filter stage, packets, commands, platforms, known gaps. |
 | [`docs/stages.md`](docs/stages.md) | How a new provider offers stages and passes conformance. |
 | [`docs/effects.md`](docs/effects.md) | The ten native effects: status, report wording, how to build and run `fx_run`, the runtime data, the tests and the limits they share. |
+| [`docs/roadmap.md`](docs/roadmap.md) | The 20 effects the project aims for: the ten done and the ten planned, in order. |
 | [`docs/generated/index.md`](docs/generated/index.md) | The generated reference: functions by offset range, classes, stubs, effects, parameters, tiers, evidence, crates, missing data. |
 | [`docs/handoff-bench.tsv`](docs/handoff-bench.tsv) | The bench table of `tools/conformance.py --bench`: the wrappers timed on chained stages. |
 
 `docs/index/` holds the machine readable index: `facts.json` (every figure with its source), `functions.jsonl` (one row a function) and `pages.json` (every page with its title and size). `docs/data/` holds the checked in evidence, among it the function map `docs/data/FUNCTION_MAP.tsv`; `docs/generated/`, `docs/index/` and the figures in every page are written from it by `python -I tools/gen_docs.py`, so change the data, then regenerate.
+
+### Sources of truth
+
+For agents and scripts:
+
+| Question | Ask |
+|---|---|
+| One function: bank name, offset, size, origin, tier, parity, evidence, name check, confirmation, crate file, callers, callees | `python -I tools/fn_info.py ID\|NAME\|OFFSET [--json]`: the function by id, bank name or offset. |
+| Every function at once | `docs/index/functions.jsonl`: one JSON object a function, every field. |
+| Any figure quoted in a document | `docs/index/facts.json`: the value, text and source of every figure. |
+| The stages this repository provides | `target/release/sapphire stage list --json`: the stage manifest. |
+| Every stage of sapphire and twixtor, with a ready stage command | `python -I tools/handoff.py stages --json`: each stage with the command line a wrapper takes. |
+| What a pipeline run will do | `target/release/sapphire INPUT [EFFECT] ... --dry-run`: the plan and every command, nothing written. |
 
 ## Legal
 

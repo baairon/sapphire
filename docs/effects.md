@@ -27,7 +27,7 @@ An effect counts as rebuilt when every one of its registered styles passes the p
 
 ## Report wording
 
-The text each effect is reported with, copied from its paragraph in the recovery workspace.
+The text each effect is reported with, copied verbatim from its paragraph in the full report. The wording is kept exactly as hashed below, so labels in it such as row, run and certificate codes name the evidence runs and are not explained here.
 
 ### `S_Blur`
 
@@ -134,9 +134,9 @@ Without the bundle the product builds and its tests pass, but no effect renders:
 
 The native code was written by reading the original plugin's machine code and data. Whether it may be published or distributed, and under what licence, is the owner's decision; see [Legal](../README.md#legal).
 
-The full report, the ten paragraphs with their exclusion tables and the runs behind them are kept in the recovery workspace, not in this repository. This page carries their SHA-256 so that a copy can be checked.
+The full report, the ten paragraphs with their exclusion tables and the runs behind them are kept outside this repository. This page carries their SHA-256 so that a copy can be checked.
 
-The full report (`FINAL_REPORT_W141_20261105.md`): `b7ee202da80faf7ce31f95ea5cced46badf3f1b7dacdbec8dc1ea8b865e2910c`
+The full report: `b7ee202da80faf7ce31f95ea5cced46badf3f1b7dacdbec8dc1ea8b865e2910c`
 
 <!--gen:effects_paragraph_sha-->
 | effect | SHA-256 of its paragraph |

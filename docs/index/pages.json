@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 28803,
+  "bytes": 30014,
   "generated": false
  },
  {
@@ -38,7 +38,7 @@
   "path": "docs/assumptions.md",
   "title": "Assumptions and limits",
   "line": "What the parity figures rest on, and how many rows depend on each assumption.",
-  "bytes": 13647,
+  "bytes": 13649,
   "generated": false
  },
  {
@@ -66,14 +66,14 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Ten of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 29601,
+  "bytes": 29694,
   "generated": false
  },
  {
   "path": "docs/evidence.md",
   "title": "Evidence and audit",
   "line": "The files that record each function's tier, status and evidence, their columns, the ledger note grammar, and the audit of the older P2v rows.",
-  "bytes": 19216,
+  "bytes": 19242,
   "generated": false
  },
  {
@@ -297,7 +297,7 @@
   "path": "docs/parity.md",
   "title": "Parity",
   "line": "How many functions of the dump match the build they replace, and under which standard.",
-  "bytes": 9843,
+  "bytes": 9789,
   "generated": false
  },
  {
@@ -305,6 +305,13 @@
   "title": "Reproduce",
   "line": "What reruns from this repository alone, what needs the archive `sapphire_archive.zip`, and how the parity evidence is re-created from it.",
   "bytes": 3516,
+  "generated": false
+ },
+ {
+  "path": "docs/roadmap.md",
+  "title": "Roadmap",
+  "line": "The goal is 20 effects ported to native Rust: the ten that run today plus the ten below.",
+  "bytes": 1861,
   "generated": false
  },
  {
