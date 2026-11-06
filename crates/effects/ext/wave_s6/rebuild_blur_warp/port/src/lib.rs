@@ -56,7 +56,7 @@ pub struct ImageObj {
     /// ripmap level 0 height [[img] field]
     pub h0: i32,
     /// plane (0,0) of the ripmap: the buffer [[[img] field] field]; data pointer = buffer + 4 * (n + n * (w0 + 3)) bytes
-    pub plane00: Vec<f32>,
+    pub plane00: std::sync::Arc<Vec<f32>>,
 }
 
 /// The record `rsi` (the body's "this"): count at and the S0 fields. All explicit.
@@ -260,7 +260,7 @@ mod tests {
         (
             ThisObj { p1_const: 1, p1x: vec![0.5], p1y: vec![1.5], p2_const: 1, p2x: vec![0.7], p2y: vec![1.2], f_cc: 0.5, assumption_a: 1.0, assumption_b: 1.0, mode_x: 0, mode_y: 0, flag_cell_a: 0 },
             Rec { count: 1, aspect_block_d: h as f32 / w as f32, assumption_e: h as f32, assumption_c: 0, assumption_d: 0, assumption_f: 0.0, assumption_g: w as f32, assumption_h: 0.0 },
-            ImageObj { width: w, height: h, n, w0: w, h0: h, plane00: plane },
+            ImageObj { width: w, height: h, n, w0: w, h0: h, plane00: std::sync::Arc::new(plane) },
         )
     }
 

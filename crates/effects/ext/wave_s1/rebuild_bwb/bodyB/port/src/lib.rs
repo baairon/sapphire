@@ -556,7 +556,7 @@ mod tests {
                 }
             }
         }
-        (st, [0.0, 1.0, 2.0, 0.5, 2.0], Host { port_blk_a: 0, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 8.0, ws: 8.0 }, Plane { buf, origin: 100 })
+        (st, [0.0, 1.0, 2.0, 0.5, 2.0], Host { port_blk_a: 0, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 8.0, ws: 8.0 }, Plane { buf: std::sync::Arc::new(buf), origin: 100 })
     }
 
     #[test]
@@ -615,7 +615,7 @@ mod tests {
             p1_const: true, p2_const: true, flag_cell_a: 0, mode_x: 0, mode_y: 0, acc_ptr: 0, acc_stride: 32,
         };
         let h = Host { port_blk_a: 0, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 6.0, ws: 8.0 };
-        let pl = Plane { buf: vec![0.0; 100], origin: 50 };
+        let pl = Plane { buf: std::sync::Arc::new(vec![0.0; 100]), origin: 50 };
         let mut out = vec![vec![0.0; 1], vec![0.0; 1]];
         assert_eq!(run_planes_b(&p, &inp, &h, &pl, None, &mut out), Err(Unsupported::P1Needed));
     }

@@ -210,8 +210,14 @@ pub struct WrapArgs {
 }
 
 pub fn wrapper_args(p: &WarpPrim, idx: i32) -> Result<WrapArgs, WarpError> {
-    let (a1, a2) = if p.const_coords { (vec![p.const_a1], vec![p.const_a2]) } else { (tail(&p.a1_arr, idx)?.to_vec(), tail(&p.a2_arr, idx)?.to_vec()) };
-    Ok(WrapArgs { a1, a2, const_coords: p.const_coords, c1: tail(&p.c1_arr, idx)?.to_vec(), c2: tail(&p.c2_arr, idx)?.to_vec(), flag: p.flag as i32, mx: p.mx, my: p.my })
+    wrapper_args_n(p, idx, None)
+}
+
+/// As `wrapper_args`, copying at most `cap` entries of each array tail (a row reads `count` entries).
+pub fn wrapper_args_n(p: &WarpPrim, idx: i32, cap: Option<usize>) -> Result<WrapArgs, WarpError> {
+    let capped = |v: &[f32]| -> Vec<f32> { match cap { Some(c) => v[..c.min(v.len())].to_vec(), None => v.to_vec() } };
+    let (a1, a2) = if p.const_coords { (vec![p.const_a1], vec![p.const_a2]) } else { (capped(tail(&p.a1_arr, idx)?), capped(tail(&p.a2_arr, idx)?)) };
+    Ok(WrapArgs { a1, a2, const_coords: p.const_coords, c1: capped(tail(&p.c1_arr, idx)?), c2: capped(tail(&p.c2_arr, idx)?), flag: p.flag as i32, mx: p.mx, my: p.my })
 }
 
 /// True when takes its error path (aspect == 0 in the image geometry block: it logs through and returns).
@@ -238,7 +244,7 @@ pub fn slot53_warp(
         return Err(WarpError::ContractLimit { n });
     }
     let obj = build_ctx(rec, geom);
-    let w = wrapper_args(p, rec.idx)?;
+    let w = wrapper_args_n(p, rec.idx, Some(rec.count.max(0) as usize))?;
     let a = DriverArgs { a1: &w.a1, a2: &w.a2, const_coords: w.const_coords, c1: &w.c1, c2: &w.c2, flag: w.flag, mx: w.mx, my: w.my };
     warp_driver::run(&obj, img, lat, &a, out).map_err(WarpError::Driver)
 }
