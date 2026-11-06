@@ -1,5 +1,5 @@
 //! Timing of the neighbourhood kernels at 1080p, CPU kernel against the device (PoCL on the CPU here). Ignored by default:
-//! `cargo test --release -p fx_exec --test device_k3_perf -- --ignored --nocapture --test-threads=1`.
+//! `cargo test --release -p fx_exec --test device_neighbourhood_perf -- --ignored --nocapture --test-threads=1`.
 
 use fx_device::{Backend as Handle, DeviceKind};
 use fx_exec::backend::{Backend, DeviceBackend, NodeCall};
@@ -31,7 +31,7 @@ fn c(v: &[f32]) -> Val {
 #[ignore]
 fn time_blur_sharpen_grad_static2_and_edge_aware_sharpen_at_1080p() {
     let Handle::Device(ctx) = fx_device::select(DeviceKind::Gpu) else {
-        println!("NOT RUN: no usable OpenCL device");
+        not_run("no usable OpenCL device");
         return;
     };
     let mut b = DeviceBackend::new(ctx);
@@ -78,4 +78,12 @@ fn time_blur_sharpen_grad_static2_and_edge_aware_sharpen_at_1080p() {
         println!("PERF {class}: cpu {:.3} s, device first {:.3} s, device second {:.3} s, bytes equal {same}", cpu.as_secs_f64(), dev_build.as_secs_f64(), dev.as_secs_f64());
         assert!(same);
     }
+}
+
+/// A test that needs a device and found none: it prints NOT RUN, or fails when `SAPPHIRE_REQUIRE_DEVICE=1`.
+fn not_run(why: &str) {
+    if std::env::var("SAPPHIRE_REQUIRE_DEVICE").as_deref() == Ok("1") {
+        panic!("device required but unavailable: {why}");
+    }
+    println!("NOT RUN: {why}");
 }

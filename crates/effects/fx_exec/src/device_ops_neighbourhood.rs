@@ -2,7 +2,7 @@
 //!
 //! Every op follows its CPU function (`kernels2::*_k`) with the same host arithmetic (driver radii, coefficients, final scale, the
 //! edge aware driver's radii and plane bookkeeping come from the CPU crates themselves) and runs the per sample or per row and
-//! column work in the kernels of `fx_device::kernels_k3`, in the CPU's operation order. A call the kernels do not cover (a ripmap
+//! column work in the kernels of `fx_device::kernels_neighbourhood`, in the CPU's operation order. A call the kernels do not cover (a ripmap
 //! or constant where a plane is read, a width the CPU refuses, an error the CPU would report, a driver state with neither pass)
 //! returns `DevError::Unsupported` and the executor runs that node on the CPU with the same arguments.
 
@@ -749,7 +749,7 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
 // self-check corpora
 
 /// Frame shapes of the neighbourhood corpora: the common ones plus frames wide and tall enough for 64 sample windows.
-const DIMS_K3: &[(usize, usize)] = &[(1, 1), (2, 1), (1, 3), (3, 5), (7, 1), (31, 1), (33, 2), (16, 16), (257, 1), (45, 23), (300, 4), (5, 300), (129, 3)];
+const DIMS_NEIGHBOURHOOD: &[(usize, usize)] = &[(1, 1), (2, 1), (1, 3), (3, 5), (7, 1), (31, 1), (33, 2), (16, 16), (257, 1), (45, 23), (300, 4), (5, 300), (129, 3)];
 
 fn lanes4(v: &[f32]) -> [u32; 4] {
     let last = *v.last().unwrap_or(&0.0);
@@ -801,7 +801,7 @@ fn blur_corpus() -> Vec<SelfCase> {
         (5.9, 8.0, -1.0, [1.0, 1.0, 1.0, 1.0], 4, 0.0, 0, 400, None),
     ];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_K3.iter().enumerate() {
+    for (di, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
         let n = w * h;
         for (si, p) in sets.iter().enumerate() {
             for tag in [1usize, 2, 3, 4] {
@@ -841,7 +841,7 @@ fn blur_corpus() -> Vec<SelfCase> {
 fn masked_blur_corpus() -> Vec<SelfCase> {
     let sets: [(f32, f32, f32, f32, i32); 5] = [(0.5, 0.5, 2.0, 0.0, 0), (0.3, 0.8, 0.0, 1.0, 0), (1.3, 0.2, 1.0, 1.0, 0), (0.0, 0.0, 2.0, 0.0, 0), (8.0, 6.0, 2.0, 1.0, 400)];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_K3.iter().enumerate() {
+    for (di, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
         let n = w * h;
         for (si, p) in sets.iter().enumerate() {
             for tag in [1usize, 3, 4] {
@@ -887,7 +887,7 @@ fn grad_corpus() -> Vec<SelfCase> {
         (3.0, 1.5, 1.0, 1.0, 0, 400),
     ];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_K3.iter().enumerate() {
+    for (di, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
         if w < 2 {
             continue;
         }
@@ -933,7 +933,7 @@ fn sharpen_corpus() -> Vec<SelfCase> {
         (6.0, [1.0, 2.0, 0.5, 1.0], 0, false),
     ];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_K3.iter().enumerate() {
+    for (di, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
         let n = w * h;
         for (si, p) in sets.iter().enumerate() {
             for tag in [1usize, 2, 3, 4] {
@@ -968,7 +968,7 @@ fn sharpen_corpus() -> Vec<SelfCase> {
 
 fn static2_corpus() -> Vec<SelfCase> {
     let mut out = Vec::new();
-    for &(w, h) in DIMS_K3 {
+    for &(w, h) in DIMS_NEIGHBOURHOOD {
         for (i, seed) in [0i32, 1, -1, 4096, 0x7fff_ffff, i32::MIN, 123_456_789].iter().enumerate() {
             let mut kp = KParams::standin();
             kp.static2_seed_a = *seed;
@@ -1025,6 +1025,31 @@ fn esh_corpus() -> Vec<SelfCase> {
                 out.push(SelfCase { name: format!("{w}x{h} set {si} tag {tag}"), dims: (w, h), tag: tag as i32, args, consts, kp: Some(kp) });
             }
         }
+    }
+    // mask values on both sides of the two double precision thresholds of the weight functions (compared after widening to double)
+    {
+        let edges: Vec<f32> = [esh3_jobs::LOW, esh3_jobs::HIGH]
+            .iter()
+            .flat_map(|&t| {
+                let b = (t as f32).to_bits();
+                (b.saturating_sub(2)..=b + 2).map(f32::from_bits)
+            })
+            .chain([0.0, 1.0, f32::MIN_POSITIVE, 1.0e-30])
+            .collect();
+        let (w, h) = (16usize, 16usize);
+        let n = w * h;
+        let mut m = image_of(1, n, 11, true);
+        for (i, v) in m.planes[0].iter_mut().enumerate() {
+            *v = edges[i % edges.len()];
+        }
+        out.push(SelfCase {
+            name: format!("{w}x{h} mask at the double thresholds"),
+            dims: (w, h),
+            tag: 3,
+            args: vec![image_of(3, n, 12, true), m],
+            consts: vec![cst(2, &[4.0]), cst(3, &[0.0, 0.0]), cst(4, &[3.0]), cst(5, &[0.5]), cst(6, &[1.0]), cst(7, &[1.0, 0.75, 0.5, 0.25]), cst(8, &[1.0, 1.0, 1.0]), cst(9, &[1.0])],
+            kp: Some(KParams::standin()),
+        });
     }
     // a constant source with a plane mask
     for &(w, h) in &[(3usize, 5usize), (16, 16)] {

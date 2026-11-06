@@ -17,8 +17,8 @@ use crate::types::{Arg, Image, KParams};
 use fx_device::cl::Arg as ClArg;
 use fx_device::selfcheck::{adversarial_f32, compare_f32, Mismatch, NanPayloads, Tally};
 use fx_device::{DevError, DevImage, Session};
-use crate::device_ops_k2 as k2;
-use crate::device_ops_k2b as k2b;
+use crate::device_ops_warp as warp;
+use crate::device_ops_ripmap as ripmap;
 use std::sync::Arc;
 
 /// What an operand looks like, for `accepts`.
@@ -66,65 +66,65 @@ pub struct DeviceOp {
 pub static DEVICE_OPS: &[DeviceOp] = &[
     DeviceOp { class: "copy", accepts: copy_accepts, run: copy_run, corpus: copy_corpus },
     DeviceOp { class: "one_minus", accepts: one_minus_accepts, run: one_minus_run, corpus: one_minus_corpus },
-    // K2: sampling and warp ops (device_ops_k2.rs); their self-check runs in device_ops_k2::selfcheck
-    DeviceOp { class: "warp_rel", accepts: k2::warp_rel_accepts, run: k2::warp_rel_run, corpus: k2::empty_corpus },
-    DeviceOp { class: "warp", accepts: k2::warp_accepts, run: k2::warp_run, corpus: k2::empty_corpus },
-    DeviceOp { class: "rotate", accepts: k2::rotate_accepts, run: k2::rotate_run, corpus: k2::empty_corpus },
-    DeviceOp { class: "perspective", accepts: k2::persp_accepts, run: k2::persp_run, corpus: k2::empty_corpus },
-    DeviceOp { class: "perspective_alpha", accepts: k2::persp_alpha_accepts, run: k2::persp_alpha_run, corpus: k2::empty_corpus },
-    // K2B: the ripmap family (device_ops_k2b.rs); make_mipmap leaves its pyramid on the device (Val::DevMip)
-    DeviceOp { class: "make_mipmap", accepts: k2b::make_mipmap_accepts, run: k2b::make_mipmap_run, corpus: k2b::empty_corpus },
-    DeviceOp { class: "blur_warp", accepts: k2b::blur_warp_accepts, run: k2b::blur_warp_run, corpus: k2b::empty_corpus },
-    // K1: pointwise ops (device_ops_k1.rs)
-    crate::device_ops_k1::ADD,
-    crate::device_ops_k1::SUB,
-    crate::device_ops_k1::MUL,
-    crate::device_ops_k1::DIV,
-    crate::device_ops_k1::MAX,
-    crate::device_ops_k1::MIN,
-    crate::device_ops_k1::DIFF,
-    crate::device_ops_k1::ABS,
-    crate::device_ops_k1::NEGATE,
-    crate::device_ops_k1::IF_PLUS,
-    crate::device_ops_k1::IF_GT,
-    crate::device_ops_k1::CLAMP,
-    crate::device_ops_k1::V2,
-    crate::device_ops_k1::V3,
-    crate::device_ops_k1::V4,
-    crate::device_ops_k1::COERCE_UP,
-    crate::device_ops_k1::COERCE_UP_A1,
-    crate::device_ops_k1::COERCE_TO,
-    crate::device_ops_k1::COERCE_TO_ALPHA,
-    crate::device_ops_k1::COERCE_TO_V3,
-    crate::device_ops_k1::COERCE_TO_V4,
-    crate::device_ops_k1::COERCE_UP_TO_V3,
-    crate::device_ops_k1::REMOVE_ALPHA_OP,
-    crate::device_ops_k1::V3_TO_V4,
-    crate::device_ops_k1::V3_TO_V4_IF4,
-    crate::device_ops_k1::ELEMENT_OF,
-    crate::device_ops_k1::MAX_ELEMENT,
-    crate::device_ops_k1::MIN_ELEMENT,
-    crate::device_ops_k1::SCREEN_SUPER,
-    crate::device_ops_k1::INTERP,
-    crate::device_ops_k1::DISSOLVE,
-    crate::device_ops_k1::COMP_PREMULT,
-    crate::device_ops_k1::COMP_RGBA,
-    crate::device_ops_k1::POSTDIVIDE,
-    crate::device_ops_k1::ROUND,
-    crate::device_ops_k1::SCALE_RGB,
-    crate::device_ops_k1::ADD_RGB,
-    crate::device_ops_k1::SAT_SCALE,
-    crate::device_ops_k1::HUE_SHIFT,
-    crate::device_ops_k1::HUE_SHIFT_PRESERVE_LUMA,
-    crate::device_ops_k1::MONOCHROME,
-    crate::device_ops_k1::MONOCHROME_A,
-    // K3: blur family, sharpen, edge_aware_sharpen and static2 (device_ops_k3.rs)
-    crate::device_ops_k3::BLUR,
-    crate::device_ops_k3::MASKED_BLUR,
-    crate::device_ops_k3::GRAD,
-    crate::device_ops_k3::SHARPEN,
-    crate::device_ops_k3::EDGE_AWARE_SHARPEN,
-    crate::device_ops_k3::STATIC2,
+    // sampling and warp ops (device_ops_warp.rs); their self-check runs in device_ops_warp::selfcheck
+    DeviceOp { class: "warp_rel", accepts: warp::warp_rel_accepts, run: warp::warp_rel_run, corpus: warp::empty_corpus },
+    DeviceOp { class: "warp", accepts: warp::warp_accepts, run: warp::warp_run, corpus: warp::empty_corpus },
+    DeviceOp { class: "rotate", accepts: warp::rotate_accepts, run: warp::rotate_run, corpus: warp::empty_corpus },
+    DeviceOp { class: "perspective", accepts: warp::persp_accepts, run: warp::persp_run, corpus: warp::empty_corpus },
+    DeviceOp { class: "perspective_alpha", accepts: warp::persp_alpha_accepts, run: warp::persp_alpha_run, corpus: warp::empty_corpus },
+    // the ripmap family (device_ops_ripmap.rs); make_mipmap leaves its pyramid on the device (Val::DevMip)
+    DeviceOp { class: "make_mipmap", accepts: ripmap::make_mipmap_accepts, run: ripmap::make_mipmap_run, corpus: ripmap::empty_corpus },
+    DeviceOp { class: "blur_warp", accepts: ripmap::blur_warp_accepts, run: ripmap::blur_warp_run, corpus: ripmap::empty_corpus },
+    // pointwise ops (device_ops_pointwise.rs)
+    crate::device_ops_pointwise::ADD,
+    crate::device_ops_pointwise::SUB,
+    crate::device_ops_pointwise::MUL,
+    crate::device_ops_pointwise::DIV,
+    crate::device_ops_pointwise::MAX,
+    crate::device_ops_pointwise::MIN,
+    crate::device_ops_pointwise::DIFF,
+    crate::device_ops_pointwise::ABS,
+    crate::device_ops_pointwise::NEGATE,
+    crate::device_ops_pointwise::IF_PLUS,
+    crate::device_ops_pointwise::IF_GT,
+    crate::device_ops_pointwise::CLAMP,
+    crate::device_ops_pointwise::V2,
+    crate::device_ops_pointwise::V3,
+    crate::device_ops_pointwise::V4,
+    crate::device_ops_pointwise::COERCE_UP,
+    crate::device_ops_pointwise::COERCE_UP_A1,
+    crate::device_ops_pointwise::COERCE_TO,
+    crate::device_ops_pointwise::COERCE_TO_ALPHA,
+    crate::device_ops_pointwise::COERCE_TO_V3,
+    crate::device_ops_pointwise::COERCE_TO_V4,
+    crate::device_ops_pointwise::COERCE_UP_TO_V3,
+    crate::device_ops_pointwise::REMOVE_ALPHA_OP,
+    crate::device_ops_pointwise::V3_TO_V4,
+    crate::device_ops_pointwise::V3_TO_V4_IF4,
+    crate::device_ops_pointwise::ELEMENT_OF,
+    crate::device_ops_pointwise::MAX_ELEMENT,
+    crate::device_ops_pointwise::MIN_ELEMENT,
+    crate::device_ops_pointwise::SCREEN_SUPER,
+    crate::device_ops_pointwise::INTERP,
+    crate::device_ops_pointwise::DISSOLVE,
+    crate::device_ops_pointwise::COMP_PREMULT,
+    crate::device_ops_pointwise::COMP_RGBA,
+    crate::device_ops_pointwise::POSTDIVIDE,
+    crate::device_ops_pointwise::ROUND,
+    crate::device_ops_pointwise::SCALE_RGB,
+    crate::device_ops_pointwise::ADD_RGB,
+    crate::device_ops_pointwise::SAT_SCALE,
+    crate::device_ops_pointwise::HUE_SHIFT,
+    crate::device_ops_pointwise::HUE_SHIFT_PRESERVE_LUMA,
+    crate::device_ops_pointwise::MONOCHROME,
+    crate::device_ops_pointwise::MONOCHROME_A,
+    // blur family, sharpen, edge_aware_sharpen and static2 (device_ops_neighbourhood.rs)
+    crate::device_ops_neighbourhood::BLUR,
+    crate::device_ops_neighbourhood::MASKED_BLUR,
+    crate::device_ops_neighbourhood::GRAD,
+    crate::device_ops_neighbourhood::SHARPEN,
+    crate::device_ops_neighbourhood::EDGE_AWARE_SHARPEN,
+    crate::device_ops_neighbourhood::STATIC2,
 ];
 
 /// Ops allowed to run on a device.
@@ -215,7 +215,7 @@ fn one_minus_corpus() -> Vec<SelfCase> {
 }
 
 /// A self-check operand that is a constant: an image with `n == 0` whose planes 0..3 hold the four lane words and plane 4 the lane count
-/// (see `device_ops_k1::const_image`).
+/// (see `device_ops_pointwise::const_image`).
 fn case_const(i: &Image) -> Option<(usize, [u32; 4])> {
     if i.n == 0 && i.planes.len() == 5 {
         let l = |k: usize| i.planes[k][0].to_bits();
@@ -228,11 +228,11 @@ fn case_const(i: &Image) -> Option<(usize, [u32; 4])> {
 /// Runs the op on the device and on the CPU kernel for every corpus case and compares the bits. A device output
 /// with a NaN is allowed only where the CPU output has a NaN too (the executor reruns such a node on the CPU).
 pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String> {
-    if k2::handles(op.class) {
-        return k2::selfcheck(session, op);
+    if warp::handles(op.class) {
+        return warp::selfcheck(session, op);
     }
-    if k2b::handles(op.class) {
-        return k2b::selfcheck(session, op);
+    if ripmap::handles(op.class) {
+        return ripmap::selfcheck(session, op);
     }
     let mut tally = Tally { outputs: 0, nan_payloads: NanPayloads::Same };
     for case in (op.corpus)() {

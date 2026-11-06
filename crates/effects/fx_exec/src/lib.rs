@@ -11,12 +11,14 @@ pub mod aspect;
 pub mod backend;
 /// the per op device table: kernels, allowlist, cpu_only reasons and the self-check
 pub mod device_ops;
-/// device kernels of the pointwise ops
-pub mod device_ops_k1;
-pub mod device_ops_k2;
-pub mod device_ops_k2b;
-/// device kernels of blur, masked_blur, grad, sharpen, edge_aware_sharpen and static2
-pub mod device_ops_k3;
+/// device ops of the pointwise family
+pub mod device_ops_pointwise;
+/// device ops of the sampling and warp family
+pub mod device_ops_warp;
+/// device ops of the ripmap family (make_mipmap, blur_warp)
+pub mod device_ops_ripmap;
+/// device ops of blur, masked_blur, grad, sharpen, edge_aware_sharpen and static2
+pub mod device_ops_neighbourhood;
 pub mod fxrun;
 pub mod cmds;
 pub mod nanrule;

@@ -1,31 +1,31 @@
-//! K2B ops (make_mipmap, blur_warp): each passes its device self-check against the CPU kernel, and a device built ripmap
+//! Ripmap ops (make_mipmap, blur_warp): each passes its device self-check against the CPU kernel, and a device built ripmap
 //! feeds the device samplers (blur_warp, warp_rel, warp) with the same bytes as the host ripmap.
 //! Prints NOT RUN without an OpenCL device.
 
 use fx_device::{Backend as Handle, DeviceKind};
 use fx_exec::backend::{Backend, DeviceBackend};
 use fx_exec::device_ops::DEVICE_OPS;
-use fx_exec::device_ops_k2b::{selfcheck_cov, CLASSES};
+use fx_exec::device_ops_ripmap::{selfcheck_cov, CLASSES};
 
 fn device() -> Option<std::sync::Arc<fx_device::DeviceCtx>> {
     match fx_device::select(DeviceKind::Gpu) {
         Handle::Device(d) => Some(d),
         other => {
-            println!("NOT RUN: no usable OpenCL device ({})", other.describe());
+            not_run(&format!("no usable OpenCL device ({})", other.describe()));
             None
         }
     }
 }
 
 #[test]
-fn the_k2b_ops_pass_their_self_check_and_are_admitted() {
+fn the_ripmap_ops_pass_their_self_check_and_are_admitted() {
     let Some(ctx) = device() else { return };
     for class in CLASSES {
         let op = DEVICE_OPS.iter().find(|o| o.class == *class).expect("op row");
         let t = std::time::Instant::now();
         match selfcheck_cov(&ctx.session, op) {
-            Ok((tally, cov)) => println!("K2B {class}: {tally}; {cov:?}; {:.2}s", t.elapsed().as_secs_f64()),
-            Err(m) => panic!("K2B {class}: {m}"),
+            Ok((tally, cov)) => println!("ripmap {class}: {tally}; {cov:?}; {:.2}s", t.elapsed().as_secs_f64()),
+            Err(m) => panic!("ripmap {class}: {m}"),
         }
     }
     let b = DeviceBackend::with_allowlist(ctx, CLASSES);
@@ -89,4 +89,12 @@ fn a_device_built_ripmap_feeds_the_device_samplers_with_the_cpu_bytes() {
             assert_eq!(m.materialize().unwrap().ripmap.planes, cpu_mip.ripmap.planes);
         }
     }
+}
+
+/// A test that needs a device and found none: it prints NOT RUN, or fails when `SAPPHIRE_REQUIRE_DEVICE=1`.
+fn not_run(why: &str) {
+    if std::env::var("SAPPHIRE_REQUIRE_DEVICE").as_deref() == Ok("1") {
+        panic!("device required but unavailable: {why}");
+    }
+    println!("NOT RUN: {why}");
 }

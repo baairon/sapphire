@@ -1,6 +1,6 @@
-//! Device ops of builder k1: pointwise arithmetic and logic, vector shaping and coercions, interpolation and compositing,
+//! Device ops: pointwise arithmetic and logic, vector shaping and coercions, interpolation and compositing,
 //! colour. Each op has an `accepts` that mirrors the operand resolution of the CPU kernel (counts, constants, channel
-//! clamps, tags) and refuses everything it does not cover, a `run` that launches the kernels of `fx_device::kernels_k1`,
+//! clamps, tags) and refuses everything it does not cover, a `run` that launches the kernels of `fx_device::kernels_pointwise`,
 //! and a self-check corpus. The CPU kernel stays the reference: the self-check compares bit for bit.
 
 use crate::backend::NodeCall;
@@ -78,12 +78,12 @@ fn check_len(c: &NodeCall, args: &[DevArg]) -> Result<(), DevError> {
 }
 
 fn zero(s: &Arc<Session>, out: &DevImage, p: usize, n: u32) -> Result<(), DevError> {
-    s.launch("k1_fill_f32", n as usize, &[out.plane(p).arg(), ClArg::U32(0), ClArg::U32(n)])?;
+    s.launch("pointwise_fill_f32", n as usize, &[out.plane(p).arg(), ClArg::U32(0), ClArg::U32(n)])?;
     Ok(())
 }
 
 fn fill(s: &Arc<Session>, out: &DevImage, p: usize, bits: u32, n: u32) -> Result<(), DevError> {
-    s.launch("k1_fill_f32", n as usize, &[out.plane(p).arg(), ClArg::U32(bits), ClArg::U32(n)])?;
+    s.launch("pointwise_fill_f32", n as usize, &[out.plane(p).arg(), ClArg::U32(bits), ClArg::U32(n)])?;
     Ok(())
 }
 
@@ -131,7 +131,7 @@ fn bin_plan(c: &NodeCall, args: &[ArgShape]) -> Result<BinPlan, &'static str> {
 }
 
 fn bin_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], op: u32) -> Result<DevImage, DevError> {
-    bin_run_k(s, c, args, op, "k1_bin_f32", "k1_ext_f32")
+    bin_run_k(s, c, args, op, "pointwise_bin_f32", "pointwise_ext_f32")
 }
 
 /// The binary plan with the given main and extension kernels (screen_super has the same operand shapes as `+`).
@@ -201,7 +201,7 @@ fn un_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], op: u32) -> Result<De
     let tag = c.tag as usize;
     let out = DevImage::alloc(s, tag, c.n)?;
     for p in 0..tag {
-        s.launch("k1_un_f32", c.n, &[src.plane(p).arg(), out.plane(p).arg(), ClArg::U32(n), ClArg::U32(op)])?;
+        s.launch("pointwise_un_f32", c.n, &[src.plane(p).arg(), out.plane(p).arg(), ClArg::U32(n), ClArg::U32(op)])?;
     }
     Ok(out)
 }
@@ -312,7 +312,7 @@ fn sel_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], kind: u32) -> Result
         } else {
             plane(&args[iy], pidx(cy, sel.two_y))?
         };
-        s.launch("k1_sel_f32", c.n, &[pa, pb, px, py, o, ClArg::U32(n), ClArg::U32(kind), ClArg::U32(cm), ClArg::U32(wa), ClArg::U32(wb), ClArg::U32(wx), ClArg::U32(wy)])?;
+        s.launch("pointwise_sel_f32", c.n, &[pa, pb, px, py, o, ClArg::U32(n), ClArg::U32(kind), ClArg::U32(cm), ClArg::U32(wa), ClArg::U32(wb), ClArg::U32(wx), ClArg::U32(wy)])?;
     }
     Ok(out)
 }
@@ -408,7 +408,7 @@ fn clamp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage
             }
         }
         s.launch(
-            "k1_clamp_f32",
+            "pointwise_clamp_f32",
             c.n,
             &[p0, p1, p2, out.plane(ch).arg(), ClArg::U32(n), ClArg::U32(shape), ClArg::U32(vend), ClArg::U32(w0), ClArg::U32(w1), ClArg::U32(w2), ClArg::U32(CLAMP_ALLONES)],
         )?;
@@ -801,7 +801,7 @@ fn reduce_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], op: u32) -> Resul
     let DevArg::Img(img) = &args[0] else { return Err(unsup("operand is not an image")) };
     let out = DevImage::alloc(s, 1, c.n)?;
     let pl = |k: usize| img.plane(k.min(count - 1)).arg();
-    s.launch("k1_reduce_f32", c.n, &[pl(0), pl(1), pl(2), pl(3), out.plane(0).arg(), ClArg::U32(n), ClArg::U32(count as u32), ClArg::U32(op)])?;
+    s.launch("pointwise_reduce_f32", c.n, &[pl(0), pl(1), pl(2), pl(3), out.plane(0).arg(), ClArg::U32(n), ClArg::U32(count as u32), ClArg::U32(op)])?;
     Ok(out)
 }
 
@@ -931,7 +931,7 @@ fn interp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImag
             let In::Plane { arg, idx } = it else { return Err(unsup("matte plane")) };
             s.launch("copy_f32", c.n, &[plane(&args[arg], idx)?, out.plane(ch).arg(), ClArg::U32(n)])?;
         } else {
-            launch3(s, c, "k1_interp_f32", args, dh, [ia, ib, it], out.plane(ch).arg(), &[])?;
+            launch3(s, c, "pointwise_interp_f32", args, dh, [ia, ib, it], out.plane(ch).arg(), &[])?;
         }
     }
     Ok(out)
@@ -965,7 +965,7 @@ fn dissolve_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevIm
             In::Plane { arg, idx }
         };
         let it = if k[2].1 { lane_in(args, 2, ch) } else { In::Plane { arg: 2, idx: ch.min(k[2].0 - 1) } };
-        launch3(s, c, "k1_dissolve_f32", args, dh, [pick(0), pick(1), it], out.plane(ch).arg(), &[])?;
+        launch3(s, c, "pointwise_dissolve_f32", args, dh, [pick(0), pick(1), it], out.plane(ch).arg(), &[])?;
     }
     Ok(out)
 }
@@ -1033,7 +1033,7 @@ fn prem_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage,
         written[ch] = true;
         match p {
             PremChan::FillOne => fill(s, &out, ch, ONE_BITS, n)?,
-            PremChan::Compute { ins, c3 } => launch3(s, c, "k1_prem_f32", args, dh, *ins, out.plane(ch).arg(), &[u32::from(*c3)])?,
+            PremChan::Compute { ins, c3 } => launch3(s, c, "pointwise_prem_f32", args, dh, *ins, out.plane(ch).arg(), &[u32::from(*c3)])?,
         }
     }
     for p in 0..tag {
@@ -1149,7 +1149,7 @@ fn comp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage,
             for (ch, p) in v.iter().enumerate() {
                 match p {
                     CompChan::FillOne => fill(s, &out, ch, ONE_BITS, n)?,
-                    CompChan::Compute { ins, mode } => launch3(s, c, "k1_comp_f32", args, dh, *ins, out.plane(ch).arg(), &[*mode])?,
+                    CompChan::Compute { ins, mode } => launch3(s, c, "pointwise_comp_f32", args, dh, *ins, out.plane(ch).arg(), &[*mode])?,
                 }
             }
             for p in v.len()..tag {
@@ -1201,11 +1201,11 @@ fn postdiv_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevIma
     let nc = tag.min(3);
     let ncol = if tag <= 2 { 1 } else { nc };
     for k in 0..ncol {
-        s.launch("k1_postdiv_f32", c.n, &[src.plane(k).arg(), pa.arg(), out.plane(k).arg(), ClArg::U32(n), ClArg::U32(colour_mode)])?;
+        s.launch("pointwise_postdiv_f32", c.n, &[src.plane(k).arg(), pa.arg(), out.plane(k).arg(), ClArg::U32(n), ClArg::U32(colour_mode)])?;
     }
     if tag == 2 || tag == 4 {
         let p = tag - 1;
-        s.launch("k1_postdiv_f32", c.n, &[src.plane(0).arg(), pa.arg(), out.plane(p).arg(), ClArg::U32(n), ClArg::U32(2)])?;
+        s.launch("pointwise_postdiv_f32", c.n, &[src.plane(0).arg(), pa.arg(), out.plane(p).arg(), ClArg::U32(n), ClArg::U32(2)])?;
     }
     Ok(out)
 }
@@ -1290,12 +1290,12 @@ fn rgb_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], op: u32) -> Result<D
         let o = out.plane(ch).arg();
         if fa {
             let pb = plane(b, kout)?;
-            s.launch("k1_bin_f32", c.n, &[plane(b, kout)?, pb, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(1), ClArg::U32(lanes(a)[kin]), ClArg::U32(0)])?;
+            s.launch("pointwise_bin_f32", c.n, &[plane(b, kout)?, pb, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(1), ClArg::U32(lanes(a)[kin]), ClArg::U32(0)])?;
         } else if fb {
             let pa = plane(a, kin)?;
-            s.launch("k1_bin_f32", c.n, &[plane(a, kin)?, pa, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(2), ClArg::U32(0), ClArg::U32(lanes(b)[kout])])?;
+            s.launch("pointwise_bin_f32", c.n, &[plane(a, kin)?, pa, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(2), ClArg::U32(0), ClArg::U32(lanes(b)[kout])])?;
         } else {
-            s.launch("k1_bin_f32", c.n, &[plane(a, kin)?, plane(b, kout)?, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
+            s.launch("pointwise_bin_f32", c.n, &[plane(a, kin)?, plane(b, kout)?, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
         }
     }
     if let Some((mode, idx)) = pad {
@@ -1372,11 +1372,11 @@ fn round_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage
         written[ch] = true;
         let o = out.plane(ch).arg();
         if fa {
-            s.launch("k1_round_f32", c.n, &[plane(b, kout)?, plane(b, kout)?, o, ClArg::U32(n), ClArg::U32(0), ClArg::U32(1), ClArg::U32(lanes(a)[kin]), ClArg::U32(0)])?;
+            s.launch("pointwise_round_f32", c.n, &[plane(b, kout)?, plane(b, kout)?, o, ClArg::U32(n), ClArg::U32(0), ClArg::U32(1), ClArg::U32(lanes(a)[kin]), ClArg::U32(0)])?;
         } else if fb {
-            s.launch("k1_round_f32", c.n, &[plane(a, kin)?, plane(a, kin)?, o, ClArg::U32(n), ClArg::U32(0), ClArg::U32(2), ClArg::U32(0), ClArg::U32(lanes(b)[kout])])?;
+            s.launch("pointwise_round_f32", c.n, &[plane(a, kin)?, plane(a, kin)?, o, ClArg::U32(n), ClArg::U32(0), ClArg::U32(2), ClArg::U32(0), ClArg::U32(lanes(b)[kout])])?;
         } else {
-            s.launch("k1_round_f32", c.n, &[plane(a, kin)?, plane(b, kout)?, o, ClArg::U32(n), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
+            s.launch("pointwise_round_f32", c.n, &[plane(a, kin)?, plane(b, kout)?, o, ClArg::U32(n), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
         }
     }
     if tag >= 4 {
@@ -1384,18 +1384,18 @@ fn round_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage
             written[3] = true;
             let o = out.plane(3).arg();
             if fb {
-                s.launch("k1_round_f32", c.n, &[plane(a, 0)?, plane(a, 0)?, o, ClArg::U32(n), ClArg::U32(1), ClArg::U32(2), ClArg::U32(0), ClArg::U32(lanes(b)[3])])?;
+                s.launch("pointwise_round_f32", c.n, &[plane(a, 0)?, plane(a, 0)?, o, ClArg::U32(n), ClArg::U32(1), ClArg::U32(2), ClArg::U32(0), ClArg::U32(lanes(b)[3])])?;
             } else {
-                s.launch("k1_round_f32", c.n, &[plane(b, 3)?, plane(b, 3)?, o, ClArg::U32(n), ClArg::U32(1), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
+                s.launch("pointwise_round_f32", c.n, &[plane(b, 3)?, plane(b, 3)?, o, ClArg::U32(n), ClArg::U32(1), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
             }
         }
         if r14 {
             written[3] = true;
             let o = out.plane(3).arg();
             if fa {
-                s.launch("k1_round_f32", c.n, &[plane(b, 0)?, plane(b, 0)?, o, ClArg::U32(n), ClArg::U32(2), ClArg::U32(1), ClArg::U32(lanes(a)[3]), ClArg::U32(0)])?;
+                s.launch("pointwise_round_f32", c.n, &[plane(b, 0)?, plane(b, 0)?, o, ClArg::U32(n), ClArg::U32(2), ClArg::U32(1), ClArg::U32(lanes(a)[3]), ClArg::U32(0)])?;
             } else {
-                s.launch("k1_round_f32", c.n, &[plane(a, 3)?, plane(a, 3)?, o, ClArg::U32(n), ClArg::U32(2), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
+                s.launch("pointwise_round_f32", c.n, &[plane(a, 3)?, plane(a, 3)?, o, ClArg::U32(n), ClArg::U32(2), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
             }
         }
     }
@@ -1476,7 +1476,7 @@ fn colour_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], kernel: &str, whi
         }
         for (lo, hi, at) in regions {
             for k in 0..3 {
-                s.launch("k1_fillr_f32", nn, &[out.plane(k).arg(), ClArg::U32(o[k][at].to_bits()), ClArg::U32(lo as u32), ClArg::U32(hi as u32)])?;
+                s.launch("pointwise_fillr_f32", nn, &[out.plane(k).arg(), ClArg::U32(o[k][at].to_bits()), ClArg::U32(lo as u32), ClArg::U32(hi as u32)])?;
             }
         }
     } else {
@@ -1539,7 +1539,7 @@ fn mono_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], alpha: bool) -> Res
     if ch <= 2 {
         s.launch("copy_f32", c.n, &[src.plane(0).arg(), out.plane(0).arg(), ClArg::U32(n)])?;
     } else {
-        s.launch("k1_luma_f32", c.n, &[src.plane(0).arg(), src.plane(1).arg(), src.plane(2).arg(), out.plane(0).arg(), ClArg::U32(n)])?;
+        s.launch("pointwise_luma_f32", c.n, &[src.plane(0).arg(), src.plane(1).arg(), src.plane(2).arg(), out.plane(0).arg(), ClArg::U32(n)])?;
     }
     if alpha && (ch == 2 || ch == 4) {
         s.launch("copy_f32", c.n, &[src.plane(ch - 1).arg(), out.plane(1).arg(), ClArg::U32(n)])?;
@@ -1696,6 +1696,120 @@ fn coerce_corpus_for(class: &'static str, nargs: usize) -> Vec<SelfCase> {
     gen_cases(class, coerce_accepts, &all_templates(nargs, true), &[1, 2, 3, 4], DIMS_SMALL, 240)
 }
 
+// ---- wide range corpus for the double precision kernels -------------------------------------------------------------
+
+/// A finite f32 whose exponent field is uniform over 0..=254 (subnormals to the largest binade), with a random sign and mantissa.
+fn wide_f32(rng: &mut fx_device::sim::Rng) -> f32 {
+    let e = rng.below(255) as u32;
+    let m = rng.next_u32() & 0x007f_ffff;
+    let sign = (rng.next_u32() & 1) << 31;
+    f32::from_bits(sign | (e << 23) | m)
+}
+
+/// A value of the unit range with a random sign, as pixels hold.
+fn pixel_f32(rng: &mut fx_device::sim::Rng) -> f32 {
+    let v = (rng.next_u32() >> 8) as f32 / (1u32 << 24) as f32;
+    if rng.next_u32() & 1 == 1 { -v } else { v }
+}
+
+/// The luma of a pixel in the CPU's order: `mul_add` steps in double precision, rounded once to f32.
+fn luma_in_order(r: f32, g: f32, b: f32) -> f32 {
+    let t = 0.5 * g as f64;
+    let t = (r as f64).mul_add(0.3125, t);
+    (b as f64).mul_add(0.1875, t) as f32
+}
+
+/// The same sum with the last two steps swapped.
+fn luma_swapped(r: f32, g: f32, b: f32) -> f32 {
+    let t = 0.5 * g as f64;
+    let t = (b as f64).mul_add(0.1875, t);
+    (r as f64).mul_add(0.3125, t) as f32
+}
+
+/// Triples whose double precision luma changes by one ulp of f32 when the two `mul_add` steps swap: one wide channel with two pixel
+/// values, or one pixel channel with two wide ones. Found by a fixed search, so every build sees the same set.
+fn luma_sensitive_triples(want: usize) -> Vec<[f32; 3]> {
+    let mut rng = fx_device::sim::Rng::new(0x1d5e_a11c);
+    let mut out: Vec<[f32; 3]> = vec![[-0.23911922, -0.11966951, -9.35e15]];
+    let mut tries = 0usize;
+    while out.len() < want && tries < 6_000_000 {
+        tries += 1;
+        let mut t = [pixel_f32(&mut rng), pixel_f32(&mut rng), pixel_f32(&mut rng)];
+        let k = rng.below(3) as usize;
+        t[k] = wide_f32(&mut rng);
+        if tries % 3 == 0 {
+            t[(k + 1) % 3] = wide_f32(&mut rng);
+        }
+        if t.iter().any(|v| !v.is_finite()) {
+            continue;
+        }
+        if luma_in_order(t[0], t[1], t[2]).to_bits() != luma_swapped(t[0], t[1], t[2]).to_bits() {
+            out.push(t);
+        }
+    }
+    out
+}
+
+/// Cases for an op with a double precision path: operand values over the whole finite f32 exponent range (subnormal to the largest
+/// binade, both signs), and the luma-sensitive triples in the first three channels of the first image operand. These catch an order of
+/// the double steps that agrees on pixel-range input but not on wide input.
+pub fn wide_cases(class: &'static str, accepts: Acc, templates: &[Vec<Od>], tags: &[i32]) -> Vec<SelfCase> {
+    const W: usize = 64;
+    const H: usize = 24;
+    let n = W * H;
+    let kp = KParams::standin();
+    let triples = luma_sensitive_triples(n);
+    let mut rng = fx_device::sim::Rng::new(0x71de_c0de ^ class.len() as u64);
+    let mut out = Vec::new();
+    for (ti, t) in templates.iter().enumerate() {
+        let shapes: Vec<ArgShape> = t.iter().map(|o| match *o { Od::Img(c) => ArgShape::Img { channels: c }, Od::Const(c) => ArgShape::Const { n: c } }).collect();
+        for &tag in tags {
+            let call = NodeCall { idx: 0, class, tag, n, dims: (W, H), kp: &kp };
+            if accepts(&call, &shapes).is_err() {
+                continue;
+            }
+            for mode in 0..2usize {
+                let args: Vec<Image> = t
+                    .iter()
+                    .enumerate()
+                    .map(|(k, od)| match *od {
+                        Od::Img(ch) => {
+                            let mut planes: Vec<Vec<f32>> = (0..ch).map(|_| (0..n).map(|_| wide_f32(&mut rng)).collect()).collect();
+                            if mode == 1 && k == 0 {
+                                for (i, tr) in triples.iter().cycle().take(n).enumerate() {
+                                    for (p, v) in tr.iter().enumerate().take(ch) {
+                                        planes[p][i] = *v;
+                                    }
+                                }
+                            } else if mode == 1 {
+                                for pl in planes.iter_mut() {
+                                    pl.iter_mut().for_each(|v| *v = pixel_f32(&mut rng));
+                                }
+                            }
+                            Image { n, planes }
+                        }
+                        Od::Const(nl) => {
+                            let mut l = [0u32; 4];
+                            for w in l.iter_mut() {
+                                *w = if mode == 1 { pixel_f32(&mut rng) } else { wide_f32(&mut rng) }.to_bits();
+                            }
+                            const_image(nl, l)
+                        }
+                    })
+                    .collect();
+                out.push(SelfCase { name: format!("{class} wide {W}x{H} tag {tag} {t:?} m{mode} #{ti}"), dims: (W, H), tag, args, consts: vec![], kp: None });
+            }
+        }
+    }
+    out
+}
+
+/// The corpus of an op with a double precision path: the general one plus [`wide_cases`].
+fn with_wide(mut base: Vec<SelfCase>, class: &'static str, accepts: Acc, templates: &[Vec<Od>], tags: &[i32]) -> Vec<SelfCase> {
+    base.extend(wide_cases(class, accepts, templates, tags));
+    base
+}
+
 // ---- op table ------------------------------------------------------------------------------------------------------
 
 macro_rules! bin_op {
@@ -1843,7 +1957,7 @@ fn screen_accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
 pub const SCREEN_SUPER: DeviceOp = DeviceOp {
     class: "screen_super",
     accepts: screen_accepts,
-    run: |s, c, a| bin_run_k(s, c, a, 0, "k1_screen_f32", "k1_screen_ext_f32"),
+    run: |s, c, a| bin_run_k(s, c, a, 0, "pointwise_screen_f32", "pointwise_screen_ext_f32"),
     corpus: || bin_corpus_for("screen_super", screen_accepts),
 };
 
@@ -1872,7 +1986,7 @@ pub const COMP_RGBA: DeviceOp = DeviceOp {
     class: "comp_rgba",
     accepts: comp_accepts,
     run: comp_run,
-    corpus: || gen_cases("comp_rgba", comp_accepts, &all_templates(2, true), &[1, 2, 3, 4], PW_DIMS, 400),
+    corpus: || with_wide(gen_cases("comp_rgba", comp_accepts, &all_templates(2, true), &[1, 2, 3, 4], PW_DIMS, 400), "comp_rgba", comp_accepts, &all_templates(2, true), &[1, 2, 3, 4]),
 };
 
 pub const POSTDIVIDE: DeviceOp = DeviceOp {
@@ -1893,7 +2007,7 @@ pub const ROUND: DeviceOp = DeviceOp {
     class: "round",
     accepts: round_accepts,
     run: round_run,
-    corpus: || gen_cases("round", round_accepts, &all_templates(2, true), &[1, 2, 3, 4], PW_DIMS, 300),
+    corpus: || with_wide(gen_cases("round", round_accepts, &all_templates(2, true), &[1, 2, 3, 4], PW_DIMS, 300), "round", round_accepts, &all_templates(2, true), &[1, 2, 3, 4]),
 };
 
 pub const SCALE_RGB: DeviceOp = DeviceOp {
@@ -1927,20 +2041,20 @@ pub const COLOUR_DIMS: &[(usize, usize)] = &[(1, 1), (7, 1), (9, 1), (12, 1), (1
 pub const SAT_SCALE: DeviceOp = DeviceOp {
     class: "sat_scale",
     accepts: colour_accepts,
-    run: |s, c, a| colour_run(s, c, a, "k1_sat_f32", 0),
-    corpus: || gen_cases("sat_scale", colour_accepts, &colour_templates(), &[1, 2, 3, 4], COLOUR_DIMS, 400),
+    run: |s, c, a| colour_run(s, c, a, "pointwise_sat_f32", 0),
+    corpus: || with_wide(gen_cases("sat_scale", colour_accepts, &colour_templates(), &[1, 2, 3, 4], COLOUR_DIMS, 400), "sat_scale", colour_accepts, &colour_templates(), &[1, 2, 3, 4]),
 };
 pub const HUE_SHIFT: DeviceOp = DeviceOp {
     class: "hue_shift",
     accepts: colour_accepts,
-    run: |s, c, a| colour_run(s, c, a, "k1_hue_f32", 1),
-    corpus: || gen_cases("hue_shift", colour_accepts, &colour_templates(), &[1, 2, 3, 4], COLOUR_DIMS, 400),
+    run: |s, c, a| colour_run(s, c, a, "pointwise_hue_f32", 1),
+    corpus: || with_wide(gen_cases("hue_shift", colour_accepts, &colour_templates(), &[1, 2, 3, 4], COLOUR_DIMS, 400), "hue_shift", colour_accepts, &colour_templates(), &[1, 2, 3, 4]),
 };
 pub const HUE_SHIFT_PRESERVE_LUMA: DeviceOp = DeviceOp {
     class: "hue_shift_preserve_luma",
     accepts: colour_accepts,
-    run: |s, c, a| colour_run(s, c, a, "k1_hsp_f32", 2),
-    corpus: || gen_cases("hue_shift_preserve_luma", colour_accepts, &colour_templates(), &[1, 2, 3, 4], COLOUR_DIMS, 400),
+    run: |s, c, a| colour_run(s, c, a, "pointwise_hsp_f32", 2),
+    corpus: || with_wide(gen_cases("hue_shift_preserve_luma", colour_accepts, &colour_templates(), &[1, 2, 3, 4], COLOUR_DIMS, 400), "hue_shift_preserve_luma", colour_accepts, &colour_templates(), &[1, 2, 3, 4]),
 };
 
 fn mono_accepts_plain(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
@@ -1953,13 +2067,13 @@ pub const MONOCHROME: DeviceOp = DeviceOp {
     class: "monochrome",
     accepts: mono_accepts_plain,
     run: |s, c, a| mono_run(s, c, a, false),
-    corpus: || gen_cases("monochrome", mono_accepts_plain, &all_templates(1, false), &[1], DIMS_SMALL, 120),
+    corpus: || with_wide(gen_cases("monochrome", mono_accepts_plain, &all_templates(1, false), &[1], DIMS_SMALL, 120), "monochrome", mono_accepts_plain, &all_templates(1, false), &[1]),
 };
 pub const MONOCHROME_A: DeviceOp = DeviceOp {
     class: "monochrome_a",
     accepts: mono_accepts_alpha,
     run: |s, c, a| mono_run(s, c, a, true),
-    corpus: || gen_cases("monochrome_a", mono_accepts_alpha, &all_templates(1, false), &[1, 2], DIMS_SMALL, 120),
+    corpus: || with_wide(gen_cases("monochrome_a", mono_accepts_alpha, &all_templates(1, false), &[1, 2], DIMS_SMALL, 120), "monochrome_a", mono_accepts_alpha, &all_templates(1, false), &[1, 2]),
 };
 
 /// The ops of this module (the registration lines of `device_ops.rs` name them one by one).
