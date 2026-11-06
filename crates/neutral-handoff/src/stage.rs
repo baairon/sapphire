@@ -8,8 +8,11 @@
 //! `sapphire stage list --json` and a stage as `sapphire stage apply STAGE ...`;
 //! the pipeline can also run a stage in-process (`--stage @NAME`).
 //!
-//! No effect of the name bank is mapped to behaviour, so the registry holds the conformance stage
-//! `selftest-invert` and the ffmpeg filter stage `ffmpeg-filter` ([`crate::ffstage`]) only.
+//! The registry holds the conformance stage `selftest-invert`, the ffmpeg filter stage
+//! `ffmpeg-filter` ([`crate::ffstage`]) and, from the tables `data/fx_stages.tsv` and
+//! `data/fx_params.tsv`, one stage per registered style of the landed effects ([`crate::fxstage`]).
+//! The effect stages run `fx_run` as a child process on the recorded host route and are listed
+//! hidden when `fx_run` is absent.
 //! `stage list --json` prints them as a stage manifest (`contracts/stage-manifest.schema.json`):
 //! the provider (`id`, `version`, `command`) and per stage `id`, `kind`, `spool`, `geometry`,
 //! `depths`, `params` and `layers`.
@@ -55,6 +58,33 @@ pub enum ParamKind {
         /// The accepted values.
         choices: &'static [&'static str],
     },
+    /// A real number in a range.
+    Float {
+        /// The registered default (shown; an omitted parameter is not passed on).
+        default: f64,
+        /// The smallest accepted value.
+        min: f64,
+        /// The largest accepted value.
+        max: f64,
+    },
+    /// An integer in a range.
+    Int {
+        /// The registered default (shown; an omitted parameter is not passed on).
+        default: i64,
+        /// The smallest accepted value.
+        min: i64,
+        /// The largest accepted value.
+        max: i64,
+    },
+}
+
+/// An extra input of a stage (`--layer ID=PATH`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct LayerDef {
+    /// The layer id.
+    pub id: &'static str,
+    /// Whether the stage runs without it.
+    pub optional: bool,
 }
 
 /// One parameter of a stage.
@@ -77,9 +107,9 @@ pub struct StageDef {
     pub name: &'static str,
     /// The group the stage belongs to.
     pub family: &'static str,
-    /// `frame` here: frame N of the output depends on frame N of the input only.
+    /// `frame` (frame N of the output depends on frame N of the input only) or `temporal`.
     pub kind: &'static str,
-    /// The stage reads its whole input before it writes (false for every stage here).
+    /// The stage reads its whole input before it writes.
     pub spool: bool,
     /// `preserve` or `declared` (`docs/handoff.md#geometry`).
     pub geometry: &'static str,
@@ -87,11 +117,15 @@ pub struct StageDef {
     pub depths: Vec<u32>,
     /// The parameters.
     pub params: Vec<ParamDef>,
+    /// The extra inputs.
+    pub layers: Vec<LayerDef>,
+    /// Listed with `"hidden": true` (the effect stages when `fx_run` is absent).
+    pub hidden: bool,
 }
 
 /// Every stage this tool offers.
 pub fn definitions() -> Vec<StageDef> {
-    vec![
+    let mut list = vec![
         StageDef {
             id: "selftest-invert",
             name: "Selftest Invert",
@@ -101,6 +135,8 @@ pub fn definitions() -> Vec<StageDef> {
             geometry: "preserve",
             depths: Depth::ALL.iter().map(|d| d.bits()).collect(),
             params: vec![ParamDef { id: "invert_alpha", name: "Invert Alpha", kind: ParamKind::Checkbox { default: false } }],
+            layers: Vec::new(),
+            hidden: false,
         },
         StageDef {
             id: crate::ffstage::ID,
@@ -115,8 +151,12 @@ pub fn definitions() -> Vec<StageDef> {
                 ParamDef { id: "expect", name: "Expect", kind: ParamKind::Choice { default: "preserve", choices: &["preserve", "declared"] } },
                 ParamDef { id: "unsafe", name: "Unsafe", kind: ParamKind::Checkbox { default: false } },
             ],
+            layers: Vec::new(),
+            hidden: false,
         },
-    ]
+    ];
+    list.extend(crate::fxstage::definitions());
+    list
 }
 
 /// The definition of the stage `id`.
@@ -159,6 +199,22 @@ pub fn list_manifest(contract: crate::Contract) -> Out {
                         ("kind", Out::text("text")),
                         ("default", Out::text(*default)),
                     ]),
+                    ParamKind::Float { default, min, max } => Out::map(vec![
+                        ("id", Out::text(p.id)),
+                        ("name", Out::text(p.name)),
+                        ("kind", Out::text("float")),
+                        ("default", Out::Float(*default)),
+                        ("min", Out::Float(*min)),
+                        ("max", Out::Float(*max)),
+                    ]),
+                    ParamKind::Int { default, min, max } => Out::map(vec![
+                        ("id", Out::text(p.id)),
+                        ("name", Out::text(p.name)),
+                        ("kind", Out::text("int")),
+                        ("default", Out::Int(*default)),
+                        ("min", Out::Int(*min)),
+                        ("max", Out::Int(*max)),
+                    ]),
                     ParamKind::Choice { default, choices } => Out::map(vec![
                         ("id", Out::text(p.id)),
                         ("name", Out::text(p.name)),
@@ -175,10 +231,10 @@ pub fn list_manifest(contract: crate::Contract) -> Out {
                 ("kind", Out::text(def.kind)),
                 ("spool", Out::Bool(def.spool)),
                 ("geometry", Out::text(def.geometry)),
-                ("hidden", Out::Bool(false)),
+                ("hidden", Out::Bool(def.hidden)),
                 ("depths", Out::List(def.depths.iter().map(|d| Out::Int(*d as i64)).collect())),
                 ("params", Out::List(params)),
-                ("layers", Out::List(Vec::new())),
+                ("layers", Out::List(def.layers.iter().map(|l| Out::map(vec![("id", Out::text(l.id)), ("optional", Out::Bool(l.optional))])).collect())),
             ])
         })
         .collect();
@@ -211,7 +267,7 @@ pub fn list_text() -> String {
             def.kind,
             depths.join(","),
             def.params.len(),
-            0
+            def.layers.len()
         ));
     }
     out
@@ -255,6 +311,18 @@ pub fn check_params(def: &StageDef, params: &[String]) -> Result<Vec<(String, St
                 }
             }
             ParamKind::Text { .. } => {}
+            ParamKind::Float { min, max, .. } => match value.trim().parse::<f64>() {
+                Ok(v) if v.is_finite() && v >= *min && v <= *max => {}
+                Ok(v) if v.is_finite() => {
+                    return Err(Error::unsupported(format!("bad value for `{}`: {} is outside {} to {}", param.id, value, min, max)))
+                }
+                _ => return Err(Error::unsupported(format!("bad value for `{}`: cannot parse `{}`", param.id, value))),
+            },
+            ParamKind::Int { min, max, .. } => match value.trim().parse::<i64>() {
+                Ok(v) if v >= *min && v <= *max => {}
+                Ok(_) => return Err(Error::unsupported(format!("bad value for `{}`: {} is outside {} to {}", param.id, value, min, max))),
+                Err(_) => return Err(Error::unsupported(format!("bad value for `{}`: cannot parse `{}`", param.id, value))),
+            },
             ParamKind::Choice { choices, .. } => {
                 if !choices.contains(&value) {
                     return Err(Error::unsupported(format!("bad value for `{}`: `{}` is not one of {}", param.id, value, choices.join(", "))));
@@ -428,10 +496,10 @@ mod tests {
     }
 
     #[test]
-    fn the_registry_holds_the_conformance_and_ffmpeg_stages_only() {
+    fn the_registry_holds_the_conformance_ffmpeg_and_effect_stages() {
         let defs = definitions();
         let ids: Vec<&str> = defs.iter().map(|d| d.id).collect();
-        assert_eq!(ids, ["selftest-invert", "ffmpeg-filter"]);
+        assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen"]);
         assert_eq!(defs[0].depths, vec![8, 16, 32]);
         assert_eq!((defs[0].geometry, defs[0].spool), ("preserve", false));
         assert_eq!((defs[1].geometry, defs[1].spool), ("declared", false));

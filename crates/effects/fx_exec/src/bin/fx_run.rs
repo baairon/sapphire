@@ -18,6 +18,49 @@ fn main() {
     std::process::exit(h.join().unwrap());
 }
 
+/// The registered default of an unbound normalize_scale parameter as record lanes: the native range definition's default text (one value per
+/// lane), else the NS row's single text default, each through `unbound_default_record` (INT16-A5 rule) at the unit width.
+fn ns_registered_default(prog: &str, name: &str, uw: f32) -> Option<Vec<f32>> {
+    let ns = fx_eval::units::ns_of(prog, name)?;
+    let texts: Vec<f32> = match effects_rtdata::range_defs().find(|r| r.program == prog && r.parameter == name) {
+        Some(r) => r.default.split_whitespace().map(|t| t.parse::<f32>()).collect::<Result<Vec<_>, _>>().ok()?,
+        None => vec![effects_rtdata::ns_param(prog, name)?.text_default?],
+    };
+    if texts.is_empty() {
+        return None;
+    }
+    Some(texts.iter().map(|t| fx_eval::units::unbound_default_record(*t, ns, uw, false)).collect())
+}
+
+/// `fx_run --describe-params PROGRAM...`: the native range definitions of the programs as one JSON object (program, then its parameters with
+/// type, lanes, min, max and default text). The stage provider builds its manifest from this.
+fn describe_params(a: &[String]) -> i32 {
+    let progs: Vec<&String> = a.iter().skip(1).filter(|x| !x.starts_with("--") && x.as_str() != "-").collect();
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let mut out = String::from("{");
+    for (i, p) in progs.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&format!("\"{}\":[", esc(p)));
+        let mut first = true;
+        for r in effects_rtdata::range_defs().filter(|r| r.program == p.as_str()) {
+            if !first {
+                out.push(',');
+            }
+            first = false;
+            out.push_str(&format!(
+                "{{\"name\":\"{}\",\"type\":\"{}\",\"lanes\":{},\"min\":{},\"max\":{},\"default\":\"{}\"}}",
+                esc(r.parameter), esc(r.ptype), r.lanes, r.min, r.max, esc(r.default)
+            ));
+        }
+        out.push(']');
+    }
+    out.push('}');
+    println!("{}", out);
+    0
+}
+
 fn read_f32(path: &str, c: usize, n: usize) -> Result<Image, String> {
     let b = std::fs::read(path).map_err(|e| format!("cannot read {}: {}", path, e))?;
     if b.len() != c * n * 4 {
@@ -61,6 +104,9 @@ fn split(p: &str, dflt: usize) -> (String, usize) {
 }
 
 fn run(a0: &[String]) -> i32 {
+    if a0.iter().any(|x| x == "--describe-params") {
+        return describe_params(a0);
+    }
     // NATIVE PROGRAMS: the thirteen styles are built by fx_eval::programs_native; no programs table is read. The first argument is then absent
     // (`fx_run <program> --size ...`) or `-`. A path in that place is an optional override (tests): the text route.
     let a0n: Vec<String> = native_args(a0);
@@ -135,6 +181,8 @@ fn run(a0: &[String]) -> i32 {
                 i += 1;
             }
             "--no-layout-merge" => {} // LYM1: A/B gate only, read again below
+            // opt-in: an unbound normalize_scale parameter takes its registered default from the native definitions instead of the PARAM-UNITS refusal
+            "--ns-default-unbound" => ae.ns_default_unbound = true,
             "--hc" => b.host_curves_unkeyed = true,
             "--hc-zero-legacy" => b.hc_zero_legacy = true, // INT8 HC-ZERO-LEGACY (named state A option, Batch 40 rule 4)
             "--hc-keyed" => {
@@ -1487,6 +1535,8 @@ const REQUIRED: [&str; 20] = [
 
 #[derive(Default)]
 struct Ae32Args {
+    /// `--ns-default-unbound`: apply the registered default to an unbound normalize_scale parameter (no flag: the PARAM-UNITS refusal stands)
+    ns_default_unbound: bool,
     srcs: Vec<(String, String)>,
     planes: Option<usize>,
     gate: Option<(bool, bool, bool)>,
@@ -1887,6 +1937,9 @@ impl Ae32Args {
                         let rec = fx_eval::units::normalize_scale_record(h, uw, ns, false);
                         b.overrides.insert(n.clone(), vec![rec]);
                         labels.push(format!("label PARAM-DEFAULT-REGISTERED-16-16 ({} {}: unbound normalize_scale host type 2 slider; host {} / 65536 = {}, before the width scaling; record 0x{:08x}; W605, W663)", prog, n, (h as f64 * 65536.0) as i64, h as f64, rec.to_bits()));
+                    } else if let (true, Some(lanes)) = (self.ns_default_unbound, ns_registered_default(prog, n, uw)) {
+                        b.overrides.insert(n.clone(), lanes.clone());
+                        labels.push(format!("label PARAM-DEFAULT-REGISTERED-NS ({} {}: unbound normalize_scale parameter; registered default through the unbound-default rule at width {}; record lanes {:?}; opt-in --ns-default-unbound)", prog, n, uw, lanes));
                     } else {
                         return Err(format!("PARAM-UNITS: the normalize_scale parameter {} needs --host-param {}=HOST or --set {}=RECORD (no default)", n, n, n));
                     }

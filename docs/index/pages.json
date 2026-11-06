@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 29935,
+  "bytes": 31408,
   "generated": false
  },
  {
@@ -17,7 +17,7 @@
   "path": "crates/neutral-handoff/README.md",
   "title": "sapphire",
   "line": "The pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository.",
-  "bytes": 7748,
+  "bytes": 8226,
   "generated": false
  },
  {
@@ -94,7 +94,7 @@
   "path": "docs/generated/crates.md",
   "title": "Crates",
   "line": "The 14 crates of the workspace, 10 of them lifted function crates.",
-  "bytes": 9872,
+  "bytes": 10226,
   "generated": true
  },
  {
@@ -206,7 +206,7 @@
   "path": "docs/generated/index.md",
   "title": "Generated reference",
   "line": "Reference pages generated from `docs/data/` and a scan of `crates/`.",
-  "bytes": 2389,
+  "bytes": 2390,
   "generated": true
  },
  {
@@ -318,7 +318,7 @@
   "path": "docs/stages.md",
   "title": "Adding a provider",
   "line": "A provider is a program that offers stages over raw frames; twixtor's `vfx` and `sapphire` are two.",
-  "bytes": 8607,
+  "bytes": 25856,
   "generated": false
  }
 ]
