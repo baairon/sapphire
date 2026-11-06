@@ -6,13 +6,13 @@ Every command below was run from the repository root on a one second 160x96 test
 
 ## Setup
 
-The effect stages are linked into `sapphire`; no other executable is needed. The `fx_run` command line is built from the same library and also takes `--device cpu|gpu|auto`.
+The effect stages are linked into `sapphire`; no other executable is needed. The `fx_run` command line is built from the same library and takes `--device cpu|gpu|gpu=N|auto`. It is needed only for `fx_run --describe-params`. Every flag, environment variable, exit code and refusal is listed in the [Command-line reference](cli.md).
 
 ```sh
 cargo build --release --offline -p neutral-handoff -p fx_exec
 ```
 
-ffmpeg and ffprobe must be on `PATH` ([finding ffmpeg](ffmpeg.md#finding-ffmpeg)). Linux is the measured platform: `fx_run` is built and tested in CI on Linux only, and its results on macOS and Windows have not been measured.
+ffmpeg and ffprobe must be on `PATH` ([finding ffmpeg](ffmpeg.md#finding-ffmpeg)). Linux is the measured platform. CI builds `fx_run` and runs the effect golden hashes (`tools/fx_golden.py`) on Linux, macOS and Windows; the device checks on PoCL run on Linux only, and timing and the recorded-render comparison were measured on Linux only.
 
 A short test clip to try the commands on:
 
@@ -26,22 +26,22 @@ Each registered style of an effect is one stage. `sapphire stage list` prints th
 
 | `--stage` form | Effect | Kind |
 |---|---|---|
-| `@blur_color_autogen`, `@blur_mono_autogen` | `S_Blur` | frame |
-| `@transform_and_blur_autogen`, `@blur_motion_curves_no_transform_autogen` | `BlurMoCurves` | frame |
-| `@diffuse_autogen` | `S_Diffuse` | frame |
-| `@distort_rgb_autogen` | `S_DistortRGB` | frame |
-| `@drop_shadow` | `S_DropShadow` | frame |
-| `@hue_sat_bright_autogen` | `S_HueSatBright` | frame |
-| `@sharpen_best_quality_autogen`, `@sharpen_fast_autogen` | `S_Sharpen` | frame |
+| `@blur_color_autogen`, `@blur_mono_autogen` | `S_Blur` | temporal |
+| `@transform_and_blur_autogen`, `@blur_motion_curves_no_transform_autogen` | `BlurMoCurves` | temporal |
+| `@diffuse_autogen` | `S_Diffuse` | temporal |
+| `@distort_rgb_autogen` | `S_DistortRGB` | temporal |
+| `@drop_shadow` | `S_DropShadow` | temporal |
+| `@hue_sat_bright_autogen` | `S_HueSatBright` | temporal |
+| `@sharpen_best_quality_autogen`, `@sharpen_fast_autogen` | `S_Sharpen` | temporal |
 | `@time_warp_rgb_autogen` | `S_TimeWarpRGB` | temporal |
 | `@trails_autogen` | `S_Trails` | temporal |
-| `@warp_perspective_autogen` | `S_WarpPerspective` | frame |
+| `@warp_perspective_autogen` | `S_WarpPerspective` | temporal |
 
 ```sh
 target/release/sapphire stage list
 ```
 
-A frame stage turns each input frame into one output frame. A temporal stage also reads other frames of the clip: `time_warp_rgb_autogen` shifts colour channels in time, and `trails_autogen` reads the whole clip before it writes.
+All 13 stages have kind `temporal`, because the frames/2 convention accepts keyed values only for temporal stages. Only `time_warp_rgb_autogen` and `trails_autogen` read other frames of the clip: the first shifts colour channels in time, and the second reads the whole clip before it writes. The other 11 stages turn each input frame into one output frame and are `temporal` so that they accept keyframes. The kind `frame` belongs to `selftest-invert` and `ffmpeg-filter`.
 
 ## Running a stage on a clip
 
@@ -65,7 +65,7 @@ A parameter left out takes its default. A parameter can also change over the cli
 target/release/sapphire clip.mp4 --depth 32 --stage "@hue_sat_bright_autogen saturation=0@0;2@24e" -o clip_sat.mp4
 ```
 
-Keys may hold (`h`), ease (`e`) or carry Bezier handles, as the frames/2 convention defines them; [Driving the effect parameters](parameters-guide.md#keyframed-values) has the rules. `trails_autogen` takes no keyed value. The output is encoded with libx264; `--lossless` (ffv1) is available at depths 8 and 16 only.
+Keys may hold (`h`), ease (`e`) or carry Bezier handles, as the frames/2 convention defines them; [Driving the effect parameters](parameters-guide.md#keyframed-values) has the rules. `trails_autogen` takes no keyed value; every other effect stage does. The output is encoded with libx264; `--lossless` (ffv1) is available at depths 8 and 16 only.
 
 ### Large frames and `--stage-timeout 0`
 
@@ -77,7 +77,7 @@ target/release/sapphire clip.mp4 --depth 32 --stage-timeout 0 --stage "@transfor
 
 ### Rendering on a device
 
-`--device` picks where the effect kernels run. It is accepted by `sapphire stage apply` and by `fx_run`.
+`--device` picks where the effect kernels run. It is a flag of `sapphire stage apply` and of `fx_run`; the pipeline route takes the device from `SAPPHIRE_DEVICE` (see Using a device from the pipeline, below).
 
 | Value | Meaning |
 |---|---|
@@ -97,6 +97,17 @@ The OpenCL library is opened at run time, so a machine without one still builds 
 - **Self-check.** Before an operation runs on the device, its kernel is run on a set of adversarial inputs (subnormals, negative zero, infinities, NaN, exact ties, odd frame sizes) and compared bit for bit with the CPU kernel. An operation that differs is not used on the device.
 
 The device output is the same bytes as the CPU output. An operation without a device kernel, one the kernel declines for a given shape or value, and any node whose output holds a NaN all run on the CPU for that node, so a partly supported plan still renders. `SAPPHIRE_DEVICE_REPORT=1` prints how many nodes of each operation ran on the device and how many fell back, with the reason.
+
+**Using a device from the pipeline.** `sapphire INPUT --stage @ID` has no `--device` flag. It runs each effect stage as a `sapphire stage apply` child process that inherits the environment, so `SAPPHIRE_DEVICE` picks the device:
+
+- `SAPPHIRE_DEVICE` takes the values of `--device` (`gpu`, `gpu=N`, `auto`). Unset, empty, `cpu` or a value that does not parse changes nothing and the run is on the CPU.
+- The variable applies only when the run has no device installed. A `--device` other than `cpu` on `sapphire stage apply` installs its device first and wins over the variable. `--device cpu` installs nothing, so `SAPPHIRE_DEVICE=gpu` still switches a run that says `--device cpu` or leaves `--device` out. To force the CPU, unset the variable.
+- The device is chosen once per rendering thread, by the first effect that executes.
+- `SAPPHIRE_DEVICE_REPORT=1` and `SAPPHIRE_REQUIRE_DEVICE=1` work the same through the variable; a pipeline stage's report lines reach the standard error of the pipeline.
+
+```sh
+SAPPHIRE_DEVICE=gpu SAPPHIRE_DEVICE_REPORT=1 target/release/sapphire clip.mp4 --depth 32 --stage "@blur_color_autogen" -o clip_dev.mp4
+```
 
 **Notices.** An explicit `--device gpu` or `--device gpu=N` that ends on the CPU (no OpenCL library, no usable device, no device number N, or a failed self-check of the whole device) prints one line on standard error, `device: <reason>; rendering on the CPU`, and renders on the CPU. The exit code is unchanged. `auto` prints nothing unless the report is on. `sapphire stage apply` forwards every `device: ` line to its standard error, on success and on failure.
 
@@ -161,21 +172,21 @@ python3 -I tools/apply.py clip.mp4 retime --param speed_percent=50 --depth 32 --
 
 ## Finding a stage's parameters
 
-`sapphire stage list --json` lists every stage with its parameters: the id to pass as `K=V` or `--param K=V`, and the kind (`float`, `checkbox` or `text`). A parameter with several lanes, such as a 2D shift or a colour, takes its values comma separated, for example `shift=0.1,0.2`.
+`sapphire stage list --json` lists every stage with its parameters: the id to pass as `K=V` or `--param K=V`, and the kind (`float`, `int`, `popup`, `checkbox` or `text`). A parameter with several lanes, such as a 2D shift or a colour, takes its values comma separated, for example `shift=0.1,0.2`.
 
 ```sh
 target/release/sapphire stage list --json
 ```
 
-The registered default and range of every parameter of an effect program come from `fx_run` itself:
+`stage list --json` carries the registered default and range of every parameter. The same values for an effect program come from `fx_run --describe-params`:
 
 ```sh
 target/release/fx_run --describe-params Hue_Sat_Bright_Autogen
 ```
 
-The argument is the style's program name, the `name` field of the stage in `stage list --json`. The output is JSON: per parameter its name, type, lanes, minimum, maximum and default. These values are part of the effects and are never copied into the documentation; ask `fx_run` for them.
+The argument is the style's program name, the `name` field of the stage in `stage list --json`. The output is JSON: per parameter its name, type, lanes, minimum, maximum and default. These values are part of the effects and are never copied into the documentation; `stage list --json` prints them first, and `fx_run --describe-params` prints the same values from a shell.
 
-Two styles of `BlurMoCurves` read a host curve file, passed as `--param host_curve_values=PATH`; without it they use an identity curve. The `S_DistortRGB` and `S_DropShadow` stages take optional extra layers with `--layer ID=PATH` ([effects provider](stages.md#effects-provider)).
+Two styles of `BlurMoCurves` read a host curve file, passed as `--param host_curve_values=PATH`; without it they use an identity curve. No effect stage takes an extra layer: `--layer` on one exits 3 with `LAYER-INPUT-UNSUPPORTED` ([effects provider](stages.md#effects-provider)).
 
 Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. Of the opacity choices only Normal (`2`) renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED). `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items.
 
@@ -185,7 +196,7 @@ See [Driving the effect parameters](parameters-guide.md) for every stage paramet
 
 Wall time of one 1920x1080 frame through `sapphire stage apply`, MEASURED on a 12 core server under some shared load (two runs per cell, in seconds, `before` and `after` on the same machine):
 
-| stage | before PR 4 (s) | after, CPU (s) | after, PoCL device (s) |
+| stage | before the in-process route (s) | after, CPU (s) | after, PoCL device (s) |
 |---|---|---|---|
 | `blur_color_autogen` | 1.27 / 1.22 | 0.72 / 0.76 | 0.74 / 0.73 |
 | `blur_mono_autogen` | 1.02 / 1.01 | 0.64 / 0.66 | 0.71 / 0.69 |
@@ -201,7 +212,7 @@ Wall time of one 1920x1080 frame through `sapphire stage apply`, MEASURED on a 1
 | `trails_autogen` | 1.26 / 1.16 | 0.85 / 0.75 | 0.85 / 0.88 |
 | `warp_perspective_autogen` | 3.87 / 3.49 | 1.37 / 1.31 | 1.44 / 1.46 |
 
-- `before PR 4` is the previous build: one `fx_run` process per frame and a full ripmap plane copy per row in the warp kernels.
+- `before the in-process route` is the previous build: one `fx_run` process per frame and a full ripmap plane copy per row in the warp kernels.
 - `after, CPU` is the default `--device cpu`, with the warp copies removed, the render in process and the parallel-safe kernels on all cores (`SAPPHIRE_THREADS=1` runs them on one).
 - `after, PoCL device` runs with the device path on PoCL, an OpenCL runtime on the same CPU. It shows that the device path is byte identical and what the path costs on this machine; it is CPU OpenCL and is never GPU speed. Speedups on a real GPU are INFERRED until one is measured.
 
@@ -212,9 +223,9 @@ Most of the remaining time of the light stages is moving the frame in and out of
 The ten effects are rebuilt so that, on every case the parity record compares, they give the original's output bit for bit ([what rebuilt means](effects.md#what-rebuilt-means)). For the stages, in plain words:
 
 - **MEASURED.** At depth 32, with the frame sizes and parameter values of the recorded renders that use each stage's host arrangement, the stage output is byte identical to the recorded native render: 382 of 382, checked by full SHA-256 ([Effects and stages](../README.md#effects-and-stages)).
-- **INFERRED.** Other frame sizes and parameter values, a real clip among them, run the same code path and are expected to match, but were not measured. The same holds for buffer placement at unmeasured sizes, `S_Trails` clips longer than the measured histories, `S_TimeWarpRGB` shifts beyond the measured ones, extra layers, and host curves other than the identity curve.
+- **INFERRED.** Other frame sizes and parameter values, a real clip among them, run the same code path and are expected to match, but were not measured. The same holds for buffer placement at unmeasured sizes, `S_Trails` clips longer than the measured histories, `S_TimeWarpRGB` shifts beyond the measured ones, and host curves other than the identity curve.
 - **Not claimed.** Depths 8 and 16 add a conversion to and from float that is not part of the record. Recorded renders with a different host arrangement are not claimed for the stage.
 - **Platform.** Every comparison was judged by an emulator that follows Intel's specification, not by real CPU silicon, and the native code reproduces the original's AVX2 and FMA code tier only.
-- **Host.** The stages render the effect, not a full host application: values between keyframes, masks, real host frame fetches and GPU rendering are outside the claim ([limits common to the ten effects](effects.md#limits-common-to-the-ten-effects)).
+- **Host.** The stages render the effect, not a full host application. The original host's keyframe interpolation, masks, real host frame fetches and the original's GPU renderer are outside the claim ([limits common to the ten effects](effects.md#limits-common-to-the-ten-effects)). Sapphire's own values between keys are INFERRED, and its device path is MEASURED on PoCL only.
 
 The limits of each effect are in [effects](effects.md), and the stage limits in [effects provider](stages.md#effects-provider).

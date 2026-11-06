@@ -1,16 +1,16 @@
-"""Check that fx_run renders the 13 effect styles the same way on this machine as on the reference build.
+"""Check that the sapphire stage route renders the 13 effect styles the same way on this machine as on the reference build.
 
 Usage:
   python -I tools/fx_golden.py              render every case and compare with tools/fx_golden.tsv (exit 1 on any difference)
   python -I tools/fx_golden.py --write      render every case and rewrite tools/fx_golden.tsv
-  python -I tools/fx_golden.py --bin DIR    use the sapphire and fx_run executables in DIR
+  python -I tools/fx_golden.py --bin DIR    use the sapphire executable in DIR
 
 Besides the plain cases the table has two more groups. The special group (size suffix `s`) renders every stage on a clip that
 holds +inf, -inf, both default NaN patterns, huge and subnormal values and neighbouring words that make invalid operations
 (inf - inf, 0 * inf, 0 / 0); it is where the default NaN of an ARM processor would show. The threaded group (suffix `t`)
 renders the plain sizes with SAPPHIRE_PAR_MIN=0 and SAPPHIRE_THREADS=3, so row bands run at every size; it must equal the plain rows.
 
-Each case runs one effect stage (`sapphire stage apply STAGE`, which runs fx_run with the stage's canonical
+Each case runs one effect stage (`sapphire stage apply STAGE`, which renders in process with the stage's canonical
 host options from crates/neutral-handoff/data/fx_stages.tsv) on a synthetic clip of 3 frames at depth 32 and
 records the SHA-256 of the output, or the exit status (`rcN`) of a case the stage refuses. The clip comes from a fixed seed and a 64-bit linear congruential generator,
 so it is the same bytes on every platform. The table holds hashes of this repository's own renders (made by the
@@ -93,16 +93,15 @@ def find_bin(given):
         target = os.environ.get("CARGO_TARGET_DIR") or os.path.join(ROOT, "target")
         dirs.append(os.path.join(target, "release"))
     for d in dirs:
-        if os.path.isfile(os.path.join(d, "sapphire" + EXE)) and os.path.isfile(os.path.join(d, "fx_run" + EXE)):
+        if os.path.isfile(os.path.join(d, "sapphire" + EXE)):
             return d
-    sys.exit("fx_golden: no sapphire and fx_run in " + ", ".join(dirs) + " (cargo build --release -p neutral-handoff -p fx_exec)")
+    sys.exit("fx_golden: no sapphire in " + ", ".join(dirs) + " (cargo build --release -p neutral-handoff)")
 
 
 def render(bindir, stage, width, height, clip, extra_env=None):
     cmd = [os.path.join(bindir, "sapphire" + EXE), "stage", "apply", stage, "--width", str(width), "--height", str(height),
            "--depth", "32", "--fps", "24", "--frames", str(FRAMES)]
     env = dict(os.environ)
-    env["SAPPHIRE_FX_RUN"] = os.path.join(bindir, "fx_run" + EXE)
     env.update(extra_env or {})
     r = subprocess.run(cmd, input=clip, capture_output=True, env=env)
     if r.returncode != 0:

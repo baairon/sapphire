@@ -16,10 +16,10 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | `lift-a` | Lifted functions. | 46 | 7 | 1,205 |
 | `lift-b` | Lifted functions. | 126 | 67 | 1,515 |
 | `neutral-ffmpeg` | Bridge to ffmpeg that runs it as a separate process and moves raw frames over pipes. | 23 | 22 | 130 |
-| `neutral-handoff` | Pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. | 32 | 32 | 220 |
+| `neutral-handoff` | Pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. | 33 | 33 | 228 |
 | `neutral-parity` | Replays oracle test vectors against ported functions. | 1 | 1 | 4 |
 | `neutral-world` | Rust side of the world-parametric parity harness. | 3 | 3 | 17 |
-| **total** |  | 495 | 298 | 5,679 |
+| **total** |  | 496 | 299 | 5,687 |
 
 ## lift-1
 
@@ -116,6 +116,7 @@ The 14 crates of the workspace, 10 of them lifted function crates. Module lists 
 | `crates/neutral-handoff/src/verify.rs` | Checking a finished output against the input, the checks of tools/apply.py (verify). |
 | `crates/neutral-handoff/src/vfx.rs` | Talking to vfx before a frame moves: what an effect is, whether its parameters are valid, and which contract version a stage speaks. |
 | `crates/neutral-handoff/src/bin/fake_vfx.rs` | fake-vfx: a stand-in for twixtor's vfx that the tests of this crate run. |
+| `crates/neutral-handoff/tests/cli_doc.rs` | docs/cli.md against the code it describes. |
 | `crates/neutral-handoff/tests/cross_twixtor.rs` | Either tool as a stage of the other, in one pipe: twixtor's vfx run by this pipeline as an ordinary --stage command, and this crate's stage apply run by twix... |
 | `crates/neutral-handoff/tests/frames2.rs` | frames/2 (docs/handoff.md): the stage manifest, --describe, the ffmpeg-filter stage, geometry chained through the wrapper, role and index in reports, and the... |
 | `crates/neutral-handoff/tests/fx_run_state.rs` | Two different stages run one after the other in one process give the bytes that separate processes give: the executor keeps nothing from one run in the next. |

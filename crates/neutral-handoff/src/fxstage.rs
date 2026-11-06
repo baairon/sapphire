@@ -982,6 +982,9 @@ pub fn apply(
     output: &mut dyn Write,
 ) -> Result<()> {
     let p = profile(id).ok_or_else(|| Error::unsupported(format!("unknown stage `{}`", id)))?;
+    if !layers.is_empty() {
+        return Err(Error::unsupported(format!("LAYER-INPUT-UNSUPPORTED: {} takes no `--layer` input; the effect stages render the source clip only", p.id)));
+    }
     if let Some(m) = missing() {
         return Err(Error::unsupported(format!("the effect stages need fx_run: {}", m)));
     }
@@ -993,14 +996,7 @@ pub fn apply(
     let keyed = Keyed::new(p, values, rate)?;
     // the arguments of frame `f`: a keyed parameter takes its value at that frame
     let args_at = |f: u64| param_args(p, &keyed.values_at(f));
-    let mut ls: Vec<Layer> = Vec::new();
-    for raw in layers {
-        let (lid, path) = raw.split_once('=').ok_or_else(|| Error::usage(format!("`--layer` expects ID=PATH, got `{}`", raw)))?;
-        if !p.layers.iter().any(|(n, _)| n == lid) {
-            return Err(Error::unsupported(format!("{} has no layer `{}`", p.id, lid)));
-        }
-        ls.push(Layer::load(lid, path, spec)?);
-    }
+    let ls: Vec<Layer> = Vec::new();
     let fb = spec.frame_bytes() as usize;
     let mut buf = vec![0u8; fb];
     let mut out = vec![0u8; fb];
@@ -1108,7 +1104,7 @@ mod tests {
         assert!(hsb.params.iter().any(|q| q.id == "hue_shift"));
         assert_eq!(profile("trails_autogen").unwrap().spool, true);
         assert_eq!(profile("time_warp_rgb_autogen").unwrap().kind, "temporal");
-        assert_eq!(profile("drop_shadow").unwrap().layers.len(), 2);
+        assert!(ps.iter().all(|q| q.layers.is_empty()));
     }
 
     #[test]

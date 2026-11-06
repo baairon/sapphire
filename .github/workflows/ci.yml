@@ -142,3 +142,6 @@ jobs:
       - run: python -I tools/gen_docs.py --check
 
       - run: python -I tools/check_docs.py
+
+      # Every effect has golden rows and calls no platform math library.
+      - run: python -I tools/test_effect_rules.py
