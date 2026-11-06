@@ -49,11 +49,16 @@ Sources of truth, for agents and scripts:
 
 | Standard | Functions | Share of code bytes |
 |---|---|---|
-| Strict parity: matched on every compared input | <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f-->, of which <!--f:close_labelled_rows-->6<!--/f--> rest on labelled assumptions | <!--f:strict_pct-->100.0<!--/f-->% (<!--f:close_labelled_pct-->2.5<!--/f-->% of the code rests on labelled assumptions) |
-| Strictest: strict, with every branch outcome counted over compared worlds only | <!--f:strictest_fns-->2,693<!--/f--> | <!--f:strictest_pct-->97.1<!--/f-->% |
+| Strict parity: matched on every compared input | <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f-->, of which <!--f:close_labelled_rows-->1<!--/f--> rest on labelled assumptions | <!--f:strict_pct-->100.0<!--/f-->% (<!--f:close_labelled_pct-->1.3<!--/f-->% of the code rests on labelled assumptions) |
+| Strictest, revised standard of 2026-11-05: strict, with every branch outcome seen in a compared world or explained under the harness model, now including the rules HR-P2 and HR-FP | <!--f:strictest_rev_fns-->2,701<!--/f--> of <!--f:fn_total-->2,702<!--/f--> | <!--f:strictest_rev_pct-->98.7<!--/f-->% |
+| Strictest, earlier definition (compared worlds and the original harness model only, class `audit3` not counted) | <!--f:strictest_fns-->2,697<!--/f--> | <!--f:strictest_pct-->97.9<!--/f-->% |
 | Unproven: never matched | <!--f:unproven_fns-->0<!--/f--> | <!--f:unproven_pct-->0.0<!--/f-->% |
 
-The <!--f:close_labelled_rows-->6<!--/f--> rows on labelled assumptions are strict, not strictest: F (an outcome that only faulting executions take, <!--f:close_rows_F-->2<!--/f--> rows), PN (an outcome seen only in worlds with a pinned word and a no-return call, <!--f:close_rows_PN-->1<!--/f-->), P2 (stores through the function's own frame never hit the record array, <!--f:close_rows_P2-->3<!--/f-->) and A1 (the sorted range is a whole number of 248 byte records, <!--f:close_rows_A1-->1<!--/f-->, the same function as one P2 row). Each is defined in [assumptions](docs/assumptions.md#summary) and listed in [evidence](docs/evidence.md#the-last-seven-rows).
+The <!--f:close_labelled_rows-->1<!--/f--> row on a labelled assumption is strict, not strictest: `f_0001b438`, on A1 (the sorted range is a whole number of 248 byte records, <!--f:close_rows_A1-->1<!--/f--> row). The earlier labels F (an outcome that only faulting executions take, <!--f:close_rows_F-->0<!--/f--> rows) and P2 (stores through the function's own frame never hit the record array, <!--f:close_rows_P2-->0<!--/f-->) became the harness rules HR-FP and HR-P2, and PN (<!--f:close_rows_PN-->0<!--/f-->) is retired. Each is defined in [assumptions](docs/assumptions.md#summary) and listed in [evidence](docs/evidence.md#the-last-seven-rows).
+
+The strictest standard was revised on 2026-11-05 at the maintainer's decision: the harness model gained two named rules, HR-P2 (frame disjointness) and HR-FP (fault parity) ([harness](docs/harness.md#harness-rules-hr-p2-and-hr-fp)). A function that reaches strictest only through them takes the evidence class `audit3`, which the second strictest row counts and the third row does not, so both figures stay visible. A figure rises only with its measurement and an independent audit: <!--f:ev_audit3_fns-->4<!--/f--> functions have `audit3` at this date (`f_00031780` and `f_000651c2` under HR-FP, `f_0002405b` and `f_00024a39` under HR-P2), each proof re-derived independently. PN is retired (`f_00056fa6` now has its 0x57936 outcome seen without a pin). A1 is kept for one function: `f_0001b438` is the row left, because its outcomes 0x1d3bc, 0x1ddc9 and 0x1e3ba still need the caller precondition A1 (a valid sort range), which is not a harness fact; no world of any kind takes them, and making a caller precondition part of the harness model would be a further change of the standard, which is the maintainer's decision.
+
+Known port divergences outside the harness model are listed in [parity](docs/parity.md#known-port-divergences-outside-the-harness-model): worlds that put a buffer argument inside the function's own frame (they violate HR-P2) expose differences in `f_0001b438` (32 of 1609 stack-resident worlds) and in `f_0002405b` and `f_00024a39` (11 stack-resident worlds). They are port follow-ups and change no figure.
 
 Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn_total-->2,702<!--/f--> functions, most of them bundled library code.
 
@@ -245,7 +250,7 @@ python -I tools/handoff.py doctor --conformance
 
 | Not covered | What it means |
 |---|---|
-| The <!--f:close_labelled_rows-->6<!--/f--> rows on labelled assumptions | strict only under F, PN, P2 or A1 ([assumptions](docs/assumptions.md#summary)); a world that breaks the assumption was not compared |
+| The <!--f:close_labelled_rows-->1<!--/f--> row on a labelled assumption (`f_0001b438`) | strict only under A1 ([assumptions](docs/assumptions.md#summary)); a world that breaks the assumption was not compared |
 | Inputs outside the seeded worlds | parity is measured on seeded inputs, not proved for every input ([caveats](docs/parity.md#caveats)) |
 | Callees outside the dump | modelled as writing nothing and returning a seeded word |
 | Stub argument values | <!--f:stub_arity_sites-->48<!--/f--> call sites passed fewer arguments than the bank signatures; those values were never compared |

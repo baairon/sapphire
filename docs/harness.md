@@ -17,6 +17,17 @@ How a Rust port is compared with the build it replaces. That build runs in the U
 | Rust fault | a `Fault` or panic raised while the port runs; counts as a failure |
 | `STK` | `0x5afe57ac`, the value that stands for any stack address passed to a call |
 
+## Harness rules HR-P2 and HR-FP
+
+Two rules of the harness model, named and dated 2026-11-05 at the maintainer's decision. They let the strictest standard count an outcome as explained under the model; a function that reaches strictest only through them takes the evidence class `audit3` ([evidence](evidence.md#evidence-classes)).
+
+| Rule | Statement | Replaces |
+|---|---|---|
+| HR-P2, frame disjointness | A buffer argument never lies in the function's own frame; every buffer argument has its own page region. This is how the world generator builds worlds and the rule the abstract interpreter already applies. An outcome that no world satisfying HR-P2 can take is unreachable inside the model, which needs a proof that every execution taking it has a buffer argument inside the function's own frame, re-derived independently | the labelled assumption P2 |
+| HR-FP, fault parity | A branch outcome that only faulting executions can take counts as explained when (1) a proof shows every execution taking it faults, and (2) the port faults with the same fault class at the same access in every world where the original takes it and faults, measured over the stored and new sets. Zero such worlds is never taken as parity | the labelled assumption F |
+
+Worlds that violate HR-P2 are outside the model. Measured port differences in such worlds are listed in [parity](parity.md#known-port-divergences-outside-the-harness-model).
+
 ## Oracle
 
 `archive:tools/oracle.py` runs one self-contained function on arguments generated from its spec, twice per case in fresh emulators, and records the returns, the final buffers and whether callee-saved registers and `rsp` were restored. Pointers stored inside buffers, callbacks, calls that leave the dump, thread-local storage and system calls are not supported, so a function that needs them is never P1.

@@ -359,8 +359,10 @@ class Generator:
     def page_tiers(self, b):
         body = [DO_NOT_EDIT, "# Tiers", "",
                 "Parity tiers and strict accounting of the {} functions ({} bytes): {} functions are strict "
-                "({}% of the code), {} under the strictest standard ({}%), {} are unproven ({}%).".format(
+                "({}% of the code), {} under the revised strictest standard of 2026-11-05 ({}%), {} under the earlier "
+                "definition ({}%), {} are unproven ({}%).".format(
                     self.t("fn_total"), self.t("code_bytes"), self.t("strict_fns"), self.t("strict_pct"),
+                    self.t("strictest_rev_fns"), self.t("strictest_rev_pct"),
                     self.t("strictest_fns"), self.t("strictest_pct"), self.t("unproven_fns"), self.t("unproven_pct")),
                 "", "## By tier", ""]
         body += b["tiers"] + ["", "## Strict", ""] + b["strict"] + ["", "## Unproven", ""]
@@ -372,9 +374,10 @@ class Generator:
         opens = [[r["symbol"], r["offset"]] for r in d.audit_final if r["verdict"] == "OPEN"]
         anyw = [[r["id"], r["offset"], code(r["bank_name"])] for r in d.rows if r["evidence"] == "anyworld"]
         body = [DO_NOT_EDIT, "# Evidence", "",
-                "What each function's parity claim rests on. {} functions are strict; {} meet the strictest standard "
-                "(every branch outcome confirmed in the compared worlds).".format(self.t("strict_fns"),
-                                                                                 self.t("strictest_fns")), "",
+                "What each function's parity claim rests on. {} functions are strict; {} meet the revised strictest "
+                "standard of 2026-11-05 and {} meet the earlier definition (every branch outcome confirmed in the "
+                "compared worlds).".format(self.t("strict_fns"), self.t("strictest_rev_fns"),
+                                           self.t("strictest_fns")), "",
                 "## By evidence", ""]
         body += b["evidence"] + ["", "## Audit", "",
                                  "`docs/data/audit_final.tsv` holds {} rows: {} PASS, {} OPEN. "

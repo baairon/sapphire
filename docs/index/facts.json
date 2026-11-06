@@ -57,19 +57,34 @@
    "source": "docs/data/FUNCTION_MAP.tsv strict exact, share of code bytes"
   },
   "strictest_fns": {
-   "value": 2693,
-   "text": "2,693",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2}"
+   "value": 2697,
+   "text": "2,697",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2} (the earlier definition, audit3 not counted)"
   },
   "strictest_bytes": {
-   "value": 936626,
-   "text": "936,626",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2}"
+   "value": 944336,
+   "text": "944,336",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2} (the earlier definition, audit3 not counted)"
   },
   "strictest_pct": {
-   "value": 97.1,
-   "text": "97.1",
-   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2}, share of code bytes"
+   "value": 97.9,
+   "text": "97.9",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2} (the earlier definition, audit3 not counted), share of code bytes"
+  },
+  "strictest_rev_fns": {
+   "value": 2701,
+   "text": "2,701",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2, audit3} (the revised standard of 2026-11-05)"
+  },
+  "strictest_rev_bytes": {
+   "value": 951775,
+   "text": "951,775",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2, audit3} (the revised standard of 2026-11-05)"
+  },
+  "strictest_rev_pct": {
+   "value": 98.7,
+   "text": "98.7",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence in {p1, second, owner, audit2, audit3} (the revised standard of 2026-11-05), share of code bytes"
   },
   "unproven_fns": {
    "value": 0,
@@ -97,18 +112,23 @@
    "source": "docs/data/FUNCTION_MAP.tsv evidence owner"
   },
   "ev_anyworld_fns": {
-   "value": 3,
-   "text": "3",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv evidence anyworld"
   },
   "ev_audit2_fns": {
-   "value": 1,
-   "text": "1",
+   "value": 5,
+   "text": "5",
    "source": "docs/data/FUNCTION_MAP.tsv evidence audit2"
   },
+  "ev_audit3_fns": {
+   "value": 4,
+   "text": "4",
+   "source": "docs/data/FUNCTION_MAP.tsv evidence audit3"
+  },
   "ev_assumed_fns": {
-   "value": 6,
-   "text": "6",
+   "value": 1,
+   "text": "1",
    "source": "docs/data/FUNCTION_MAP.tsv evidence assumed"
   },
   "partial_fns": {
@@ -392,13 +412,13 @@
    "source": "docs/data/EXACT_AUDIT.tsv rows"
   },
   "audit_pass": {
-   "value": 1699,
-   "text": "1,699",
+   "value": 1702,
+   "text": "1,702",
    "source": "docs/data/audit_final.tsv verdict PASS"
   },
   "audit_open": {
-   "value": 3,
-   "text": "3",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/audit_final.tsv verdict OPEN"
   },
   "pipeline_parity_rows": {
@@ -512,13 +532,13 @@
    "source": "text scan of crates/lift-*/src/ for fn f_XXXXXXXX definitions, ids with more than one definition"
   },
   "anyworld_fn": {
-   "value": 3,
-   "text": "3",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv evidence anyworld"
   },
   "anyworld_bytes": {
-   "value": 4276,
-   "text": "4,276",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/FUNCTION_MAP.tsv evidence anyworld"
   },
   "unproven_p2v_fn": {
@@ -617,88 +637,88 @@
    "source": "docs/data/ledger_digest.tsv note, 'write nothing through pointers'"
   },
   "close_rows": {
-   "value": 7,
-   "text": "7",
+   "value": 10,
+   "text": "10",
    "source": "docs/data/audit_close.tsv rows"
   },
   "close_pass_rows": {
-   "value": 1,
-   "text": "1",
+   "value": 9,
+   "text": "9",
    "source": "docs/data/audit_close.tsv verdict PASS"
   },
   "close_labelled_rows": {
-   "value": 6,
-   "text": "6",
+   "value": 1,
+   "text": "1",
    "source": "docs/data/audit_close.tsv rows with a label other than -"
   },
   "close_labelled_bytes": {
-   "value": 23757,
-   "text": "23,757",
+   "value": 12884,
+   "text": "12,884",
    "source": "docs/data/audit_close.tsv rows with a label other than -, sum of size"
   },
   "close_labelled_pct": {
-   "value": 2.5,
-   "text": "2.5",
+   "value": 1.3,
+   "text": "1.3",
    "source": "docs/data/audit_close.tsv rows with a label other than -, share of code bytes"
   },
   "close_compared": {
-   "value": 15116,
-   "text": "15,116",
+   "value": 25839,
+   "text": "25,839",
    "source": "docs/data/audit_close.tsv sum of compared"
   },
   "close_outcomes": {
-   "value": 216,
-   "text": "216",
+   "value": 236,
+   "text": "236",
    "source": "docs/data/audit_close.tsv sum of outcomes"
   },
   "close_seen": {
-   "value": 151,
-   "text": "151",
+   "value": 170,
+   "text": "170",
    "source": "docs/data/audit_close.tsv sum of seen"
   },
   "close_explained": {
-   "value": 65,
-   "text": "65",
+   "value": 66,
+   "text": "66",
    "source": "docs/data/audit_close.tsv sum of explained"
   },
   "close_landing_outcomes": {
-   "value": 20,
-   "text": "20",
+   "value": 22,
+   "text": "22",
    "source": "docs/data/audit_close.tsv sum of landing_pads"
   },
   "close_landing_rows": {
-   "value": 1,
-   "text": "1",
+   "value": 2,
+   "text": "2",
    "source": "docs/data/audit_close.tsv rows with landing_pads above 0"
   },
   "close_rows_F": {
-   "value": 2,
-   "text": "2",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/audit_close.tsv rows whose labels include F"
   },
   "close_out_F": {
-   "value": 2,
-   "text": "2",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/audit_close.tsv label_outcomes F"
   },
   "close_rows_PN": {
-   "value": 1,
-   "text": "1",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/audit_close.tsv rows whose labels include PN"
   },
   "close_out_PN": {
-   "value": 1,
-   "text": "1",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/audit_close.tsv label_outcomes PN"
   },
   "close_rows_P2": {
-   "value": 3,
-   "text": "3",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/audit_close.tsv rows whose labels include P2"
   },
   "close_out_P2": {
-   "value": 12,
-   "text": "12",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/audit_close.tsv label_outcomes P2"
   },
   "close_rows_A1": {
@@ -707,18 +727,18 @@
    "source": "docs/data/audit_close.tsv rows whose labels include A1"
   },
   "close_out_A1": {
-   "value": 4,
-   "text": "4",
+   "value": 3,
+   "text": "3",
    "source": "docs/data/audit_close.tsv label_outcomes A1"
   },
   "close_sets_rows": {
-   "value": 48,
-   "text": "48",
+   "value": 62,
+   "text": "62",
    "source": "docs/data/close_sets.tsv rows"
   },
   "close_sets_pins": {
-   "value": 16,
-   "text": "16",
+   "value": 0,
+   "text": "0",
    "source": "docs/data/close_sets.tsv sum of pins"
   },
   "stub_arity_fns": {
