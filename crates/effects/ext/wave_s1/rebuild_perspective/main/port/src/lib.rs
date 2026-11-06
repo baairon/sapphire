@@ -57,7 +57,7 @@ pub fn sincos_arg(gpu_call_a: f32) -> f32 {
 }
 
 /// The one native for the callee (crate libm_sincos, SC1): (r0, r1) = (sin, cos) as f32, bit exact against the emulated routine.
-/// PX1-A1 (the f64 model) is retired by W50.
+/// PX1-A1 (the f64 model) is retired: the callee is the native crate libm_sincos.
 pub fn sincos_native(x: f32) -> (f32, f32) {
     libm_sincos::sincosf_x(x)
 }

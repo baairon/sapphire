@@ -1,4 +1,4 @@
-//! Batch 016: format-id tables (jump tables) that fill small output records, and a format predicate with a
+//! format-id tables (jump tables) that fill small output records, and a format predicate with a
 //! level limit.
 use crate::cov::{br, hit};
 use crate::*;

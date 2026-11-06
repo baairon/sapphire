@@ -1,4 +1,4 @@
-//! T22 (INT9, Batch 41 rule 4, W323; WPG15 PATCH 2): the INPUT-PRESENCE-MASK is one native input. Both readers derive from it:
+//! T22 (INT9; WPG15 PATCH 2): the INPUT-PRESENCE-MASK is one native input. Both readers derive from it:
 //! the bind pass (bit = node index minus 3 = declared position, INFERRED) and the range pass (bit = record field +0xba = declared position).
 //! (1) presence 0 equals the state A form (range mask 0, no image binding); (2) presence 1 with the Mask channel count equals the state A
 //! form with range mask 1 and Mask bound as an image; (3) the plans at 0 and 1 differ (the bind pass reads the bit);

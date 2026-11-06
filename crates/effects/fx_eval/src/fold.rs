@@ -86,7 +86,7 @@ pub fn is_complex_one(a: &[ArgView2], i: usize) -> bool {
     }
 }
 
-/// DCP1 (W603): the count the original stores for a v3_to_v4_if4 node is the element count of its bound image argument (argument 2).
+/// DCP1: the count the original stores for a v3_to_v4_if4 node is the element count of its bound image argument (argument 2).
 /// None when the argument has no known count.
 pub fn v3_count(a: &[ArgView2]) -> Option<i32> {
     a.get(2).and_then(|x| x.elnum)
@@ -169,10 +169,10 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
                 None
             }
         }
-        // DCP1 (W588 (a), W603): the collapse test in full. Collapse only when the copy_alpha argument is a constant below zero
+        // DCP1: the collapse test in full. Collapse only when the copy_alpha argument is a constant below zero
         // and the tag is 1 or 3; a copy_alpha of zero or above keeps the node (the class-3 tail, MEASURED by DCP1).
         "postdivide" => (copy_alpha_negative(a) && (el == 1 || el == 3)).then_some(0),
-        // DCP1 v2 (W588 (a), W603): the flag word is the low bit of the node's element count (3 in the class-3 compile, 4 and 2 in
+        // DCP1 v2: the flag word is the low bit of the node's element count (3 in the class-3 compile, 4 and 2 in
         // the others, MEASURED by DCP1's write watch); set: the node forwards argument 0. A node whose arguments 0 and 1 are both
         // constants is left to the constant fold (the original folds Hue_Sat_Bright's two class-3 nodes to the same constants).
         "v3_to_v4_if4" => (!(a.first().map(|x| x.is_const).unwrap_or(false) && a.get(1).map(|x| x.is_const).unwrap_or(false))
@@ -374,14 +374,14 @@ pub fn can_fold(class: &str, a: &[ArgView2]) -> bool {
 
 /// Slot 30 with the node's own combo tag (`out_el`[this]) for the classes whose slot 30 reads it.
 /// DSW3, READ: blur slot 30 : argument 3 (opacity) constant zero and (tag odd, or tag equal to [this]).
-/// READ RULE (W262 b, EVT1): [this] is argument 0's bound count (setter; OPERAND MEASURED for counts 2 and 4); the Drop_Shadow blurs have tag 1 (odd), so the field is not exercised there.
+/// READ RULE (EVT1): [this] is argument 0's bound count (setter; OPERAND MEASURED for counts 2 and 4); the Drop_Shadow blurs have tag 1 (odd), so the field is not exercised there.
 pub fn can_fold_el(class: &str, a: &[ArgView2], out_el: Option<i32>) -> bool {
     if class == "blur" {
         let tag = match out_el {
             Some(t) => t,
             None => return false,
         };
-        // W262 (b) READ RULE: [this] = argument 0's bound count (setter); SHE4_OFF=blur_ac ablates it
+        // READ RULE: [this] = argument 0's bound count (setter); SHE4_OFF=blur_ac ablates it
         let ac = if off("blur_ac") { -99 } else { a.first().and_then(|x| x.elnum).unwrap_or(-99) };
         return !off("blur_fold") && a.len() >= 4 && is_zero(&a[3]) && ((tag & 1) != 0 || tag == ac);
     }
@@ -422,7 +422,7 @@ fn math1(class: &str, x: f32) -> f32 {
         "one_minus" => 1.0 - x,
         "negate" => -x,
         "cos" => crate::svml_trig::cos_rev(x),
-        // INT3: NV-3g rules E (atan in revolutions) and E2 (log(2.0) lane) are NOT merged (W176 (c), W181 (a)); atan and log keep the plain f32 code until the one-argument origin is traced (CMP2e M9)
+        // INT3: NV-3g rules E (atan in revolutions) and E2 (log(2.0) lane) are NOT merged; atan and log keep the plain f32 code until the one-argument origin is traced (CMP2e M9)
         "atan" => x.atan(),
         "log" => x.ln(),
         "sin" => crate::svml_trig::sin_rev(x),
@@ -436,11 +436,11 @@ fn math1(class: &str, x: f32) -> f32 {
 }
 
 /// Folded lanes (f32 bits) for `class` over constant arguments; None when not foldable.
-/// INT22 step B (W509 (b), W515 (d), W521 (a)): the form of a folded v3_to_v4_if4 node. M4: n = 4 (the 4 channel arm); M3Z: n = 3 with a scalar
+/// INT22 step B: the form of a folded v3_to_v4_if4 node. M4: n = 4 (the 4 channel arm); M3Z: n = 3 with a scalar
 /// argument 0 and every argument 1 lane bit equal to +0.0 (HSR2's h2F, h2F2 class-3 originals); M2S: n = 2 with scalar arguments (BCJ3's Blur_Mono
-/// originals; a vector argument 1 with equal lanes counts as scalar); INT23 (W523 (a), (c)), widened by INT24 (W533 (b)): M3V: n = 3, argument 0
+/// originals; a vector argument 1 with equal lanes counts as scalar); INT23, widened by INT24: M3V: n = 3, argument 0
 /// a 3-lane vector (any lanes), argument 1 a scalar (or a vector with bit-equal lanes) bit equal to 1.0 (0x3f800000); result the three lanes of
-/// argument 0, argument 1 not placed (HSR1 hsBR and hsR0 re-scores at equal lanes; FLD2 bindings A and B at distinct lanes); every other form is UNMEASURED-FORM and is refused on the claim route
+/// argument 0, argument 1 not placed (HSR1 hsBR and hsR0 re-scores at equal lanes; FLD2 bindings A and B at distinct lanes); every other form is UNMEASURED-FORM and is refused on the verified render path
 /// (V3TOV4IF4-NARROW-UNMEASURED) by fx_run.
 pub fn v3_form(a: &[ArgView2], out_el: i32) -> &'static str {
     let n = out_el.clamp(1, 4) as usize;
@@ -453,9 +453,9 @@ pub fn v3_form(a: &[ArgView2], out_el: i32) -> &'static str {
     match n {
         4 => "M4",
         3 if a[0].n <= 1 && a1_zero => "M3Z",
-        // INT24 widening (W533 (b), W537 (a)): any 3-lane argument 0 (FLD2 bindings A and B, distinct lanes); argument 1 other than 1.0 stays refused (W533 (c))
+        // INT24 widening: any 3-lane argument 0 (FLD2 bindings A and B, distinct lanes); argument 1 other than 1.0 stays refused
         3 if a[0].n == 3 && a1_equal && a[1].lanes[0].to_bits() == 0x3f80_0000 => "M3V",
-        // FLD3-FORM (W666 (d) 2, W678 (c)): n = 3, a one-lane argument 0 and a one-lane argument 1. BCJ5's FLD3 records (Blur_Color_Autogen node 67; brightness 1.0,
+        // FLD3-FORM: n = 3, a one-lane argument 0 and a one-lane argument 1. BCJ5's FLD3 records (Blur_Color_Autogen node 67; brightness 1.0,
         // 1.21 and 1.21 with scale_opacity 1.0, 1.0 and 0.6875): the folded constant is argument 0 broadcast to lanes 0 to 2 and argument 1 in lane 3.
         3 if a[0].n <= 1 && a[1].n <= 1 && !cfg!(feature = "fld3_form_kept_mut") => "M3B",
         // FLD3M (BCJ5's node 68 records gA to gD): n = 1 and one-lane arguments: the folded constant is the pair [a0 a1] (measured [1 1], [1 0.6875] and
@@ -468,7 +468,7 @@ pub fn v3_form(a: &[ArgView2], out_el: i32) -> &'static str {
 
 thread_local! {
     /// INT22 step B: every v3_to_v4_if4 fold of the last compile on this thread: (node, n, argument 0 lanes count, argument 1 lane bits, result bits, form,
-    /// argument 0 lane bits (INT23, W523 (d))).
+    /// argument 0 lane bits (INT23)).
     static V3_FOLDS: std::cell::RefCell<Vec<(usize, usize, usize, Vec<u32>, [u32; 4], &'static str, Vec<u32>)>> = std::cell::RefCell::new(Vec::new());
 }
 
@@ -570,7 +570,7 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
             if a.len() < 2 {
                 return None;
             }
-            // FLD3 wrong-form mutants (build-time features, W170): the candidate forms BCJ5's records exclude (lane 3 of each is the candidate's own prediction, 1.0)
+            // FLD3 wrong-form mutants (build-time features): the candidate forms BCJ5's records exclude (lane 3 of each is the candidate's own prediction, 1.0)
             if cfg!(feature = "fld3_bcast_mut") && n == 3 && a[0].n <= 1 {
                 out[..3].fill(lane(&a[0], 0));
                 out[3] = 1.0;
@@ -621,11 +621,11 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                         out[1] = a[1].lanes[0];
                     }
                 }
-                // INT23 (W523 (c) 2, W170): mutant only: argument 1 into the last lane at n = 3 for a vector argument 0; must be killed by HSR1's hsBR and hsR0.
+                // INT23: mutant only: argument 1 into the last lane at n = 3 for a vector argument 0; must be killed by HSR1's hsBR and hsR0.
                 if cfg!(feature = "int23_a1last_mut") && n == 3 && a[0].n > 1 {
                     out[2] = a[1].lanes[0];
                 }
-                // INT24 (W533 (b), W170): mutant only: lane 0 of a 3-lane argument 0 broadcast at n = 3; must be killed by FLD2's two native compiles.
+                // INT24: mutant only: lane 0 of a 3-lane argument 0 broadcast at n = 3; must be killed by FLD2's two native compiles.
                 if cfg!(feature = "int24_lane0v_mut") && n == 3 && a[0].n == 3 {
                     out[1] = a[0].lanes[0];
                     out[2] = a[0].lanes[0];
@@ -785,7 +785,7 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
             }
         },
     }
-    // FLD3-FORM (W678 (c)): the measured n = 3 form carries argument 1 in lane 3 of the original's folded constant; no other form keeps a lane at or beyond n
+    // FLD3-FORM: the measured n = 3 form carries argument 1 in lane 3 of the original's folded constant; no other form keeps a lane at or beyond n
     let keep3 = class == "v3_to_v4_if4" && n == 3 && a.len() >= 2 && a[0].n <= 1 && a[1].n <= 1;
     let keep1 = class == "v3_to_v4_if4" && n == 1 && a.len() >= 2 && a[0].n <= 1 && a[1].n <= 1;
     for i in n..4 {

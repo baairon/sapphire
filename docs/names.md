@@ -1,6 +1,6 @@
 # Names
 
-Every function, class, stub, effect and parameter name comes from the name bank. Names live in tables and documents; the code keeps its `f_XXXXXXXX` symbols. A name is the bank's assignment for its offset.
+Every function, class, [stub](glossary.md#stub), effect and parameter name comes from the [name bank](glossary.md#name-bank). Names live in tables and documents; the code keeps its `f_XXXXXXXX` symbols. A name is the bank's assignment for its offset.
 
 ## The name bank
 

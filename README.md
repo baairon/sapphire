@@ -2,18 +2,20 @@
 
 An independent open source reimplementation of Sapphire behaviour, function by function. It is not affiliated with or endorsed by any other company, product or library.
 
-The plugin's functions, written in Rust and paired with ffmpeg and twixtor. `tools/fn_info.py` looks up any function, `sapphire` runs an ffmpeg decode, twixtor's `vfx`, the stages of any tool and an ffmpeg encode as one pipe, `sapphire stage apply` runs this repository's stages on raw frames, and `tools/handoff.py` and `tools/conformance.py` hand tasks to twixtor and test a stage against the convention.
+sapphire rebuilds the plugin's functions and ten of its video effects in Rust, and runs the effects on video through ffmpeg. The `sapphire` command decodes a clip with ffmpeg, passes its frames through one or more effect stages (and, if wanted, twixtor's `vfx`), encodes the result and checks it before writing the output. Each port is compared with the original on every compared input, and the parity record in [docs/parity.md](docs/parity.md) says exactly what is covered.
 
 ## Status
 
-Ten effects run today as native Rust, each matching the original bit for bit on every compared case; the list and what each claim covers are in [docs/effects.md](docs/effects.md). They render through `fx_run` and as `sapphire stage` commands. The effects need no external data: they render from code in this repository alone. The goal is 20 effects, the ten done plus the ten of [docs/roadmap.md](docs/roadmap.md); the other names in the plugin are not planned.
+- **Effects.** Ten effects run as native Rust and match the original bit for bit on every compared case ([effects](docs/effects.md)). They render through `fx_run` and as `sapphire stage` commands, from code in this repository alone, with no external data. Ten more are planned ([roadmap](docs/roadmap.md)), for 20 in all; the other effect names of the plugin are not planned.
+- **Functions.** <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f--> functions reach [strict parity](docs/glossary.md#strict) ([Parity](#parity)).
+- **Usage.** [docs/guide.md](docs/guide.md) shows how to run the effects on a video.
 
 ## Contents
 
 - [Status](#status)
+- [Build](#build)
 - [Quick start](#quick-start)
-  - [Build](#build)
-  - [Run one effect](#run-one-effect)
+- [Documentation](#documentation)
 - [Parity](#parity)
 - [Effects and stages](#effects-and-stages)
   - [Names](#names)
@@ -28,76 +30,98 @@ Ten effects run today as native Rust, each matching the original bit for bit on 
 - [Tests](#tests)
   - [Smoke test](#smoke-test)
 - [Limits](#limits)
-- [Documentation](#documentation)
-  - [Sources of truth](#sources-of-truth)
 - [Legal](#legal)
 - [License](#license)
 
-## Quick start
-
-Build first, then run one effect.
-
-### Build
+## Build
 
 From the repository root, with a stable Rust toolchain, offline:
 
 ```sh
-cargo build --release --offline -p neutral-handoff
+cargo build --release --offline -p neutral-handoff -p fx_exec
 ```
 
-On a Windows machine without the MSVC linker the GNU toolchain builds the same code: `cargo +stable-x86_64-pc-windows-gnu build --release --offline -p neutral-handoff`.
+On a Windows machine without the MSVC linker the GNU toolchain builds the same code: `cargo +stable-x86_64-pc-windows-gnu build --release --offline -p neutral-handoff`. The effect crates, `fx_run` among them, are built and tested in CI on Linux only.
 
 | Binary | Path (`.exe` added on Windows) | Used by |
 |---|---|---|
 | `sapphire` | `target/release/sapphire` | the pipeline, the stage provider of `contracts/tool.json`, `tools/handoff.py doctor`, `tools/conformance.py` |
+| `fx_run` | `target/release/fx_run` | the 13 effect stages, which look for it beside `sapphire` (or at `SAPPHIRE_FX_RUN`) |
 | `fake-vfx` | `target/release/fake-vfx` | the pipeline tests, as a stand in for twixtor's `vfx` |
 
-`CARGO_TARGET_DIR` moves both; `SAPPHIRE_PATH` points the Python tools at another build. The pipeline and the `neutral-ffmpeg` tests need ffmpeg and ffprobe ([finding ffmpeg](docs/ffmpeg.md#finding-ffmpeg)).
+`CARGO_TARGET_DIR` moves the binaries; `SAPPHIRE_PATH` points the Python tools at another build. The pipeline and the `neutral-ffmpeg` tests need ffmpeg and ffprobe ([finding ffmpeg](docs/ffmpeg.md#finding-ffmpeg)).
 
-### Run one effect
+## Quick start
 
-An effect renders through `fx_run`, built from `crates/effects/fx_exec`. It needs no external data ([no external data](docs/effects.md#no-external-data)); the full call and options are in [Build and run](docs/effects.md#build-and-run).
+After [Build](#build), with ffmpeg on `PATH`, from the repository root. Make a one second test clip, list the stages, then run one effect stage over the clip:
 
 ```sh
-cargo build --release --offline -p fx_exec
-target/release/fx_run PROGRAM --size WxH --out PREFIX --synth SEED [options]
+ffmpeg -v error -f lavfi -i testsrc=size=160x96:rate=24 -t 1 -pix_fmt yuv420p clip.mp4
+target/release/sapphire stage list
+target/release/sapphire clip.mp4 --depth 32 --stage "@hue_sat_bright_autogen hue_shift=0.25" -o clip_hue.mp4
 ```
 
-`PROGRAM` is a registered program of [docs/effects.md](docs/effects.md), and the output is `PREFIX.dest.f32` with `PREFIX.dest.meta.txt`. Some host context options are required and have no default; a call that omits one is refused with a message that names it.
+The last command decodes `clip.mp4`, shifts its hue with the `S_HueSatBright` stage, encodes `clip_hue.mp4` and verifies it. Depth 32 is the render path the parity record covers. Stage ids, parameters, chaining and twixtor are in the [guide](docs/guide.md).
+
+## Documentation
+
+- [docs/guide.md](docs/guide.md): using the effects on a clip or on raw frames, chaining, parameters, speed and what is claimed.
+- [docs/parameters-guide.md](docs/parameters-guide.md): every stage parameter, how to write its value, and the values verified against recorded renders.
+- [docs/effects.md](docs/effects.md): the ten native effects, their status, how to build and run `fx_run`, and their shared limits.
+- [docs/stages.md](docs/stages.md): the stage manifest and apply command, how a new provider joins, and the effects provider.
+- [docs/roadmap.md](docs/roadmap.md): the 20 effects the project aims for, the ten done and the ten planned.
+- [docs/adding-an-effect.md](docs/adding-an-effect.md): how to add the next effects.
+- [docs/glossary.md](docs/glossary.md): the technical terms of the parity record.
+- [docs/parity.md](docs/parity.md): what parity means, the tiers, strict and strictest, the caveats.
+- [docs/harness.md](docs/harness.md): the oracle, worlds, the `Env` trait, vector sets, comparison and replay.
+- [docs/lifting.md](docs/lifting.md): mechanical lift and hand port, the crate layout, the x86 rules the ports reproduce.
+- [docs/evidence.md](docs/evidence.md): the evidence classes and the record behind each function's status.
+- [docs/assumptions.md](docs/assumptions.md): every assumption the parity figures rest on.
+- [docs/missing-data.md](docs/missing-data.md): references the dump does not contain, and their placeholders.
+- [docs/reproduce.md](docs/reproduce.md): what reruns from this repository alone and what needs the archive.
+- [docs/names.md](docs/names.md): the name bank, origins, the name check and confirmation levels.
+- [docs/ffmpeg.md](docs/ffmpeg.md): how sapphire finds and runs ffmpeg.
+- [docs/handoff.md](docs/handoff.md): how sapphire, twixtor and ffmpeg pass raw frames to each other.
+- [docs/generated/index.md](docs/generated/index.md): the generated reference of functions, classes, stubs, effects, parameters and crates.
+- [docs/handoff-bench.tsv](docs/handoff-bench.tsv): the wrappers timed on chained stages, written by `tools/conformance.py --bench`.
+
+`docs/index/` holds the machine readable index: `facts.json` (every figure with its source), `functions.jsonl` (one row a function) and `pages.json` (every page with its title and size). `docs/data/` holds the checked in evidence, among it the function map `docs/data/FUNCTION_MAP.tsv`; `docs/generated/`, `docs/index/` and the figures in every page are written from it by `python -I tools/gen_docs.py`, so change the data, then regenerate.
+
+For scripts, the quickest answers are: `python -I tools/fn_info.py ID|NAME|OFFSET [--json]` for one function, `docs/index/functions.jsonl` for every function, `docs/index/facts.json` for any figure, `target/release/sapphire stage list --json` for this repository's stages, `python -I tools/handoff.py stages --json` for every stage of sapphire and twixtor with a ready command, and `target/release/sapphire INPUT [EFFECT] ... --dry-run` for what a run will do.
 
 ## Parity
 
-1:1 parity with the build it replaces is the first priority of this project, ahead of speed, convenience and a cleaner design. When they conflict, parity wins.
+1:1 parity with the build it replaces comes before speed, convenience and a cleaner design: when they conflict, parity wins.
 
-- **Output.** A port gives what the function it replaces gives on every compared input: bit for bit on oracle vectors (tier P1), and the same returns, memory writes and calls in every compared world (tier P2v) ([tiers](docs/parity.md#tiers)).
+- **Output.** A port gives what the function it replaces gives on every compared input: bit for bit on oracle vectors ([tier P1](docs/glossary.md#p1)), and the same returns, memory writes and calls in every [compared world](docs/glossary.md#compared-world) ([tier P2v](docs/glossary.md#p2v)) ([tiers](docs/parity.md#tiers)).
 - **Interface.** Each port keeps its function's offset in its symbol, `f_XXXXXXXX`, and the name bank gives that function's exact name.
-- **No near misses.** A port that differs on any compared input counts in no parity figure ([unproven](docs/parity.md#unproven)).
+- **No near misses.** A port that differs on any compared input is in no parity figure ([unproven](docs/parity.md#unproven)).
 - **Measured, not assumed.** Each function and its port run on the same generated inputs and every result is compared ([harness](docs/harness.md)); what the figures rest on is in [assumptions](docs/assumptions.md).
 
 | Standard | Functions | Share of code bytes |
 |---|---|---|
-| Strict parity: matched on every compared input | <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f-->, of which <!--f:close_labelled_rows-->1<!--/f--> rest on labelled assumptions | <!--f:strict_pct-->100.0<!--/f-->% (<!--f:close_labelled_pct-->1.3<!--/f-->% of the code rests on labelled assumptions) |
-| Strictest, revised standard of 2026-11-05: strict, with every branch outcome seen in a compared world or explained under the harness model, now including the rules HR-P2 and HR-FP | <!--f:strictest_rev_fns-->2,701<!--/f--> of <!--f:fn_total-->2,702<!--/f--> | <!--f:strictest_rev_pct-->98.7<!--/f-->% |
-| Strictest, earlier definition (compared worlds and the original harness model only, class `audit3` not counted) | <!--f:strictest_fns-->2,697<!--/f--> | <!--f:strictest_pct-->97.9<!--/f-->% |
+| Strict parity: matched on every compared input | <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f-->, of which <!--f:close_labelled_rows-->1<!--/f--> rests on a stated assumption | <!--f:strict_pct-->100.0<!--/f-->% (<!--f:close_labelled_pct-->1.3<!--/f-->% of the code rests on stated assumptions) |
+| Strictest, standard revised on 2026-11-05: strict, with every [branch outcome](docs/glossary.md#branch-outcome) seen in a compared world or explained under the [harness model](docs/glossary.md#harness-model), including the rules HR-P2 and HR-FP | <!--f:strictest_rev_fns-->2,701<!--/f--> of <!--f:fn_total-->2,702<!--/f--> | <!--f:strictest_rev_pct-->98.7<!--/f-->% |
+| Strictest, earlier definition (compared worlds and the original harness model only, evidence class `audit3` excluded) | <!--f:strictest_fns-->2,697<!--/f--> | <!--f:strictest_pct-->97.9<!--/f-->% |
 | Unproven: never matched | <!--f:unproven_fns-->0<!--/f--> | <!--f:unproven_pct-->0.0<!--/f-->% |
 
-The <!--f:close_labelled_rows-->1<!--/f--> row on a labelled assumption is strict, not strictest: `f_0001b438`, on A1 (the sorted range is a whole number of 248 byte records, <!--f:close_rows_A1-->1<!--/f--> row). The earlier labels F (an outcome that only faulting executions take, <!--f:close_rows_F-->0<!--/f--> rows) and P2 (stores through the function's own frame never hit the record array, <!--f:close_rows_P2-->0<!--/f-->) became the harness rules HR-FP and HR-P2, and PN (<!--f:close_rows_PN-->0<!--/f-->) is retired. Each is defined in [assumptions](docs/assumptions.md#summary) and listed in [evidence](docs/evidence.md#the-last-seven-rows).
+The <!--f:close_labelled_rows-->1<!--/f--> function that rests on a stated assumption is [strict](docs/glossary.md#strict), not [strictest](docs/glossary.md#strictest): `f_0001b438`, under assumption A1 (the sorted range is a whole number of 248 byte records, <!--f:close_rows_A1-->1<!--/f--> row). The earlier assumptions F (an outcome that only faulting executions take, <!--f:close_rows_F-->0<!--/f--> rows) and P2 (stores through the function's own frame never hit the record array, <!--f:close_rows_P2-->0<!--/f-->) became the harness rules HR-FP and HR-P2, and PN (<!--f:close_rows_PN-->0<!--/f-->) is retired. Each is defined in [assumptions](docs/assumptions.md#summary) and listed in [evidence](docs/evidence.md#the-last-seven-rows).
 
-The strictest standard was revised on 2026-11-05 at the maintainer's decision: the harness model gained two named rules, HR-P2 (frame disjointness) and HR-FP (fault parity) ([harness](docs/harness.md#harness-rules-hr-p2-and-hr-fp)). A function that reaches strictest only through them takes the evidence class `audit3`, which the second strictest row counts and the third row does not, so both figures stay visible. A figure rises only with its measurement and an independent audit: <!--f:ev_audit3_fns-->4<!--/f--> functions have `audit3` at this date (`f_00031780` and `f_000651c2` under HR-FP, `f_0002405b` and `f_00024a39` under HR-P2), each proof re-derived independently. PN is retired (`f_00056fa6` now has its 0x57936 outcome seen without a pin). A1 is kept for one function: `f_0001b438` is the row left, because its outcomes 0x1d3bc, 0x1ddc9 and 0x1e3ba still need the caller precondition A1 (a valid sort range), which is not a harness fact; no world of any kind takes them, and making a caller precondition part of the harness model would be a further change of the standard, which is the maintainer's decision.
+The strictest standard was revised on 2026-11-05: the harness model gained two named rules, HR-P2 (frame disjointness) and HR-FP (fault parity) ([harness](docs/harness.md#harness-rules-hr-p2-and-hr-fp)). A function that reaches strictest only through them has the [evidence class](docs/glossary.md#evidence-class) `audit3`, which the second strictest row includes and the third row excludes, so both figures stay visible. A figure rises only with its measurement and an independent audit: <!--f:ev_audit3_fns-->4<!--/f--> functions have `audit3` at this date (`f_00031780` and `f_000651c2` under HR-FP, `f_0002405b` and `f_00024a39` under HR-P2), each proof re-derived independently. PN is retired (`f_00056fa6` now has its 0x57936 outcome seen without a pin). A1 remains for one function: `f_0001b438` keeps it because its outcomes 0x1d3bc, 0x1ddc9 and 0x1e3ba still need the caller precondition A1 (a valid sort range), which is not a harness fact. No world of any kind takes them, and the standard does not make a caller precondition part of the harness model; doing so would be a further change of the standard.
 
-Known port divergences outside the harness model are listed in [parity](docs/parity.md#known-port-divergences-outside-the-harness-model): worlds that put a buffer argument inside the function's own frame (they violate HR-P2) expose differences in `f_0001b438` (32 of 1609 stack-resident worlds) and in `f_0002405b` and `f_00024a39` (11 stack-resident worlds). They are port follow-ups and change no figure.
+Known port divergences outside the harness model are listed in [parity](docs/parity.md#known-port-divergences-outside-the-harness-model): worlds that put a buffer argument inside the function's own frame (they violate HR-P2) expose differences in `f_0001b438` (32 of 1609 stack-resident worlds) and in `f_0002405b` and `f_00024a39` (11 stack-resident worlds). They are open port fixes and change no figure.
 
 Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn_total-->2,702<!--/f--> functions, most of them bundled library code.
 
 ## Effects and stages
 
-The ten native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned ten more are in [docs/roadmap.md](docs/roadmap.md). Stages are the programs that pass raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
+The ten native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned ten more are in [docs/roadmap.md](docs/roadmap.md). A stage is a program that passes raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
 
-Each registered style of the ten effects is also a frames/2 stage, so twixtor and any other wrapper can run it as `sapphire stage apply STAGE` (13 stages; they need `fx_run`, and `stage list` marks them hidden without it):
+Each registered style of the ten effects is also a frames/2 stage, so twixtor and any other wrapper can run it as `sapphire stage apply STAGE` (13 stages; they need `fx_run`, and `stage list` marks them hidden without it). The [guide](docs/guide.md) shows how to run them.
 
-| Effect | Stages | Kind | Parity claim |
+| Effect | Stages | Kind | Byte identical through the stage |
 |---|---|---|---|
-| `S_Blur` | 2 | frame | byte identical on 36 of 48 counted members |
+| `S_Blur` | 2 | frame | 36 of 48 recorded renders |
 | `BlurMoCurves` styles | 2 | frame | 26 of 67 |
 | `S_Diffuse` | 1 | frame | 31 of 42 |
 | `S_DistortRGB` | 1 | frame | 26 of 30 |
@@ -108,7 +132,7 @@ Each registered style of the ten effects is also a frames/2 stage, so twixtor an
 | `S_Trails` | 1 | temporal, spool | 70 of 120 |
 | `S_WarpPerspective` | 1 | frame | 10 of 224 |
 
-The counts are the counted members of the parity record that match the stage's canonical host and are byte identical through `sapphire stage apply` at depth 32 (382 of 382 of those members); the rest are not claimed for the stage. The host of each stage, the offered parameters, the size refusals, the timing and the claim limits are in [docs/stages.md](docs/stages.md#effects-provider).
+The first number counts the recorded renders of the parity record that use the stage's fixed host arrangement; each of them is byte identical through `sapphire stage apply` at depth 32 (382 of 382). The other recorded renders use a different host arrangement and are not claimed for the stage. Each stage's host, parameters, size refusals, timing and claim limits are in [docs/stages.md](docs/stages.md#effects-provider).
 
 ### Names
 
@@ -248,6 +272,7 @@ python -I tools/handoff.py doctor --conformance
 ```
 
 - **Default members.** `cargo test` runs `neutral-world`, `neutral-parity`, `neutral-ffmpeg` and `neutral-handoff`. The `lift-*` tests replay stored vector sets that are archived, not in the repository, and are marked `#[ignore]`; running them with the archive: [reproduce](docs/reproduce.md#re-creating-the-evidence).
+- **Effects.** The effect tests are described in [effects](docs/effects.md#tests).
 - **ffmpeg.** The live tests of `neutral-ffmpeg` and the pipeline tests need ffmpeg and ffprobe and print a `SKIPPED` line without them ([tests that need ffmpeg](docs/ffmpeg.md#tests-that-need-ffmpeg)). One `neutral-ffmpeg` test always prints `SKIPPED`, because the pixel format table generator is not in the repository.
 - **twixtor.** `crates/neutral-handoff/tests/cross_twixtor.rs` runs twixtor's `vfx` as a stage of this pipeline and this crate's `stage apply` inside twixtor's `tools/apply.py`, in every order; it skips with a printed reason when ffmpeg, `vfx`, Python or `apply.py` is missing.
 - **Conformance.** `tools/conformance.py --quick` is the covering subset of about a minute; the other modes are in [Handoff](#handoff).
@@ -282,7 +307,7 @@ python -I tools/handoff.py doctor
 
 | Not covered | What it means |
 |---|---|
-| The <!--f:close_labelled_rows-->1<!--/f--> row on a labelled assumption (`f_0001b438`) | strict only under A1 ([assumptions](docs/assumptions.md#summary)); a world that breaks the assumption was not compared |
+| The <!--f:close_labelled_rows-->1<!--/f--> function on a stated assumption (`f_0001b438`) | strict only under A1 ([assumptions](docs/assumptions.md#summary)); a world that breaks the assumption was not compared |
 | Inputs outside the seeded worlds | parity is measured on seeded inputs, not proved for every input ([caveats](docs/parity.md#caveats)) |
 | Callees outside the dump | modelled as writing nothing and returning a seeded word |
 | Stub argument values | <!--f:stub_arity_sites-->48<!--/f--> call sites passed fewer arguments than the bank signatures; those values were never compared |
@@ -295,41 +320,6 @@ python -I tools/handoff.py doctor
 | Interrupt | `sapphire` installs no Ctrl+C handler and never exits 130 |
 | Windows launchers | a launcher in front of ffmpeg, such as the Chocolatey shim, is ended on a timeout but the ffmpeg it started is not; point `FFMPEG` at the real `ffmpeg.exe` |
 | Pixel format table | its generator is not in the repository, so the table cannot be regenerated here |
-
-## Documentation
-
-| File | Specifies |
-|---|---|
-| [`docs/parity.md`](docs/parity.md) | What parity means: the tiers, strict parity and strictest, the unproven functions, the caveats, the parity terms. |
-| [`docs/harness.md`](docs/harness.md) | The oracle, worlds, the `Env` trait, vector sets, comparison, replay, mutation checks, the harness terms. |
-| [`docs/lifting.md`](docs/lifting.md) | Mechanical lift and hand port, what the lifter writes, the crate layout with per-crate counts, the x86 rules the ports reproduce. |
-| [`docs/evidence.md`](docs/evidence.md) | The evidence classes, the audit, how to read an audit detail, the record behind each function's tier and status. |
-| [`docs/assumptions.md`](docs/assumptions.md) | Every assumption the parity figures rest on: callee model, pinned words, no-return declarations, landing pads, hand proofs, stub argument counts. |
-| [`docs/missing-data.md`](docs/missing-data.md) | Missing references: what the code needs that the dump does not contain, and their placeholders. |
-| [`docs/reproduce.md`](docs/reproduce.md) | What reruns from this repository alone and what needs the archive. |
-| [`docs/names.md`](docs/names.md) | The name bank, origins, the name check, confirmation levels and the naming rules. |
-| [`docs/ffmpeg.md`](docs/ffmpeg.md) | How sapphire runs ffmpeg: lookup, the crate, raw frames, colour, rate and length, tests. |
-| [`docs/handoff.md`](docs/handoff.md) | How sapphire, twixtor and ffmpeg pass raw frames to each other: contract versions, the frame contract, errors and exits, reports, discovery, geometry, the ffmpeg filter stage, packets, commands, platforms, known gaps. |
-| [`docs/stages.md`](docs/stages.md) | How a new provider offers stages and passes conformance. |
-| [`docs/effects.md`](docs/effects.md) | The ten native effects: status, report wording, how to build and run `fx_run`, the data the effects carry, the tests and the limits they share. |
-| [`docs/roadmap.md`](docs/roadmap.md) | The 20 effects the project aims for: the ten done and the ten planned, in order. |
-| [`docs/generated/index.md`](docs/generated/index.md) | The generated reference: functions by offset range, classes, stubs, effects, parameters, tiers, evidence, crates, missing data. |
-| [`docs/handoff-bench.tsv`](docs/handoff-bench.tsv) | The bench table of `tools/conformance.py --bench`: the wrappers timed on chained stages. |
-
-`docs/index/` holds the machine readable index: `facts.json` (every figure with its source), `functions.jsonl` (one row a function) and `pages.json` (every page with its title and size). `docs/data/` holds the checked in evidence, among it the function map `docs/data/FUNCTION_MAP.tsv`; `docs/generated/`, `docs/index/` and the figures in every page are written from it by `python -I tools/gen_docs.py`, so change the data, then regenerate.
-
-### Sources of truth
-
-For agents and scripts:
-
-| Question | Ask |
-|---|---|
-| One function: bank name, offset, size, origin, tier, parity, evidence, name check, confirmation, crate file, callers, callees | `python -I tools/fn_info.py ID\|NAME\|OFFSET [--json]`: the function by id, bank name or offset. |
-| Every function at once | `docs/index/functions.jsonl`: one JSON object a function, every field. |
-| Any figure quoted in a document | `docs/index/facts.json`: the value, text and source of every figure. |
-| The stages this repository provides | `target/release/sapphire stage list --json`: the stage manifest. |
-| Every stage of sapphire and twixtor, with a ready stage command | `python -I tools/handoff.py stages --json`: each stage with the command line a wrapper takes. |
-| What a pipeline run will do | `target/release/sapphire INPUT [EFFECT] ... --dry-run`: the plan and every command, nothing written. |
 
 ## Legal
 

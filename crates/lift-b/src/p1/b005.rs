@@ -1,4 +1,4 @@
-//! Batch 005: bit-table predicates, set predicates, constructors, byte swapping, small fill and convert loops.
+//! bit-table predicates, set predicates, constructors, byte swapping, small fill and convert loops.
 use crate::cov::br;
 use crate::*;
 

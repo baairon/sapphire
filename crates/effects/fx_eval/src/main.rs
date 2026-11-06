@@ -49,7 +49,7 @@ fn real_main() -> i32 {
     }
 }
 
-/// INT9 (Batch 41 rule 4): `--presence-mask HEX` (INPUT-PRESENCE-MASK, one native input), `--input-chan NAME=N` (repeatable; the channel count of an input
+/// INT9: `--presence-mask HEX` (INPUT-PRESENCE-MASK, one native input), `--input-chan NAME=N` (repeatable; the channel count of an input
 /// whose presence bit is set, a host input with no default) and the named option `--mixed-mask` (attribution only).
 fn presence_args() -> Result<(Option<u8>, BTreeMap<String, i32>, bool), String> {
     let a: Vec<String> = std::env::args().collect();
@@ -96,8 +96,8 @@ fn mask_arg() -> Option<u32> {
     u32::from_str_radix(a.get(p + 1)?.trim_start_matches("0x"), 16).ok()
 }
 
-/// LYM3 (W449 (d), step L2): `--layout-merge` builds the REGISTERED program (the layout row merged as fx_run does: layout order, `:extra`, `:hardcode`, the
-/// layout input group) for a program that has a layout row; without it the def path is unchanged (the existing W181 plan sets were frozen on the def text).
+/// LYM3 (step L2): `--layout-merge` builds the REGISTERED program (the layout row merged as fx_run does: layout order, `:extra`, `:hardcode`, the
+/// layout input group) for a program that has a layout row; without it the def path is unchanged (the existing plan sets were recorded from the def text).
 fn layout_merge_flag() -> bool {
     std::env::args().any(|x| x == "--layout-merge")
 }
@@ -444,7 +444,7 @@ fn plan_one(programs: &str, combos: &str, name: &str, sets: &str) -> i32 {
     }
 }
 
-/// XWP2 (W746): the default-xy writers of the placement model (stack word 2 = 1 plan), one line per writer, then the plan text
+/// XWP2: the default-xy writers of the placement model (stack word 2 = 1 plan), one line per writer, then the plan text
 fn xyplan(programs: &str, combos: &str, name: &str, sets: &str) -> i32 {
     let (c, ct) = match load(programs, combos) {
         Some(x) => x,
@@ -632,7 +632,7 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
         }
         let _ = fs::write(format!("{}/MINE_{}_{}.txt", outdir, prog, tag), fx_eval::cpuplan::plan_text_mode(&cp, mode));
         if argcol_on {
-            // INT9 (Batch 41 rule 3): report-only per-argument column (original plan text against the native plan text of this compile)
+            // INT9: report-only per-argument column (original plan text against the native plan text of this compile)
             let (v, no, nn, d) = fx_eval::argcol::compare(&text, &fx_eval::cpuplan::plan_text_mode(&cp, mode));
             argcol_rows.push_str(&format!("{}\t{}\t{}\t{}\t{}\t{}\n", prog, tag, v, no, nn, d.replace('\t', " ")));
         }
@@ -649,7 +649,7 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
     0
 }
 
-/// W113 layout tokens: every printed token of every command in order, image ids (`:refN`) canonicalised by
+/// layout tokens: every printed token of every command in order, image ids (`:refN`) canonicalised by
 /// first appearance (numbering may differ, in-place writes and id reuse after a free may not), the
 /// suffix after the id (format code, g flag) and the gpu/cpu token kept. Commands without printed text
 /// (the per-image cleanup records `cmd-0x...`) compare by their opcode name only.

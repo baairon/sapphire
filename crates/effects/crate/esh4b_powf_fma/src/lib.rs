@@ -7,7 +7,7 @@
 //!
 //! The port follows the instruction order of the listing (no fused multiply add anywhere: the body is legacy SSE), keeps every special case
 //! path, and reports the error code that the original passes to its errno/matherr service (ecx at the call) in `Out::err`.
-//! The service is modelled as leaving the result unchanged (labelled ASSUMPTION A1 in SPEC.md).
+//! The service is modelled as leaving the result unchanged (assumption A1 in SPEC.md).
 //!
 //! HOST-FP-ASSUMED: round to nearest even, no flush to zero, no denormals are zero. The routine reads and writes MXCSR flags on two paths
 //! (stmxcsr/ldmxcsr clearing the precision and underflow flags); flags are not modelled.

@@ -1,9 +1,9 @@
-//! M3P (W496 (d), W511): the host-datum derivation of [ctx] at the arm (RDR12 MODE3_DERIVATION.md line 7), and the cells it reads.
+//! M3P: the host-datum derivation of [ctx] at the arm (RDR12 MODE3_DERIVATION.md line 7), and the cells it reads.
 //! Rule (MEASURED from the listing by RDR12): ctx = 1 exactly when the 590 value is 2 AND desc == 2 AND (in[idx] == 2 OR NOT(in[idx] != 0 AND in[idx] != 0))
 //! AND the input world's data pointer differs from the output world's (after the [desc] row-pointer correction); else 0.
 //! Host datum: the two data pointers. An in-place host gives equal pointers. `--host-inplace 1` is that datum.
 
-/// The cells the rule reads on the claim route.
+/// The cells the rule reads on the verified render path.
 #[derive(Clone, Copy, Debug)]
 pub struct CellsMode {
     pub cells_mode_d: u32,
@@ -41,11 +41,11 @@ pub fn derive(cells_mode_d: u32, host_inplace: bool, w: usize, h: usize) -> Resu
     Ok((fx_run_cell_f_rule(&c, host_inplace)?, c.dest_desc_mode))
 }
 
-/// INT27 (W524 (c)): the programs whose own counted records show the five terms (desc, desc, in[idx],
-///). HSR2's RJ1 record (Hue_Sat_Bright_Autogen, rj1M3F, 64x32) and the Time_Warp_RGB_Autogen O2 records (64x32 and 50x7, FIVE_TERMS.tsv, W722).
+/// INT27: the programs whose own counted records show the five terms (desc, desc, in[idx],
+///). HSR2's RJ1 record (Hue_Sat_Bright_Autogen, rj1M3F, 64x32) and the Time_Warp_RGB_Autogen O2 records (64x32 and 50x7, FIVE_TERMS.tsv).
 pub const TERMS_RECORDED: &[&str] = &["Hue_Sat_Bright_Autogen", "Time_Warp_RGB_Autogen"];
 
-/// The W524 (c) label for a program whose own record of the terms is owed (None for a program in TERMS_RECORDED).
+/// The label for a program whose own record of the terms is owed (None for a program in TERMS_RECORDED).
 pub fn terms_unrecorded_label(program: &str) -> Option<String> {
     if TERMS_RECORDED.contains(&program) {
         return None;

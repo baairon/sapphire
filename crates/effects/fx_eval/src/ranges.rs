@@ -132,7 +132,7 @@ impl RangeTable {
             RangeSet::RecHarness => TR.get_or_init(RangeTable::default),
         }
     }
-    /// Row of a program parameter. W224 (a): the lookup is EXACT. Every row is keyed by the program whose record it was measured on; there is no
+    /// Row of a program parameter. the lookup is EXACT. Every row is keyed by the program whose record it was measured on; there is no
     /// fallback from a wrapper name to its core name (the `_Autogen` strip and SHE3's exact-first fix are removed).
     pub fn lookup(&self, program: &str, parameter: &str) -> Option<&RangeRow> {
         self.index.get(&(program.to_string(), parameter.to_string())).map(|&i| &self.rows[i])
@@ -148,7 +148,7 @@ impl RangeTable {
     }
 }
 
-/// INT18 (W414 (c) step 7): clamp_lane and clamp_lanes (the clamp without per-bound flags) had no caller on any route; they are removed
+/// INT18: clamp_lane and clamp_lanes (the clamp without per-bound flags) had no caller on any route; they are removed
 /// from the crate and kept, unchanged, as test-local functions of tests/t8.rs, whose asserts are unchanged. The route clamp is clamp_lane_row.
 /// The clamp of ONE lane with the per-bound enforcement flags (RNG1 PATCH 3 b). Operand order of the listing : vminss with the max cell first
 /// (`max < v ? max : v`: above max gives the max cell, equal and NaN keep the value), then vmaxss with the min cell first (`min > v ? min : v`: below min gives the min cell, equal and NaN keep the value; -0 stays).
@@ -189,7 +189,7 @@ pub fn clamp_param(program: &str, parameter: &str, v: &mut [f32]) -> Option<bool
 /// input is not bound (bit of [ctx] clear) takes the copy-default path of and SKIPS the range clamp. `data/PARAM_INPUTS.tsv` lists
 /// (program, parameter, input_index) read from the records after the original program load; defined in effects_rtdata (field `inputs`).
 
-/// INT28 step PI (W563 (b)): the PARAM_INPUTS rows that a record's input index cell confirms (tools/pi_fleet.py over the fleet's CTX records). The table rows were written by DSW3's tools/rec_inputs.py from the def-text parse; Warp_Perspective_Autogen's three rows held the def
+/// INT28 step PI: the PARAM_INPUTS rows that a record's input index cell confirms (tools/pi_fleet.py over the recorded CTX records). The table rows were written by DSW3's tools/rec_inputs.py from the def-text parse; Warp_Perspective_Autogen's three rows held the def
 /// order's 0 and take the registered program's 1 by record (WPR1 D2, L80e).
 /// Defined in effects_rtdata (field `input_records`).
 
@@ -205,7 +205,7 @@ pub fn param_input_recorded(program: &str, parameter: &str) -> bool {
     has(program.strip_suffix("_Autogen").unwrap_or(program))
 }
 
-/// W563 (b): a host value fed for a parameter whose PARAM_INPUTS row has no record refuses.
+/// a host value fed for a parameter whose PARAM_INPUTS row has no record refuses.
 pub fn host_value_index_check(program: &str, parameter: &str) -> Result<(), String> {
     if param_input_index(program, parameter).is_some() && !param_input_recorded(program, parameter) {
         return Err(format!("PARAM-INPUT-INDEX-UNRECORDED ({} {}: no record of the parameter's input index; W563)", program, parameter));
@@ -223,7 +223,7 @@ pub fn param_input_index(program: &str, parameter: &str) -> Option<usize> {
     find(program.strip_suffix("_Autogen").unwrap_or(program))
 }
 
-/// NZ1 (W298, Batch 38 rule 8): the plugin's node store rewrites a node cell only when old and new DIFFER as floats (ucomiss), so +0 and -0 never
+/// NZ1: the plugin's node store rewrites a node cell only when old and new DIFFER as floats (ucomiss), so +0 and -0 never
 /// replace each other; NaN on either side counts as different (written). `old` is the node's previous cell (the program default at genotype creation, then the previous
 /// compile's stored value: COMPILE-HISTORY); a lane without an old value is written.
 pub fn node_store(old: &[f32], new: &mut [f32]) {

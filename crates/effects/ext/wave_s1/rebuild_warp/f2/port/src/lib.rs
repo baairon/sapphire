@@ -17,7 +17,7 @@ pub const DIM_EPS: f64 = 1.01; //  (captured, bytes 295c8fc2f528f03f)
 /// frame words above it; INFERRED for the entry alignment where rbx = A+16). Above 8 the saved rbp at [rbp] is overwritten.
 pub const MAX_N_SAFE: i32 = 8;
 pub const MAX_N_BLEND: i32 = 18;
-/// Phase input (W55): bytes of the temp row address modulo 32. The temp row is at rbp and rbp = A-16 with A 32-aligned
+/// Phase input: bytes of the temp row address modulo 32. The temp row is at rbp and rbp = A-16 with A 32-aligned
 /// by the body's own `and rsp,-32`so the phase is 16, not a caller buffer address (INFERRED from).
 pub const TEMP_PHASE_BYTES: usize = 16;
 

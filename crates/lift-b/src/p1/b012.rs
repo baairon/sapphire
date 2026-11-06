@@ -1,4 +1,4 @@
-//! Batch 012: 10-bit unpack/pack kernels, a state reset with two pointer-pair modes, and a constructor.
+//! 10-bit unpack/pack kernels, a state reset with two pointer-pair modes, and a constructor.
 use crate::cov::br;
 use crate::*;
 

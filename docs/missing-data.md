@@ -1,6 +1,6 @@
 # Missing data
 
-The data, imports and constants the ported code reads that are not in the dump (missing references), how they are addressed, and how the harness stands in for them.
+The data, imports and constants the ported code reads that are not in the dump ([missing references](glossary.md#missing-reference)), how they are addressed, and how the harness stands in for them.
 
 ## Count
 

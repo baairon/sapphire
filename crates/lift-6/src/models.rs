@@ -40,7 +40,7 @@ pub enum Kind {
     Find,
     /// std::string::find: npos (-1) unless the call result rdx has two zero low bits, then a small position (rdx >> 8) & 0xf.
     FindNpos,
-    /// locale::use_facet(id): rax = the fixed world data block FACET_REL (its vtable words are pinned by the spec: fleet-6 scripts/modelcand.py facet_pins).
+    /// locale::use_facet(id): rax = the fixed world data block FACET_REL (its vtable words are pinned by the spec: scripts/modelcand.py facet_pins).
     Facet,
 }
 

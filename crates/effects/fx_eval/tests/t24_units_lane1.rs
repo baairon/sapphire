@@ -1,4 +1,4 @@
-//! t24 (INT16, Batch 49 step 4): UNT2 PATCH 2 (the lane-1 term) and PATCH 3 (the popup rule) in fx_eval::units.
+//! t24 (INT16): UNT2 PATCH 2 (the lane-1 term) and PATCH 3 (the popup rule) in fx_eval::units.
 //! Vectors: data/UNT2_CONV_T2.tsv, a field-for-field copy of UNT2's rig T2 output (wave_s9/unt2_units_rest/out/conv_t2_out.jsonl,
 //! SHA-256 bebafd6798719af6f2b945a9016e2f3a21d253d85d43a19cf1b6535e8f49c652): 18,880 cases of the original's conversion function 0x11ca10
 //! run in the emulator (entries disp, vex and sse; lanes 0 and 1; ns 1 and others; arms clear, null and set; types 1 and 2).

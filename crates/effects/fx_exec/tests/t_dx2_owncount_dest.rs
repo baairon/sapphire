@@ -1,4 +1,4 @@
-//! Step DX2 v2 (W653 (c) 2): a code pin for the own-count mutant. D_64x32's 'ae32' claim line (read from dsc1()'s trial PRED.tsv, as in
+//! Step DX2 v2: a code pin for the own-count mutant. D_64x32's 'ae32' claim line (read from dsc1's trial PRED.tsv, as in
 //! t_dx2_claim_d64) run at a constructed 1-plane destination: the real code folds node 65 at its bound image argument's count 1 and
 //! refuses V3TOV4IF4-NARROW-UNMEASURED; the mutant dx2_owncount_mut folds at its own count 3 and fails later with a shape error.
 //! A probe only: claimed rows are judged at their recorded destinations.

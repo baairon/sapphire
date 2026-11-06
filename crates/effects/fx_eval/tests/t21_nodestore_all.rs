@@ -1,4 +1,4 @@
-//! T21 (INT8, Batch 41 rule 5, W325 (d)): the node store 0x11b978 runs on every record the range pass visits (skip set and row-less popups included).
+//! T21 (INT8): the node store 0x11b978 runs on every record the range pass visits (skip set and row-less popups included).
 //! (1) a skip-path parameter compiled with history -0 and then at its default +0 keeps -0; (2) a row-less popup bound to -0 in a fresh instance with
 //! a +0 default keeps +0. Test (3) (CMP4h's 312 cases unchanged) is the examples/sw_native run recorded in the INT8 folder.
 use fx_eval::*;

@@ -1,4 +1,4 @@
-"""Confirm the name bank's function names against the evidence in docs/data/ (FLEET section 7 levels).
+"""Confirm the name bank's function names against the evidence in docs/data/ (the seven confirmation levels).
 
 Usage:
   python -I tools/confirm_names.py            write docs/data/name_confirmation.tsv and print the level counts

@@ -1,5 +1,5 @@
-//! Step TPU (W662 (c)): `unit <param> rec6c|x3|d4|d5 <hex>` lines and the host keys size_x and size_y feed the generic-path nibble-5
-//! conversion of shift; a unit entry never makes a point context. Tests (i) to (iii) of W662 (c) 3; (iv) is t_pw_point and t_tpr unedited.
+//! Step TPU: `unit <param> rec6c|x3|d4|d5 <hex>` lines and the host keys size_x and size_y feed the generic-path nibble-5
+//! conversion of shift; a unit entry never makes a point context. Tests (i) to (iii) are the rule's cases; (iv) is t_pw_point and t_tpr unedited.
 use fx_eval::hostcurve::{fold, HostCurveValues};
 use tickmap::{unit_nibble5, UnitIn};
 

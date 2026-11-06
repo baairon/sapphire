@@ -1,4 +1,4 @@
-//! Judge-interface module (W689 (a), W842 (c) 2): the pass names that the recorded table carries, byte for byte; every other line uses the constants.
+//! Judge-interface module: the pass names that the recorded table carries, byte for byte; every other line uses the constants.
 pub const PASS_NAME_A: &str = "C80";
 pub const PASS_NAME_B: &str = "D00";
 pub const PASS_NAME_C: &str = "DE0";

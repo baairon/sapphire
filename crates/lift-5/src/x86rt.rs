@@ -49,7 +49,7 @@ pub struct Mem<'a, E: Env> {
     pub env: &'a mut E,
     stk: Vec<u8>,
     /// Integer argument registers (bit j = register j in rdi, rsi, rdx, rcx, r8, r9 order) that the out-parameter model inspects at
-    /// the next call, with their values; set by the generated code right before each call (fleet-5).
+    /// the next call, with their values; set by the generated code right before each call.
     out_mask: u32,
     out_vals: [u64; 6],
     /// Offset of the instruction after the call (the return address minus the dump base) for the out-parameter value lists.
@@ -199,7 +199,7 @@ impl<'a, E: Env> Mem<'a, E> {
         r
     }
 
-    /// The `outwords` of the current call site (fleet-5; scripts/pinpatch.py apply_outwords is the original side).
+    /// The `outwords` of the current call site (scripts/pinpatch.py apply_outwords is the original side).
     fn apply_outwords(&mut self, rdx: u64) {
         for (k, lists) in crate::models::outwords_for(self.out_site) {
             let abs = k >> 63 == 1;
@@ -216,7 +216,7 @@ impl<'a, E: Env> Mem<'a, E> {
         }
     }
 
-    /// Global `outparam` model (fleet-5): every integer argument that is an address in the stack window receives a seeded value,
+    /// Global `outparam` model: every integer argument that is an address in the stack window receives a seeded value,
     /// 4 bytes when the address is 4 aligned, else 1 byte; the same rule as scripts/pinpatch.py. An assumption about the callees.
     fn apply_outparam(&mut self, regs: &[(u64, u64)], rdx: u64, vals: Option<&[u64]>) {
         for (k, a) in regs.iter() {
@@ -707,7 +707,7 @@ impl Ret {
     }
 }
 
-// ---- SSE2 packed integer and shuffle helpers (fleet-6) ------------------------------------------------------------
+// ---- SSE2 packed integer and shuffle helpers ------------------------------------------------------------
 
 #[inline(always)]
 fn dw(x: u128, i: u32) -> u32 {

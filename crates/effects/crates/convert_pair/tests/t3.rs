@@ -68,7 +68,7 @@ fn survivor15_replicate_band_spec() {
     assert_eq!(d, before);
 }
 
-// INT14 (Batch 50 P2): the mutant switch acts only under --features mutants (mu() is cfg!(feature = "mutants")), so this kill test is
+// INT14: the mutant switch acts only under --features mutants (mu is cfg!(feature = "mutants")), so this kill test is
 // compiled only there; INT13's default-feature failure was this test configuration, not a survivor (MEASURED: passes under the feature).
 #[cfg(feature = "mutants")]
 #[test]

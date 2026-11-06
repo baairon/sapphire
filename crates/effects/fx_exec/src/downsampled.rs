@@ -17,7 +17,7 @@
 pub const BIAS: f32 = 0.001708984375;
 const C16: f32 = 0.0625;
 
-/// MUTANT switch for the W63 mutation sweep (env DS_MUT=n, 0 = the port as written); read once.
+/// MUTANT switch for mutation sweep (env DS_MUT=n, 0 = the port as written); read once.
 fn mu() -> u32 {
     use std::sync::OnceLock;
     static M: OnceLock<u32> = OnceLock::new();

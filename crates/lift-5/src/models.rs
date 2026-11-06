@@ -107,7 +107,7 @@ pub fn gw(seed: u64, a: u64) -> u64 {
 }
 
 /// True when the vector set declares the global `outparam` model (sidecar line `all 0x0 outparam`): every integer argument of an
-/// opaque call that is a stack address receives a seeded value (fleet-5; see Mem::apply_outparam).
+/// opaque call that is a stack address receives a seeded value (see Mem::apply_outparam).
 pub fn outparam() -> bool {
     OUTPARAM.with(|c| c.get())
 }
@@ -194,7 +194,7 @@ pub fn load_models(path: &Path) -> Vec<(bool, u64, Kind)> {
     }
 }
 
-/// Call models beyond the per target ones (fleet-5; scripts/pinpatch.py install_models is the original side):
+/// Call models beyond the per target ones (scripts/pinpatch.py install_models is the original side):
 /// `indret v..` every call to a world address returns list[mix(rdx, 0x4000) % len]; `outval SITE v..` after the call at SITE the stack
 /// address arguments receive list[mix(rdx, 0x3000 + k) % len]; `stackpin OFF KIND X` initial stack words at RSP0 + OFF.
 #[derive(Debug, Clone, Default)]

@@ -141,7 +141,7 @@ class CloseRowsTest(unittest.TestCase):
         self.assertEqual(f["close_labelled_rows"], f["ev_assumed_fns"])
         self.assertEqual(f["close_pass_rows"], f["ev_audit2_fns"] + f["ev_audit3_fns"])
         self.assertEqual(f["close_pass_rows"] + f["close_labelled_rows"], f["close_rows"])
-        strictest = sum(1 for r in self.d.fm if r["evidence"] in ("p1", "second", "owner", "audit2"))
+        strictest = sum(1 for r in self.d.fm if r["evidence"] in ("p1", "second", "ledger", "audit2"))
         self.assertEqual(f["strictest_fns"], strictest)
         self.assertEqual(f["strictest_rev_fns"] - f["strictest_fns"], f["ev_audit3_fns"])
         self.assertEqual(f["strict_fns"] - f["strictest_rev_fns"], f["ev_anyworld_fns"] + f["ev_assumed_fns"])
@@ -169,6 +169,19 @@ class PagesTest(unittest.TestCase):
         self.assertEqual(gen_docs.disk(ROOT, "docs/generated/effects.md"), page)
         self.assertIn("verbatim and in bank order", page)
         self.assertIn("No effect is mapped to a function", page)
+
+    def test_effects_status_block(self):
+        page = STATE["out"].get("docs/effects.md") or read_text(os.path.join(ROOT, "docs", "effects.md"))
+        m = re.search(r"<!--gen:effects_status-->\n(.*?)\n<!--/gen:effects_status-->", page, re.S)
+        lines = m.group(1).split("\n")
+        self.assertEqual(lines[0], "| effect | registered styles | verified comparisons | recorded renders | re-rendered units |")
+        status = read_tsv(os.path.join(DATA, "effects_status.tsv"))
+        self.assertEqual(len(lines), 2 + len(status))
+        self.assertNotIn("paragraph_sha256", status[0])
+        self.assertNotIn("effects_paragraph_sha", page)
+        self.assertNotIn("Report wording", page)
+        for line, r in zip(lines[2:], status):
+            self.assertEqual(spans(line)[0], r["effect"])
 
     def test_parameters_verbatim(self):
         page = STATE["out"]["docs/generated/parameters.md"]
@@ -211,6 +224,21 @@ class PagesTest(unittest.TestCase):
         self.assertIn("name check", names)
         self.assertIn("confirmation", names)
 
+    def test_evidence_prose_is_neutral(self):
+        evidence = STATE["out"]["docs/generated/evidence.md"]
+        self.assertIn("independently audited", evidence)
+        self.assertIn("audited under the harness rules of 2026-11-05", evidence)
+        self.assertIn("given a stated precondition", evidence)
+        for word in ("maintainer", "accepted", "labelled assumption", "parity claim"):
+            self.assertNotIn(word, evidence)
+
+    def test_glossary_anchors(self):
+        text = read_text(os.path.join(ROOT, "docs", "glossary.md"))
+        have = check_docs.anchors(text)
+        for a in ("compared-world", "branch-outcome", "harness-model", "p1", "p2v", "strict", "strictest",
+                  "evidence-class", "stub", "name-bank", "precondition-label", "hr-p2", "hr-fp"):
+            self.assertIn(a, have)
+
     def test_generated_pages_notice_and_no_source_lines(self):
         for rel, text in STATE["out"].items():
             if rel.startswith("docs/generated/"):
@@ -225,7 +253,7 @@ class PagesTest(unittest.TestCase):
     def test_lift_crates_block(self):
         gen = render.Generator(STATE["data"])
         gen.pages()
-        self.assertNotIn("owners", gen.block_cache)
+        self.assertNotIn("crates_by_ledger", gen.block_cache)
         got = {}
         for line in gen.block_cache["lift_crates"][2:]:
             cells = [c.strip() for c in line.strip("|").split("|")]

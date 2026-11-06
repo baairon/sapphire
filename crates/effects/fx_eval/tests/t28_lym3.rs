@@ -1,4 +1,4 @@
-//! LYM3: the layout row's input group natively (W449 (e)), both names per record (W449 (f) 1), and a mutant per rule.
+//! LYM3: the layout row's input group natively, both names per record, and a mutant per rule.
 use fx_eval::layoutmerge::{build_registered, merge_layout, read_layout, resolve_layout};
 use fx_eval::{build_effect, Corpus, NodeKind};
 

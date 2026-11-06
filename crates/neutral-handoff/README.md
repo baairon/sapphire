@@ -87,7 +87,7 @@ In the pipeline, `--stage @selftest-invert` runs that stage in process; `--stage
 | File | Checks | Needs |
 |---|---|---|
 | unit tests in `src/` | plan, rates, formats, errors, arguments, paths, geometry, stages | see each module |
-| `tests/fx_stage_parity.rs` | every in profile frozen member through `stage apply`, full SHA-256 against the recorded prediction | `VEC_DIR`, `fx_run` (else NOT RUN) |
+| `tests/fx_stage_parity.rs` | every stored prediction member covered by the stage host profile through `stage apply`, full SHA-256 against the recorded prediction | `VEC_DIR`, `fx_run` (else NOT RUN) |
 | `tests/stage_cli.rs` | `stage list --json` and `stage apply selftest-invert` as a process | nothing |
 | `tests/pipeline_fake.rs` | stage order, the in-process stage, the error object for every way a stage can misbehave | ffmpeg |
 | `tests/frames2.rs` | the manifest, `--describe`, `ffmpeg-filter`, geometry through the wrapper, `role` and `index`, the exits | ffmpeg |

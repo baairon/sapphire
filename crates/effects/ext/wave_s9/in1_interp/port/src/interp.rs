@@ -98,7 +98,7 @@ pub struct Operand<'a> {
 }
 
 /// Explicit parameters, no Default. `nout` = result of base virtual slot 31 (: the word of the chosen combo entry; called at
-///  and again after every channel; hooked in R-PARITY, W69). `n` = [info] (i32, sign extended).
+/// and again after every channel; hooked in R-PARITY). `n` = [info] (i32, sign extended).
 pub struct Params {
     pub nout: i32,
     pub n: i32,

@@ -89,7 +89,7 @@ fn put(p: &mut [f32], i: usize, v: f32, what: &'static str) -> Result<(), Fault>
 fn contract(o: &Obj, out: &[Vec<f32>]) -> Result<(), Fault> {
     // BLE1 (FM2 lens): the listing tests n_in and n_out only with signed compares against 2 and 4 and indexes by min(c, n-1), so every
     // n >= 1 is well defined as long as the channel loop stays below 4; only n < 1 (index -1) and fewer than 4 output planes are refused.
-    // W205 (c) / BLE2-H1 (INT5): the shipped contract is 1..=4; the n >= 1 relaxation (BLE1's FM2-lens probes) is the test-only feature `wide_counts`.
+    // / BLE2-H1 (INT5): the shipped contract is 1..=4; the n >= 1 relaxation (BLE1's FM2-lens probes) is the test-only feature `wide_counts`.
     let wide = cfg!(feature = "wide_counts");
     if (wide && (o.n_in < 1 || o.n_out < 1)) || (!wide && (!(1..=4).contains(&o.n_in) || !(1..=4).contains(&o.n_out))) || out.len() < 4 {
         return Err(Fault::Contract("n_in/n_out outside the contract (1..=4; n >= 1 under feature wide_counts) or fewer than 4 output planes"));
@@ -245,7 +245,7 @@ mod tests {
         assert!(matches!(add_rgb(&obj(3, -2, false, false), 5, 3, &mut outp()), Err(Fault::Contract(_))));
     }
 
-    // INT14 (Batch 50 step 10): the shipped-contract refusal holds only without the test feature wide_counts (which models n >= 1)
+    // INT14: the shipped-contract refusal holds only without the test feature wide_counts (which models n >= 1)
     #[cfg(not(feature = "wide_counts"))]
     #[test]
     fn counts_five_and_six_are_outside_the_shipped_contract() {

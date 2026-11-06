@@ -1,4 +1,4 @@
-//! INT29 step TW (W559 (a)): TWF1, TWF2 and TWF3's frame port merged as module fx_exec::twframe, the TWF3 crate text verbatim (its
+//! INT29 step TW: TWF1, TWF2 and TWF3's frame port merged as module fx_exec::twframe, the TWF3 crate text verbatim (its
 //! mutation switch MUT stays 0 outside tests/t_int29_twf.rs) plus the claim-route request at the end.
 //! TWF3 (copy of TWF2's port with mutation switches and the new ports in the second half). Original header: TWF2: Time_Warp_RGB's frame-index writer, the checkout request and limit, and both frame-range paths, ported as read from the
 //! neutral_1 listing (addresses are listing addresses). The emulated original is the judge (t2/emu.tsv, tests/t2.rs).
@@ -251,9 +251,9 @@ impl FrameCache {
     }
 }
 
-// ---------------------------------------------------------------- INT29 step TW: the claim-route request (W559 (a), (c))
+// ---------------------------------------------------------------- INT29 step TW: the claim-route request
 
-/// The per-run request inputs of the get_frame route, every one from the run's record (no default; Batch 69 rule 1).
+/// The per-run request inputs of the get_frame route, every one from the run's record (no default).
 /// `big_f` is F (the --host-frame value), `dur_frames` the clip duration in frames, `limit_cell` the host limit cell taken per run from
 /// the record (LIMIT-CELL-BY-RECORD), `step` local_time_step, `kind` the host id, `f4` the step struct flag, `r8` and `r9` the two
 /// frame-range selectors (r9 != 0 is the scalar path).

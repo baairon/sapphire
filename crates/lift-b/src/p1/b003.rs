@@ -1,4 +1,4 @@
-//! Batch 003: small getters and setters, constant predicates, bounds-checked setters, indexed slots at +0x168.
+//! small getters and setters, constant predicates, bounds-checked setters, indexed slots at +0x168.
 use crate::cov::br;
 use crate::*;
 

@@ -10,20 +10,20 @@ Reference pages generated from `docs/data/` and a scan of `crates/`.
 | [classes.md](classes.md) | Classes | 1,822 |
 | [crates.md](crates.md) | Crates | 10,226 |
 | [effects.md](effects.md) | Effect names | 3,992 |
-| [evidence.md](evidence.md) | Evidence | 3,807 |
-| [functions-0x000000.md](functions-0x000000.md) | Functions 0x0 to 0xc404 | 65,048 |
-| [functions-0x00c422.md](functions-0x00c422.md) | Functions 0xc422 to 0x11bf1 | 64,565 |
-| [functions-0x011c65.md](functions-0x011c65.md) | Functions 0x11c65 to 0x25d00 | 64,769 |
-| [functions-0x025d62.md](functions-0x025d62.md) | Functions 0x25d62 to 0x2ec36 | 64,967 |
-| [functions-0x02ed06.md](functions-0x02ed06.md) | Functions 0x2ed06 to 0x49316 | 64,830 |
-| [functions-0x04990e.md](functions-0x04990e.md) | Functions 0x4990e to 0x64996 | 65,074 |
-| [functions-0x064a17.md](functions-0x064a17.md) | Functions 0x64a17 to 0xb11b6 | 64,810 |
-| [functions-0x0b11c0.md](functions-0x0b11c0.md) | Functions 0xb11c0 to 0xb796e | 64,961 |
-| [functions-0x0b799c.md](functions-0x0b799c.md) | Functions 0xb799c to 0xc39ec | 65,112 |
-| [functions-0x0c39fa.md](functions-0x0c39fa.md) | Functions 0xc39fa to 0xc548e | 64,271 |
-| [functions-0x0c5610.md](functions-0x0c5610.md) | Functions 0xc5610 to 0xd4906 | 64,965 |
-| [functions-0x0d4940.md](functions-0x0d4940.md) | Functions 0xd4940 to 0xe49c4 | 65,033 |
-| [functions-0x0e49f0.md](functions-0x0e49f0.md) | Functions 0xe49f0 to 0xeb7b0 | 33,694 |
+| [evidence.md](evidence.md) | Evidence | 3,817 |
+| [functions-0x000000.md](functions-0x000000.md) | Functions 0x0 to 0xc404 | 65,079 |
+| [functions-0x00c422.md](functions-0x00c422.md) | Functions 0xc422 to 0x11bf1 | 64,587 |
+| [functions-0x011c65.md](functions-0x011c65.md) | Functions 0x11c65 to 0x25d00 | 64,793 |
+| [functions-0x025d62.md](functions-0x025d62.md) | Functions 0x25d62 to 0x2ec36 | 64,979 |
+| [functions-0x02ed06.md](functions-0x02ed06.md) | Functions 0x2ed06 to 0x49316 | 64,844 |
+| [functions-0x04990e.md](functions-0x04990e.md) | Functions 0x4990e to 0x64996 | 65,086 |
+| [functions-0x064a17.md](functions-0x064a17.md) | Functions 0x64a17 to 0xb11b6 | 64,828 |
+| [functions-0x0b11c0.md](functions-0x0b11c0.md) | Functions 0xb11c0 to 0xb796e | 64,965 |
+| [functions-0x0b799c.md](functions-0x0b799c.md) | Functions 0xb799c to 0xc39de | 64,627 |
+| [functions-0x0c39ec.md](functions-0x0c39ec.md) | Functions 0xc39ec to 0xc548e | 64,780 |
+| [functions-0x0c5610.md](functions-0x0c5610.md) | Functions 0xc5610 to 0xd4906 | 64,974 |
+| [functions-0x0d4940.md](functions-0x0d4940.md) | Functions 0xd4940 to 0xe49c4 | 65,051 |
+| [functions-0x0e49f0.md](functions-0x0e49f0.md) | Functions 0xe49f0 to 0xeb7b0 | 33,704 |
 | [missing-data.md](missing-data.md) | Missing data | 2,217 |
 | [names.md](names.md) | Names | 2,608 |
 | [parameters.md](parameters.md) | Parameter candidates | 12,928 |

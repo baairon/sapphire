@@ -8,7 +8,7 @@
 //! input), so buffer reuse and `constant` images drop out. Constants print with 6 significant digits.
 //!
 //! The original plans (audit_ep3) were produced by running the original compiler in the emulator on the
-//! approved original binary (Ale approved it as a read-only data source). A run-level match per branch set is EVALUATOR-PLAN-PARITY.
+//! original binary (used only as a read-only data source). A run-level match per branch set is EVALUATOR-PLAN-PARITY.
 
 use crate::compile::CompiledProgram;
 use std::collections::HashMap;

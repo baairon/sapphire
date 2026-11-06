@@ -1,4 +1,4 @@
-//! Step TPU2 (W708 (e) 1, 3): the host point parameter 'center' is a host input; its lanes come from the run's recorded point lines through
+//! Step TPU2: the host point parameter 'center' is a host input; its lanes come from the run's recorded point lines through
 //! the ported point route. These tests check the native centre against the original's recorded point-arm results (BMR1 canary re-records,
 //! bmr1.pt.res r0 and r1) by bits.
 use fx_eval::hostcurve::{fold, HostCurveValues};

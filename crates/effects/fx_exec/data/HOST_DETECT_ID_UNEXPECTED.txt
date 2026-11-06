@@ -1,1 +1,1 @@
-HOST-DETECT-ID-UNEXPECTED (S_Trails: the host detect id read from the host cell = <v>; the claim route is ported for id 1; RDR13, W527)
+HOST-DETECT-ID-UNEXPECTED (S_Trails: the host detect id read from the host cell = <v>; the verified render path is ported for id 1)

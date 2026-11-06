@@ -1,4 +1,4 @@
-//! Every stand-in, route choice and host fact of the comp_rgba port, with its tier (W51/W65). Prefix CR1-.
+//! Every stand-in, route choice and host fact of the comp_rgba port, with its tier. Prefix CR1-.
 
 #[derive(Clone, Debug)]
 pub struct Assumption {

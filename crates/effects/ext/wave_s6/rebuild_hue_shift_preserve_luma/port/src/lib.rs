@@ -1,7 +1,7 @@
 //! hue_shift_preserve_luma (HP1, patched copy HP2): native port of the CPU render entry of builtin class
 //! `hue_shift_preserve_luma` (vtable, slot 52 = dispatcher, AVX2 body).
 //!
-//! HP2 change (W118 c, W104): the two vpermd index cells HP1-V14 (used) and
+//! HP2 change: the two vpermd index cells HP1-V14 (used) and
 //! HP1-V15 (used) take the ORIGINAL FILE's words 0,2,4,6,0,0,0,0
 //! (MEASURED-DYLIB) instead of the stand-in identity 0..7; vpermd is implemented faithfully (index & 7 selects the source
 //! dword) and the red luma-term gate of variant A is modelled with real lane vectors (`red_kept`). Every other line of the
@@ -25,7 +25,7 @@
 //!   S6 planes, mask shift : scalar only
 //!   S8 plane count == 4 -> tail jmp (this, 0, 3, outs[3], info)
 //!   S9 count < 3: for i in 0..count (this, 0, i, outs[i], info)
-//! The vector loops divide with vrcpps plus one Newton step (APPROX-MODEL: 1/x exact, W49), do not fuse
+//! The vector loops divide with vrcpps plus one Newton step (APPROX-MODEL: 1/x exact), do not fuse
 //! h/6 + shift (vmulps, vaddps) and fuse only the sector products; the scalar loops use vdivss and fuse
 //! h/6 + shift (vfmadd). FMA sites: scalar
 //!       
@@ -40,7 +40,7 @@ pub fn set_mutant(id: u32) {
     MUT.store(id, Ordering::Relaxed);
 }
 thread_local! {
-    /// APPROX-BOUND test only (W49): relative perturbation of every rcp estimate before the Newton step.
+    /// APPROX-BOUND test only: relative perturbation of every rcp estimate before the Newton step.
     static PERT: std::cell::Cell<f32> = std::cell::Cell::new(0.0);
 }
 fn mu(id: u32) -> bool {
@@ -85,7 +85,7 @@ pub struct Force {
 
 /// Vector constant cells of one width (ymm cells xx, xmm cells xx / xx). Each field is one cell
 /// value (HP1-V01..V11 and the vpermd cell for ymm, HP1-X01..X11 for xmm; HP1-V15 is the vpermd cell read,
-/// which belongs to the xmm section, so the xmm VCells carries it). No Default: the caller names every value (W65).
+/// which belongs to the xmm section, so the xmm VCells carries it). No Default: the caller names every value.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VCells {
     /// 1.0: (1 - f)
@@ -183,7 +183,7 @@ fn negf(x: f32) -> f32 {
     f32::from_bits(x.to_bits() ^ 0x8000_0000)
 }
 
-/// vrcpps modelled as exact 1/x (W49, APPROX-MODEL) plus the code's Newton step
+/// vrcpps modelled as exact 1/x (APPROX-MODEL) plus the code's Newton step
 /// r1 = (r + r) - ((x * r) * r) (separate roundings: vaddps, vmulps, vmulps, vsubps).
 fn newton(x: f32) -> f32 {
     let mut r = 1.0f32 / x;
@@ -465,7 +465,7 @@ pub fn render(p: &Params, src: Option<[&[f32]; 3]>, mask: Option<&[f32]>, outs: 
     render_with(p, src, mask, outs, &Cells::FILE)
 }
 
-/// Every assumption, with its tier (W104 wording): id, what, tier and basis.
+/// Every assumption, with its tier: id, what, tier and basis.
 pub fn assumptions() -> Vec<(&'static str, &'static str)> {
     vec![
         ("HP1-S1", "f32 6.0 : registry STD-006, MEASURED-DYLIB (DV1 CONFIRMED; re-read by HP2: 0x40c00000)."),
@@ -576,7 +576,7 @@ mod tests {
         let (o, _) = run(&p, None, None);
         assert!(o[0][0].is_nan());
     }
-    /// APPROX-BOUND (W49): perturb every vrcpps estimate by up to 1.5 x 2^-12 relative (both signs) before the
+    /// APPROX-BOUND: perturb every vrcpps estimate by up to 1.5 x 2^-12 relative (both signs) before the
     /// code's own Newton step and report the maximum ulp change of the vector-loop outputs.
     #[test]
     fn approx_bound_rcp_perturbation() {

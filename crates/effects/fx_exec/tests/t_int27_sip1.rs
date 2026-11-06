@@ -1,4 +1,4 @@
-//! INT27 step SI (SIP1 outcome A, W552 (b), W561): Hue_Sat_Bright_Autogen at G0, GC, GD, GN with Source at 3 channels compiles to one folded
+//! INT27 step SI (SIP1 outcome A): Hue_Sat_Bright_Autogen at G0, GC, GD, GN with Source at 3 channels compiles to one folded
 //! constant node; the 'ae32' constant route renders its lanes through the destination convert. Bits from SIP1's PLANS.tsv (the original's
 //! command-0 constants, MEASURED in the emulator): G0 and GC 00000000, GD 3fc00000, GN c0000000 in lanes 0 to 2.
 use fx_exec::exec::{compile_for, execute_ae32_const, Binding, HostFrames};

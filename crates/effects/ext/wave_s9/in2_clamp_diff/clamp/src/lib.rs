@@ -6,7 +6,7 @@
 //! std only, no unsafe, explicit parameters (no Default), S3-style `render`. Assumption prefix IN2C-. See README.md and SPEC.md.
 pub use ops_arith::{OpError, Operand};
 
-/// Explicit parameters. `nout` = result of virtual slot 31 (count getter, hooked in R-PARITY, W69); called again after every channel.
+/// Explicit parameters. `nout` = result of virtual slot 31 (count getter, hooked in R-PARITY); called again after every channel.
 /// `n` = [info]. `allones` = STD-001 (8 lanes, MEASURED-DYLIB 0xffffffff), the xor constant that inverts
 /// the vector compare masks; no default. `dst_phase_bytes[c]` = (address of output plane c) & 0x1f (ALIGN-DEPENDENT: only n >= 0x4b0 / 0x45d peels).
 pub struct Params {
@@ -540,7 +540,7 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, c: &Operand, out: &mut [&mut [f
     Ok(())
 }
 
-/// Every stand-in of this port with its tier (W65 / W104 wording).
+/// Every stand-in of this port with its tier.
 pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
         ("IN2C-A1", "MEASURED-DYLIB (STD-001)", "vector constant (32 B, uncovered in the image) = 0xffffffff x8, the xor constant of every lane mask inversion (vxorps K,mask); explicit parameter allones; T2 runs all-ones and an alternate value, so a wrong value shows"),

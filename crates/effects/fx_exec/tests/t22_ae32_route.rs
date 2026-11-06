@@ -1,4 +1,4 @@
-//! T22 (INT9, Batch 43 rules 1 to 3): the 'ae32' source route through FMT3a's readers, the recorded head decides the body,
+//! T22 (INT9): the 'ae32' source route through FMT3a's readers, the recorded head decides the body,
 //! unported heads and the destination (until FMT3c) are refused by name, TABLE-NULL-ON-ROUTE is the native state.
 use fx_exec::hostconv14::*;
 

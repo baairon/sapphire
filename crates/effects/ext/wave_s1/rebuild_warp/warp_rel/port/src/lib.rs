@@ -6,7 +6,7 @@
 pub use warp_f2::{Args as F2Args, F2Error, Host, Image, Obj, Rec};
 use warp_f1::Lattice;
 
-/// CONTRACT-LIMIT (W61): largest plane count n = [image] for which the real wrapper plus F2 return correctly in the emulator.
+/// CONTRACT-LIMIT: largest plane count n = [image] for which the real wrapper plus F2 return correctly in the emulator.
 /// F2's temp row (rbp upward) overwrites its saved caller rbp for n >= 9; the wrapper then runs `mov rsp,rbp; pop rbp; ret`
 /// with that rbp, so the call faults (MEASURED by the end-to-end T2 probes, t2/T2_RESULT.tsv). Beyond it `render` returns an error.
 pub const CONTRACT_MAX_N: i32 = 8;

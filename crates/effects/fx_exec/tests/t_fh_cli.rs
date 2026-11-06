@@ -1,4 +1,4 @@
-//! Step FH (W617 (b), W620 (b)): the built fx_run refuses raw host frame planes (--frame-req) on the 'ae32' route with
+//! Step FH: the built fx_run refuses raw host frame planes (--frame-req) on the 'ae32' route with
 //! FRAME-CONTENT-UNCONVERTED, and a State A run of Time_Warp_RGB still takes them (each missing request answered until rc 0).
 use std::path::PathBuf;
 use std::process::Command;

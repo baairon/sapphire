@@ -1,7 +1,7 @@
 //! The effects stage provider: one frames/2 stage per registered style of the landed effects.
 //!
 //! Every stage runs `fx_run` as a child process on the recorded host route (the 'ae32' route that
-//! the frozen predictions used), so the proven binary carries the parity and this module touches
+//! the stored predictions used), so the proven binary carries the parity and this module touches
 //! no effect crate. The data is in two tables:
 //!
 //! - `data/fx_stages.tsv`: per style the stage id, program, family, kind, spool, layers, the name of

@@ -1,5 +1,5 @@
 //! INT20 step G: RDR8 PATCH 3's cases for fx_exec::input_class (the transcription of 0x6e7f00 and the caller's class-1 test),
-//! plus W450 (b) 1's no-default rule (a reached record cell without a value is refused by name).
+//! plus 's no-default rule (a reached record cell without a value is refused by name).
 use fx_exec::input_class::*;
 
 fn base() -> ClassCells {

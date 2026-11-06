@@ -1,4 +1,4 @@
-//! Batch 001: the 51 smallest group-B P1 candidates (empty functions, constant returns, identity).
+//! the 51 smallest group-B P1 candidates (empty functions, constant returns, identity).
 //! Shapes: `push rbp; mov rbp,rsp; <body>; pop rbp; ret` with the body below.
 
 /// parity: P1 @0xa1d66 size=6

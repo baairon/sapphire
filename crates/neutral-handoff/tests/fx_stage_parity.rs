@@ -1,4 +1,4 @@
-//! Parity of the effect stages: every in-profile frozen member goes through
+//! Parity of the effect stages: every stored prediction member covered by the stage host profile goes through
 //! `sapphire stage apply` and its relaid 'ae32' words are compared, by full SHA-256, with the
 //! recorded prediction.
 //!

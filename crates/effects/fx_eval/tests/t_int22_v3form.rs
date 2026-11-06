@@ -1,4 +1,4 @@
-//! INT22 step B (W509 (b) 2, W515 (d), W521 (a)): the v3_to_v4_if4 form classifier behind the claim-route refusal V3TOV4IF4-NARROW-UNMEASURED.
+//! INT22 step B: the v3_to_v4_if4 form classifier behind the claim-route refusal V3TOV4IF4-NARROW-UNMEASURED.
 //! One test per refused form, and the measured forms (M4, M3Z, M3V, M2S) not refused. Unit tests on constructed operands; no original is judged here.
 use fx_eval::compile::ArgView2;
 use fx_eval::fold::{fold_lanes, v3_form, v3_note, v3_take};
@@ -10,7 +10,7 @@ fn s(x: f32) -> ArgView2 {
     c([x, x, x, x], 1)
 }
 
-// FLD3-FORM (W678 (c)): the two earlier refusals of n = 3 with a scalar argument 0 and a scalar argument 1 (0.5, -0.0) are measured now: the form is
+// FLD3-FORM: the two earlier refusals of n = 3 with a scalar argument 0 and a scalar argument 1 (0.5, -0.0) are measured now: the form is
 // argument 0 broadcast to lanes 0 to 2 and argument 1 in lane 3 (BCJ5's FLD3 records). They stay refused when argument 1 is not one lane.
 #[test]
 fn n3_scalar_arg0_scalar_arg1_is_m3b_not_refused() {
@@ -23,8 +23,8 @@ fn refused_n3_scalar_arg0_vector_arg1() {
     assert_eq!(v3_form(&[s(0.2), c([1.0, 0.5, 0.0, 0.0], 2)], 3), "UNMEASURED-FORM");
 }
 
-// INT23 (W523 (c) 1): the INT22 test refused_n3_vector_arg0 is replaced by the four tests below and m3v_not_refused.
-// INT24 (W533 (b)): distinct lanes at argument 1 = 1.0 are M3V after the widening; the first assert of INT23's test moved to t_int24_m3v.rs
+// INT23: the INT22 test refused_n3_vector_arg0 is replaced by the four tests below and m3v_not_refused.
+// INT24: distinct lanes at argument 1 = 1.0 are M3V after the widening; the first assert of INT23's test moved to t_int24_m3v.rs
 // (as M3V); the argument 1 = 0 assert stays refused here.
 #[test]
 fn refused_n3_vector_arg0_distinct_lanes() {

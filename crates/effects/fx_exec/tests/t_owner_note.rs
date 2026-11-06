@@ -1,4 +1,4 @@
-//! The OWNER-OPACITY-DERIVED note on an unbound row with a --set (W630 (d)); the words do not change (INT36).
+//! The OWNER-OPACITY-DERIVED note on an unbound row with a --set; the words do not change (INT36).
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -76,7 +76,7 @@ fn run(tag: &str, extra: &[&str]) -> (Option<i32>, String, String, Vec<u8>) {
 
 const NOTE_OUT: &str = "label OWNER-OPACITY-DERIVED (Time_Warp_RGB ";
 
-// W630 (d): an unbound Time_Warp_RGB row with --set output_opacity (the registered default's loop value 0) prints the same note as the row without it,
+// an unbound Time_Warp_RGB row with --set output_opacity (the registered default's loop value 0) prints the same note as the row without it,
 // and the two runs give the same words.
 #[test]
 fn owner_opacity_note_prints_on_an_unbound_row_with_a_set() {

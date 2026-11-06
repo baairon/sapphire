@@ -1,5 +1,5 @@
-//! INT17 step s11_prerender: byte copy of wave_s9/pdv3_owner_rest/owner_arm/owner_arm.rs below this line (PDV3 PATCH 1, W409 (b)).
-//! PDV2: the owner arm of the original plugin ported as one pure function (W371 (c)).
+//! INT17 step s11_prerender: byte copy of wave_s9/pdv3_owner_rest/owner_arm/owner_arm.rs below this line (PDV3 PATCH 1).
+//! PDV2: the owner arm of the original plugin ported as one pure function.
 //!
 //! Sources (neutral_1 listing addresses; every statement labelled in ../README.md):
 //!   * definition flag: sets bit 0x20 of [[owner]] for the token "dynamic" (cell);
@@ -33,7 +33,7 @@ pub struct ParamView {
 /// MEASURED in place). Out-of-range values give 0x80000000 on hardware; Rust `as` saturates, so those are refused.
 pub fn param_int(value: f32) -> Option<i32> {
     let x = value + 0.5f32;
-    // INT18 (W414 (c) step 7): -2147483648.0f32 is in range for cvttss2si (it gives 0x80000000 as a value, not as the indefinite); the
+    // INT18: -2147483648.0f32 is in range for cvttss2si (it gives 0x80000000 as a value, not as the indefinite); the
     // earlier bound `x <= -2147483649.0f32` rounded to -2^31 in f32 and refused it
     if x.is_nan() || x >= 2147483648.0f32 || x < -2147483648.0f32 {
         None
@@ -302,7 +302,7 @@ mod tests {
         assert!(ctx_postdiv_checked >= 4);
     }
 
-    /// TWR1 (W722): the four recorded (opacity, output opacity) loop pairs of S_TimeWarpRGB give the recorded owner tuples (the owner cells)
+    /// TWR1: the four recorded (opacity, output opacity) loop pairs of S_TimeWarpRGB give the recorded owner tuples (the owner cells)
     #[test]
     fn time_warp_opacity_output_opacity_pairs() {
         for (op, out, want) in [(1.0f32, 0.0f32, [1, 3, 1, 0]), (0.0, 0.0, [0, 3, 0, 0]), (2.0, 0.0, [2, 3, 0, 0]), (1.0, 1.0, [1, 0, 1, 0])] {

@@ -64,7 +64,7 @@ pub struct PerspThis<'a> {
 }
 
 /// Slot 52 of class perspective. `n` is [args]; `out2_phase_bytes` = (address of out2[0]) & 0x1f (the buffer phase, an explicit input
-/// per W55; out1 is not address dependent). Writes out1[..n] and out2[..n].
+/// by design; out1 is not address dependent). Writes out1[..n] and out2[..n].
 pub fn slot52_perspective(fw: u64, t: &PerspThis, flag: bool, n: i32, out2_phase_bytes: u32, out1: &mut [f32], out2: &mut [f32]) -> Result<(), Slot52Error> {
     match tier(fw) {
         Tier::Avx2 => {}
@@ -105,7 +105,7 @@ pub fn slot52_perspective_alpha_with(fw: u64, ramp_max: f32, par: &AlphaParams, 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // class warp, slot 53 
 
-/// CONTRACT-LIMIT (W61, inherited from the driver crate): plane count n = [image] above 10 overwrites the driver's frame; F1 (flag path)
+/// CONTRACT-LIMIT (inherited from the driver crate): plane count n = [image] above 10 overwrites the driver's frame; F1 (flag path)
 /// is contracted to n <= 4.
 pub const CONTRACT_MAX_N_BLEND: i32 = warp_driver::MAX_N_BLEND;
 pub const CONTRACT_MAX_N_F1: i32 = 4;
@@ -234,7 +234,7 @@ pub fn slot53_warp(
         return Err(WarpError::ContractLimit { n });
     }
     if p.flag != 0 && n > CONTRACT_MAX_N_F1 {
-        // F1 (reached only on the flag path) smashes its frame above n = 4 (CONTRACT-LIMIT, W61)
+        // F1 (reached only on the flag path) smashes its frame above n = 4 (CONTRACT-LIMIT)
         return Err(WarpError::ContractLimit { n });
     }
     let obj = build_ctx(rec, geom);

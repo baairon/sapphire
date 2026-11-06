@@ -1,4 +1,4 @@
-//! Batch 015: bytes-per-row calculators selected by a format id (jump tables), a 12 word to 4 dword unpack and
+//! bytes-per-row calculators selected by a format id (jump tables), a 12 word to 4 dword unpack and
 //! the RGB to 10-bit YCbCr line converter with two matrices.
 use crate::cov::{br, hit};
 use crate::*;

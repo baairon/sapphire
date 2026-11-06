@@ -1,5 +1,5 @@
 // INT19: LYM2 tests/t27_lym1.rs renamed t31_lym1.rs (the t27 name is INT17s; NEXT.md of INT18, step L).
-//! LYM1: the 13 registered programs merged with their layout row (LAY1, W225 (b), W442): extras, hardcodes, parameter counts.
+//! LYM1: the 13 registered programs merged with their layout row (LAY1): extras, hardcodes, parameter counts.
 use fx_eval::layoutmerge::{find_layout_text, merge_layout, read_layout};
 use fx_eval::{build_effect, Corpus};
 

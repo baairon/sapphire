@@ -20,7 +20,7 @@ impl Edge {
         match v {
             0 => Ok(Edge::Zero),
             1 => Ok(Edge::Mirror),
-            _ => Err(FxError::Geometry), // BG-A2: fx_common's FxError has no edge variant and is frozen
+            _ => Err(FxError::Geometry), // BG-A2: fx_common's FxError has no edge variant and is not changed by this crate
         }
     }
 }
@@ -28,7 +28,7 @@ impl Edge {
 /// Scratch buffer base alignment modulo 32 bytes (B-A4). Only windows of 64 or more samples notice it.
 pub const DEFAULT_BASE_PHASE: usize = 0;
 
-/// blur_core on dense w*h buffers (W3). `half` is not a parameter: Blur and Glow pass 0.
+/// blur_core on dense w*h buffers. `half` is not a parameter: Blur and Glow pass 0.
 /// Order as the driver: gain 0 clears dst; both sigmas not positive scales or copies src; otherwise the X pass (sigma_x > 0),
 /// the Y pass (sigma_y > 0, reading dst in place after an X pass, else src), then the final scale gain / prod(2*B+1).
 #[allow(clippy::too_many_arguments)]
@@ -79,7 +79,7 @@ pub fn blur_core_phase(src: &[f32], dst: &mut [f32], w: usize, h: usize, sx: f32
     }
 }
 
-/// Entry for a caller that asks for the half-height vertical mode (kernel K2, not ported, decision W3): always an error.
+/// Entry for a caller that asks for the half-height vertical mode (kernel K2, not ported, decision): always an error.
 #[allow(clippy::too_many_arguments)]
 pub fn blur_core_half(src: &[f32], dst: &mut [f32], w: usize, h: usize, sx: f32, sy: f32, gain: f32, edge: Edge, passes: i32, subpixel: bool, aspect: Option<f32>, half: bool) -> Result<(), FxError> {
     if half {

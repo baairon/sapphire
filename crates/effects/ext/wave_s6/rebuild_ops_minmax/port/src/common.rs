@@ -87,7 +87,7 @@ impl Mutant {
 }
 
 /// x86 MAXSS / MAXPS (SDM): dst = (a > b) ? a : b with a = first source, b = second source. A NaN in either operand, or a pair of zeros of
-/// either sign, returns the SECOND source. Operand order is therefore part of the semantics (silicon NaN rule, W64).
+/// either sign, returns the SECOND source. Operand order is therefore part of the semantics (silicon NaN rule).
 #[inline]
 pub fn x86_max(a: f32, b: f32) -> f32 {
     if a > b {

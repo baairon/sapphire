@@ -1,5 +1,5 @@
 //! INT17 step 5 (s9_style): merged from INT16 stage/s7/style.rs (byte copy below this line).
-//! INT16 (Batch 49 step 5, Batch 47 rule 3, W379 (b) to (d)): STYLE-SELECT, the style of a multi-style effect from the host popup "Effect".
+//! INT16: STYLE-SELECT, the style of a multi-style effect from the host popup "Effect".
 //! BCJ3 (wave_s9/bcj3_blur_reach/SELECTOR.md, MEASURED in the emulator): the render path reads the program count
 //! [owner] (movsx word; cmp 1; jg); with a count above 1 it checks out "Effect" (registered index 5, popup) and takes
 //! style = max(answer - 1, 0) (dec ecx; cmovs ecx, 0); load the program pointer from [owner + 8 x style].
@@ -24,7 +24,7 @@ pub fn style_index(prog_count: i16, answer: i32) -> usize {
 /// claimed here; a style of one of them is refused by STYLE-SELECT only when the run declares an Effect answer.
 pub const STYLE_TABLE: &[(&str, &[&str])] = &[
     ("S_Blur", &["Blur_Color", "Blur_Mono"]),
-    // BOP1 (W570 (e) outcome A): S_BlurMoCurves has two styles. Effect = 2 is the Blur_Only layout object. The plugin's own def registration refuses the
+    // BOP1 (outcome A): S_BlurMoCurves has two styles. Effect = 2 is the Blur_Only layout object. The plugin's own def registration refuses the
     // def name Blur_Motion_Curves_No_Transform_Autogen (39 characters, bound 32), so the Blur_Only render is the layout object's own plan, which is
     // plan-equal (BOP1 runs/cmp_rm30.txt) to the native compile of that def. The style name used here is the layout's style name.
     ("S_BlurMoCurves", &["Transform_and_Blur", "Blur_Only"]),

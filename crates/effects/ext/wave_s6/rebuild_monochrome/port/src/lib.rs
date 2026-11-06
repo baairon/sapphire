@@ -37,14 +37,14 @@ pub const SCALAR_W: Weights = Weights { r: 0.3125, g: 0.5, b: 0.1875 };
 pub const VEC_W: Weights = SCALAR_W;
 
 /// The fields of the class object and the call info the entry reads.
-/// No Default: every field is an explicit input (W65).
+/// No Default: every field is an explicit input.
 #[derive(Clone, Copy, Debug)]
 pub struct Params {
     /// this: channel count of the single input image.
     pub channels: i32,
     /// info: pixels in the call (signed 32 bit).
     pub n: i32,
-    /// (dest pointer) & 0x1f in bytes; 0 = 32 byte aligned buffer (W55). Only multiples of 4 are
+    /// (dest pointer) & 0x1f in bytes; 0 = 32 byte aligned buffer. Only multiples of 4 are
     /// reachable with f32 planes; a value with (phase & 3) != 0 sends the whole row down the scalar loop.
     pub dst_phase: u32,
 }

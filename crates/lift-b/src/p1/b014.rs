@@ -1,4 +1,4 @@
-//! Batch 014: more pixel/sample repacking kernels (10-bit unpack variants, component selection by mode and
+//! more pixel/sample repacking kernels (10-bit unpack variants, component selection by mode and
 //! parity, 12-bit packing).
 use crate::cov::br;
 use crate::*;

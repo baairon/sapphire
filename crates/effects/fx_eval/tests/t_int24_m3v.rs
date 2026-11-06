@@ -1,6 +1,6 @@
-//! INT24 widening step (W533 (b), W537 (a)): M3V for every 3-lane argument 0 at argument 1 bit equal to 1.0 (own lanes, argument 1 not placed),
+//! INT24 widening step: M3V for every 3-lane argument 0 at argument 1 bit equal to 1.0 (own lanes, argument 1 not placed),
 //! at FLD2's two argument-0 lane sets (wave_s9/fld2_m3v_record LANES.tsv: binding A [0.8125 1.0625 0.9375], binding B the `*` product
-//! [1.0390625 0.6015625 0.875]); argument 1 other than 1.0 with a 3-lane argument 0 stays refused (W533 (c)). Also the W518 (c) refusal text.
+//! [1.0390625 0.6015625 0.875]); argument 1 other than 1.0 with a 3-lane argument 0 stays refused. Also refusal text.
 use fx_eval::compile::ArgView2;
 use fx_eval::fold::{fold_lanes, v3_form};
 use fx_eval::layoutmerge::{find_layout_text, merge_layout, read_layout};
@@ -43,7 +43,7 @@ fn m3v_distinct_lanes_vector_arg1_equal_one() {
 
 #[test]
 fn refused_n3_three_lane_arg0_arg1_not_one() {
-    // W533 (c): FLD2's brightness 0.875 (inside the `*` node, not a V3ToV4If4 argument) and other values stay refused
+    // FLD2's brightness 0.875 (inside the `*` node, not a V3ToV4If4 argument) and other values stay refused
     for x in [0.875f32, 0.0, -1.0, 1.0000001, 2.0] {
         assert_eq!(v3_form(&[v(FLD2_A), s(x)], 3), "UNMEASURED-FORM", "argument 1 {}", x);
     }
@@ -59,7 +59,7 @@ fn layout_modify_value_text_prints_name_and_value() {
     if !effects_vecdir::have_all(&["record_extract/programs/programs.tsv"]) {
         return;
     }
-    // W518 (c): Texture_Chroma_Spiral_Autogen's row carries `:modify shift = 0`
+    // Texture_Chroma_Spiral_Autogen's row carries `:modify shift = 0`
     fn pt() -> &'static str { effects_vecdir::path_str("record_extract/programs/programs.tsv") }
     let tsv = std::fs::read_to_string(pt()).expect("programs.tsv");
     let c = Corpus::from_programs_tsv(&tsv);

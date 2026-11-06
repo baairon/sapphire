@@ -140,7 +140,7 @@ pub enum CoError {
     Plane(PlError),
 }
 
-/// Explicit parameters (no Default, W65): `tag` = what slot 31 returns (the combo's output count), pool flag of the plane service, flat info record.
+/// Explicit parameters (no Default): `tag` = what slot 31 returns (the combo's output count), pool flag of the plane service, flat info record.
 #[derive(Clone, Copy, Debug)]
 pub struct Params {
     pub pass: Pass,

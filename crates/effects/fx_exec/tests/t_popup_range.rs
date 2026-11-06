@@ -1,4 +1,4 @@
-//! POPUP-ANSWER-OUT-OF-RANGE (W630 (b)) at the command line (INT36).
+//! POPUP-ANSWER-OUT-OF-RANGE at the command line (INT36).
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -43,7 +43,7 @@ fn run(tag: &str, extra: &[&str]) -> (Option<i32>, String, String, Vec<u8>) {
     (p.status.code(), String::from_utf8_lossy(&p.stderr).to_string(), meta, words)
 }
 
-// W630 (b): the answer is judged before anything else of the line; out of range refuses with the exact text, in range does not.
+// the answer is judged before anything else of the line; out of range refuses with the exact text, in range does not.
 #[test]
 fn popup_answer_out_of_range_refuses_on_the_command_line() {
     if !effects_vecdir::have_all(&["record_extract/programs/programs.tsv"]) {

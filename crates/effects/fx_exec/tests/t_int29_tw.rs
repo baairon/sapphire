@@ -1,4 +1,4 @@
-//! INT29 step TW (W559 (a)): FRAME-INDEX-REQUIRED at compile on the claim route, and the get_frame request keyed by (frame, stored)
+//! INT29 step TW: FRAME-INDEX-REQUIRED at compile on the verified render path, and the get_frame request keyed by (frame, stored)
 //! through the executor on Time_Warp_RGB_Autogen at F = 2.5, step 2 (TWS1 F25's requests: frames 3, 2, 1, arguments 7, 5, 3).
 use fx_exec::exec::{compile_for, execute_compiled, Binding, HostFrames, Inputs};
 use fx_exec::twframe::TwRoute;
@@ -36,7 +36,7 @@ fn frame_index_required_on_claim_route() {
     assert!(format!("{}", e).contains("FRAME-INDEX-REQUIRED"), "{}", e);
     b.host.insert("get_frame_number".into(), vec![2.5]);
     assert!(compile_for(&g, &b).is_ok());
-    // state A (not the claim route) keeps NV3-A7's zeros
+    // state A (not the verified render path) keeps NV3-A7's zeros
     assert!(compile_for(&g, &bind()).is_ok());
 }
 

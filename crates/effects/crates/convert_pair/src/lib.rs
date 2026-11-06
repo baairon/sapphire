@@ -212,7 +212,7 @@ pub fn convert_pair_frame(src: &[f32], w: usize, h: usize, cell: usize, p: ToDes
 
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// SHE2: the 3-plane branch (destination image with 3 planes, the Source of every no_alpha_only program, W112 / W185 d).
+// SHE2: the 3-plane branch (destination image with 3 planes, the Source of every no_alpha_only program).
 // Reader: format 16, plane count 3: dispatcher (cmp eax,3) -> (SSE-flag variant: a 16-pixel chunk loop
 // plain variant:; both read B,G,R,A of every host pixel, finite-test each sample with,
 // multiply the three colours by the finite alpha with mulss, and store ONLY three plane rows: the alpha plane (a fourth pointer) is never read
@@ -416,12 +416,12 @@ pub fn convert_dest_frame_n12(image_planes: i32, to_dest_params_a: i32, mode_byt
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// INT20 step G3 (RDR10 PATCH 2, Batch 55 rules 3 and 4, W459 (b) (c)): the class-3 pair of the 'ae32' route, format 14 host words A, R, G, B
+// INT20 step G3 (RDR10 PATCH 2): the class-3 pair of the 'ae32' route, format 14 host words A, R, G, B
 // per pixel (u32 bits, the first dword = A). Source: variant B head (listing text, both loops): the second and third dwords,
 // through the finite test, no read of the first dword, no multiply (CONVERT-VARIANT-B-UNWEIGHTED, MEASURED RDR10 r1b). Destination: the mode-2
 // three-plane body stores the second and third dwords, only; slot 0 is the host source row's slot 0 by the row copier (14, 14)
 // (DEST-ALPHA-FROM-SOURCE-ROW, MEASURED RDR10 r1b and r1c, RDR11). Variant C (DRR2) is NOT here (Opus 57).
-// Mutants are fixed at build time by env CONVERT_PAIR_G3_MUT (W170: one build per mutant, each binary's SHA-256 recorded):
+// Mutants are fixed at build time by env CONVERT_PAIR_G3_MUT (one build per mutant, each binary's SHA-256 recorded):
 // 1 planes weighted by alpha, 2 slot 0 written 0.0, 3 slot 0 written 1.0, 4 planes 4, 5 finite test removed.
 // ---------------------------------------------------------------------------------------------------------------------------
 

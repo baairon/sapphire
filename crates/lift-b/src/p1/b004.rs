@@ -1,4 +1,4 @@
-//! Batch 004: predicates over constants, clamping selects, std::string::data() style accessor, small copies.
+//! predicates over constants, clamping selects, std::string::data style accessor, small copies.
 use crate::cov::br;
 use crate::*;
 

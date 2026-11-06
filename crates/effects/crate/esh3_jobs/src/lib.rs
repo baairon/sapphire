@@ -1,4 +1,4 @@
-//! ESH3: native port of three pool jobs of edge_aware_sharpen's slot 52 (listing addresses; ROUTE AVX2-ONLY, W53):
+//! ESH3: native port of three pool jobs of edge_aware_sharpen's slot 52 (listing addresses; ROUTE AVX2-ONLY):
 //!   * `job_2`: AVX2 body behind the dispatcher (job cell). Domain-transform style weight planes whose
 //!     horizontal and vertical distances are L1 sums over the colour channels (`nch` planes, at most 4: the job loads four plane pointers).
 //!   * `job_cell_a`: scalar job (called from slot 52): two running-sum passes (a -> p0 along lines, t -> p1 along columns).

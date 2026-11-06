@@ -429,10 +429,10 @@ symbol	offset	name	verdict	confidence	flags	evidence	suggested_label	reviewed
 0xa03	0xa03	_nanosleep	weak	low	hyp_none;table_arity_overcount;null_ptr_imm;unreviewed_sites	no inferred role; signature takes 2 int/0 float args, table arity 4, fresh arg writes 1.0,1.0 over 1 sites; no contradiction found		script
 0xa09	0xa09	_pow	align	med	hyp_confirmed;unreviewed_sites	role confirmed (pow); sites 10; table arity 0 vs signature 0		script
 0xa0f	0xa0f	_printf	align	high	hyp_confirmed	printf(fmt, ...): rdi format literal, esi/rsi value, eax zeroed for varargs, 28 sites		deep
-0xa15	0xa15	_pthread_equal	align	med	hyp_none	pthread_equal between pthread_self results in f_000566f8 and f_00056760 (recursive lock owner check)		deep
+0xa15	0xa15	_pthread_equal	align	med	hyp_none	pthread_equal between pthread_self results in f_000566f8 and f_00056760 (recursive lock holder check)		deep
 0xa1b	0xa1b	_pthread_mutex_destroy	align	med	hyp_none	pthread_mutex_destroy in f_000562d0 (a lock object destructor)		deep
 0xa21	0xa21	_pthread_mutex_init	align	high	hyp_refuted;null_ptr_imm	pthread_mutex_init(&member, NULL): rdi = this+0x198, esi zeroed, in a constructor body		deep
-0xa27	0xa27	_pthread_mutex_lock	align	high	hyp_refuted	pthread_mutex_lock in f_000566f8 beside pthread_self and pthread_equal (recursive-lock owner check); port-a copy has no instruction comments		deep
+0xa27	0xa27	_pthread_mutex_lock	align	high	hyp_refuted	pthread_mutex_lock in f_000566f8 beside pthread_self and pthread_equal (recursive-lock holder check); port-a copy has no instruction comments		deep
 0xa2d	0xa2d	_pthread_mutex_unlock	align	high	hyp_refuted	pthread_mutex_unlock in f_00056760 beside pthread_self and pthread_equal (mirror of the lock function)		deep
 0xa33	0xa33	_pthread_once	align	med	hyp_none	pthread_once(&once, init_fn): arg1 is the callback handed by registration functions f_0002de4e, f_0002decc, f_0002de78 (structure noted callbacks f_0002dd46, f_0002df5c)		deep
 0xa39	0xa39	_pthread_self	align	high	hyp_refined	pthread_self(): no args, rax saved (thread id); co-called with pthread_equal and mutex lock/unlock in f_000566f8 and f_00056760; structure accessor shape right		deep

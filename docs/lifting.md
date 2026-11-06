@@ -1,6 +1,6 @@
 # Lift crates
 
-How the Rust in the `lift-*` crates was produced from the dump, how the crates are laid out, and the x86 rules the ports reproduce. What reached parity is in [parity](parity.md).
+How the Rust in the `lift-*` crates was produced from the [dump](glossary.md#dump), how the crates are laid out, and the x86 rules the ports reproduce. What reached parity is in [parity](parity.md).
 
 ## The input
 
@@ -78,7 +78,7 @@ Each lift crate is a standalone library: its only dependencies are `neutral-worl
 
 The crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions for the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once, in several crates or in several modules of one crate. Each copy is a separate port of the same function: no lift crate depends on another, nearly every call between functions goes through `Env` rather than into another port, every copy has its own test in its own crate against the stored vectors of its id, and most copies differ in their code (call helpers, coverage hooks, runtime).
 
-`docs/data/FUNCTION_MAP.tsv` names one copy per id in its `source` column: the first file, in path order, of the crate of the row's `owner` that defines the id; the row's tier, strict class, evidence and ledger note belong to that crate's ledger row, and the other copies count in no figure. In `lift-a` that first file is the `liftcheck` copy wherever one exists, not the hand port in `p1` or the world port in `p2v`.
+`docs/data/FUNCTION_MAP.tsv` names one copy per id in its `source` column: the first file, in path order, of the row's `crate` that defines the id; the row's tier, strict class, evidence and ledger note belong to that crate's ledger row, and the other copies count in no figure. In `lift-a` that first file is the `liftcheck` copy wherever one exists, not the hand port in `p1` or the world port in `p2v`.
 
 ## x86 rules the ports reproduce
 

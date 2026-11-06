@@ -10,7 +10,7 @@ use fx_eval::{compile, CompileOptions, CompiledProgram, ComboTable, Genotype, Pl
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-/// Explicit parameter bindings and host values for one render (W84: nothing is read from a host).
+/// Explicit parameter bindings and host values for one render (nothing is read from a host).
 #[derive(Clone, Debug)]
 pub struct Binding {
     /// parameter name to lanes; absent = PROGRAM-DEFAULT (the program text's value)
@@ -21,32 +21,32 @@ pub struct Binding {
     pub host: BTreeMap<String, Vec<f32>>,
     /// INT29 step TW: FRAME-INDEX-REQUIRED (set by fx_run on the 'ae32' route): get_frame_number must be given in `host`
     pub frame_index_required: bool,
-    /// step DX2 v2 (W652 (d)): set by fx_run on the 'ae32' route only; copied into CompileOptions::v3_bound_count
+    /// step DX2 v2: set by fx_run on the 'ae32' route only; copied into CompileOptions::v3_bound_count
     pub v3_bound_count: bool,
     pub input_elnum: BTreeMap<String, i32>,
     pub paramset: String,
     pub no_fold: bool,
-    /// HOST-CURVES (W116, CV1-A1): an unkeyed get_curve_val node folds to the lanes of its first argument (NV9-A1)
+    /// HOST-CURVES (CV1-A1): an unkeyed get_curve_val node folds to the lanes of its first argument (NV9-A1)
     pub host_curves_unkeyed: bool,
-    /// HCK1 (W275, Batch 36 rule 6): keyed host curve answers (curve name, f32 bits of the requested time) -> lanes; Some = no default, an unanswered request is a compile error
+    /// HCK1: keyed host curve answers (curve name, f32 bits of the requested time) -> lanes; Some = no default, an unanswered request is a compile error
     pub host_keyed: Option<BTreeMap<(String, u32), Vec<f32>>>,
-    /// W479/W490 step T: the claimed HOST-CURVE-VALUES input (fx_run --host-curve-values FILE)
+    /// step T: the claimed HOST-CURVE-VALUES input (fx_run --host-curve-values FILE)
     pub host_curve_values: Option<fx_eval::hostcurve::HostCurveValues>,
-    /// INT8 HC-ZERO-LEGACY (Batch 40 rule 4): the named state A zero fold; false = HC-NO-INTERFACE (a get_curve_val with neither interface is an error)
+    /// INT8 HC-ZERO-LEGACY: the named state A zero fold; false = HC-NO-INTERFACE (a get_curve_val with neither interface is an error)
     pub hc_zero_legacy: bool,
     /// NEG-2 RANGES-OFF: skip the evaluator range clamp (also env NEG2_RANGES_OFF)
     pub ranges_off: bool,
-    /// W215/W231 explicit bound-input mask of the compile (bit 0 = Source bound); the executor default is 1, `fx_run --bound-mask` sets it (DSW6 A.2)
+    /// explicit bound-input mask of the compile (bit 0 = Source bound); the executor default is 1, `fx_run --bound-mask` sets it (DSW6 A.2)
     pub bound_input_mask: u32,
     /// INT10 (BCX1 PATCH 2): the compiler's `__do_postdiv__` cell as a host input of the SMART context (BCX1: 1 in SMR7's Blur_Color compiles,
     /// read from the plan text). None = the state A derivation (the program flag `dynamic`glue's compiler-reader measurement of instance).
     pub do_postdiv: Option<bool>,
-    /// INT6 (Batch 36 rule 3): the compile context; None only in library unit tests. The CLIs require it (no default) and compile_for refuses an unsupported value.
+    /// INT6: the compile context; None only in library unit tests. The CLIs require it (no default) and compile_for refuses an unsupported value.
     pub ctx: Option<fx_eval::CompileContext>,
     pub kp: KParams,
 }
 
-/// INT8 (W314 (e)): the binding of the auxiliary binaries (hsb_cmp, trails_cmp, hsb_e2e, eff_e2e). `--state-a-defaults` names the stored state A
+/// INT8: the binding of the auxiliary binaries (hsb_cmp, trails_cmp, hsb_e2e, eff_e2e). `--state-a-defaults` names the stored state A
 /// semantics (Binding::defaults(): bound mask 1, no compile context, plus HC-ZERO-LEGACY) and is printed on stderr; otherwise `--bound-mask HEX` and the
 /// four `--ctx-*` fields are required (no default), `--hc` selects the unkeyed host-curve interface, and a get_curve_val request without one is HC-NO-INTERFACE.
 pub fn strict_binding(tool: &str, a: &[String]) -> Result<Binding, String> {
@@ -105,14 +105,14 @@ impl Binding {
             hc_zero_legacy: self.hc_zero_legacy,
             ranges_off: self.ranges_off,
             unbound_exception_off: false, // INT4 (DSW3): the unbound-input exception stays on
-            bound_input_mask: self.bound_input_mask, // INT4 (W231, DSW5): explicit; default 1 = Source bound; INT5: Binding field (DSW6 A.2)
-            mocha_data_present: false, // INT4 (SHE4 W215 b): no host mocha data in the executor
+            bound_input_mask: self.bound_input_mask, // INT4 (DSW5): explicit; default 1 = Source bound; INT5: Binding field (DSW6 A.2)
+            mocha_data_present: false, // INT4 (SHE4): no host mocha data in the executor
             history: None, // INT7 NZ1 COMPILE-HISTORY: the executor compiles a fresh instance (no earlier compile)
             presence_mask: None, // INT9: the executor binds real images by name; INPUT-PRESENCE-MASK wiring into the executor is NEXT
             mixed_mask: false,
             presence_derived: false,
             do_postdiv: self.do_postdiv,
-            // INT18 (STK2 PATCH 2, W416 (d)): fx_run copies --ctx-word2 and --ctx-has-data into CompileOptions itself
+            // INT18 (STK2 PATCH 2): fx_run copies --ctx-word2 and --ctx-has-data into CompileOptions itself
             ctx_word2: self.ctx.as_ref().map(|c| c.stack_word2).unwrap_or(false),
             ctx_has_data: self.ctx.as_ref().map(|c| c.has_data).unwrap_or(0),
             v3_bound_count: self.v3_bound_count,
@@ -138,7 +138,7 @@ pub struct HostFrames {
     pub frames: BTreeMap<i32, Image>,
     /// NV5-FRAME-ROUND-OLD (NV-8 frame rule merged in FX-1 for the Time_Warp_RGB re-run): true selects round(t); false (default) is floor(max(0, t)).
     pub frame_round_old: bool,
-    /// INT29 step TW (W559 (a), (c)): Some on the claim route; get_frame then asks the request the plugin makes (twframe::route_request) and
+    /// INT29 step TW: Some on the verified render path; get_frame then asks the request the plugin makes (twframe::route_request) and
     /// takes the frame keyed by (frame, stored bits) from `by_request`; None keeps the state A rule above (frame_key) and `frames`.
     pub tw_route: Option<crate::twframe::TwRoute>,
     pub by_request: BTreeMap<(i32, u32), Image>,
@@ -166,7 +166,7 @@ pub fn combo_table() -> ComboTable {
     ComboTable::from_defs()
 }
 
-/// XWP2 (W746): the per-writer xy list of one run: (base phase in bytes mod 32, reused from render 1) per writer in execution order, and the render (1 or 2).
+/// XWP2: the per-writer xy list of one run: (base phase in bytes mod 32, reused from render 1) per writer in execution order, and the render (1 or 2).
 pub static XY_LIST: std::sync::Mutex<Option<(Vec<(i32, bool)>, u32)>> = std::sync::Mutex::new(None);
 /// XWP2: the writers of the placement model as the executor uses them: (consumer (gid, slot) list, base, head mode, preserve)
 /// XWP2b: per perspective-class node gid, true when its destination is a row buffer in the placement model's plan
@@ -174,7 +174,7 @@ pub static PERSP_ROWBUF: std::sync::Mutex<std::collections::BTreeMap<usize, bool
 pub static XY_WRITERS: std::sync::Mutex<Vec<(Vec<(usize, usize)>, i32, crate::types::XyHeadMode, bool)>> = std::sync::Mutex::new(Vec::new());
 
 /// XWP2: map the run's --xy-base-list onto the writers of the placement model (compile_placed). Head mode from the placement: a plane indexed by
-/// row is PerRow, a row buffer is OneHead (W746 (a) 3). A preserve writer runs in render 1 only: its render 2 entry must be the render 1 base, marked
+/// row is PerRow, a row buffer is OneHead. A preserve writer runs in render 1 only: its render 2 entry must be the render 1 base, marked
 /// reused. Mutants (env XWP2_MUT, test only): merge (one writer for every consumer), primset (head mode from the primitive set), noreuse (a preserve
 /// writer re-runs in render 2 at base 0).
 fn xy_writers_for(program: &Genotype, binding: &Binding) -> Result<(), ExecError> {
@@ -215,13 +215,13 @@ fn xy_writers_for(program: &Genotype, binding: &Binding) -> Result<(), ExecError
 
 pub fn compile_for(program: &Genotype, binding: &Binding) -> Result<CompiledProgram, ExecError> {
     xy_writers_for(program, binding)?;
-    // INT18 (STK2 PATCH 2 and 3, W416 (d)): with the context carried into CompileOptions, word 2 = 1 is planned by the preserve-group model
+    // INT18 (STK2 PATCH 2 and 3): with the context carried into CompileOptions, word 2 = 1 is planned by the preserve-group model
     // (fx_eval::preserve); the other native refusals of check_native stay, and the motion_blur and downsample programs are refused by name.
     let w2 = binding.ctx.as_ref().map(|c| c.stack_word2).unwrap_or(false);
     if let Some(c) = &binding.ctx {
         if w2 { c.check_native_preserve() } else { c.check_native() }.map_err(ExecError::Shape)?;
     }
-    // INT29 step TW (TWF1 PATCH 1, W559 (a)): on the claim route F is a required explicit input; a program that reads get_frame_number
+    // INT29 step TW (TWF1 PATCH 1): on the verified render path F is a required explicit input; a program that reads get_frame_number
     // with no host value refuses instead of folding zeros. State A callers (frame_index_required false) keep NV3-A7's zeros.
     if binding.frame_index_required && !binding.host.contains_key("get_frame_number") && program.nodes.iter().any(|g| g.name == "get_frame_number") {
         return Err(ExecError::BadPlan("compile: FRAME-INDEX-REQUIRED (ctx: the program reads get_frame_number and the run gives no F; TWF1, W559)".into()));
@@ -258,7 +258,7 @@ pub fn unsupported_classes(cp: &CompiledProgram) -> Vec<String> {
     v
 }
 
-/// INT12 (Batch 48 rule 6, W393, W396): "R-PARITY (constant operand binding: the binder calls set_arg_const at
+/// INT12: "R-PARITY (constant operand binding: the binder calls set_arg_const at
 ///  (virtual), twins : lane j = src[min(j, count - 1)] for j = 0..3, integer-typed lanes converted by
 /// x86 cvttss2si (NaN or out of range gives 0x80000000), image-only arguments refused; 1,624 of 1,624 constructed cases equal in the emulator
 /// at counts 1 to 4, float and integer-typed, special values; 4 of 4 mutants killed; comp_premult reads raw lanes;
@@ -266,9 +266,9 @@ pub fn unsupported_classes(cp: &CompiledProgram) -> Vec<String> {
 /// The lanes stay f32 here; an integer-typed consumer converts at its own site with the x86 model (rebuild_common x86), never a saturating cast.
 /// Features cst1_raw_cp (no fill) and fill0_mut (lanes n..3 = 0) are the gate's controls, test builds only.
 fn const_val(nd: &PlanNode) -> Result<Val, ExecError> {
-    // Batch 49 rule 9 (INT13): "CONST-COUNT-NEGATIVE-OFF-CLAIM (plan constants with count -1 in LightWrap, Matte_Ops, Matte_Ops_Comp and
+    // (INT13): "CONST-COUNT-NEGATIVE-OFF-CLAIM (plan constants with count -1 in LightWrap, Matte_Ops, Matte_Ops_Comp and
     // Original: INT11's binding kept (n = 1, raw lanes, no fill) so the survey stays comparable; not R-PARITY; outside the 13 claimed styles;
-    // refused by name on a claimed route; INT12)". The claim route ('ae32', fx_run) refuses any count below 1 before execution.
+    // refused by name on the verified render path; INT12)". The verified render path ('ae32', fx_run) refuses any count below 1 before execution.
     if nd.elnum < 0 {
         return Ok(Val::Const { n: 1, lanes: nd.lanes });
     }
@@ -338,7 +338,7 @@ fn execute_downsampled(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs,
     let mut b2 = binding.clone();
     let g = scaled_geom(&geom_of(&binding.kp, w, h), f);
     b2.kp.geom = Some(g);
-    // W953: the body writer (the last writer of the placement model) sets the head of the small-size xy rows; without a writer list the KParams head stands
+    // the body writer (the last writer of the placement model) sets the head of the small-size xy rows; without a writer list the KParams head stands
     let mut kp_body = binding.kp;
     if let Some(wb) = XY_WRITERS.lock().unwrap().last() {
         kp_body.xy_head = ((32 - wb.1 as usize % 32) % 32) as i32 / 4 % 8;
@@ -428,7 +428,7 @@ fn eval_graph_r(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: 
     let mut trace = Vec::new();
     let mut diagnostics = Vec::new();
     let mut saved: Option<Image> = None;
-    // XWP2 (W746): one Val per default-xy writer of the placement model (empty unless --xy-base-list is given; the caller's xy image wins)
+    // XWP2: one Val per default-xy writer of the placement model (empty unless --xy-base-list is given; the caller's xy image wins)
     let xyw = XY_WRITERS.lock().unwrap().clone();
     let xyv: Vec<Val> = if inputs.images.contains_key("xy") {
         Vec::new()
@@ -579,7 +579,7 @@ pub fn run_host(class: &str, elnum: i32, args: &[Arg], n: usize, host: &HostFram
                 .ok_or_else(|| ExecError::BadPlan("get_frame without a constant frame offset".into()))?;
             if let Some(q) = &host.tw_route {
                 let r = crate::twframe::route_request(q, off).map_err(ExecError::Shape)?;
-                // REQUEST-LIST (W559 (a)): one line per request, compared with the record's host_log arguments
+                // REQUEST-LIST: one line per request, compared with the record's host_log arguments
                 eprintln!("HOST-REQUEST\tframe={}\tstored={:08x}\targ={}", r.frame, r.stored.to_bits(), r.arg);
                 let im = host.by_request.get(&(r.frame, r.stored.to_bits())).ok_or_else(|| {
                     ExecError::MissingHostFrame(format!("get_frame request frame {} stored {} (bits {:08x}) argument {}", r.frame, r.stored, r.stored.to_bits(), r.arg))
@@ -690,7 +690,7 @@ pub fn execute_ae32(
     let mut images = other.clone();
     let mut source_planes = Vec::new();
     for (nm, s) in source_names.iter().zip(route.sources.iter()) {
-        // SVB1 (W744 (b)): a class-3 input (input node of elnum 3) whose record head is the variant-B 4-plane head gets its first three lanes
+        // SVB1: a class-3 input (input node of elnum 3) whose record head is the variant-B 4-plane head gets its first three lanes
         let im = if binding.input_elnum.get(nm) == Some(&3) && s.planes == 4 && s.reader_head == crate::hostconv14::VB4_HEAD {
             crate::hostconv14::class3_vb4_lanes(s, width, height)?
         } else {
@@ -720,7 +720,7 @@ pub fn execute_ae32(
     Ok(Ae32ExecOutput { exec, dest_words, source_planes })
 }
 
-/// INT27 step SI (SIP1 outcome A, W552 (b)): the Source-independent constant route. The plan has no input node (srcindep::route_check);
+/// INT27 step SI (SIP1 outcome A): the Source-independent constant route. The plan has no input node (srcindep::route_check);
 /// the host Source world is given and its planes are not read; the constant lanes go through the destination convert as on the ordinary route.
 /// Mutant (build-time env SIP1_MUT=1): render 0 instead of the constant.
 pub fn execute_ae32_const(

@@ -1,4 +1,4 @@
-//! ENVFENCE (W618 (b)): the 'ae32' route refuses with ENV-SWITCH-REFUSED when any fenced environment name is set (WPG1_PBASE named by
+//! ENVFENCE: the 'ae32' route refuses with ENV-SWITCH-REFUSED when any fenced environment name is set (WPG1_PBASE named by
 //! the brief, plus every name added by this step), and the default line (no switch set) never reaches that refusal.
 use std::path::PathBuf;
 use std::process::Command;
