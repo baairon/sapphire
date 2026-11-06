@@ -6,14 +6,14 @@
 //! argument of 8192 or more) sets the error word of the launch; the host then takes the node to the CPU, so the CPU error
 //! or the CPU bytes are produced there.
 //!
-//! * `K2_HELPERS`: `k2_fmod` (exact fmod of a float widened to double by an integer valued divisor, integer arithmetic),
+//! * `WARP_HELPERS`: `k2_fmod` (exact fmod of a float widened to double by an integer valued divisor, integer arithmetic),
 //!   `k2_sincosf` (port of `libm_sincos::sincosf_traced` for the table walk, tiny and non finite routes).
-//! * `K2_WARP`: kernel `warp_f32`, ports `warp_rel::render` + `warp_f2::run` (`rel` = 1) and `warp_driver::run` (`rel` = 0)
+//! * `WARP_WARP`: kernel `warp_f32`, ports `warp_rel::render` + `warp_f2::run` (`rel` = 1) and `warp_driver::run` (`rel` = 0)
 //!   for the flag 0 path, host mode 0, n <= 4 planes.
-//! * `K2_ROTATE`: kernel `rotate_f32`, ports `rotate::render` (seven operand paths).
-//! * `K2_PERSP`: kernels `persp_f32` and `persp_alpha_f32`, port `perspective::run` and `perspective_alpha`.
+//! * `WARP_ROTATE`: kernel `rotate_f32`, ports `rotate::render` (seven operand paths).
+//! * `WARP_PERSP`: kernels `persp_f32` and `persp_alpha_f32`, port `perspective::run` and `perspective_alpha`.
 
-pub const K2_HELPERS: &str = r#"
+pub const WARP_HELPERS: &str = r#"
 /* Exact fmod(x, y) for x a float widened to double and y an integer valued double in [1, 2^31]. Integer arithmetic only:
    x = mant * 2^e; for e >= 0 the remainder is (mant mod y) * (2^e mod y) mod y, for e < 0 it is (q mod y) + frac * 2^e
    with q the integer part of x. The result has the sign of x (zero keeps it). Inf and NaN give a NaN. */
@@ -117,7 +117,7 @@ void k2_sincosf(float x, __global const ulong* st, float* so, float* co, int* bi
 }
 "#;
 
-pub const K2_WARP: &str = r#"
+pub const WARP_WARP: &str = r#"
 /* MIRRORS_MUL_ADD: warp_f2::x_raw, warp_f2::y_raw, warp_f2::blend1, warp_driver::x_raw, warp_driver::y_raw, warp_driver::blend1 */
 
 /* warp_f2::fm / warp_driver::fm: fmod of the coordinate by the dimension, plus the dimension for a negative coordinate. */
@@ -268,7 +268,7 @@ __kernel void k2_warp_f32(__global const float* plane, uint plen, __global const
 }
 "#;
 
-pub const K2_ROTATE: &str = r#"
+pub const WARP_ROTATE: &str = r#"
 /* MIRRORS_MUL_ADD: rotate::render_cfg (FMA sites 0 to 31) */
 
 /* path 1..4: the angle is a plane (v constant or planes, centre constant or planes: P1 vC cC, P2 vC cP, P3 vP cC, P4 vP cP).
@@ -360,7 +360,7 @@ __kernel void k2_rotate_f32(__global const float* ang, __global const float* vx,
 }
 "#;
 
-pub const K2_PERSP: &str = r#"
+pub const WARP_PERSP: &str = r#"
 /* MIRRORS_MUL_ADD: perspective::d_of, perspective::dneg_of, perspective::elem, perspective_alpha::ramp */
 
 /* Section plan of one row of w elements for a destination phase (bytes mod 32): elements in [*pk, *pe) use the vector

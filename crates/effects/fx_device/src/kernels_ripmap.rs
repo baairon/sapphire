@@ -16,7 +16,7 @@
 //! Out of contract data (a tap outside the ripmap plane, where the CPU kernel returns an error or panics) sets the error word
 //! of the launch; the host then takes the node to the CPU, which reports its own error.
 
-pub const K2B_MIPMAP: &str = r#"
+pub const RIPMAP_MIPMAP: &str = r#"
 /* make_mipmap::mm2::base_fill, one work item per base pixel (all channels): format 2 (f32 bits) copy of source row y into
    the interior of plane (0, 0). Plane (0,0) starts at offset 0 of the ripmap buffer. */
 __kernel void k2b_mm_base(__global const float* s0, __global const float* s1, __global const float* s2, __global const float* s3,
@@ -169,7 +169,7 @@ __kernel void k2b_mm_ver(__global uint* rip, uint soff, uint doff, uint stride, 
 }
 "#;
 
-pub const K2B_BLUR_WARP: &str = r#"
+pub const RIPMAP_BLUR_WARP: &str = r#"
 /* MIRRORS_MUL_ADD: bwb_bodya::s2_x, bwb_bodya::s3_y, bwb_bodya::run_planes_full, bwb_bodya::p2::x_major_sample, bwb_bodya::p2::y_major_sample, bwb_bodyb::x_major_sample2, bwb_bodyb::y_major_sample2, bwb_bodyc::x_major_sample, bwb_bodyc::y_major_sample, bwb_bodyd::x_major_sample_ex, bwb_bodyd::p3::spec_loop, bwb_bodyd::p3::flag0_sample, bwb_bodyd::p4::y_major_sample, bwb_p1::sample */
 
 typedef struct {

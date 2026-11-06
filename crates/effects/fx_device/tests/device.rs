@@ -1,4 +1,5 @@
-//! Tests that need an OpenCL device: they print `NOT RUN` and pass when the machine has no usable platform.
+//! Tests that need an OpenCL device: they print `NOT RUN` and pass when the machine has no usable platform,
+//! and panic instead when `SAPPHIRE_REQUIRE_DEVICE=1`.
 //! Without a device the same kernels are covered by the simulator tests (`tests/sim.rs`) on every OS.
 
 use fx_device::cl::{Arg, Buffer};
@@ -9,6 +10,7 @@ fn device() -> Option<std::sync::Arc<fx_device::DeviceCtx>> {
     match select(DeviceKind::Gpu) {
         Backend::Device(d) => Some(d),
         other => {
+            assert!(std::env::var("SAPPHIRE_REQUIRE_DEVICE").map_or(true, |v| v != "1"), "SAPPHIRE_REQUIRE_DEVICE=1 and no usable OpenCL device ({})", other.describe());
             println!("NOT RUN: no usable OpenCL device ({})", other.describe());
             None
         }
