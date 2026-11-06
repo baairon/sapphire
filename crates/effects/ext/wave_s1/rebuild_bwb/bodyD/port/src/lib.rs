@@ -236,7 +236,7 @@ pub fn x_major_sample_ex(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane, sel
 
 /// Selector only (no sampling): which path the original takes for this sample.
 pub fn x_selector(st: &S5State, a: &[f32; 5], hst: &Host) -> Result<XSel, Unsupported> {
-    let pl = Plane { buf: vec![], origin: 0 };
+    let pl = Plane { buf: std::sync::Arc::new(vec![]), origin: 0 };
     let mut sel = None;
     let _ = x_major_sample_ex(st, a, hst, &pl, &mut sel);
     sel.ok_or(Unsupported::Oob)
@@ -336,7 +336,7 @@ mod tests {
                 }
             }
         }
-        (st, [1.0, 1.0, 1.0, 0.5, 1.0], Host { port_blk_a: 1, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 8.0, ws: 8.0 }, Plane { buf, origin: 200 })
+        (st, [1.0, 1.0, 1.0, 0.5, 1.0], Host { port_blk_a: 1, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 8.0, ws: 8.0 }, Plane { buf: std::sync::Arc::new(buf), origin: 200 })
     }
 
     #[test]

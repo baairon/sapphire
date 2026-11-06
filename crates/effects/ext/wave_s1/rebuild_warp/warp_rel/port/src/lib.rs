@@ -62,28 +62,37 @@ pub struct WrapArgs {
     pub my: i32,
 }
 
-fn tail(v: &[f32], idx: i32) -> Result<Vec<f32>, RelError> {
+fn tail(v: &[f32], idx: i32, cap: Option<usize>) -> Result<Vec<f32>, RelError> {
     let i = usize::try_from(idx).map_err(|_| RelError::BadIndex)?;
     if i > v.len() {
         return Err(RelError::BadIndex);
     }
-    Ok(v[i..].to_vec())
+    let end = match cap {
+        Some(c) => i.saturating_add(c).min(v.len()),
+        None => v.len(),
+    };
+    Ok(v[i..end].to_vec())
 }
 
 /// The wrapper's argument building, no pixel work.
 pub fn wrapper_args(p: &Prim, idx: i32) -> Result<WrapArgs, RelError> {
+    wrapper_args_n(p, idx, None)
+}
+
+/// As `wrapper_args`, copying at most `cap` entries of each array tail (a row reads `count` entries).
+pub fn wrapper_args_n(p: &Prim, idx: i32, cap: Option<usize>) -> Result<WrapArgs, RelError> {
     // const_coords picks &P[0x6c], &P[0x70]; else the base from [P] plus 4*idx
     let (a1, a2) = if p.const_coords {
         (vec![p.const_a1], vec![p.const_a2])
     } else {
-        (tail(&p.a1_arr, idx)?, tail(&p.a2_arr, idx)?)
+        (tail(&p.a1_arr, idx, cap)?, tail(&p.a2_arr, idx, cap)?)
     };
     Ok(WrapArgs {
         a1,
         a2,
         const_coords: p.const_coords,
-        c1: tail(&p.c1_arr, idx)?, // 
-        c2: tail(&p.c2_arr, idx)?, // 
+        c1: tail(&p.c1_arr, idx, cap)?, // 
+        c2: tail(&p.c2_arr, idx, cap)?, // 
         flag: p.flag as i32,       // movzx eax, byte [P] 
         mx: p.mx,                  // [P] 
         my: p.my,                  // [P] 
@@ -97,7 +106,7 @@ pub fn render(p: &Prim, fr: &Frame, img: &mut Image, lat: &Lattice, out: &mut [V
     if n > CONTRACT_MAX_N {
         return Err(RelError::ContractLimit { n });
     }
-    let w = wrapper_args(p, fr.idx)?;
+    let w = wrapper_args_n(p, fr.idx, Some(fr.obj.count.max(0) as usize))?;
     let a = F2Args { a1: &w.a1, a2: &w.a2, const_coords: w.const_coords, c1: &w.c1, c2: &w.c2, flag: w.flag, mx: w.mx, my: w.my };
     warp_f2::run(&fr.obj, img, lat, &a, out, warp_f2::TEMP_PHASE_BYTES).map_err(RelError::F2)
 }

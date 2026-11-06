@@ -252,7 +252,7 @@ mod tests {
                 }
             }
         }
-        Plane { buf, origin: 200 }
+        Plane { buf: std::sync::Arc::new(buf), origin: 200 }
     }
 
     fn base(flag: u32, mx: i32, my: i32) -> (S5State, [f32; 5], Host, Plane) {

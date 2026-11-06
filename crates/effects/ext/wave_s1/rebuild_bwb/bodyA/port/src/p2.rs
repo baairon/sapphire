@@ -6,7 +6,7 @@ use crate::*;
 /// Source plane as the original sees it: `buf[origin + idx]` is data[idx] (the data pointer of).
 #[derive(Clone, Debug)]
 pub struct Plane {
-    pub buf: Vec<f32>,
+    pub buf: std::sync::Arc<Vec<f32>>,
     pub origin: i64,
 }
 
@@ -533,7 +533,7 @@ mod tests {
             data_ptr: 0, width: 8, height: 8, stride: 8, scx: 1.0, scy: 1.0, k_a1_a0: 1.0, k_a2_a1: 1.0, k_1_a3: 0.5, scale: 2.0, flag_cell_a: flag, mode_x: 0, mode_y: 0,
         };
         let buf: Vec<f32> = (0..400).map(|i| (i % 8) as f32).collect();
-        (st, [0.0, 1.0, 2.0, 0.5, 2.0], Host { port_blk_a: 0, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 8.0, ws: 8.0 }, Plane { buf, origin: 100 })
+        (st, [0.0, 1.0, 2.0, 0.5, 2.0], Host { port_blk_a: 0, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 8.0, ws: 8.0 }, Plane { buf: std::sync::Arc::new(buf), origin: 100 })
     }
 
     #[test]
@@ -563,7 +563,7 @@ mod tests {
         let (mut s, a, h, _) = st(0);
         s.e2x = 3000.0;
         s.dx = 2999.0;
-        let big = Plane { buf: vec![1.0; 5000], origin: 2000 };
+        let big = Plane { buf: std::sync::Arc::new(vec![1.0; 5000]), origin: 2000 };
         let r = x_major_sample(&s, &a, &h, &big);
         assert!(r.is_ok() || r == Err(Unsupported::Oob));
     }
@@ -600,7 +600,7 @@ mod tests {
             p1_const: true, p2_const: true, flag_cell_a: 0, mode_x: 0, mode_y: 0, acc_ptr: 0, acc_stride: 8,
         };
         let h = Host { port_blk_a: 0, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 6.0, ws: 8.0 };
-        let pl = Plane { buf: vec![0.0; 100], origin: 50 };
+        let pl = Plane { buf: std::sync::Arc::new(vec![0.0; 100]), origin: 50 };
         let mut out = vec![0.0; 1];
         assert_ne!(run_planes(&p, &inp, &h, &pl, &mut out), Err(Unsupported::YMajor));
     }
@@ -692,8 +692,8 @@ mod tests {
             let hy = Host { port_blk_a: fl[1] as u8, cassumption_a: fl[0] as u8, cassumption_b: fl[3] as u8, cassumption_c: fl[2] as u8, hs: n as f32, ws: n as f32 };
             let sx = mk(x, y, e2x, e2y, mx, my);
             let sy = mk(y, x, e2y, e2x, my, mx);
-            let px = Plane { buf: buf.clone(), origin };
-            let py = Plane { buf: tb, origin };
+            let px = Plane { buf: std::sync::Arc::new(buf.clone()), origin };
+            let py = Plane { buf: std::sync::Arc::new(tb), origin };
             let a1 = x_major_sample(&sx, &a, &hx, &px);
             let b1 = y_major_sample(&sy, &a, &hy, &py);
             if let (Ok(u), Ok(v)) = (a1, b1) {

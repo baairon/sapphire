@@ -213,7 +213,7 @@ mod tests {
                 }
             }
         }
-        Plane { buf, origin: 200 }
+        Plane { buf: std::sync::Arc::new(buf), origin: 200 }
     }
 
     fn si(cc: bool, rc: bool) -> SpecIn {

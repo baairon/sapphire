@@ -190,7 +190,7 @@ fn blur_warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resu
     }
     let n = w * h;
     let plane00: Vec<f32> = mip.ripmap.planes[0].iter().map(|b| f32::from_bits(*b)).collect();
-    let img = blur_warp::ImageObj { width: w as i32, height: h as i32, n: c as i32, w0: mip.ripmap.widths[0] as i32, h0: mip.ripmap.heights[0] as i32, plane00 };
+    let img = blur_warp::ImageObj { width: w as i32, height: h as i32, n: c as i32, w0: mip.ripmap.widths[0] as i32, h0: mip.ripmap.heights[0] as i32, plane00: std::sync::Arc::new(plane00) };
     // the original worker (E1 route, band cell 1) calls the body once per line with count = W. kp.bw_whole_frame (env
     // NV10_BW_WHOLE=1, the NV-9 binding) keeps one call with count = W * H; the vector head/tail split then falls at other columns.
     let whole = std::env::var("NV10_BW_WHOLE").map(|v| v == "1").unwrap_or(false);
