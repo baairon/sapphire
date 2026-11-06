@@ -1,0 +1,17 @@
+
+[package]
+name = "edge_aware_sharpen"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Executor class for edge_aware_sharpen slot 52 (flag 0 route): no operand defaults, absent fourth plane with a tripwire, named refusals."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+edge_aware_sharpen_render = { path = "../edge_aware_sharpen_render" }
+edge_aware_sharpen_jobs = { path = "../edge_aware_sharpen_jobs" }
+
+[dev-dependencies]
+effects_vecdir = { path = "../../vecdir" }

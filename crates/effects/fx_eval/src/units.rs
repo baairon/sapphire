@@ -49,7 +49,7 @@ fn cvtt(x: f32) -> i32 {
     }
 }
 
-/// The record value of one lane (, wave_s9/unt2_units_rest/convmodel.py): lane 0 = host x ((2 / W) x ns); lane 1 = lane 0 x
+/// The record value of one lane: lane 0 = host x ((2 / W) x ns); lane 1 = lane 0 x
 /// ((conv_in_b x clamp(a)) / (-clamp(b))) with clamp(v) = v when 0.0001 < v (as double) or v is NaN, else 1.0; the divide by 100.0 when
 /// flags & 0x40 comes after. Kind (low 4 bits) 0 is the unit-less path (host kept, then the percent divide). None for the paths the rig did
 /// not judge (types other than 1 and 2, kinds other than 0 and 5).

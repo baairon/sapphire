@@ -1,0 +1,15 @@
+
+[package]
+name = "blur_coef"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the blur core driver arithmetic and helpers."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
+fx_common = { path = "../../fx_common" }

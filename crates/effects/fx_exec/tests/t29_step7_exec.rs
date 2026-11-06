@@ -1,5 +1,5 @@
 //! param_int at -2147483648.0f32, warp_rel's flag through cvttss2si, and
-//! integer-typed set_arg_const cases (812 in-rule cases recorded in the emulator, cst3_setargconst_t2/out/cst3_t2_out.jsonl) as tests
+//! integer-typed set_arg_const cases (812 in-rule cases recorded in the emulator) as tests
 //! of the native x86 truncation used by warp_rel (kernels2::cvt_i32) and by element_of (ops_element::common::cvtt). Asserts written before
 //! the first run.
 use fx_exec::kernels2::{cvt_i32, footprint_taken};

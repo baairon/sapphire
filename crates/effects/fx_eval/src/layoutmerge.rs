@@ -343,7 +343,7 @@ pub fn merge_layout(g: &mut Genotype, info: &LayoutInfo) -> Result<MergeReport, 
                 }
                 match take(&mut def, canon) {
                     Some(mut p) => {
-                        // (step L2, hand-applied: LYM3.diff hunk 3 of layoutmerge.rs did not apply over the recorded refusal text): the layout name
+                        // the parameter keeps its record and takes the :modify row's name as its layout name
                         p.layout_name = name.clone();
                         out.push(p)
                     }

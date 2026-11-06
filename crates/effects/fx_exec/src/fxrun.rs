@@ -1,4 +1,4 @@
-//! fx_run: the NV-9 command line. Takes a program, a binding, the input planes and host frames, writes the output planes.
+//! fx_run: the command line of the executor. Takes a program, a binding, the input planes and host frames, writes the output planes.
 //!
 //! fx_run [<programs.tsv> | -] <program> --size WxH --out PREFIX [--set name=v1,v2 ...] [--hc] [--mask-image]
 //!   [--in Name=path[:C]] [--frame OFF=path[:C]] [--prev path[:C]] [--xy path] [--synth SEED]
@@ -399,10 +399,10 @@ fn run_locked(a0: &[String]) -> i32 {
     // the request inputs of the get_frame route (--tw-route) and the host frames keyed by request (--frame-req)
     let mut tw_route_s: Option<String> = None;
     let mut frame_reqs: Vec<(String, String)> = Vec::new();
-    // step FH: host frames on the 'ae32' route as the harness's ae32 words, converted by the head and class of their input
+    // host frames on the 'ae32' route as the harness's ae32 words, converted by the head and class of their input
     let mut frame_words: Vec<(String, String)> = Vec::new();
     let (mut cell, mut margin): (usize, usize) = (1, 0);
-    // CONVERT wiring: None = CONVERT-STANDIN (planes go straight in and out, the NV-9 route); Some(mode byte) = native convert pair on host memory
+    // CONVERT wiring: None = CONVERT-STANDIN (planes go straight in and out); Some(mode byte) = native convert pair on host memory
     let mut convert: Option<i8> = std::env::var("INT1_CONVERT").ok().and_then(|v| v.parse().ok());
     let mut seed_given = false;
     let mut ds_phase_opt: Option<u32> = None;
@@ -448,7 +448,7 @@ fn run_locked(a0: &[String]) -> i32 {
                 i += 1;
             }
             "--host-curve-values" => {
-                // step T: the CLAIMED get_curve_val input (a host interface like the source pixels); file form in fx_eval/src/hostcurve.rs
+                // the CLAIMED get_curve_val input (a host interface like the source pixels); file form in fx_eval/src/hostcurve.rs
                 match read_text(&val).map_err(|e| e.to_string()).and_then(|t| fx_eval::hostcurve::HostCurveValues::parse(&t)) {
                     Ok(mut h) => {
                         h.source = val.clone();
@@ -756,7 +756,7 @@ fn run_locked(a0: &[String]) -> i32 {
     };
     // the host answer form. --cset Opacity=V (the checkout display name, V the host's checkout integer)
     // gives the loop value by conversion; a given --owner-opacity is then a check (OWNER-OPACITY-LOOP-MISMATCH).
-    // step L2b: each --cset display name maps to opacity, input_opacity or output_opacity by the program's registered
+    // each --cset display name maps to opacity, input_opacity or output_opacity by the program's registered
     // display names; any other name is not a host answer on this route
     for (n, v) in ae.csets.clone() {
         // a popup answer outside 1..N (N the registered choice count) refuses; the name resolution below keeps its own refusal
@@ -768,7 +768,7 @@ fn run_locked(a0: &[String]) -> i32 {
             Some(p) if p == "output_opacity" => ae.host_out_opacity = Some(v),
             Some(p) => {
                 if ae.host_opacity.is_some() {
-                    crate::fxrun::elog!("--cset {}: a second opacity host answer (step L2b)", n);
+                    crate::fxrun::elog!("--cset {}: a second opacity host answer", n);
                     return 2;
                 }
                 ae.host_opacity = Some(v);
@@ -825,11 +825,11 @@ fn run_locked(a0: &[String]) -> i32 {
                     in_op_used = true;
                 }
                 if let (Some(hv), Some(Some(cb)), true) = (ae.host_opacity, ae.opacity, ae.host_opacity_param.as_deref() == Some(ex.name.as_str())) {
-                    // with step OP: under the host answer form (--cset Opacity=V) the record value is conversion of the checkout
+                    // under the host answer form (--cset Opacity=V) the record value is conversion of the checkout
                     // integer (max(v - 1, 0), set above); a --set of the same parameter must equal it (the earlier OPACITY-SET-MISMATCH text kept)
                     if let Some(sv) = setv(&ex.name) {
                         if sv.to_bits() != cb {
-                            crate::fxrun::elog!("OPACITY-SET-MISMATCH: --set {}={} differs from the host answer's loop value {} (--cset Opacity, step OP)", ex.name, sv, f32::from_bits(cb));
+                            crate::fxrun::elog!("OPACITY-SET-MISMATCH: --set {}={} differs from the host answer's loop value {} (--cset Opacity)", ex.name, sv, f32::from_bits(cb));
                             return 2;
                         }
                     }
@@ -858,7 +858,7 @@ fn run_locked(a0: &[String]) -> i32 {
                     ae.opacity_notes.push((ex.name.clone(), v, reg));
                 }
             } else if ex.name == "output_opacity" {
-                // step L2b: a --set of output_opacity is checked against the registered default's loop value; none is taken as given
+                // a --set of output_opacity is checked against the registered default's loop value; none is taken as given
                 let sv = setv("output_opacity");
                 out_op_used = true;
                 match output_opacity_checked(&prog, sv, ae.host_out_opacity, dv) {
@@ -1016,7 +1016,7 @@ fn run_locked(a0: &[String]) -> i32 {
             for nm in ["mocha_project", "show_mocha_mask_only"] {
                 if let Some(v) = b.overrides.get(nm) {
                     if v.iter().any(|x| *x != 0.0) {
-                        crate::fxrun::elog!("MOCHA-OFF-SCOPE: {} = {:?} on the claim route is outside the claimed region (mocha_project != 0 or show_mocha_mask_only != 0)", nm, v);
+                        crate::fxrun::elog!("MOCHA-OFF-SCOPE: {} = {:?} on the verified route is outside the claimed region (mocha_project != 0 or show_mocha_mask_only != 0)", nm, v);
                         return 2;
                     }
                 }
@@ -1370,8 +1370,8 @@ fn run_locked(a0: &[String]) -> i32 {
             }
         }
     }
-    // the precondition of is ported (fx_eval prune_arm's count conjunct); step G's refusal is
-    // removed. A non-constant second argument of if_neq_const (c7 form, not probed) is refused on the verified render path.
+    // the precondition is ported (fx_eval prune_arm's count conjunct) and needs no refusal.
+    // A non-constant second argument of if_neq_const (c7 form, not probed) is refused on the verified render path.
     // v3_to_v4_if4 folds of an unmeasured form are refused on the verified render path; every fold is
     // printed as a census label (form M4, M3Z, M2S or UNMEASURED-FORM). The survey route keeps the patched result.
     {
@@ -1467,7 +1467,7 @@ fn run_locked(a0: &[String]) -> i32 {
             .map(|nd| (nd.idx, nd.elnum))
             .collect();
         if ae32.is_some() && !below.is_empty() {
-            crate::fxrun::elog!("CONST-COUNT-OFF-CONTRACT: the claim route refuses plan constants with count below 1: {:?}", below);
+            crate::fxrun::elog!("CONST-COUNT-OFF-CONTRACT: the verified route refuses plan constants with count below 1: {:?}", below);
             return 2;
         }
     }
@@ -2045,7 +2045,7 @@ impl Ae32Args {
                 self.host_params.push((n.to_string(), x.parse().map_err(|_| format!("--host-param {}: not a number", n))?));
             }
             "--cset" => {
-                // , step L2b: the host answer by the checkout DISPLAY name; the name is resolved against the
+                // the host answer by the checkout DISPLAY name; the name is resolved against the
                 // program's own parameter-to-display-name table (STYLE_PARAM_INDEX.tsv) once the program is known (cset_param)
                 let (n, x) = v.split_once('=').ok_or("--cset takes DISPLAYNAME=V (the host checkout integer)")?;
                 if self.csets.iter().any(|(m, _)| m == n) {
@@ -2118,7 +2118,7 @@ impl Ae32Args {
                 continue; // the host answer gives the loop value
             }
             if r == "--owner-opacity" && self.opacity.is_some() {
-                continue; // OWNER-OPACITY-DERIVED (step L2): taken from the merged record
+                continue; // OWNER-OPACITY-DERIVED: taken from the merged record
             }
             if !given.iter().any(|(o, _)| *o == r) {
                 return Err(format!("the 'ae32' route requires {} (no default)", r));
@@ -2553,7 +2553,7 @@ fn style_select_args(a: &[String]) -> Result<(Vec<String>, Option<String>), Stri
     }
 }
 
-/// step s11_prerender: [prog] by PROG_MODE_WORD-RULE-READ, the later pre-render stage
+/// [prog] by PROG_MODE_WORD-RULE-READ, the later pre-render stage
 ///  (owner_loop::later_stage) between the two calls, the mode byte by owner_loop::ctx_init, and the destination
 /// body selected by it. The recorded --ae32-dest mode is a check.
 fn mode_byte_derived(
@@ -2670,7 +2670,7 @@ fn mode_byte_derived(
                 None => return Err(format!("INPUT-CLASS-RECORD-MISMATCH ({} input {}: a recorded class byte for an input that is not bound)", g.name, n)),
             }
         }
-        // class 4 as at step G; class 3 admitted only on the ported path (variant B head, body at mode 2,
+        // class 4 (CLASS_IMPLEMENTED) passes; class 3 admitted only on the ported path (variant B head, body at mode 2,
         // alpha slot from the host source row); class 1 and 2 refused; every other case refused by name, never a fallback.
         let _ = input_class_guard;
         for (k, n, c) in &derived {
@@ -2692,7 +2692,7 @@ fn mode_byte_derived(
             labels.push(format!("label ALLOCATE-PLANNED ({}: {} image(s), elnum {}; the record's allocate command checked equal)", g.name, pi, pe));
         }
         labels.push(format!(
-            "label INPUT-CLASS-GUARD ({}: bound inputs {:?} derive classes {:?} by the rule and the caller's class-1 test from [owner] {}, [owner] {}, [prog] {}, record cells [prog] {}, [prog] {}, * {}; claim routes refused unless every bound input derives the class the kernels implement; per-run record check {})",
+            "label INPUT-CLASS-GUARD ({}: bound inputs {:?} derive classes {:?} by the rule and the caller's class-1 test from [owner] {}, [owner] {}, [prog] {}, record cells [prog] {}, [prog] {}, * {}; verified routes refused unless every bound input derives the class the kernels implement; per-run record check {})",
             g.name, derived.iter().map(|d| d.1.as_str()).collect::<Vec<_>>(), derived.iter().map(|d| d.2).collect::<Vec<_>>(), setup_cell_a, setup_cell_b, g3_in_a,
             fx_run_cell_c.map(|x| format!("0x{:02x}", x)).unwrap_or("not read or unrecorded".into()), fx_run_cell_d.map(|x| format!("0x{:02x}", x)).unwrap_or("not read or unrecorded".into()),
             fx_run_cell_g.map(|x| format!("0x{:02x}", x)).unwrap_or("not read or unrecorded".into()),
@@ -2749,8 +2749,8 @@ fn class3_admit(style: &str, _k: usize, name: &str, g3_in_a: u32, mode: i32, g3:
     }
     let k = g3.sources.iter().position(|s| s.0 == name).ok_or_else(|| format!("INPUT-CLASS-NOT-PORTED ({} input {}: class 3 for an input that is not an 'ae32' source)", style, name))?;
     let (_, head, planes) = &g3.sources[k];
-    // R3 (readers14 read3 body) on the class-3 path, admitted only when the record's
-    // head hooks show (the record's head is the check, never the input; hostconv14::ae32_to_image reads R3 by readers14 for 3 planes).
+    // R3 (format14_read read3 body) on the class-3 path, admitted only when the record's
+    // head hooks show (the record's head is the check, never the input; hostconv14::ae32_to_image reads R3 by format14_read for 3 planes).
     let r3 = *head == crate::hostconv14::R3_HEAD;
     // the variant-B 4-plane head on the class-3 path, admitted only when the run's record head hook shows it
     let vb4 = *head == crate::hostconv14::VB4_HEAD;
@@ -2758,11 +2758,11 @@ fn class3_admit(style: &str, _k: usize, name: &str, g3_in_a: u32, mode: i32, g3:
         return Err(format!("SOURCE-VARIANT-UNPORTED ({} input {}: derived head 0x{:x}; only variant B, variant B 4-plane (by record) and R3 are ported for class 3)", style, name, head));
     }
     if vb4 && g3.rec_head != Some(crate::hostconv14::VB4_HEAD) {
-        return Err(format!("SOURCE-HEAD-UNRECORDED ({}: class 3 derived, source head selected, the run's record carries no source-head hook showing it; the head is not taken on the claim route without its record)", style));
+        return Err(format!("SOURCE-HEAD-UNRECORDED ({}: class 3 derived, source head selected, the run's record carries no source-head hook showing it; the head is not taken on the verified route without its record)", style));
     }
     if r3 && g3.rec_head != Some(crate::hostconv14::R3_HEAD) {
-        // the refusal text, fixed byte for byte
-        return Err(format!("SOURCE-HEAD-UNRECORDED ({}: class 3 derived, source head selected, the run's record carries no source-head hook to check it against; the head is not taken on the claim route without its record; G3R)", style));
+        // the R3 head is taken only when the record's head hook shows it
+        return Err(format!("SOURCE-HEAD-UNRECORDED ({}: class 3 derived, source head selected, the run's record carries no source-head hook to check it against; the head is not taken on the verified route without its record; G3R)", style));
     }
     // no SOURCE-HEAD-MISMATCH refusal; a recorded head that differs is refused by derived_source (SOURCE-VARIANT-MISMATCH)
     let _ = g3.rec_head;
@@ -2790,7 +2790,7 @@ fn class3_admit(style: &str, _k: usize, name: &str, g3_in_a: u32, mode: i32, g3:
             format!("label INPUT-CLASS-PLANES-DERIVED ({} input {}: class 3 by the caller rule from [prog] {} and the record cells; planes {} set through the binding's input elnum before compile; the recorded --src-planes checked equal)", style, name, g3_in_a, want),
             class3_head_label(style, name, r3, vb4),
             format!("label MODE3-CLASS3-ROUTED-1P ({}: class 3 at mode byte 3 with a 1-plane destination runs the code-14 one-plane zero-arm body (port, R-PARITY cited: T2, plane count 1, tier A, mode 3, 639 of 639 cases PASS), MEASURED by the record of (oM1c: the one-plane body 64 entries, the three-plane body 0); words 1 to 3 = plane 0, word 0 = 1.0, no row copier; FLOOR-OPEN until the reader pair)", style),
-            "label FLOOR-OPEN (convert_pair c14 one-plane tier A body: FLOOR-PARTIAL in, 122 of 651 mutants unproven over the four plain bodies; the reader pair (h) 3 reads the UNCLASSIFIED tier A survivors before the Mono count)".to_string(),
+            "label FLOOR-OPEN (convert_pair format14_write one-plane tier A body: FLOOR-PARTIAL in, 122 of 651 mutants unproven over the four plain bodies; the reader pair (h) 3 reads the UNCLASSIFIED tier A survivors before the Mono count)".to_string(),
         ]);
     }
     if mode == 3 {
@@ -3213,7 +3213,7 @@ mod int31_alias_tests {
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()
     }
-    // both claim forms refused INPUT-DEFAULT-ALIAS before step AL; the alias binds the target's node, and the aliased node is unreachable
+    // the alias binds the target's node, and the aliased node is unreachable
     fn check(prog: &str, inp: &str, tgt: &str) {
         let mut g = geno(prog);
         let k = g.inputs.iter().position(|x| x.name == inp).unwrap();
@@ -3352,7 +3352,7 @@ fn param_by_record_label(n: &str, v: &[f32]) -> String {
     format!("param {} record {:?} PARAM-BY-RECORD", n, v.iter().map(|x| format!("0x{:08x}", x.to_bits())).collect::<Vec<_>>())
 }
 
-/// Step L2b: output_opacity. The checkout integer v is the bound answer (--cset 'Output Opacity=V', host answer form) or, on an
+/// The output_opacity check. The checkout integer v is the bound answer (--cset 'Output Opacity=V', host answer form) or, on an
 /// unbound row, the registered default; the loop value is f32(max(v - 1, 0)). A --set of output_opacity must equal it bit for bit
 /// (OPACITY-SET-MISMATCH, as for opacity and input_opacity); an unbound row whose default is unrecorded refuses even when a --set is given.
 /// Returns (loop value bits, v, registration; None for the bound answer).
@@ -3372,14 +3372,14 @@ fn output_opacity_checked(prog: &str, set: Option<f32>, host: Option<i32>, text_
                 sv,
                 if host.is_some() { "the host answer's" } else { "the registered default's" },
                 f32::from_bits(db),
-                if host.is_some() { "--cset Output Opacity, step L2b" } else { "STYLE_PARAM_INDEX.tsv" }
+                if host.is_some() { "--cset Output Opacity" } else { "STYLE_PARAM_INDEX.tsv" }
             ));
         }
     }
     Ok((db, v, reg))
 }
 
-/// Step L2b: the parameter a --cset display name answers: the record name (opacity, input_opacity or output_opacity)
+/// The parameter a --cset display name answers: the record name (opacity, input_opacity or output_opacity)
 /// whose registered display name in STYLE_PARAM_INDEX.tsv equals the given name for this program; None for any other name.
 fn cset_param(prog: &str, display: &str) -> Option<String> {
     for row in effects_rtdata::style_params_of(prog).filter(|r| r.display_name == display) {
@@ -3394,7 +3394,7 @@ fn cset_param(prog: &str, display: &str) -> Option<String> {
     None
 }
 
-/// Step L2b: the loop value a --cset answer gives (conversion for opacity and input_opacity, f32(max(v - 1, 0)) for output_opacity).
+/// The loop value a --cset answer gives (conversion for opacity and input_opacity, f32(max(v - 1, 0)) for output_opacity).
 #[cfg(test)]
 fn cset_loop_value(prog: &str, display: &str, v: i32) -> Option<(String, f32)> {
     let p = cset_param(prog, display)?;
@@ -3444,7 +3444,7 @@ mod int31_l2_tests {
         assert_eq!(registered_default("Time_Warp_RGB_Autogen", "output_opacity").map(|x| x.0), Some(1));
         assert_eq!(loop_of("Time_Warp_RGB_Autogen", "output_opacity", None, 0.0), 0.0);
     }
-    // Step L2b: Time_Warp_RGB_Autogen unbound, --set output_opacity=1.0 refuses, 0.0 passes; -0.0 refuses (bit compare);
+    // Time_Warp_RGB_Autogen unbound, --set output_opacity=1.0 refuses, 0.0 passes; -0.0 refuses (bit compare);
     // no --set takes the registered default; an unrecorded default refuses even with a --set.
     #[test]
     fn l2b_output_opacity_set_one_refuses() {
@@ -3493,10 +3493,10 @@ mod int31_l2_tests {
         let (bits, v, reg) = output_opacity_checked("Time_Warp_RGB_Autogen", Some(1.0), Some(2), 0.0).unwrap();
         assert_eq!((bits, v, reg.is_none()), (1.0f32.to_bits(), 2, true));
         let e = output_opacity_checked("Time_Warp_RGB_Autogen", Some(0.0), Some(2), 0.0).unwrap_err();
-        assert!(e.starts_with("OPACITY-SET-MISMATCH: --set output_opacity=0 differs from the host answer's loop value 1 (--cset Output Opacity, step L2b"), "{}", e);
+        assert!(e.starts_with("OPACITY-SET-MISMATCH: --set output_opacity=0 differs from the host answer's loop value 1 (--cset Output Opacity)"), "{}", e);
         assert_eq!(output_opacity_checked("Time_Warp_RGB_Autogen", None, Some(1), 0.0).unwrap().0, 0.0f32.to_bits());
     }
-    // Step L2b: display names resolve by the program's own table: Time_Warp_RGB's Input Opacity and Output Opacity, Trails' Opacity.
+    // Display names resolve by the program's own table: Time_Warp_RGB's Input Opacity and Output Opacity, Trails' Opacity.
     #[test]
     fn l2b_cset_display_names() {
     if !effects_rtdata::have_tables() {
@@ -3612,7 +3612,7 @@ mod g2_popup_tests {
     }
 }
 
-/// Step FH: raw host frame planes (--frame-req) on the 'ae32' route refuse; host frames there come as words (--frame-words).
+/// Raw host frame planes (--frame-req) on the 'ae32' route refuse; host frames there come as words (--frame-words).
 fn frame_content_check(prog: &str, ae32: bool, raw_frames: usize) -> Result<(), String> {
     if ae32 && raw_frames > 0 {
         return Err(format!("FRAME-CONTENT-UNCONVERTED ({}: a host frame was given as raw planes on the 'ae32' route; host frames are converted by the input's head like its Source frame)", prog));

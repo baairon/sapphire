@@ -1,8 +1,8 @@
-//! NEG-2: the per-program parameter range table and the measured clamp rule, owned by the evaluator.
+//! The per-program parameter range table and the measured clamp rule, owned by the evaluator.
 //!
 //! The table is defined in `effects_rtdata` (styles/<style>.rs, field `ranges`: program, parameter, type, lanes, min, max, default and the
 //! two enforcement flags; text-derived from the shipped Autogen/layout, NEG1-A1). The REC-HARNESS set is test data and holds no rows here. The rule is the
-//! arithmetic of the original compiler pass -> (NEG-1 runs D, D2, D3):
+//! arithmetic of the original compiler pass (measurement runs D, D2, D3):
 //!   * the clamp is lane-wise on every bound parameter value, before fold and compile;
 //!   * ORDER: the upper bound first, the lower bound last (`if v > max {v = max}; if v < min {v = min}`), which only matters when min > max;
 //!   * plain compares: NaN fails both and passes through, -0 compares equal to 0 and is kept, +-inf clamp to the bounds;

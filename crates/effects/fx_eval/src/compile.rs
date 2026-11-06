@@ -1,4 +1,4 @@
-//! NV-2: the compiler's result-changing semantics, natively (label EVALUATOR-UNCHECKED).
+//! The compiler's result-changing semantics, natively (label EVALUATOR-UNCHECKED).
 //!
 //! Rules are numbered R1.. and tabulated in README.md with their listing address and
 //! MEASURED / INFERRED status. Listing offsets (VA = offset). Source of truth:
@@ -8,7 +8,7 @@
 //! with the constant-compare helpers,
 //! and the selector (COMBO_SELECT.md, tables in COMBOS.tsv).
 //!
-//! NV-3: collapse (slot 38) and folding are ported in fold.rs; see README.
+//! Collapse (slot 38) and constant folding are ported in fold.rs.
 
 use crate::build::{GNode, Genotype, NodeKind};
 use crate::fold::{can_fold_el, collapse_arm, fold_kind, fold_lanes, FoldKind};
@@ -206,7 +206,7 @@ pub struct CompileOptions {
     pub input_elnum: BTreeMap<String, i32>,
     pub strict: bool,
     pub paramset: String,
-    /// disable constant folding (NV-2 behaviour)
+    /// disable constant folding
     pub no_fold: bool,
     /// unbound inputs the harness binds to a constant (name -> lanes), e.g. Mask = 1 (NV3-A5)
     pub const_inputs: BTreeMap<String, Vec<f32>>,
@@ -214,7 +214,7 @@ pub struct CompileOptions {
     pub host: BTreeMap<String, Vec<f32>>,
     /// HOST-CONTEXT-MINIMAL binding (M2): every input with a declared default is bound to that
     /// constant, parameters flagged `default_to_1_if_postdiv` default to 1 (M11), Source has 3 channels for
-    /// `no_alpha_only` programs (the original rejects 4). Off by default (NV-5 binds real images).
+    /// `no_alpha_only` programs (the original rejects 4). Off by default (the default binds real images).
     pub minimal_context: bool,
     /// inputs that stay real images in the minimal context (name -> channel count); the default constant binding is skipped for them
     pub bound_elnum: BTreeMap<String, i32>,
@@ -227,7 +227,7 @@ pub struct CompileOptions {
     /// host mocha data present ([this] non-null); the native compiler errors when set (MOCHA-OFF)
     pub mocha_data_present: bool,
     /// HOST-CURVES (CV1-A1): an unkeyed host curve value is the parameter's own current cells, so
-    /// `get_curve_val p ..` folds to the lanes of its first argument. Off: zeros (the EP-3 harness read zeros).
+    /// `get_curve_val p ..` folds to the lanes of its first argument. Off: zeros (the state A harness read zeros).
     pub host_curves_unkeyed: bool,
     /// HOST-CURVES keyed per (curve name, requested time). Key = (parameter name of the first argument of
     /// `get_curve_val`, f32 bits of the time argument); value = the answer lanes the host gave. `Some(map)` is the keyed input: a request the map does not
@@ -237,10 +237,10 @@ pub struct CompileOptions {
     ///: HOST-CURVE-VALUES, the claimed get_curve_val input. When set, the fold calls tickmap::map_param (hostcurve.rs). The keyed and unkeyed modes are test interfaces and are refused together with it.
     pub host_curve_values: Option<crate::hostcurve::HostCurveValues>,
     /// HC-NO-INTERFACE: a get_curve_val request with neither `host_keyed` nor `host_curves_unkeyed` set is a compile error.
-    /// `hc_zero_legacy` is the named option HC-ZERO-LEGACY (the zero fold the EP-3 state A harness read) for the definitions of state A suites that need it;
+    /// `hc_zero_legacy` is the named option HC-ZERO-LEGACY (the zero fold the state A harness read) for the definitions of state A suites that need it;
     /// never in counted runs or stored predictions. No environment switch.
     pub hc_zero_legacy: bool,
-    /// NEG-2 RANGES-OFF: do not clamp the bound parameter values with the range table (also: env NEG2_RANGES_OFF)
+    /// RANGES-OFF: do not clamp the bound parameter values with the range table (also: env NEG2_RANGES_OFF)
     pub ranges_off: bool,
     /// COMPILE-HISTORY: the node cells left by the previous compile of this program instance (`CompiledProgram::cells`); None = a fresh instance after the setup commands
     /// (the cell is the program-text default). Explicit, no default other than None.
@@ -248,7 +248,7 @@ pub struct CompileOptions {
     /// INPUT-PRESENCE-MASK: the byte [H] (H = [ctx]; bit j = declared input j has a host layer and data,
     /// writer) as ONE native input. Both readers are derived from it: the range pass (`bt [owner], input_index`input_index = record
     /// field = declared position j) and the bind pass (`bt byte [compiler], r8d` with r8d = node field minus 3; the node
-    /// index of declared input j is j + 3, INFERRED from the same r8 indexing the program's per-input tables and and from EP-3b's "Source =
+    /// index of declared input j is j + 3, INFERRED from the same r8 indexing the program's per-input tables and and from the recorded dumps' "Source =
     /// input number 3"; so both readers test bit j). A set bit keeps input j an image: its channel count must be given in `bound_elnum` (a host fact, no default);
     /// a clear bit binds an input with a declared default to that default. The native has no compile cache (the cache key reader is not modelled).
     /// None = the state A form (`bound_input_mask` for the range pass and `bound_elnum` for the bind pass given separately).
@@ -264,7 +264,7 @@ pub struct CompileOptions {
     pub ctx_word2: bool,
     /// has-data flags (see `CompiledProgram::ctx_has_data`)
     pub ctx_has_data: u32,
-    /// step v2: a v3_to_v4_if4 node takes its bound image argument's count (the count the route records) only when true;
+    /// a v3_to_v4_if4 node takes its bound image argument's count (the count the route records) only when true;
     /// fx_run sets it on the 'ae32' route only; every other route keeps the node's own count and the earlier compile
     pub v3_bound_count: bool,
 }
@@ -596,7 +596,7 @@ pub struct NodeState {
     pub nargs: usize,
 }
 
-/// Compile a genotype under a parameter binding (NV-3: with the original's collapses and folding).
+/// Compile a genotype under a parameter binding (with the original's collapses and folding).
 pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Result<CompiledProgram, CompileError> {
     if opt.mocha_data_present {
         return Err(CompileError { msg: "MOCHA-DATA-PRESENT: host mocha data ([this] non-null) is outside the claimed context".into() });
@@ -608,7 +608,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
         cp.diagnostics.insert(0, label);
         return Ok(cp);
     }
-    // NV-3e (EP-3c fix list item 1, MEASURED by value on 5 pairs): an unbound input whose declared default names another input is that input
+    // MEASURED by value on 5 pairs: an unbound input whose declared default names another input is that input
     let mut g_owned = g0.clone();
     if opt.minimal_context {
         let mut amap: HashMap<usize, usize> = HashMap::new();
@@ -756,7 +756,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                 let mut row_applied = false;
                 if let Some(p) = pname.get(&gn.index) {
                     cn.param = Some(p.clone());
-                    // NV-3f: a parameter with NO flag text has the create_param default range [0, 1e6] (, PARAM_RANGES.tsv): the original also clamps the program-text default lane-wise at 0 (Drop_Shadow shift [0.042 -0.042] is [0.042 0] in the dumps and in; MEASURED once, rule for flagless parameters INFERRED; flagged parameters (widget, angle, screen...) keep their negative defaults, 5 programs checked in the dump scan)
+                    // a parameter with NO flag text has the create_param default range [0, 1e6] (, PARAM_RANGES.tsv): the original also clamps the program-text default lane-wise at 0 (Drop_Shadow shift [0.042 -0.042] is [0.042 0] in the dumps and in; MEASURED once, rule for flagless parameters INFERRED; flagged parameters (widget, angle, screen...) keep their negative defaults, 5 programs checked in the dump scan)
                     if !ranges_off && pnoflags.contains(&gn.index) && crate::ranges::RangeTable::builtin().lookup(&g.name, p).is_none() && !opt.overrides.get(p).map(|o| !o.is_empty()).unwrap_or(false) {
                         for x in vals.iter_mut() {
                             if *x < 0.0 {
@@ -770,7 +770,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                             row_applied = true;
                         }
                     }
-                    // (a): an error, never a guess, for a claimed program (one with range rows) whose parameter has no row. Popup parameters keep NV-3g rule P.
+                    // (a): an error, never a guess, for a claimed program (one with range rows) whose parameter has no row. Popup parameters keep the popup range rule below.
                     if !ranges_off && crate::ranges::RangeTable::builtin().has_program(&g.name) && crate::ranges::RangeTable::builtin().lookup(&g.name, p).is_none() && g.params.iter().find(|q| q.name == *p).map(|q| q.info.popup.is_empty()).unwrap_or(true) {
                         return Err(CompileError { msg: format!("RANGE-ROW-MISSING {}.{}", g.name, p) });
                     }
@@ -783,13 +783,13 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                                     *x = crate::units::registered_16_16(&g.name, &ln, *x).map_err(|msg| CompileError { msg })?;
                                 }
                             }
-                            // NEG-2: the measured range clamp of the original (pass), lane-wise, before fold and compile
+                            // the measured range clamp of the original (pass), lane-wise, before fold and compile
                             if !ranges_off && !noclamp.contains(p) {
                                 if crate::ranges::clamp_param(&g.name, p, &mut vals).is_some() {
                                     row_applied = true;
                                 }
                             }
-                            // NV-3g rule P (RULE-FITTED, InfiniteZoom nf2: transparent_area = 2 is [1] in the original plan): a popup parameter with no range row clamps lane-wise to [0, items - 1]
+                            // popup range rule (RULE-FITTED, InfiniteZoom nf2: transparent_area = 2 is [1] in the original plan): a popup parameter with no range row clamps lane-wise to [0, items - 1]
                             // (the same shape as the four measured popup rows in PARAM_RANGES.tsv: record max = items - 1)
                             if !ranges_off && crate::ranges::RangeTable::builtin().lookup(&g.name, p).is_none() {
                                 if let Some(pr) = g.params.iter().find(|q| q.name == *p) {
@@ -808,7 +808,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                             }
                         }
                     }
-                    // (nz1_negzero_clamp PATCH 2; node store): the clamp pass writes the node cell only where old and new differ as floats; equal under == (+0 vs -0) keeps the OLD bits.
+                    // node store: the clamp pass writes the node cell only where old and new differ as floats; equal under == (+0 vs -0) keeps the OLD bits.
                     // old = the previous compile's cell (opt.history) or, for a fresh instance, the program-text default. COMPILE-HISTORY is the caller's statement.
                     // every record the range pass visits, not only rows that applied (NODE-STORE-PARTIAL closed); `row_applied` is kept for reading only.
                     let _ = row_applied;
@@ -904,7 +904,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                 if let Some(k) = nodes[c].alias {
                     if let Some(&t) = nodes[c].args.get(k) {
                         nodes[id].args[i] = t;
-                        // NV-3g rule D (RULE-FITTED, Sharpen_Best_Quality nf1 and nf2): forwarding an argument through a collapsed node onto a FOLDED constant
+                        // constant copy rule (RULE-FITTED, Sharpen_Best_Quality nf1 and nf2): forwarding an argument through a collapsed node onto a FOLDED constant
                         // function node leaves a second constant node (a per-use copy) in the original (node 71 next to node 19); recorded as an unreferenced copy
                         // that only the constant-lane comparison sees (it is not in the evaluation order and changes no plan text).
                         if nodes[t].kind == CKind::Func && nodes[t].is_const && nodes[t].folded {
@@ -973,7 +973,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
             }
             // R5 / R5b (slot 38): the class decides the collapse
             // a v3_to_v4_if4 node takes the element count of its bound image argument for the collapse and the fold
-            // step v2: A RULE THAT TAKES A RECORDED COUNT APPLIES ONLY ON THE ROUTE THAT RECORDS IT
+            // A RULE THAT TAKES A RECORDED COUNT APPLIES ONLY ON THE ROUTE THAT RECORDS IT
             let v3_route = opt.v3_bound_count || cfg!(feature = "dx2v2_allroutes_mut");
             let v3cnt: Option<i32> = if name == "v3_to_v4_if4" && v3_route && !cfg!(feature = "dx2_owncount_mut") {
                 match crate::fold::v3_count(&views) {
@@ -1122,7 +1122,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
     if let Some(m) = ifneq_refusal.borrow_mut().take() {
         return Err(CompileError { msg: m });
     }
-    // R8 auto nodes (MEASURED order and collapse by the EP-3 plans): save_prev_dest (iff get_prev_dest is
+    // R8 auto nodes (MEASURED order and collapse by the original's recorded plans): save_prev_dest (iff get_prev_dest is
     // in the surviving graph), gamma(amount 1), if+(__do_postdiv__, postdivide(.., copy_alpha=-1), image)
     let flags: HashSet<&str> = g.flags.iter().map(|s| s.as_str()).collect();
     let mut root = dest;
@@ -1624,7 +1624,7 @@ pub fn enumerate_branches_opt(g: &Genotype, combos: &ComboTable, input_elnum: &B
 }
 
 impl CompiledProgram {
-    /// `ELN gid elnum prim` rows for comparison with the original's node dump (EP-3 out_ch)
+    /// `ELN gid elnum prim` rows for comparison with the original's node dump (its out_ch field)
     pub fn elnum_rows(&self) -> String {
         let mut s = String::new();
         for n in &self.nodes {

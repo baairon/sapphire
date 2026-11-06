@@ -1,7 +1,7 @@
 //! Where the tests of the effect crates find the stored data of the original (recorded plans, emulator rows, fixtures and the program corpus).
 //!
 //! The data is not part of the repository. It lives in `VEC_DIR/effects/`, with the same relative paths the effect tree used
-//! (`fixtures/...`, `fx_eval/data/orig/...`, `record_extract/programs/programs.tsv`, `wave_s9/...`). `VEC_DIR` defaults to
+//! (`fixtures/...`, `fx_eval/data/orig/...`, `record_extract/programs/programs.tsv` and others). `VEC_DIR` defaults to
 //! `crates/vectors`, the folder the lift crates read their vectors from. A test whose data is absent prints a `NOT RUN` line
 //! and returns, as the conformance suite does for an absent peer.
 use std::path::{Path, PathBuf};

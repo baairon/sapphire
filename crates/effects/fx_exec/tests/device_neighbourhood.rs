@@ -35,7 +35,7 @@ fn the_neighbourhood_kernels_pass_the_self_check_against_the_cpu() {
 
 mod esh_units {
     use super::*;
-    use esh3_jobs as j3;
+    use edge_aware_sharpen_jobs as j3;
     use fx_device::cl::Arg as ClArg;
     use fx_device::DevImage;
 
@@ -140,11 +140,11 @@ mod esh_units {
                                 mem.extend_from_slice(srcv);
                                 mem.extend(std::iter::repeat(f32::from_bits(0x7fc0_4321)).take(n));
                                 mem.extend_from_slice(&p0);
-                                let job = esh5b_passjobs::Job { w: w as i32, h: h as i32, radius, src: 0, dst: n, aux: 2 * n };
-                                let mut rec = esh5b_passjobs::Rec::default();
-                                esh5b_passjobs::job_x(&mut mem, &job, 0, h as i32, &mut rec);
+                                let job = edge_aware_sharpen_box_filter::Job { w: w as i32, h: h as i32, radius, src: 0, dst: n, aux: 2 * n };
+                                let mut rec = edge_aware_sharpen_box_filter::Rec::default();
+                                edge_aware_sharpen_box_filter::job_x(&mut mem, &job, 0, h as i32, &mut rec);
                                 let want_x = mem[n..2 * n].to_vec();
-                                let p = esh5b_passjobs::cb_cell_a(radius);
+                                let p = edge_aware_sharpen_box_filter::cb_cell_a(radius);
                                 let dsrc = up(srcv);
                                 let ddst = DevImage::alloc(&s, 1, n).unwrap();
                                 s.launch("esh_filter_x_f32", h, &[dsrc.plane(0).arg(), ddst.plane(0).arg(), dp0.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32), ClArg::F32(p[0]), ClArg::F32(p[1]), ClArg::F32(p[2])]).unwrap();
@@ -154,8 +154,8 @@ mod esh_units {
                                 mem.extend_from_slice(srcv);
                                 mem.extend(std::iter::repeat(f32::from_bits(0x7fc0_4321)).take(n));
                                 mem.extend_from_slice(&p1);
-                                let mut rec = esh5b_passjobs::Rec::default();
-                                esh5b_passjobs::job_y(&mut mem, &job, 0, w as i32, &mut rec);
+                                let mut rec = edge_aware_sharpen_box_filter::Rec::default();
+                                edge_aware_sharpen_box_filter::job_y(&mut mem, &job, 0, w as i32, &mut rec);
                                 let want_y = mem[n..2 * n].to_vec();
                                 let ddst = DevImage::alloc(&s, 1, n).unwrap();
                                 s.launch("esh_filter_y_f32", w, &[dsrc.plane(0).arg(), ddst.plane(0).arg(), dp1.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32), ClArg::F32(p[0]), ClArg::F32(p[1]), ClArg::F32(p[2])]).unwrap();

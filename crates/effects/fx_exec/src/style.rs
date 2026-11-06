@@ -1,6 +1,5 @@
-//! (s9_style): merged stage/s7/style.rs (byte copy below this line).
 //! STYLE-SELECT, the style of a multi-style effect from the host popup "Effect".
-//! (wave_s9/bcj3_blur_reach/SELECTOR.md, MEASURED in the emulator): the render path reads the program count
+//! MEASURED in the emulator: the render path reads the program count
 //! [owner] (movsx word; cmp 1; jg); with a count above 1 it checks out "Effect" (registered index 5, popup) and takes
 //! style = max(answer - 1, 0) (dec ecx; cmovs ecx, 0); load the program pointer from [owner + 8 x style].
 //! With a count of 1 or less the style index is 0 and no checkout is made. MEASURED for S_Blur: Effect = 2 gives the program pointer of

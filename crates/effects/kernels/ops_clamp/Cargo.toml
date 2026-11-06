@@ -1,0 +1,9 @@
+
+[package]
+name = "ops_clamp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# ops_arith: Operand and OpError are reused as they are.
+ops_arith = { path = "../ops_arith" }

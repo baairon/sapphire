@@ -1,0 +1,15 @@
+
+[package]
+name = "warp_rel"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the class warp_rel CPU render entry (slot 53, wrapper) over warp_rel_sampler."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+warp_rel_sampler = { path = "../warp_rel_sampler" }
+warp_sampler = { path = "../warp_sampler" }
+libm_fmod = { path = "../libm_fmod" }

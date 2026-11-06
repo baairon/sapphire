@@ -1,0 +1,12 @@
+
+[package]
+name = "fx_common"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Shared helpers of the effect crates: x86 instruction semantics, plane types and comparison, harness manifests, a PNG writer and the Shake natives."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

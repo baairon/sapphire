@@ -1,4 +1,4 @@
-//! T2 (NV-2): compiler semantics. Hand-evaluated examples per rule, the milestone programs under
+//! T2: compiler semantics. Hand-evaluated examples per rule, the milestone programs under
 //! their branch sets, determinism, malformed input.
 use fx_eval::*;
 use std::collections::BTreeMap;
@@ -128,7 +128,7 @@ fn r2_elnum_from_combo_tag() {
     let g = gen("(def_effect T ( S ) ( ) ( a = 2 ) ( * S ( * a 3 ) ))", "T");
     let cp = compile(&g, &ct, &CompileOptions::default()).unwrap();
     let inner = cp.nodes.iter().find(|n| n.kind == "const" && n.folded).unwrap();
-    assert_eq!(inner.elnum, 1); // NV-3: the constant subgraph folds (0x98d0)
+    assert_eq!(inner.elnum, 1); // the constant subgraph folds (0x98d0)
     assert_eq!(cp.nodes.iter().filter(|n| n.prim == "*").count(), 1);
     // vec3 constant times image
     let g = gen("(def_effect T ( S ) ( ) ( ) ( * S [ 1 2 3 ] ))", "T");

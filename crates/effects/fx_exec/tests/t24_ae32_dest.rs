@@ -1,4 +1,4 @@
-//! T24: the 'ae32' destination route through code-14 zero-arm bodies (crate c14) and the row copier (14, 14).
+//! T24: the 'ae32' destination route through code-14 zero-arm bodies (crate format14_write) and the row copier (14, 14).
 //! R-PARITY (FLOOR PENDING): the bodies' T2 is; this test checks the wiring (record inputs, word layout, prior, copier, refusals).
 use fx_exec::hostconv14::*;
 use fx_exec::Image;

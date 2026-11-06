@@ -39,7 +39,8 @@ jobs:
       # The tools run on Debian's python3 (3.11 or later), so they use no
       # 3.12-only syntax.
       - run: |
-          apt-get update && apt-get install -y --no-install-recommends python3 xz-utils pocl-opencl-icd ocl-icd-libopencl1 clinfo
+          apt-get update && apt-get install -y --no-install-recommends python3 xz-utils
+          POCL_SUDO= bash tools/ci_install_pocl.sh
           curl -sSfL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-gpl-9.0.tar.xz | tar -xJ -C /opt
           echo /opt/ffmpeg-n9.0-latest-linux64-gpl-9.0/bin >> "$GITHUB_PATH"
 
@@ -60,7 +61,7 @@ jobs:
       # the ones that need the original-derived data print NOT RUN.
       - run: |
           cargo build --release -p fx_exec
-          cargo test --release -p fx_eval -p fx_exec -p esh2_job -p esh3_jobs -p esh5_core -p esh5b_passjobs -p esh6_driver -p esh8_exec -p sharpen -p wpg1_glue -p make_mipmap -p rotate -p interp -p effects_rtdata -p effects_vecdir
+          cargo test --release -p fx_eval -p fx_exec -p edge_aware_sharpen_weights -p edge_aware_sharpen_jobs -p edge_aware_sharpen_blur_core -p edge_aware_sharpen_box_filter -p edge_aware_sharpen_render -p edge_aware_sharpen -p sharpen -p warp_render -p make_mipmap -p rotate2d -p interp -p effects_rtdata -p effects_vecdir
 
       # Each of the 13 effect styles renders a fixed synthetic clip at 64x32 and 50x7 through its stage, and the
       # SHA-256 of every output must equal tools/fx_golden.tsv (this repository's own Linux renders); a difference

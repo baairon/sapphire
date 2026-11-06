@@ -1,0 +1,10 @@
+
+[package]
+name = "libm_sincos"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[dev-dependencies]
+effects_vecdir = { path = "../../vecdir" }

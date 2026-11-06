@@ -1,0 +1,9 @@
+
+[package]
+name = "ops_diff"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# ops_arith: Operand, OpError, ONE are reused as they are.
+ops_arith = { path = "../ops_arith" }

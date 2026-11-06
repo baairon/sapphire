@@ -18,7 +18,7 @@ use neutral_ffmpeg::pixfmt::{
 };
 use neutral_ffmpeg::{Binaries, PixFmt, PlaneKind};
 
-/// The five sizes of the brief: tiny, even, odd, and two larger ones.
+/// The five sizes: tiny, even, odd, and two larger ones.
 const SIZES: [(u32, u32); 5] = [(1, 1), (2, 2), (33, 17), (64, 48), (175, 99)];
 
 /// Concurrent ffmpeg processes inside one sweep (default 4, NEUTRAL_FFMPEG_JOBS to change).
@@ -289,7 +289,7 @@ fn frame_size_matches_ffmpeg_for_every_supported_format_and_size() {
     assert!(failures.is_empty(), "{} mismatches:\n{}", failures.len(), failures.join("\n"));
 }
 
-/// More awkward sizes than the five of the brief: single rows and columns, primes, sizes
+/// More awkward sizes than the five of SIZES: single rows and columns, primes, sizes
 /// that are odd in one direction only. Each was also part of the layout fit, but the
 /// Rust function is checked against fresh ffmpeg output here.
 const MORE_SIZES: [(u32, u32); 8] = [(2, 1), (1, 2), (3, 3), (5, 7), (13, 6), (9, 9), (255, 1), (1, 255)];

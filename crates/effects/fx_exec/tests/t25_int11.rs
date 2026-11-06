@@ -1,5 +1,5 @@
 //! T25: the owner-arm function and the native postdivide insertion test against 8 original plans
-//! (fixtures/pdv1/PLAN_ORIG_*: the original compiler 0x13370 run in the emulator at ctx+0x774 = 0 and 1, plain and SMART stacks).
+//! (stored PLAN_ORIG_* files: the original compiler 0x13370 run in the emulator at ctx+0x774 = 0 and 1, plain and SMART stacks).
 use fx_eval::cpuplan::{plan_text_mode, PlanMode};
 use fx_eval::{build_effect, compile, CompileOptions, Corpus};
 use fx_exec::hostconv14::*;

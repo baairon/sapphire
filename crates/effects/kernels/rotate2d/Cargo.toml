@@ -1,0 +1,14 @@
+
+[package]
+name = "rotate2d"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of class rotate (vtable), slot 53, AVX2 body; callee is the crate libm_sincos."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+libm_sincos = { path = "../libm_sincos" }
+

@@ -15,7 +15,7 @@ fn combos() -> ComboTable {
 fn ds() -> String {
     std::fs::read_to_string(effects_vecdir::path("fx_eval/data/TEST_DROP_SHADOW.txt")).expect("TEST_DROP_SHADOW.txt")
 }
-// a program with no range rows at all; `mode` is a popup without a row (NV-3g rule P path)
+// a program with no range rows at all; `mode` is a popup without a row (the popup range rule path)
 const PP: &str = "(def_effect T21_Popup ( Source ) ( ) ( mode = 0 ( popup A B ) ) ( * Source mode ))";
 
 fn run(text: &str, prog: &str, hist: Option<BTreeMap<usize, Vec<u32>>>, name: &str, v: Option<f32>) -> (u32, BTreeMap<usize, Vec<u32>>) {

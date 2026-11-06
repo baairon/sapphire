@@ -96,7 +96,7 @@ fn mask_arg() -> Option<u32> {
     u32::from_str_radix(a.get(p + 1)?.trim_start_matches("0x"), 16).ok()
 }
 
-/// (step L2): `--layout-merge` builds the REGISTERED program (the layout row merged as fx_run does: layout order, `:extra`, `:hardcode`, the
+/// `--layout-merge` builds the REGISTERED program (the layout row merged as fx_run does: layout order, `:extra`, `:hardcode`, the
 /// layout input group) for a program that has a layout row; without it the def path is unchanged (the existing plan sets were recorded from the def text).
 fn layout_merge_flag() -> bool {
     std::env::args().any(|x| x == "--layout-merge")
@@ -691,7 +691,7 @@ pub fn layout_canon(text: &str) -> Vec<String> {
     out
 }
 
-/// NV-3e: feed the r8 = 1 eval order (EVL_r1) through the ported linewise pass and compare order and lg with the original r8 = 0 eval list (EVL_r0).
+/// Feed the r8 = 1 eval order (EVL_r1) through the ported linewise pass and compare order and lg with the original r8 = 0 eval list (EVL_r0).
 fn lgtest(r1: &str, r0: &str) -> i32 {
     fn parse(path: &str) -> Vec<(String, Vec<(usize, bool, String, i32, Vec<usize>, i32)>)> {
         let t = fs::read_to_string(path).unwrap_or_default();

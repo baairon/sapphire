@@ -1,0 +1,11 @@
+
+[package]
+name = "blur_warp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+blur_warp_1ch = { path = "../blur_warp_1ch" }
+blur_warp_2ch = { path = "../blur_warp_2ch" }
+blur_warp_3ch = { path = "../blur_warp_3ch" }
+blur_warp_4ch = { path = "../blur_warp_4ch" }

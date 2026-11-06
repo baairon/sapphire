@@ -1,0 +1,13 @@
+
+[package]
+name = "perspective"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the AVX2 body of class perspective (vtable, slot 52); callee is the crate libm_sincos."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+libm_sincos = { path = "../libm_sincos" }

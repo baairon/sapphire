@@ -1,4 +1,4 @@
-//! NV-10 tests: the original `variable 2` xy ramp (x_ramp / xy_ramp) against values read from the emulator hook (audit_ep10 E1 run, 50x7).
+//! Tests of the original `variable 2` xy ramp (x_ramp / xy_ramp) against values read from the emulator hook (audit_ep10 E1 run, 50x7).
 use fx_exec::types::{x_ramp, xy_pixel_centre, xy_ramp};
 
 fn hexf(s: &str) -> Vec<f32> {

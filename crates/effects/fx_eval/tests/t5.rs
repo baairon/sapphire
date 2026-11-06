@@ -1,4 +1,4 @@
-//! NV-3c tests: rules read from the original's listing (slot 38 bodies, number function, class flags).
+//! Rules read from the original's listing (slot 38 bodies, number function, class flags).
 use fx_eval::compile::ArgView2;
 use fx_eval::fold::collapse_arm;
 use fx_eval::layout::{class_flags, flags_of};

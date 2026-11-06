@@ -160,7 +160,7 @@ fn tickmap_index_not_registered_refused() {
         return;
     }
     let h = HostCurveValues::default();
-    // step TPR: the shipped table now carries index 23; the refusal is kept on a CONSTRUCTED table, the shipped text with
+    // the shipped table carries index 23; the refusal is kept on a CONSTRUCTED table, the shipped text with
     // Transform_and_Blur_Autogen's rotate row set back to the old index 0 row
     let old = RECORDS.replace("Transform_and_Blur_Autogen\trotate\t1\t1\t1\t0\t0\t6\t23", "Transform_and_Blur_Autogen\trotate\t1\t1\t1\t0\t0\t6\t0");
     assert_ne!(old.as_str(), &*RECORDS);

@@ -1,0 +1,10 @@
+
+[package]
+name = "libm_powf"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Std-only port of the original powf routine."
+
+[lib]
+path = "src/lib.rs"

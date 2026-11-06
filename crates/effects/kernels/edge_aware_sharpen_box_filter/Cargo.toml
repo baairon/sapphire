@@ -1,0 +1,13 @@
+
+[package]
+name = "edge_aware_sharpen_box_filter"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Std-only port of the edge_aware_sharpen pass jobs, the callbacks and the exp2 helper."
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+effects_vecdir = { path = "../../vecdir" }

@@ -1,0 +1,14 @@
+
+[package]
+name = "masked_blur"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the masked_blur class (slot 52, wrapper, clamp, premultiply, combine job) on the finished blur crates."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+blur = { path = "../blur" }
+fx_common = { path = "../../fx_common" }

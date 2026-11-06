@@ -1,5 +1,5 @@
 //! widening step: M3V for every 3-lane argument 0 at argument 1 bit equal to 1.0 (own lanes, argument 1 not placed),
-//! at two argument-0 lane sets (wave_s9/fld2_m3v_record LANES.tsv: binding A [0.8125 1.0625 0.9375], binding B the `*` product
+//! at two argument-0 lane sets (the recorded lane sets: binding A [0.8125 1.0625 0.9375], binding B the `*` product
 //! [1.0390625 0.6015625 0.875]); argument 1 other than 1.0 with a 3-lane argument 0 stays refused. Also refusal text.
 use fx_eval::compile::ArgView2;
 use fx_eval::fold::{fold_lanes, v3_form};

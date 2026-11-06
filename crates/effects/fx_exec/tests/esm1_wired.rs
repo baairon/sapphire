@@ -1,5 +1,5 @@
 //! stored cases (t2/export, emulator outputs) through the WIRED class in fx_exec (kernels::run_any, class edge_aware_sharpen).
-//! Expected values are the original's stored output planes. Refusals are counted by name. the export is the in-tree fixture fixtures/esh6_t2/export, checked by fixtures/MANIFEST.sha256 (row esh6_t2/EXPORT.sha256) and sha256sum -c before it is read; env ESH6_T2 overrides the directory.
+//! Expected values are the original's stored output planes. Refusals are counted by name. The export is an in-tree fixture under fixtures/, checked by fixtures/MANIFEST.sha256 (its EXPORT.sha256 row) and sha256sum -c before it is read; env ESH6_T2 overrides the directory.
 use fx_exec::kernels;
 use fx_exec::types::{Arg, ExecError, Image, KParams};
 use std::collections::HashMap;
@@ -26,13 +26,13 @@ fn export_dir() -> String {
     }
     let root = effects_vecdir::path("fixtures");
     let man = fs::read_to_string(root.join("MANIFEST.sha256")).expect("fixtures/MANIFEST.sha256");
-    let want = man.lines().find(|l| l.ends_with("  esh6_t2/EXPORT.sha256")).expect("esh6_t2/EXPORT.sha256 not in the manifest").split_whitespace().next().unwrap().to_string();
+    let want = man.lines().find(|l| l.ends_with("  esh6_t2/EXPORT.sha256")).expect("fixture not in the manifest").split_whitespace().next().unwrap().to_string();
     let out = std::process::Command::new("sha256sum").arg(root.join("esh6_t2/EXPORT.sha256")).output().expect("sha256sum");
     let got = String::from_utf8_lossy(&out.stdout).split_whitespace().next().unwrap_or("").to_string();
-    assert_eq!(got, want, "fixture SHA mismatch for esh6_t2/EXPORT.sha256");
+    assert_eq!(got, want, "fixture SHA mismatch for the export checksum file");
     let exp = root.join("esh6_t2").join("export");
     let st = std::process::Command::new("sha256sum").arg("-c").arg("--quiet").arg("../EXPORT.sha256").current_dir(&exp).status().expect("sha256sum -c");
-    assert!(st.success(), "esh6_t2/export files differ from EXPORT.sha256");
+    assert!(st.success(), "the export files differ from EXPORT.sha256");
     exp.to_string_lossy().to_string()
 }
 

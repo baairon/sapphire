@@ -1,0 +1,9 @@
+path	text	reason
+tools/test_docgen.py	labelled assumption	the test that the generated evidence page holds none of these words
+tools/test_docgen.py	findings/fleet-8	a folder name of the archive in a test fixture of the archive: citation check
+tools/docgen/archive.py	aggr|fleet|vectors	the top folders of the archive that archive: citations name (docs/data/archive_refs.tsv)
+crates/effects/kernels/v3_to_v4_if4/Cargo.toml	v3_to_v4_if4	the plan class name v3_to_v4_if4, which the crate implements
+crates/effects/fx_exec/src/fxrun.rs	CLASS3-BUILDER-ON-ROUTE	runtime refusal label (plane-count builder hits in the class-3 record)
+crates/effects/fx_exec/src/fxrun.rs	CLASS3-BUILDERS-NOT-ON-ROUTE	runtime report label (no plane-count builder hits in the record)
+crates/effects/kernels/hue_shift_preserve_luma/src/lib.rs	HP1-V12,V13	the assumption ids HP1-V12 and HP1-V13 of one row; assumption ids do not change
+crates/effects/kernels/warp_render/tests/warp53_entry.rs	stage1_cases=	a key of the TOTAL line the test writes (cases whose first call-record stage is ok)

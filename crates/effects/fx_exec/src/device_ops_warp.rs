@@ -295,7 +295,7 @@ pub fn rotate_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<Dev
         return Err(unsup("all operands constant (outside the contract)"));
     }
     let l = |a: &DevArg, i: usize| lane(a, i).unwrap_or(0.0);
-    let two_pi = rotate::TWO_PI;
+    let two_pi = rotate2d::TWO_PI;
     let (mut sconst, mut cconst) = (0.0f32, 0.0f32);
     if a_const {
         let (sn, cs) = libm_sincos::sincosf_x(two_pi * l(&args[1], 0));

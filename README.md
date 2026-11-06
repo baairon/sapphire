@@ -181,7 +181,7 @@ Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, 
 | `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->228<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
 | `crates/lift-a`, `crates/lift-b`, `crates/lift-1` to `crates/lift-8` | library | The ported functions. The <!--f:lift_crates-->10<!--/f--> lift crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions of the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once; the per-crate detail is in [lifting](docs/lifting.md#crate-layout) | `p1/`, `p2v/`, `missing.rs` (placeholders), `dup.rs`, `x86rt.rs` (`lift_rt.rs` in `lift-a`); `liftcheck/` in `lift-a` (feature `liftcheck`) | per crate in `docs/generated/crates.md`; `#[ignore]` without the stored vector sets |
 
-The effect crates are under `crates/effects` (the evaluator `fx_eval`, the executor and `fx_run` in `fx_exec`, the kernel crates they call, and the test helpers `effects_vecdir` and `effects_rtdata`); they are workspace members, and the ones whose tests need no stored data are default members ([effects](docs/effects.md)).
+The effect crates are under `crates/effects` (the evaluator `fx_eval`, the executor and `fx_run` in `fx_exec`, the kernel crates they call in `crates/effects/kernels`, and the test helpers `effects_vecdir` and `effects_rtdata`); they are workspace members, and the ones whose tests need no stored data are default members ([effects](docs/effects.md)).
 
 Each `neutral-*` crate has a readme in its folder. Outside the workspace: `contracts/` (JSON schemas of the handoff convention and `contracts/conformance/cases.json`), `tools/` (Python 3.12 standard library: `handoff.py`, `conformance.py`, `gen_docs.py` with `docgen/`, `check_docs.py`, `fn_info.py`, `confirm_names.py` and their tests) and `docs/`.
 
@@ -240,7 +240,7 @@ A `--json` failure is the error object `{"ok": false, "contract", "error": {"cod
 |---|---|
 | `tools/fn_info.py ID\|NAME\|OFFSET` | one function's row from the map, the bank and the confirmation table, with callers, callees and stubs |
 | `tools/gen_docs.py` | regenerates `docs/generated/`, `docs/index/` and every marker; `--check` reports drift without writing |
-| `tools/check_docs.py` | regeneration drift, links, anchors, inline paths, ids, flag and exit code tables, ASCII, dashes, secrets, first person, claims, ffmpeg citations, archive citations, effect names |
+| `tools/check_docs.py` | regeneration drift, links, anchors, inline paths, ids, flag and exit code tables, ASCII, dashes, secrets, first person, claims, ffmpeg citations, archive citations, effect names, process terms (`tools/process_terms.py`) |
 
 The handoff tools, `tools/handoff.py` and `tools/conformance.py`, are in [Handoff](#handoff).
 

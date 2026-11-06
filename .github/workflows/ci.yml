@@ -70,14 +70,6 @@ jobs:
           Expand-Archive -Path "$env:RUNNER_TEMP\ffmpeg.zip" -DestinationPath "$env:RUNNER_TEMP"
           Add-Content -Path $env:GITHUB_PATH -Value "$env:RUNNER_TEMP\ffmpeg-n9.0-latest-win64-gpl-9.0\bin"
 
-      # PoCL, an OpenCL runtime on the CPU, so the device backend runs its self-check on a runner with no GPU.
-      - name: Install PoCL (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pocl-opencl-icd ocl-icd-libopencl1 clinfo
-          clinfo -l
-
       # The workspace tests its default members: the harness, the parity
       # replayer, the ffmpeg bridge and the handoff pipeline, in the release
       # profile the parity runs use. The lifted crates need the stored
@@ -100,26 +92,13 @@ jobs:
       # OpenCL device print NOT RUN where no platform is present.
       - run: cargo test --release -p fx_device -- --test-threads=1
 
-      # Linux with PoCL: every allowlisted op passes the self-check against the CPU kernel, the seam tests run, and the 13
-      # styles render through the device backend (SAPPHIRE_DEVICE=gpu) to the same hashes as the CPU renders above.
-      # SAPPHIRE_REQUIRE_DEVICE=1 turns a missing device into a failure, so an unusable PoCL install cannot pass as NOT RUN.
-      # The device integration tests run one binary at a time on one thread: OpenCL platform discovery is not thread safe.
-      - name: Device backend on PoCL (self-check and devcheck)
-        if: runner.os == 'Linux'
-        env:
-          SAPPHIRE_REQUIRE_DEVICE: "1"
-        run: |
-          cargo test --release -p fx_exec --lib device -- --test-threads=1
-          cargo test --release -p fx_exec --test device_backend --test device_pointwise --test device_warp --test device_ripmap --test device_neighbourhood -- --test-threads=1
-          SAPPHIRE_REQUIRE_DEVICE=1 SAPPHIRE_DEVICE=gpu python -I tools/fx_golden.py
-
       # The 15 effect crates outside the default members (docs/effects): their tests that need no stored data run;
       # the ones that need the original-derived data print NOT RUN.
       # Linux only: the macOS and Windows results of these tests have not been measured.
       - name: Run the tests of the non-default effect crates that need no stored data
         if: runner.os == 'Linux'
         run: |
-          cargo test --release -p fx_eval -p fx_exec -p esh2_job -p esh3_jobs -p esh5_core -p esh5b_passjobs -p esh6_driver -p esh8_exec -p sharpen -p wpg1_glue -p make_mipmap -p rotate -p interp -p effects_rtdata -p effects_vecdir
+          cargo test --release -p fx_eval -p fx_exec -p edge_aware_sharpen_weights -p edge_aware_sharpen_jobs -p edge_aware_sharpen_blur_core -p edge_aware_sharpen_box_filter -p edge_aware_sharpen_render -p edge_aware_sharpen -p sharpen -p warp_render -p make_mipmap -p rotate2d -p interp -p effects_rtdata -p effects_vecdir
 
       # The Python tools need no packages beyond the standard library to
       # compile, so a syntax slip anywhere in them fails here.
@@ -145,3 +124,64 @@ jobs:
 
       # Every effect has golden rows and calls no platform math library.
       - run: python -I tools/test_effect_rules.py
+
+  # The device backend on PoCL (an OpenCL runtime on the CPU, so the self-check runs on a runner with no GPU). It is a job
+  # of its own so the tests above never wait on the Ubuntu package mirror. Both jobs are required for a green run.
+  device:
+    name: device backend on PoCL
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The cache key is built in the shell: the runner image variables are not in the expression context.
+      - name: PoCL cache key
+        id: pocl-key
+        run: |
+          list=$(sha256sum tools/ci_install_pocl.sh | cut -c1-16)
+          echo "key=pocl-$RUNNER_OS-$RUNNER_ARCH-$ImageOS-$ImageVersion-$list" >> "$GITHUB_OUTPUT"
+          echo "prefix=pocl-$RUNNER_OS-$RUNNER_ARCH-" >> "$GITHUB_OUTPUT"
+
+      # The downloaded .deb files. A push to main saves them, so every later pull request restores them.
+      - name: Cache PoCL packages
+        uses: actions/cache@v6
+        with:
+          path: ~/pocl-apt-archives
+          key: ${{ steps.pocl-key.outputs.key }}
+          restore-keys: |
+            ${{ steps.pocl-key.outputs.prefix }}
+
+      # Up to 3 attempts of 240 s each, the second on archive.ubuntu.com; the step is bounded below the job limit.
+      - name: Install PoCL
+        timeout-minutes: 15
+        run: |
+          export POCL_APT_ARCHIVES="$HOME/pocl-apt-archives"
+          bash tools/ci_install_pocl.sh
+
+      # The stage provider and fx_run that the device steps drive.
+      - run: cargo build --release -p neutral-handoff
+
+      - run: cargo build --release -p fx_exec
+
+      # Linux with PoCL: every allowlisted op passes the self-check against the CPU kernel, the seam tests run, and the 13
+      # styles render through the device backend (SAPPHIRE_DEVICE=gpu) to the same hashes as tools/fx_golden.tsv.
+      # SAPPHIRE_REQUIRE_DEVICE=1 turns a missing device into a failure, so an unusable PoCL install cannot pass as NOT RUN.
+      # The device integration tests run one binary at a time on one thread: OpenCL platform discovery is not thread safe.
+      - name: Device backend on PoCL (self-check and devcheck)
+        env:
+          SAPPHIRE_REQUIRE_DEVICE: "1"
+        run: |
+          cargo test --release -p fx_exec --lib device -- --test-threads=1
+          cargo test --release -p fx_exec --test device_backend --test device_pointwise --test device_warp --test device_ripmap --test device_neighbourhood -- --test-threads=1
+          SAPPHIRE_REQUIRE_DEVICE=1 SAPPHIRE_DEVICE=gpu python -I tools/fx_golden.py

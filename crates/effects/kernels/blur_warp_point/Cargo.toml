@@ -1,0 +1,10 @@
+
+[package]
+name = "blur_warp_point"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[dev-dependencies]
+fx_common = { path = "../../fx_common" }

@@ -1,4 +1,4 @@
-//! IN4A (wave_s9 in4a_wire): hand tests of the newly wired classes (v3_to_v4, coerce_to_v3, coerce_to_v4, coerce_up_to_v3, sharpen),
+//! Hand tests of the newly wired classes (v3_to_v4, coerce_to_v3, coerce_to_v4, coerce_up_to_v3, sharpen),
 //! and the equality of the evaluator's constant folds `clamp_const` / `diff_const` with the native class crates `clamp` (shape 000, one
 //! element) and `diff`.
 use fx_exec::kernels::run_any;
@@ -212,11 +212,11 @@ fn clamp_fold_equals_native_class_shape_000() {
                 let oa = ops_arith::Operand { count: 1, is_const: false, consts: [0.0; 4], planes: &sx };
                 let ob = ops_arith::Operand { count: 1, is_const: false, consts: [0.0; 4], planes: &slo };
                 let oc = ops_arith::Operand { count: 1, is_const: false, consts: [0.0; 4], planes: &shi };
-                let p = clamp::Params { nout: 1, n: 1, allones: 0xffff_ffff, dst_phase_bytes: [0; 4] };
+                let p = ops_clamp::Params { nout: 1, n: 1, allones: 0xffff_ffff, dst_phase_bytes: [0; 4] };
                 let mut out = vec![0.0f32; 1];
                 {
                     let mut outs: Vec<&mut [f32]> = vec![out.as_mut_slice()];
-                    clamp::render(&p, &oa, &ob, &oc, &mut outs).unwrap();
+                    ops_clamp::render(&p, &oa, &ob, &oc, &mut outs).unwrap();
                 }
                 let f = fx_eval::fold::clamp_const(x, lo, hi);
                 assert!(nan_class_eq(f, out[0]), "clamp({:?}, {:?}, {:?}): fold {:?} native {:?}", x, lo, hi, f, out[0]);
@@ -236,11 +236,11 @@ fn diff_fold_equals_native_class() {
             let (sx, sy): (Vec<&[f32]>, Vec<&[f32]>) = (vec![&px[..]], vec![&py[..]]);
             let oa = ops_arith::Operand { count: 1, is_const: false, consts: [0.0; 4], planes: &sx };
             let ob = ops_arith::Operand { count: 1, is_const: false, consts: [0.0; 4], planes: &sy };
-            let p = diff::Params { nout: 1, n: 1, vec_one: 1.0, vec_mask: 0x7fff_ffff, dst3_phase_bytes: 0 };
+            let p = ops_diff::Params { nout: 1, n: 1, vec_one: 1.0, vec_mask: 0x7fff_ffff, dst3_phase_bytes: 0 };
             let mut out = vec![0.0f32; 1];
             {
                 let mut outs: Vec<&mut [f32]> = vec![out.as_mut_slice()];
-                diff::render(&p, &oa, &ob, &mut outs).unwrap();
+                ops_diff::render(&p, &oa, &ob, &mut outs).unwrap();
             }
             let f = fx_eval::fold::diff_const(x, y);
             assert!(nan_class_eq(f, out[0]), "diff({:?}, {:?}): fold {:?} native {:?}", x, y, f, out[0]);

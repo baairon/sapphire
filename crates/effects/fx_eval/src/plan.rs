@@ -1,4 +1,4 @@
-//! NV-3: plan emission in the text form of the original's compiled plans (EP-3 `PLAN_ORIG_*.txt`),
+//! Plan emission in the text form of the original's compiled plans (`PLAN_ORIG_*.txt`),
 //! the canonical run list used for the compare, and the compare tool.
 //!
 //! Emission models the plan at the RUN level: every surviving function node is one `run-primitive`
@@ -18,7 +18,7 @@ pub fn fmt_g6(x: f64) -> String {
     if x == 0.0 {
         return if x.is_sign_negative() { "-0".into() } else { "0".into() };
     }
-    // NV-3f: the original prints a NaN as `nan` (printf %g; Shake_Normal `[ nan nan ]`, MEASURED in the layout dumps); inf as `inf` / `-inf`
+    // the original prints a NaN as `nan` (printf %g; Shake_Normal `[ nan nan ]`, MEASURED in the layout dumps); inf as `inf` / `-inf`
     if x.is_nan() {
         return "nan".into();
     }
@@ -133,7 +133,7 @@ fn ref_id(r: &str) -> String {
     r.trim_start_matches(":ref").split('.').next().unwrap_or("").to_string()
 }
 
-/// Canonical run list of a plan in the EP-3 text form (CMD rows + EVALTEXT).
+/// Canonical run list of a plan in the original's plan text form (CMD rows + EVALTEXT).
 pub fn canon_orig(text: &str) -> Canon {
     // eval-list names by ref id
     let mut names: HashMap<String, String> = HashMap::new();
@@ -243,8 +243,8 @@ pub fn canon_orig(text: &str) -> Canon {
     c
 }
 
-/// Emit our plan in the EP-3 text form (run level; see the module note).
-/// NV-3c: plan text with the full command layout (F13, see `layout.rs`).
+/// Emit our plan in the original's plan text form (run level; see the module note).
+/// Plan text with the full command layout (F13, see `layout.rs`).
 pub fn plan_text(cp: &CompiledProgram) -> String {
     let mut s = String::new();
     let mut eval: Vec<String> = Vec::new();
@@ -269,7 +269,7 @@ pub fn plan_text(cp: &CompiledProgram) -> String {
     s
 }
 
-/// The NV-3b run-level emission (one buffer per run); kept for reference only.
+/// The run-level emission (one buffer per run); kept for reference only.
 #[allow(dead_code)]
 pub fn plan_text_runlevel(cp: &CompiledProgram) -> String {
     let mut s = String::new();
@@ -340,7 +340,7 @@ pub fn canon_mine(cp: &CompiledProgram) -> Canon {
     canon_orig(&plan_text(cp))
 }
 
-/// Parse any plan file: EP-3 text form (CMD rows) or CANON text.
+/// Parse any plan file: the original's plan text form (CMD rows) or CANON text.
 pub fn canon_any(text: &str) -> Canon {
     if text.starts_with("CANON") {
         Canon::from_text(text)
