@@ -6,7 +6,7 @@ sapphire rebuilds the plugin's functions and ten of its video effects in Rust, a
 
 ## Status
 
-- **Effects.** Ten effects run as native Rust and match the original bit for bit on every compared case ([effects](docs/effects.md)). They render through `fx_run` and as `sapphire stage` commands, from code in this repository alone, with no external data. Ten more are planned ([roadmap](docs/roadmap.md)), for 20 in all; the other effect names of the plugin are not planned.
+- **Effects.** Ten effects run as native Rust and match the original bit for bit on every compared case ([effects](docs/effects.md)). They render through `fx_run` and as `sapphire stage` commands, from code in this repository alone, with no external data. The planned effects are ranked in four tiers for YouTube edits, and Tier 1 is built next ([roadmap](docs/roadmap.md)). Effects outside the roadmap are not planned.
 - **Speed.** The CPU path renders one 1920x1080 frame of the slowest stage, `blur_motion_curves_no_transform_autogen`, in about 1.1 s where the earlier one process per frame route took about 52 s (MEASURED; [Speed](docs/guide.md#speed)).
 - **Keyframes.** Every effect stage accepts keyed parameter values (`VALUE@FRAME;VALUE@FRAME`) except `trails_autogen`; each frame is a plain run at the value the keys give for it (MEASURED), and the values between keys are INFERRED ([guide](docs/guide.md#running-a-stage-on-a-clip)).
 - **Device path.** `--device gpu|gpu=N|auto` and `SAPPHIRE_DEVICE` run the kernels through OpenCL, byte identical to the CPU path. It is MEASURED on PoCL, an OpenCL runtime on the CPU, only; speed on a real GPU is INFERRED ([guide](docs/guide.md#rendering-on-a-device)).
@@ -73,7 +73,7 @@ The last command decodes `clip.mp4`, shifts its hue with the `S_HueSatBright` st
 - [docs/parameters-guide.md](docs/parameters-guide.md): every stage parameter, how to write its value, and the values verified against recorded renders.
 - [docs/effects.md](docs/effects.md): the ten native effects, their status, how to build and run `fx_run`, and their shared limits.
 - [docs/stages.md](docs/stages.md): the stage manifest and apply command, how a new provider joins, and the effects provider.
-- [docs/roadmap.md](docs/roadmap.md): the 20 effects the project aims for, the ten done and the ten planned.
+- [docs/roadmap.md](docs/roadmap.md): the planned effects, ranked in four tiers for YouTube edits, and the ten done.
 - [docs/adding-an-effect.md](docs/adding-an-effect.md): how to add the next effects.
 - [docs/glossary.md](docs/glossary.md): the technical terms of the parity record.
 - [docs/parity.md](docs/parity.md): what parity means, the tiers, strict and strictest, the caveats.
@@ -119,7 +119,7 @@ Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn
 
 ## Effects and stages
 
-The ten native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned ten more are in [docs/roadmap.md](docs/roadmap.md). A stage is a program that passes raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
+The ten native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned effects, ranked in four tiers, are in [docs/roadmap.md](docs/roadmap.md). A stage is a program that passes raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
 
 Each registered style of the ten effects is also a frames/2 stage, so twixtor and any other wrapper can run it as `sapphire stage apply STAGE` (13 stages). They are linked into `sapphire`, are always listed and need no `fx_run` process; `fx_run` is needed only for `--describe-params`. The [guide](docs/guide.md) shows how to run them.
 
