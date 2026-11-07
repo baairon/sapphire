@@ -453,6 +453,11 @@ fn param_args(p: &Profile, values: &[(String, String)]) -> Result<Vec<String>> {
             None => continue,
         };
         let value = value.trim();
+        // fx_run reads numeric lanes only: a checkbox word becomes 1 or 0
+        let value = match (q.kind.as_str(), crate::stage::parse_bool(value)) {
+            ("checkbox", Some(b)) => if b { "1" } else { "0" },
+            _ => value,
+        };
         if q.kind == "text" && q.lanes > 1 {
             let parts: Vec<&str> = value.split(',').collect();
             if parts.len() != q.lanes || parts.iter().any(|t| t.trim().parse::<f32>().is_err()) {
@@ -1084,6 +1089,68 @@ pub fn apply(
 
 #[cfg(test)]
 mod tests {
+    /// The keyed-value shape a stage parameter takes, and the value halfway between two keys.
+    fn keyed_at_5(stage: &str, id: &str, keys: &str) -> (crate::keys::Shape, String, String) {
+        let p = profile(stage).unwrap_or_else(|| panic!("stage {}", stage));
+        let rate = crate::rate::Rate::parse("24").expect("rate");
+        let q = p.params.iter().find(|q| q.id == id).unwrap_or_else(|| panic!("param {}", id));
+        let k = Keyed::new(p, &[(id.to_string(), keys.to_string())], Some(&rate)).expect("keyed");
+        let shape = k.tracks[0].1.shape.clone();
+        let v = k.values_at(5).into_iter().find(|(i, _)| i == id).unwrap().1;
+        (shape, q.ptype.clone(), v)
+    }
+
+    #[test]
+    fn keyed_boolean_holds_between_keys() {
+        let (shape, ptype, v) = keyed_at_5("blur_color_autogen", "subpixel", "0@0;1@10");
+        assert_eq!((shape, ptype.as_str(), v.as_str()), (crate::keys::Shape::Hold, "boolean", "0"));
+    }
+
+    fn forwarded(id: &str, value: &str) -> Vec<String> {
+        let p = profile("blur_color_autogen").expect("stage");
+        super::param_args(p, &[(id.to_string(), value.to_string())]).expect("args")
+    }
+
+    #[test]
+    fn checkbox_words_are_forwarded_as_numbers() {
+        assert_eq!(forwarded("subpixel", "off"), vec!["--set", "subpixel=0"]);
+        assert_eq!(forwarded("subpixel", "on"), vec!["--set", "subpixel=1"]);
+        assert_eq!(forwarded("subpixel", "false"), vec!["--set", "subpixel=0"]);
+        assert_eq!(forwarded("subpixel", "true"), vec!["--set", "subpixel=1"]);
+        assert_eq!(forwarded("blur_amount", "2.5"), vec!["--host-param", "blur_amount=2.5"]);
+    }
+
+    #[test]
+    fn keyed_checkbox_words_are_forwarded_as_numbers() {
+        let p = profile("blur_color_autogen").expect("stage");
+        let rate = crate::rate::Rate::parse("24").expect("rate");
+        let k = Keyed::new(p, &[("subpixel".to_string(), "off@0;on@10".to_string())], Some(&rate)).expect("keyed");
+        let at = |f: u64| super::param_args(p, &k.values_at(f)).expect("args");
+        assert_eq!(at(5), vec!["--set", "subpixel=0"]);
+        assert_eq!(at(10), vec!["--set", "subpixel=1"]);
+    }
+
+    #[test]
+    fn keyed_popup_holds_between_keys() {
+        let (shape, ptype, v) = keyed_at_5("blur_color_autogen", "combine_masks", "0@0;2@10");
+        assert_eq!((shape, ptype.as_str(), v.as_str()), (crate::keys::Shape::Hold, "popup", "0"));
+    }
+
+    #[test]
+    fn keyed_two_lane_popup_holds_between_keys() {
+        let (shape, ptype, v) = keyed_at_5("warp_perspective_autogen", "wrap", "0,0@0;2,2@10");
+        assert_eq!((shape, ptype.as_str(), v.as_str()), (crate::keys::Shape::Hold, "popup", "0,0"));
+    }
+
+    #[test]
+    fn keyed_angle_takes_the_angle_shape() {
+        for (stage, id) in [("warp_perspective_autogen", "swing"), ("warp_perspective_autogen", "roll"), ("distort_rgb_autogen", "rotate_warp_dir")] {
+            let (shape, ptype, v) = keyed_at_5(stage, id, "0@0;40@10");
+            assert_eq!((shape, ptype.as_str()), (crate::keys::Shape::Angle, "angle"), "{} {}", stage, id);
+            assert_eq!(v, "20", "{} {}", stage, id);
+        }
+    }
+
     #[test]
     fn only_device_lines_are_forwarded() {
         let log = "fx_exec: note: x\ndevice: gpu 0: report\n  device: indented\ndevice: rendering on the CPU\nboom\n";

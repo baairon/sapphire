@@ -80,7 +80,7 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Ten of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 29312,
+  "bytes": 29339,
   "generated": false
  },
  {
@@ -325,7 +325,7 @@
   "path": "docs/parameters-guide.md",
   "title": "Driving the effect parameters",
   "line": "How to run each of the 13 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.",
-  "bytes": 30300,
+  "bytes": 30326,
   "generated": false
  },
  {
@@ -353,7 +353,7 @@
   "path": "docs/stages.md",
   "title": "Adding a provider",
   "line": "A provider is a program that offers stages over raw frames; twixtor's `vfx` and `sapphire` are two.",
-  "bytes": 20924,
+  "bytes": 21000,
   "generated": false
  }
 ]

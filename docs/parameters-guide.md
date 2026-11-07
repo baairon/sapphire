@@ -146,8 +146,8 @@ One stage, `distort_rgb_autogen` (program `Distort_RGB_Autogen`). It takes the g
 - `amount_rel`, two lanes, `--set`. Scales the displacement per axis (INFERRED). Verified at 10 value pairs, each lane between `0.6875` and `1.4375`.
 - `warp_red`, `warp_green`, `warp_blue`, scalars, `--set`. The displacement of each channel as a multiple of the common displacement (INFERRED). Verified at 9, 10 and 9 values between `0` and `0.9375`.
 - `blur_lens`, scalar, `--host-param` (host units relative to the frame width). How much the lens image is blurred before its gradient is taken; it also scales the strength (INFERRED). Verified at 11 values from `0` to `68`.
-- `rotate_warp_dir`, scalar angle in degrees, `--set`. Rotates the direction of the displacement (INFERRED). Verified at `-30` and `45`.
-- `wrap`, two lanes (one popup index per axis, No, Tile, Reflect), `--set`. Edge handling of the displaced sampling (INFERRED). Verified at `0,0`, `0,2`, `1,1` and `2,1`.
+- `rotate_warp_dir`, angle in degrees, `--set`. Rotates the direction of the displacement (INFERRED). Verified at `-30` and `45`.
+- `wrap`, two-lane popup No, Tile, Reflect, `--set` record values 0 to 2 per axis. Edge handling of the displaced sampling (INFERRED). Verified at `0,0`, `0,2`, `1,1` and `2,1`.
 - `filter`, checkbox, `--set`. Smooth (filtered) sampling of the displaced channels (INFERRED). Verified at `0`.
 - `cset_opacity`: see the opacity popup.
 
@@ -264,9 +264,9 @@ One stage, `warp_perspective_autogen` (program `Warp_Perspective_Autogen`). It l
 - `latitude`, scalar in degrees, `--set`. The tilt of the plane towards the horizon (INFERRED). Verified at `60` and `80`.
 - `z_dist`, scalar, `--set`. The distance of the plane from the viewer (INFERRED). Verified at `2.5`.
 - `tele_lens_width`, scalar, `--set`. The lens: larger values flatten the perspective (INFERRED). Verified at `1.6000061`.
-- `swing`, scalar angle in degrees, `--set`. Rotates the plane after the perspective (INFERRED). Verified at `-12`, `-0` and `40`.
-- `roll`, scalar angle in degrees, `--set`. Rotates the image before the perspective (INFERRED). Verified at `-10`, `-0` and `30`.
-- `wrap`, two lanes (one popup index per axis, No, Tile, Reflect), `--set`. Edge handling on the plane (INFERRED). Verified at `0,2`.
+- `swing`, angle in degrees, `--set`. Rotates the plane after the perspective (INFERRED). Verified at `-12`, `-0` and `40`.
+- `roll`, angle in degrees, `--set`. Rotates the image before the perspective (INFERRED). Verified at `-10`, `-0` and `30`.
+- `wrap`, two-lane popup No, Tile, Reflect, `--set` record values 0 to 2 per axis. Edge handling on the plane (INFERRED). Verified at `0,2`.
 - `wrap_above_horizon`, checkbox, `--set`. Fills the area above the horizon instead of leaving it transparent (INFERRED). Verified at `1`.
 - `filter`, checkbox, `--set`. Smooth (filtered) sampling (INFERRED). Verified at `0` and `1`.
 - `cset_opacity`: see the opacity popup.
@@ -282,7 +282,7 @@ Every stage but `trails_autogen` accepts a keyed value: `--param 'ID=V@F;V@F;...
 
 - Scalars and angles interpolate: straight between plain keys, eased next to an `e` key, along the handle's curve next to a handle. A scalar that a handle overshoots is held inside its range.
 - Two-lane vectors (`shift`, `blur_rel`, `rel_amount` and the like) move on the straight line between their keys.
-- Integers, popups, checkboxes, colours, the opacity answers and `host_curve_values` hold their value until the next key and refuse handles.
+- Integers, popups (the two-lane `wrap` among them), checkboxes, colours, the opacity answers and `host_curve_values` hold their value until the next key and refuse handles.
 - A host value (`--host-param`) between keys is rounded to the 1/65536 grid of a host slider.
 - Each key value is checked like a plain value; a bad key, two keys on one frame tick or a missing `--fps` is refused before a frame is read.
 
