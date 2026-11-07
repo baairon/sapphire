@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 34345,
+  "bytes": 34419,
   "generated": false
  },
  {
@@ -345,8 +345,8 @@
  {
   "path": "docs/roadmap.md",
   "title": "Roadmap",
-  "line": "The goal is 20 effects in native Rust: the ten that run today and the ten below.",
-  "bytes": 2757,
+  "line": "The planned effects are ranked by how useful they are in YouTube edits: montages, highlights, music videos and gaming videos.",
+  "bytes": 4796,
   "generated": false
  },
  {

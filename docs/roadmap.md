@@ -1,6 +1,8 @@
 # Roadmap
 
-The goal is 20 effects in native Rust: the ten that run today and the ten below. The other effect names of the plugin are not planned. The status of each finished effect is in [effects](effects.md).
+The planned effects are ranked by how useful they are in YouTube edits: montages, highlights, music videos and gaming videos. The ranking is a practical judgment of each effect's use, not a measured statistic (INFERRED: no public usage figures exist). Tier 1 is built first, then each tier in rank order. The status of each finished effect is in [effects](effects.md).
+
+Effect names are the plugin's own name strings from the [name bank](glossary.md#name-bank). `Shake` and `BlurMoCurves` are host effects whose names are not in the bank, so they are written without the bank's prefix.
 
 ## Platform
 
@@ -26,21 +28,67 @@ Each of these matches the original bit for bit on every compared case ([what tha
 - `S_Trails`
 - `S_WarpPerspective`
 
-## Next ten
+## Tier 1: essential
 
-The ten below are Tier 1 and in progress. The order follows how much code already ported each effect can reuse, cheapest first, with the two heaviest last. The choice of effects is by how often edits use them (INFERRED: no public usage statistics exist), taking one or two per kind of look: glow and light, motion, beat, colour split, glitch and transition.
+Ranks 1 to 8. The effects most edits reach for first. Three are done; the other five are next.
 
-| Order | Effect | Use |
+| Rank | Effect | Use | Status |
+|---|---|---|---|
+| 1 | `Shake` | Impact shakes, hits and dramatic moments | planned |
+| 2 | `S_Glow` | Bright highlights and a cinematic glow | planned |
+| 3 | `BlurMoCurves` | Smooth motion blur for fast, speed-ramped edits | done |
+| 4 | `S_DistortRGB` | RGB splits and chromatic distortion | done |
+| 5 | `S_Flicker` | Flashes and intensity in time with a beat | planned |
+| 6 | `S_Sharpen` | Crisp, detailed footage | done |
+| 7 | `S_DissolveShake` | Shaky transitions between clips | planned |
+| 8 | `S_SwishPan` | Fast directional transitions | planned |
+
+## Tier 2: very useful
+
+Ranks 9 to 16. Polish for montages and cinematic edits.
+
+| Rank | Effect | Use |
 |---|---|---|
-| 1 | `S_BlurDirectional` | Blur along a chosen direction, for speed and whip looks. |
-| 2 | `S_WarpChroma` | Warp that splits colour channels, for colour-split transitions. |
-| 3 | `S_Flicker` | Brightness flicker, for beat and strobe looks. |
-| 4 | `S_Glint` | Sparkle highlights on bright points. |
-| 5 | `S_SwishPan` | Fast swish between shots, for pan transitions. |
-| 6 | `Shake` | Camera shake in three styles (Normal, Twitchy, Jumpy), for impacts and beats. |
-| 7 | `S_Glow` | Soft glow around bright areas. |
-| 8 | `S_Rays` | Light rays streaming from bright areas. |
-| 9 | `S_DigitalDamage` | Digital glitch and corruption. |
-| 10 | `S_LensFlare` | Lens flare, the plugin's best-known light effect. |
+| 9 | `S_BlurMotion` | Motion blur on fast movement |
+| 10 | `S_WarpTransform` | Zooms, rotations and dynamic framing |
+| 11 | `S_GlowEdges` | Glowing outlines and edge highlights |
+| 12 | `S_Retime` | Slow motion and speed changes |
+| 13 | `S_DigitalDamage` | Glitches and digital distortion |
+| 14 | `S_Glint` | Sparkles on bright objects |
 
-`Shake`, like `BlurMoCurves`, is a host effect of the plugin whose name string is not in the [name bank](glossary.md#name-bank), so both are written here without the bank's prefix.
+Ranks 15 and 16 are push-in and pull-out transitions (Hyper Push and Hyper Pull). Neither is in the name bank or the host records of the plugin version this project rebuilds (MEASURED), so neither has code to rebuild.
+
+## Tier 3: situational
+
+Ranks 17 to 24. Atmosphere and scene transitions for slower, story-driven edits.
+
+| Rank | Effect | Use |
+|---|---|---|
+| 17 | `S_DissolveGlow` | Glowing scene transitions |
+| 18 | `S_FilmDamage` | Dark, vintage film looks |
+| 19 | `S_TVDamage` | Distorted screen effects |
+| 20 | `S_Rays` | Dramatic light beams |
+| 21 | `S_EdgeRays` | Rays extending from object edges |
+| 22 | `S_Vignette` | Darkened corners for focus |
+| 23 | `S_LightLeak` | Warm flashes and atmosphere |
+| 24 | `S_LensFlare` | Bright cinematic lighting |
+
+## Tier 4: optional
+
+Ranks 25 to 30. Creative looks that fewer edits need.
+
+| Rank | Effect | Use |
+|---|---|---|
+| 27 | `S_WarpVortex` | Spinning vortex distortions |
+| 28 | `S_JpegDamage` | Compression artifacts and glitch looks |
+| 29 | `S_PixelSort` | Stylized pixel distortion |
+| 30 | `S_KaleidoRadial` | Kaleidoscope-style transitions |
+
+Ranks 25 and 26 are a prism lens distortion (Prism Lens) and an extreme glow (Ultra Glow). Neither is in the name bank or the host records of the plugin version this project rebuilds (MEASURED), so neither has code to rebuild.
+
+## Common combinations
+
+- **Fast impact edits:** `Shake`, `S_Glow`, `BlurMoCurves`, `S_DistortRGB` and `S_Flicker`, for hard hits with glowing highlights, colour separation and smooth movement.
+- **Cinematic and story edits:** `S_Glow`, `S_Vignette`, `S_Rays`, `S_FilmDamage` and `BlurMoCurves`.
+
+Speed ramps, punch zooms, impact frames, titles and camera moves are usually made with the editor's own tools rather than with an effect.
