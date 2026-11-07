@@ -65,16 +65,16 @@ Both stages offer the same parameters:
 | `--param brightness=V` | float | 1 |
 | `--param scale_opacity=V` | float | 1 |
 | `--param mix_with_source=V` | float | 1 |
-| `--param subpixel=V` | float | 1 |
+| `--param subpixel=V` | checkbox | 1 |
 | `--param offset_darks=V` | float | 1 |
-| `--param filter=V` | float | 1 |
-| `--param combine_masks=V` | float | 1 |
+| `--param filter=V` | int | 1 |
+| `--param combine_masks=V` | int | 1 |
 | `--param mocha_mask_opacity=V` | float | 1 |
-| `--param invert_mocha_mask=V` | float | 1 |
+| `--param invert_mocha_mask=V` | checkbox | 1 |
 | `--param resize_mocha_mask=V` | float | 1 |
 | `--param resize_mocha_rel_x=V` | float | 1 |
 | `--param resize_mocha_rel_y=V` | float | 1 |
-| `--param bypass_mocha_mask=V` | float | 1 |
+| `--param bypass_mocha_mask=V` | checkbox | 1 |
 | `--param cset_opacity=V` | int | 1 |
 
 ```sh
@@ -131,14 +131,14 @@ Scatters the pixels of the image: each output pixel takes its value from a nearb
 | `--param wrap=V` | text | 2 |
 | `--param diffuse_amount_host=V` | float | 1 |
 | `--param blur_mocha_mask_host=V` | float | 1 |
-| `--param bypass_mocha_mask=V` | float | 1 |
-| `--param combine_masks=V` | float | 1 |
-| `--param invert_mocha_mask=V` | float | 1 |
+| `--param bypass_mocha_mask=V` | checkbox | 1 |
+| `--param combine_masks=V` | int | 1 |
+| `--param invert_mocha_mask=V` | checkbox | 1 |
 | `--param mocha_mask_opacity=V` | float | 1 |
 | `--param resize_mocha_mask=V` | float | 1 |
 | `--param resize_mocha_rel_x=V` | float | 1 |
 | `--param resize_mocha_rel_y=V` | float | 1 |
-| `--param show_mocha_mask_only=V` | float | 1 |
+| `--param show_mocha_mask_only=V` | checkbox | 1 |
 
 `diffuse_amount` and `blur_mocha_mask` are the values as the host passes them; `diffuse_amount_host` and `blur_mocha_mask_host` set the same parameters in the effect's own units.
 
@@ -165,7 +165,7 @@ Bends the image through a distortion field, with a different strength for the re
 | `--param warp_blue=V` | float | 1 |
 | `--param blur_lens=V` | float | 1 |
 | `--param wrap=V` | text | 2 |
-| `--param filter=V` | float | 1 |
+| `--param filter=V` | checkbox | 1 |
 | `--param rotate_warp_dir=V` | float | 1 |
 | `--param cset_opacity=V` | int | 1 |
 
@@ -217,7 +217,7 @@ Adjusts colour: rotates the hue, scales the saturation, scales the brightness an
 | parameter | type | lanes |
 |---|---|---|
 | `--param brightness=V` | float | 1 |
-| `--param bypass_mocha_mask=V` | float | 1 |
+| `--param bypass_mocha_mask=V` | checkbox | 1 |
 | `--param hue_shift=V` | float | 1 |
 | `--param offset_darks=V` | float | 1 |
 | `--param preserve_luma=V` | checkbox | 1 |
@@ -315,7 +315,7 @@ The stage is temporal: it reads the whole clip before it writes.
 | parameter | type | lanes |
 |---|---|---|
 | `--param blur_amount=V` | float | 1 |
-| `--param invert_mocha_mask=V` | float | 1 |
+| `--param invert_mocha_mask=V` | checkbox | 1 |
 | `--param mocha_mask_opacity=V` | float | 1 |
 | `--param cset_opacity=V` | int | 1 |
 | `--param blur_rel=V` | text | 2 |
@@ -342,13 +342,13 @@ Places the image on a plane seen in perspective. Swing, roll and latitude turn t
 
 | parameter | type | lanes |
 |---|---|---|
-| `--param filter=V` | float | 1 |
+| `--param filter=V` | checkbox | 1 |
 | `--param z_dist=V` | float | 1 |
 | `--param tele_lens_width=V` | float | 1 |
 | `--param swing=V` | float | 1 |
 | `--param roll=V` | float | 1 |
 | `--param latitude=V` | float | 1 |
-| `--param wrap_above_horizon=V` | float | 1 |
+| `--param wrap_above_horizon=V` | checkbox | 1 |
 | `--param wrap=V` | text | 2 |
 | `--param cset_opacity=V` | int | 1 |
 

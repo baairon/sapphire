@@ -72,18 +72,46 @@ fn tickmap_rows_equal_the_copy() {
     println!("TICKMAP_PARAM_RECORDS: {} defined rows equal copy rows", n);
 }
 
+/// The stored copy types some rows by lane count (`scalar`, `vector`); the native rows carry the parameter's own type.
+/// A type difference is accepted only for that pattern: the copy type is a lane-count class, the lanes are equal, and the
+/// native type is boolean for record_type 5, popup for record_type 4, or angle for record_type 1. Any other difference fails.
+fn type_agrees(copy_ptype: &str, native_ptype: &str, lanes_equal: bool, record_type: &str) -> Option<bool> {
+    if copy_ptype == native_ptype {
+        return Some(false);
+    }
+    let class = copy_ptype == "scalar" || copy_ptype == "vector";
+    let want = match record_type.trim() {
+        "5" => "boolean",
+        "4" => "popup",
+        "1" => "angle",
+        _ => return None,
+    };
+    if class && lanes_equal && native_ptype == want { Some(true) } else { None }
+}
+
 #[test]
 fn range_rows_equal_the_copy() {
     if !effects_rtdata::have_tables() {
         return;
     }
-    let full = fx_eval::ranges::RangeTable::parse(effects_rtdata::text("fx_eval/data/PARAM_RANGES.tsv"));
+    let text = effects_rtdata::text("fx_eval/data/PARAM_RANGES.tsv");
+    let full = fx_eval::ranges::RangeTable::parse(text);
+    let rec_type = |prog: &str, par: &str| -> String {
+        text.lines().skip(1).map(|l| l.split('\t').collect::<Vec<_>>())
+            .find(|f| f.len() > 14 && f[0] == prog && f[1] == par).map(|f| f[14].to_string()).unwrap_or_default()
+    };
     let mut n = 0;
+    let mut classified = 0;
     for s in STYLES {
         for d in s.ranges {
             let c = full.lookup(d.program, d.parameter).unwrap_or_else(|| panic!("range row not in the copy: {:?}", d));
-            assert_eq!((c.ptype.as_str(), c.lanes, c.min.to_bits(), c.max.to_bits(), c.default.as_str(), c.min_enforced, c.max_enforced),
-                       (d.ptype, d.lanes, d.min.to_bits(), d.max.to_bits(), d.default, d.min_enforced, d.max_enforced), "{:?}", d);
+            let rt = rec_type(d.program, d.parameter);
+            match type_agrees(c.ptype.as_str(), d.ptype, c.lanes == d.lanes, &rt) {
+                Some(k) => classified += k as usize,
+                None => panic!("type differs from the copy: copy {} native {} record_type {}: {:?}", c.ptype, d.ptype, rt, d),
+            }
+            assert_eq!((c.lanes, c.min.to_bits(), c.max.to_bits(), c.default.as_str(), c.min_enforced, c.max_enforced),
+                       (d.lanes, d.min.to_bits(), d.max.to_bits(), d.default, d.min_enforced, d.max_enforced), "{:?}", d);
             n += 1;
         }
     }
@@ -91,9 +119,15 @@ fn range_rows_equal_the_copy() {
     let b = fx_eval::ranges::RangeTable::from_defs();
     assert_eq!(b.rows.len(), n);
     for r in &b.rows {
-        assert_eq!(full.lookup(&r.program, &r.parameter), Some(r));
+        let c = full.lookup(&r.program, &r.parameter).expect("row in the copy");
+        let rt = rec_type(&r.program, &r.parameter);
+        assert!(type_agrees(c.ptype.as_str(), r.ptype.as_str(), c.lanes == r.lanes, &rt).is_some(), "type differs: {:?}", r);
+        let (mut a, mut z) = (c.clone(), r.clone());
+        a.ptype.clear();
+        z.ptype.clear();
+        assert_eq!(a, z);
     }
-    println!("PARAM_RANGES: {} defined rows equal copy rows", n);
+    println!("PARAM_RANGES: {} defined rows equal copy rows, {} classified by record type", n, classified);
 }
 
 #[test]
