@@ -8,3 +8,6 @@ description = "Std-only port of the original powf routine."
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+libm_sincos = { path = "../libm_sincos" }

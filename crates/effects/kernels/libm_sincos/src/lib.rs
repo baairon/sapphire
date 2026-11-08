@@ -8,14 +8,14 @@
 //! cvtsd2ss. itself uses a table walk for |x| < 90112 and calls the argument reducer above that (Cody-Waite
 //! below 2^30, a Payne-Hanek style limb product above).
 //!
-//! Tables: the sincosf table (64 entries of (sin, cos) of k pi/32) and the double table (64 entries of 64 bytes) are computed at
-//! first use from their mathematical definition (module `exact`: 320 bit fixed point, Machin's pi, Taylor series). No file and no
-//! captured value is read. A check that needs the stored copies (tests/vs_copy.rs, copies under VEC_DIR) compares all 128 entries with the plugin's
-//! tables bit for bit. All other constants are captured.
+//! Tables: the sincosf table (64 entries of (sin, cos) of k pi/32), the double table (64 entries of 64 bytes), the Cody-Waite pieces of
+//! pi/4 (`CW_S`, `CW_B`) and the 2/pi limbs of the large argument reducer (`PH_TAB`) are computed at first use from their definitions
+//! (module `exact`: 320 bit fixed point, Machin's pi, Taylor series). No file and no captured value is read for them. The checks of
+//! tests/vs_copy.rs (copies under VEC_DIR) compare the first two tables bit for bit with stored copies. The remaining constants (scalars and cells of at most 2 words) are literals.
 
 pub mod exact;
 
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
 fn f(b: u64) -> f64 {
     f64::from_bits(b)
@@ -48,12 +48,10 @@ const C_CELL_B: [u64; 2] = [0xbfc5555555555555, 0xbfe0000000000000]; //  (-1/3!,
 //  (argument reducer)
 const FOUR_OVER_PI: f64 = f64::from_bits(0x3ff45f306dc9c883); // 
 const SIGN_TAB: [u64; 2] = [0x3ff0000000000000, 0xbff0000000000000]; // 
-const CW_S: [u64; 4] = [0x3fe921fb54000000, 0x3e010b4612000000, 0xbc2676733c000000, 0x3a61701b839a2520]; // 
-const CW_B: [u64; 5] = [0x3fe921fa00000000, 0x3ea5444300000000, 0xbd373dca00000000, 0xbbf3b39a00000000, 0x3a845c06e0e68948]; // 
-const PH_TAB: [u64; 14] = [
-    0x0000000000000000, 0x4c745f3060000000, 0x4aeb939100000000, 0x494529fc20000000, 0x47ad5f47c0000000, 0x4624d37700000000, 0x447b6c5280000000,
-    0x430993c420000000, 0x4189041fe0000000, 0x3fe458eae0000000, 0x3e67aef150000000, 0x3cd0db9230000000, 0x3b3c748480000000, 0x39bba5c000000000,
-]; // 
+//  CW_S and CW_B: pi/4 split into Cody-Waite pieces, computed from pi at 320 bits by exact::pi4_pieces_s and exact::pi4_pieces_b (widths and roundings are the method's parameters).
+static CW_S: LazyLock<[u64; 4]> = LazyLock::new(exact::pi4_pieces_s);
+static CW_B: LazyLock<[u64; 5]> = LazyLock::new(exact::pi4_pieces_b);
+static PH_TAB: LazyLock<[u64; 14]> = LazyLock::new(exact::two_over_pi_limbs);
 const PH_C_CELL_A: [u64; 2] = [0x0000000000000000, 0xbff0000000000000]; // 
 const PH_C_CELL_B: u64 = 0x4198000000000000; // 
 const PH_C_CELL_C: u64 = 0x3fe921fb40000000; // 
