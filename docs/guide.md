@@ -1,6 +1,6 @@
 # Using the effects
 
-This page shows how to run the ten native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match. The effects themselves are described in [effects](effects.md); the stage interface they use is specified in [stages](stages.md).
+This page shows how to run the thirteen native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match. The effects themselves are described in [effects](effects.md); the stage interface they use is specified in [stages](stages.md).
 
 Every command below was run from the repository root on a one second 160x96 test clip, and each ended with exit code 0.
 
@@ -31,8 +31,11 @@ Each registered style of an effect is one stage. `sapphire stage list` prints th
 | `@diffuse_autogen` | `S_Diffuse` | temporal |
 | `@distort_rgb_autogen` | `S_DistortRGB` | temporal |
 | `@drop_shadow` | `S_DropShadow` | temporal |
+| `@flicker` | `S_Flicker` | temporal |
+| `@glow` | `S_Glow` | temporal |
 | `@hue_sat_bright_autogen` | `S_HueSatBright` | temporal |
 | `@sharpen_best_quality_autogen`, `@sharpen_fast_autogen` | `S_Sharpen` | temporal |
+| `swishpan` (with `stage apply` only, see [Time and transitions](#time-and-transitions)) | `S_SwishPan` | temporal |
 | `@time_warp_rgb_autogen` | `S_TimeWarpRGB` | temporal |
 | `@trails_autogen` | `S_Trails` | temporal |
 | `@warp_perspective_autogen` | `S_WarpPerspective` | temporal |
@@ -41,7 +44,7 @@ Each registered style of an effect is one stage. `sapphire stage list` prints th
 target/release/sapphire stage list
 ```
 
-All 13 stages have kind `temporal`, because the frames/2 convention accepts keyed values only for temporal stages. Only `time_warp_rgb_autogen` and `trails_autogen` read other frames of the clip: the first shifts colour channels in time, and the second reads the whole clip before it writes. The other 11 stages turn each input frame into one output frame and are `temporal` so that they accept keyframes. The kind `frame` belongs to `selftest-invert` and `ffmpeg-filter`.
+All 16 stages have kind `temporal`, because the frames/2 convention accepts keyed values only for temporal stages. Only `time_warp_rgb_autogen` and `trails_autogen` read other frames of the clip: the first shifts colour channels in time, and the second reads the whole clip before it writes. The other 14 stages turn each input frame into one output frame and are `temporal` so that they accept keyframes; of them, `swishpan` also reads the matching frame of a second clip. The kind `frame` belongs to `selftest-invert` and `ffmpeg-filter`.
 
 ## Running a stage on a clip
 
@@ -160,6 +163,21 @@ ffmpeg -v error -f rawvideo -pix_fmt gbrapf32le -video_size 160x96 -framerate 24
 
 A stage refuses a frame size it cannot render, such as 1x1, with exit code 3 (`unsupported`) and a message; the exit codes are in [Exit codes](../README.md#exit-codes).
 
+## Time and transitions
+
+`--fps` gives each frame its time: frame f is at f / rate seconds ([Host values](cli.md#host-values)). `flicker` changes the brightness with the time, so pass the real rate of the clip; without `--fps` a `flicker` run is refused with `HOST-VALUE-MISSING` (exit 3). The verified renders use whole frames of a 24 frames a second clock.
+
+```sh
+target/release/sapphire stage apply flicker --width 160 --height 96 --depth 32 --fps 24 --param amplitude=0.6 --param wave_amp=0.5 --param wave_freq=2.5 < clip.f32 > flicker.f32
+```
+
+`swishpan` is a transition from the input clip to a second clip. It takes the second clip as `--layer To=PATH`, raw frames of the same size and depth (one frame, held, or one frame per input frame), and the length of the transition as `--frames N`, the number of input frames: the move starts on the first frame and ends on the last. The layer is optional. The pipeline passes neither input, so `swishpan` runs with `sapphire stage apply` only ([Transition stages](cli.md#transition-stages)):
+
+```sh
+ffmpeg -v error -y -f lavfi -i testsrc2=size=160x96:rate=24:duration=1 -f rawvideo -pix_fmt gbrapf32le to.f32
+target/release/sapphire stage apply swishpan --width 160 --height 96 --depth 32 --fps 24 --frames 24 --layer To=to.f32 --param direction=1 < clip.f32 > swish.f32
+```
+
 ## Running the stages from twixtor
 
 twixtor's `tools/apply.py` runs any frames/2 stage before its own effect with `--pre-stage CMD`, or after it with `--post-stage CMD` ([running in a wrapper](stages.md#running-in-a-wrapper)). A wrapper fills the placeholders `{width}`, `{height}`, `{depth}` and `{fps}` in the command. From a twixtor checkout, with `SAPPHIRE` set to the absolute path of `target/release/sapphire`:
@@ -184,11 +202,11 @@ target/release/sapphire stage list --json
 target/release/fx_run --describe-params Hue_Sat_Bright_Autogen
 ```
 
-The argument is the style's program name, the `name` field of the stage in `stage list --json`. The output is JSON: per parameter its name, type, lanes, minimum, maximum and default. These values are part of the effects and are never copied into the documentation; `stage list --json` prints them first, and `fx_run --describe-params` prints the same values from a shell.
+The argument is the style's program name, the `name` field of the stage in `stage list --json`. The output is JSON: per parameter its name, type, lanes, minimum, maximum and default. These values are part of the effects and are never copied into the documentation; `stage list --json` prints them first, and `fx_run --describe-params` prints the same values from a shell, apart from the default of one popup ([Parameter discovery](cli.md#parameter-discovery)).
 
-Two styles of `BlurMoCurves` read a host curve file, passed as `--param host_curve_values=PATH`; without it they use an identity curve. No effect stage takes an extra layer: `--layer` on one exits 3 with `LAYER-INPUT-UNSUPPORTED` ([effects provider](stages.md#effects-provider)).
+Two styles of `BlurMoCurves` and `swishpan` read a host curve file, passed as `--param host_curve_values=PATH`; without it they use a constant curve. Only `swishpan` takes an extra layer, the second clip of its transition; `--layer` on any other effect stage exits 3 with `LAYER-INPUT-UNSUPPORTED` ([effects provider](stages.md#effects-provider)).
 
-Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. Of the opacity choices only Normal (`2`) renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED). `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items.
+Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. On the stages of the first ten effects only Normal (`2`) of the opacity choices renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED), and `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items. `glow` and `swishpan` render all three answers, each with the host arrangement of its own recorded renders.
 
 See [Driving the effect parameters](parameters-guide.md) for every stage parameter, how to write its value and the values verified against recorded renders.
 
@@ -220,12 +238,12 @@ Most of the remaining time of the light stages is moving the frame in and out of
 
 ## What is claimed
 
-The ten effects are rebuilt so that, on every case the parity record compares, they give the original's output bit for bit ([what rebuilt means](effects.md#what-rebuilt-means)). For the stages, in plain words:
+The thirteen effects are rebuilt so that, on every case the parity record compares, they give the original's output bit for bit ([what rebuilt means](effects.md#what-rebuilt-means)). For the stages, in plain words:
 
-- **MEASURED.** At depth 32, with the frame sizes and parameter values of the recorded renders that use each stage's host arrangement, the stage output is byte identical to the recorded native render: 382 of 382, checked by full SHA-256 ([Effects and stages](../README.md#effects-and-stages)).
-- **INFERRED.** Other frame sizes and parameter values, a real clip among them, run the same code path and are expected to match, but were not measured. The same holds for buffer placement at unmeasured sizes, `S_Trails` clips longer than the measured histories, `S_TimeWarpRGB` shifts beyond the measured ones, and host curves other than the identity curve.
+- **MEASURED.** At depth 32, with the frame sizes and parameter values of the recorded renders that use each stage's host arrangement, the stage output is byte identical to the recorded native render, checked by full SHA-256: 382 of 382 on the stages of the first ten effects, 24 of 24 on `flicker`, 36 of 36 on `glow` and 32 of 32 on `swishpan` ([Effects and stages](../README.md#effects-and-stages)). The other 4 counted `swishpan` renders were recorded at another phase of the default xy buffer and are verified through `fx_run`.
+- **INFERRED.** Other frame sizes and parameter values, a real clip among them, run the same code path and are expected to match, but were not measured. The same holds for buffer placement at unmeasured sizes, `S_Trails` clips longer than the measured histories, `S_TimeWarpRGB` shifts beyond the measured ones, host curves other than the identity curve and the recorded `swishpan` Wipe Percent curves, frame times at rates other than 24 frames a second, and transitions of other lengths.
 - **Not claimed.** Depths 8 and 16 add a conversion to and from float that is not part of the record. Recorded renders with a different host arrangement are not claimed for the stage.
 - **Platform.** Every comparison was judged by an emulator that follows Intel's specification, not by real CPU silicon, and the native code reproduces the original's AVX2 and FMA code tier only.
-- **Host.** The stages render the effect, not a full host application. The original host's keyframe interpolation, masks, real host frame fetches and the original's GPU renderer are outside the claim ([limits common to the ten effects](effects.md#limits-common-to-the-ten-effects)). Sapphire's own values between keys are INFERRED, and its device path is MEASURED on PoCL only.
+- **Host.** The stages render the effect, not a full host application. The original host's keyframe interpolation, masks, real host frame fetches and the original's GPU renderer are outside the claim ([limits common to the effects](effects.md#limits-common-to-the-effects)). Sapphire's own values between keys are INFERRED, and its device path is MEASURED on PoCL only.
 
 The limits of each effect are in [effects](effects.md), and the stage limits in [effects provider](stages.md#effects-provider).

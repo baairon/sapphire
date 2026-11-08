@@ -1,13 +1,13 @@
 # Driving the effect parameters
 
-How to run each of the 13 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
+How to run each of the 16 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
 
 The stages themselves (requirements, host arrangement, exits, limits) are described in [Effects provider](stages.md#effects-provider). This page is about the parameters.
 
 ## Conventions on this page
 
 - **INFERRED** marks a description that rests on reading the effect graph (the native program constructors in `crates/effects/fx_eval/src/programs_native.rs` and the parameter definitions in `crates/effects/rtdata`), not on a measurement.
-- **MEASURED** marks a statement checked by running the code. "Verified at these values" lists the parameter values at which the stage output is byte identical to a recorded render of the original (MEASURED by `crates/neutral-handoff/tests/fx_stage_parity.rs`: 382 recorded renders over the 13 stages, all byte identical, depth 32). Values outside those lists run through the same code path and are INFERRED.
+- **MEASURED** marks a statement checked by running the code. "Verified at these values" lists the parameter values at which the stage output is byte identical to a recorded render of the original (MEASURED at depth 32, full SHA-256: by `crates/neutral-handoff/tests/fx_stage_parity.rs` for 382 recorded renders over the 13 stages of the first ten effects, and for `flicker`, `glow` and `swishpan` by rendering through `sapphire stage apply` their counted renders that match the stage's host arrangement, 24, 36 and 32; all byte identical). Values outside those lists run through the same code path and are INFERRED.
 - Every worked command below was run on this tree and ended with exit 0 (MEASURED, 64x32 `testsrc` clip, 3 frames, depth 32).
 
 ## Running a stage
@@ -31,7 +31,7 @@ target/release/fx_run --describe-params Blur_Color_Autogen
 target/release/fx_run --describe-params Blur_Color_Autogen Drop_Shadow Trails_Autogen
 ```
 
-The output is JSON: for each program, one entry per registered parameter with `name`, `type` (scalar, boolean, popup, int, color, vector or angle), `lanes`, `min`, `max` and `default` (one value per lane, separated by spaces). The `name` is the program parameter name, which is the stage parameter id except for the few ids listed under each stage below. `target/release/sapphire stage list --json` prints the same defaults and ranges per stage parameter, read from `fx_run` when the list is built. The program of each stage is the second column of `crates/neutral-handoff/data/fx_stages.tsv` and the `name` printed by `sapphire stage list`.
+The output is JSON: for each program, one entry per registered parameter with `name`, `type` (scalar, boolean, popup, int, color, vector or angle), `lanes`, `min`, `max` and `default` (one value per lane, separated by spaces). The `name` is the program parameter name, which is the stage parameter id except for the few ids listed under each stage below. `target/release/sapphire stage list --json` prints the same defaults and ranges per stage parameter, read from `fx_run` when the list is built, with one difference: for a one-lane popup it prints the default an unset run takes, the item the style registers. Of the offered parameters only `auto_trans` of `swishpan` differs: `fx_run --describe-params SwishPan` prints the program text default `0`, while `stage list` prints `1` and an unset `auto_trans` renders as `1` (MEASURED). For a `--host-param` parameter (below) both print the program's record value, not a host value. The program of each stage is the second column of `crates/neutral-handoff/data/fx_stages.tsv` and the `name` printed by `sapphire stage list`.
 
 The stage refuses a value outside the printed range with exit 3 before any frame is read, for example `bad value for blur_res: 3 is outside 0 to 2` (MEASURED).
 
@@ -42,16 +42,16 @@ The stage refuses a value outside the printed range with exit 3 before any frame
 - **Checkbox.** `0` (off) or `1` (on): `--param subpixel=1`.
 - **Integer.** A whole number: `--param shift_frames_red=2`.
 - **Popup given as a record value (`--set`).** The zero-based item index, as the effect graph reads it: the first item is `0`. Example: `filter` of `S_Blur` lists Box, Triangle and Gauss, so `--param filter=1` selects Triangle. A two-lane popup such as `wrap` takes one index per axis: `--param wrap=1,2`. The printed range of such a popup is `0` to the item count minus one (MEASURED for `blur_res`).
-- **Popup given as a host answer (`cset_*` ids).** The one-based item number, as a host answers a popup: the first item is `1`. These are the opacity popups described below. An answer outside 1 to the item count is exit 3 with `POPUP-ANSWER-OUT-OF-RANGE` (MEASURED).
+- **Popup given as a host answer (`cset_*` ids).** The one-based item number, as a host answers a popup: the first item is `1`. These are the opacity popups described below. `stage list --json` prints such an id with `min` 1, `max` the item count of the popup and `default` the answer the style registers, and the stage refuses an answer outside 1 to the item count with exit 3 before any frame is read, for example `bad value for cset_opacity: 9 is outside 1 to 3` (MEASURED).
 
 ## How the stage passes a value to fx_run
 
 Each offered parameter has one route, listed in `crates/neutral-handoff/data/fx_params.tsv` (third column) and in the stage sections below.
 
 - **`--set NAME=VALUE`, the record value.** The value goes to the effect graph unchanged, lane by lane. Positions and sizes given this way are in the graph's own normalized units, not pixels (INFERRED).
-- **`--host-param NAME=VALUE`, a host value with a unit conversion.** The value is what a host would show on its slider, in units tied to the frame width. `fx_run` converts it to the record value as `record = host x (2 / W) x s` in single precision, where `W` is the frame width in pixels and `s` is the parameter's registered normalize scale from the native definitions (MEASURED against the original for lane 0; the formula is in `crates/effects/fx_eval/src/units.rs`). The same host value therefore makes a proportionally smaller record value on a wider frame. The host value must lie on the 1/65536 grid of a host slider; a value off the grid, such as `4.00001`, is exit 3 with `HOST-VALUE-OFF-GRID` (MEASURED). The two-lane form `X,Y` exists only for the `shift_host` parameter of the `S_DropShadow` stage: lane 0 converts as above and lane 1 is negated (the host's y axis points the other way).
+- **`--host-param NAME=VALUE`, a host value with a unit conversion.** The value is what a host would show on its slider, in units tied to the frame width. `fx_run` converts it to the record value as `record = host x (2 / W) x s` in single precision, where `W` is the frame width in pixels and `s` is the parameter's registered normalize scale from the native definitions (MEASURED against the original for lane 0; the formula is in `crates/effects/fx_eval/src/units.rs`). The same host value therefore makes a proportionally smaller record value on a wider frame. The host value must lie on the 1/65536 grid where the host slider holds a 16.16 value: a value off the grid, such as `4.00001`, is exit 3 with `HOST-VALUE-OFF-GRID` on every `--host-param` parameter but `width` of `S_Glow`, `blur_mocha_mask` of `S_Diffuse` and `shift_host` of `S_DropShadow`, which take an off-grid value as given (MEASURED: exit 0). The `default` printed for a `--host-param` parameter is its record value, not a host value: an unset parameter renders at the host value the style registers, converted at the frame width, and the printed `default` passed as a host value gives another render (MEASURED on `width` of `S_Glow` and `blur_amount` of `S_SwishPan`). Leave the parameter unset to render its default. The two-lane form `X,Y` exists only for the `shift_host` parameter of the `S_DropShadow` stage: lane 0 converts as above and lane 1 is negated (the host's y axis points the other way).
 - **`--cset DISPLAY=N`, a host popup answer.** Used for the opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`). `fx_run` derives the effect's opacity handling from the answer.
-- **`--host-curve-values PATH`.** Used only by `host_curve_values` of the two `BlurMoCurves` stages; see that section.
+- **`--host-curve-values PATH`.** Used only by `host_curve_values` of the two `BlurMoCurves` stages and of `swishpan`; see those sections.
 
 A parameter offered under two ids (for example `diffuse_amount` and `diffuse_amount_host` of `diffuse_autogen`) reaches the same program parameter through the two routes. Give only one of them: both together are exit 3 (`given both as --host-param and --set`, MEASURED for the `shift` pair of the `S_DropShadow` stage).
 
@@ -61,9 +61,9 @@ Parameters that a stage fixes (the mask inputs, for example) are not offered and
 
 ### The opacity popup
 
-`cset_opacity` (display name `Opacity`) is the host popup that tells the effect how to treat the input alpha. Its items are All_Opaque, Normal and As_Premult, so it takes `1`, `2` or `3` (INFERRED from the program layouts). On the host arrangement the stages run, only `2` (Normal) renders; `1` and `3` are refused by `fx_run` with exit 3 because the recorded host arrangement does not cover them (MEASURED on every stage that offers it). Leaving it unset is the same as `2` for a stage run (INFERRED). `time_warp_rgb_autogen` has `cset_input_opacity` (display name `Input Opacity`, same items and the same result: only `2` renders, MEASURED) and `cset_output_opacity` (display name `Output Opacity`, items All_Opaque and Copy_From_Input; `1` and `2` both render, MEASURED).
+`cset_opacity` (display name `Opacity`) is the host popup that tells the effect how to treat the input alpha. Its items are All_Opaque, Normal and As_Premult, so it takes `1`, `2` or `3` (INFERRED from the program layouts). On the stages of the first ten effects only `2` (Normal) renders; `1` and `3` are refused by `fx_run` with exit 3 because the recorded host arrangement does not cover them (MEASURED on every such stage that offers it). On `glow` and `swishpan` all three answers render: the stage runs each answer with the host arrangement of its own recorded renders, from the `host_variants` column of [Effects provider](stages.md#effects-provider) (MEASURED). Leaving it unset is the same as `2` for a stage run (INFERRED). `time_warp_rgb_autogen` has `cset_input_opacity` (display name `Input Opacity`, same items and the same result: only `2` renders, MEASURED) and `cset_output_opacity` (display name `Output Opacity`, items All_Opaque and Copy_From_Input; `1` and `2` both render, MEASURED).
 
-No recorded render sets an opacity popup, so its values are not in the verified lists.
+No recorded render of the first ten effects sets an opacity popup. The recorded renders of `glow` and `swishpan` set `cset_opacity` to `1`, `2` and `3`.
 
 ### The tracker mask group
 
@@ -176,6 +176,53 @@ target/release/sapphire stage apply drop_shadow --width 64 --height 32 --depth 3
   --param shadow_blur=4 --param shift_host=4,4 --param color=0.2,0.5,0.8 --param shadow_opacity=0.9 --in clip.raw --out out.raw
 ```
 
+## `S_Flicker`
+
+One stage, `flicker`, which runs the registered program itself (no wrapper). Every pixel of a frame is multiplied, per colour channel, by one factor that changes with the frame time (INFERRED). The time comes from `--fps`, so the stage needs it ([Time and transitions](guide.md#time-and-transitions)); without it the run is refused with `HOST-VALUE-MISSING` (exit 3).
+
+- `brightness`, scalar, `--set`. The base of the factor: with the random and wave parts at 0 the image is multiplied by it (INFERRED). Verified at `0.800003052`, `0.899993896`, `1.1000061` and `1.19999695`.
+- `amplitude`, scalar, `--set`. Scales the random and wave parts together (INFERRED). Verified at `0`, `0.330001831`, `0.449996948` and `0.600006104`.
+- `rand_luma_amp`, scalar, `--set`. The random part common to the three channels (INFERRED). Verified at `0`, `0.5` and `1.5`.
+- `rand_color_amp`, scalar, `--set`. A random part per channel, which tints the change (INFERRED). Verified at `0`, `0.600006104` and `0.800003052`.
+- `rand_freq`, scalar, `--set`. How fast the random part changes with the frame time (INFERRED). Verified at `0.5`, `12` and `20`.
+- `seed`, scalar, `--set`. Picks another random sequence (INFERRED). Verified at `0.309997559` and `0.770004272`.
+- `wave_amp` and `wave_freq`, scalar, `--set`. The size of the wave part and its frequency in cycles a second of frame time (INFERRED). Verified at `0`, `0.25`, `0.5`, `0.600006104` and `1.5` (`wave_amp`); `2.5`, `3.5` and `17` (`wave_freq`).
+- `wave_r_phase`, `wave_g_phase` and `wave_b_phase`, scalar, `--set`. The phase of the wave per channel, in cycles (INFERRED). Verified at `-0.399993896` and `0.649993896` (red); `-0.899993896` and `-0.199996948` (green); `-0.699996948` and `0.149993896` (blue).
+- `red_amp`, `green_amp` and `blue_amp`, scalar, `--set`. Weight the random and wave parts per channel (INFERRED). Verified at `1.30000305` (red); `0.699996948` and `2.19999695` (green); `1.69999695` (blue).
+
+The verified times are the frames 0, 2, 3, 5, 11, 13, 19 and 29 of a 24 frames a second clock, at 64x32 and 50x7.
+
+```sh
+target/release/sapphire stage apply flicker --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param amplitude=0.5 --param rand_color_amp=0.6 --param wave_amp=0.5 --param wave_freq=2.5 --in clip.raw --out out.raw
+```
+
+## `S_Glow`
+
+One stage, `glow`, which runs the registered program itself (no wrapper). It spreads the parts of the image above a threshold into a wide glow and combines the glow with the source (INFERRED). The background, matte and tracker mask inputs of the program are not connected: the stage offers no mask parameter, and `--layer` is refused.
+
+- `threshold`, scalar, `--set`. The level above which a part of the image glows (INFERRED). Verified at `0.300003052`, `0.350006104`, `0.550003052` and `0.699996948`.
+- `width`, scalar, `--host-param` (host units, converted relative to the frame width). The size of the glow (INFERRED). Verified at `12.5` and `20.75`.
+- `width_x` and `width_y`, scalar, `--set`. Scale the size per axis (INFERRED). Verified at `0.699996948` and `1.5` (`width_x`); `1.30000305` and `2.19999695` (`width_y`).
+- `width_red`, `width_green` and `width_blue`, scalar, `--set`. Scale the size per colour channel, so the colours of the glow spread by different amounts (INFERRED). Verified at `0.800003052` (red); `1.6000061` (green); `0.600006104` and `1.8999939` (blue).
+- `brightness`, scalar, `--set`. Scales the glow (INFERRED). Verified at `1.1000061`, `1.3500061`, `1.6000061`, `2.6000061` and `3.19999695`.
+- `combine`, popup, `--set` record value. How the glow joins the source, one of five blend modes given by its zero-based index (INFERRED). Verified at `0`, `1`, `3` and `4`.
+- `show`, popup, `--set` record value. `0` outputs the result and `1` the thresholded image the glow is made from (INFERRED). Verified at `1`.
+- `edge_mode`, popup, `--set` record value. How the spread treats the border of the frame (INFERRED). Verified at `0`.
+- `glow_under_source`, scalar, `--set`. Moves the glow from over the source to under it (INFERRED). Verified at `0.75`.
+- `scale_source` and `scale_background`, scalar, `--set`. Scale the source and the background in the mix; with no background connected the background is empty (INFERRED). Verified at `0.600006104` and `0.800003052` (`scale_source`); `1.3999939` (`scale_background`).
+- `light_bg`, scalar, `--set`. How much the glow lights the background (INFERRED). Verified at `0.300003052`.
+- `affect_alpha`, scalar, `--set`. How much the glow adds to the alpha (INFERRED). Verified at `0.25` and `0.5`.
+- The atmosphere parameters are not offered: Atmosphere is not rendered, and `atmosphere_amp` keeps its registered default, which leaves Atmosphere off (see `S_Glow` in [Effects](effects.md)).
+- `cset_opacity`: see the opacity popup. All three answers render on this stage. Verified at `1` and `3`; the renders that leave it unset run the default answer.
+
+The verified sizes are 64x32 and 50x7.
+
+```sh
+target/release/sapphire stage apply glow --width 64 --height 32 --depth 32 --frames 3 \
+  --param combine=1 --param glow_under_source=0.75 --param cset_opacity=3 --in clip.raw --out out.raw
+```
+
 ## `S_HueSatBright`
 
 One stage, `hue_sat_bright_autogen` (program `Hue_Sat_Bright_Autogen`). It rotates the hue, scales the saturation, then scales the lights and offsets the darks (INFERRED). It offers no opacity popup.
@@ -223,6 +270,27 @@ target/release/sapphire stage apply sharpen_best_quality_autogen --width 64 --he
   --param small_detail_size=4 --param sharpen_amp=1.25 --param edge_threshold=0.25 --in clip.raw --out out.raw
 target/release/sapphire stage apply sharpen_fast_autogen --width 64 --height 32 --depth 32 --frames 3 \
   --param sharpen_width=6 --param sharpen_amp=1.25 --param sharpen_luma=0.5 --in clip.raw --out out.raw
+```
+
+## `S_SwishPan`
+
+One stage, `swishpan`, which runs the registered program itself (no wrapper). It is a transition: the input clip moves out of the frame and a second clip follows it in, with a motion blur along the move (INFERRED). The second clip is `--layer To=PATH` (optional) and the length of the transition is `--frames N` ([Transition stages](cli.md#transition-stages)).
+
+- `direction`, popup, `--set` record value. The direction of the move: `0` left, `1` right, `2` up, `3` down (INFERRED). Verified at `0`, `1`, `2` and `3`.
+- `transition_dir`, popup, `--set` record value. `0` moves the input clip out and brings the second clip in; `1` swaps the two (INFERRED). Verified at `0` and `1`.
+- `auto_trans`, popup, `--set` record value. `1` runs the move over the whole clip, from 0 on the first frame to 1 on the last; `0` reads the progress from the host curve (INFERRED). Verified at `0` and `1`.
+- `slow_in` and `slow_out`, scalar, `--set`. Ease the start and the end of the move (INFERRED). Verified at `0.3000030517578125`, `0.399993896484375`, `0.5` and `0.6999969482421875` (`slow_in`); `0.149993896484375`, `0.5` and `0.8000030517578125` (`slow_out`).
+- `overlap`, scalar, `--set`. Shortens or lengthens the distance between the two clips, so that they overlap or leave a gap (INFERRED). Verified at `-0.3000030517578125`, `0`, `0.1999969482421875` and `0.4499969482421875`.
+- `blur_amount`, scalar, `--host-param` (host units, converted relative to the frame width). Scales the motion blur, which follows the speed of the move (INFERRED). Verified at `0`, `300`, `479.9999694824219` and `700`.
+- `swish_auto_trans`, scalar, `--set`. A hidden parameter of the program: above 0 the blur follows the eased move, as with `auto_trans` 1 (INFERRED). Verified at `0`, `0.5`, `1.5` and `2`.
+- `cset_opacity`: see the opacity popup. All three answers render on this stage. Verified at `1`, `2` and `3`.
+- `host_curve_values`, a file path, `--host-curve-values`. The curve file that `auto_trans` 0 reads the progress, the original's Wipe Percent, from. Without it the stage's constant curve file gives a Wipe Percent of 0 (MEASURED: exit 0). Verified with `auto_trans` 0 and curve files that hold a Wipe Percent of 35 and 50 percent (the curve values 22938 and 32768, the fraction times 65536), constant over the render.
+
+The verified transitions are 100, 120, 240 and 480 frames long (`--frames`), at the frames 0, 17, 25, 30, 40, 60, 90 and 120, at 64x32 and 50x7.
+
+```sh
+target/release/sapphire stage apply swishpan --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param direction=2 --param slow_in=0.3 --param overlap=0.2 --in clip.raw --out out.raw
 ```
 
 ## `S_TimeWarpRGB`
@@ -301,7 +369,10 @@ All of these end with exit 3 and an `unsupported` error naming the cause (MEASUR
 
 - a value outside the range `fx_run --describe-params` prints, or a wrong lane count;
 - a popup answer outside 1 to the item count (`POPUP-ANSWER-OUT-OF-RANGE`), or an opacity answer the stage's host arrangement does not cover;
-- a host value off the 1/65536 grid (`HOST-VALUE-OFF-GRID`);
+- a host value off the 1/65536 grid (`HOST-VALUE-OFF-GRID`), except on `width` of `glow`, `blur_mocha_mask` and `shift_host`;
 - the same program parameter given through both routes;
 - a keyed value on `trails_autogen`, a malformed key or two keys on one tick (a keyed value without `--fps` is exit 2);
-- a host curve sample that neither the given file nor the stage's identity curve can serve (`HOST-CURVE-SAMPLE-UNSERVED`).
+- a host curve sample that neither the given file nor the stage's identity curve can serve (`HOST-CURVE-SAMPLE-UNSERVED`);
+- on `swishpan`, a missing or unusable `--frames` or layer (`FRAMES-REQUIRED`, `FRAMES-TOO-SMALL` and the `LAYER-*` refusals of [Refusal labels](cli.md#refusal-labels)).
+
+A run of `flicker` without `--fps` is refused with `HOST-VALUE-MISSING` (exit 3).

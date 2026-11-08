@@ -34,6 +34,20 @@ fn params_of(c: &Corpus, prog: &str, sets: &[(&str, f32)]) -> BTreeMap<String, V
     cp.params.into_iter().map(|(n, l)| (lname(&n), l)).collect()
 }
 
+/// true when the parameter registered as RECORD_NAME is a normalize_scale parameter. The normalize_scale table is keyed by the
+/// program's own parameter name, which a layout rename can make differ from the registered (layout) name.
+fn is_ns(c: &Corpus, prog: &str, record_name: &str) -> bool {
+    if ns_of(prog, record_name).is_some() {
+        return true;
+    }
+    let ei = match c.find_effect(prog, None) {
+        Some(e) => e,
+        None => return false,
+    };
+    let (g, _) = fx_eval::layoutmerge::build_registered(c, ei, prog).unwrap();
+    g.params.iter().any(|q| q.layout_name == record_name && ns_of(prog, &q.name).is_some())
+}
+
 #[test]
 fn prev_brightness_unbound_is_registered_16_16() {
     if !effects_vecdir::have_all(&["record_extract/programs/programs.tsv", "fx_eval/data"]) {
@@ -127,7 +141,7 @@ fn table_unbound_lane_equals_registered_bits() {
             continue;
         }
         let col = |n: &str| f[hdr.iter().position(|h| *h == n).unwrap()];
-        if col("host_type") != "2" || col("record_name") == "-" || ns_of(col("program"), col("record_name")).is_some() {
+        if col("host_type") != "2" || col("record_name") == "-" || is_ns(&c, col("program"), col("record_name")) {
             continue;
         }
         if let Ok(b) = col("registered_value_bits").parse::<i64>() {

@@ -1,0 +1,12 @@
+[package]
+name = "warp_noise"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of builtin class warp_noise, one-channel and three-channel noise bodies, evaluated at constant arguments."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+fx_common = { path = "../../fx_common" }

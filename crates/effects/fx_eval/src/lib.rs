@@ -25,6 +25,7 @@ pub mod layoutmerge;
 pub mod parse;
 /// Native builders of the programs the thirteen styles reach (no program text is read)
 pub mod programs_native;
+pub mod svml_sin_avx2;
 pub mod svml_trig;
 /// the per-argument column of record (argcol_rs with ARGCOL-VACUOUS and the two tie-break guards), report-only
 pub mod argcol;

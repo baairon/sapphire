@@ -38,21 +38,47 @@ pub enum PlanMode {
     CpuDriver,
 }
 
-/// argument positions that only donate a type (fold.rs `can_fold` exemption): coerce_up and coerce_to arg 1, v3_to_v4_if4 arg 2 and up.
+/// argument positions that only donate a type (fold.rs `can_fold` exemption): coerce_up and coerce_to arg 1, coerce_up_a1 arg 1,
+/// v3_to_v4_if4 and v3_to_v4_if4_a arg 2 and up.
 pub fn donor_pos(prim: &str, k: usize) -> bool {
     match prim.strip_suffix("_if_needed").unwrap_or(prim) {
         "coerce_up" | "coerce_to" => k >= 1,
+        "coerce_up_a1" => k >= 1,
         "v3_to_v4_if4" => k >= 2,
+        "v3_to_v4_if4_a" => k >= 2,
         // class E: argument 0 of time_warp is the CLIP of the input (original text `time_warp (clip 0 4) f shift`), not an image dependency: MEASURED in TimeDisplace a and b
         "time_warp" => k == 0,
         _ => false,
     }
 }
 
+/// donor positions whose operand is a lane constant whatever the operand kind: every recorded plan prints the constant at these
+/// positions, for input, special and computed operands alike. coerce_to is not recorded and keeps the input and special rule.
+fn donor_any_kind(prim: &str, k: usize) -> bool {
+    match prim.strip_suffix("_if_needed").unwrap_or(prim) {
+        "coerce_up" => k >= 1,
+        "coerce_up_a1" => k >= 1,
+        "v3_to_v4_if4" => k >= 2,
+        "v3_to_v4_if4_a" => k >= 2,
+        _ => false,
+    }
+}
+
+/// The one decision for a type-only operand: true when the operand at position `k` of `prim` (a node of kind `kind`: "input",
+/// "special", "func", "auto" or "const") is passed as a -999 lane constant of its element count and is not an image dependency.
+/// Used by the compile (computed donors become constants, so a producer used only there is pruned), the plan print and the
+/// preserve-group predicate.
+pub fn donor_operand(prim: &str, k: usize, kind: &str) -> bool {
+    if old("DONOR") {
+        return false;
+    }
+    (donor_any_kind(prim, k) && kind != "const") || (donor_pos(prim, k) && matches!(kind, "input" | "special"))
+}
+
 /// a donor that is an input or special variable (not a computed node): no image dependency, printed as the -999 constant (, MEASURED on
 /// Time_Warp_RGB_Autogen: coerce_up arg 1 = Source prints `[ -999 -999 -999 -999 ]`, no convert-from-source)
 pub(crate) fn is_donor_arg(prim: &str, k: usize, kind: &str) -> bool {
-    !old("DONOR") && donor_pos(prim, k) && matches!(kind, "input" | "special")
+    donor_operand(prim, k, kind)
 }
 
 /// the exec-downsampled factor of a compiled program: 2^blur_res when the program has a constant node named `blur_res` (popup
@@ -94,7 +120,7 @@ pub fn nonlinewise(prim: &str) -> bool {
 
 /// classes seen writing in place in the r8 = 0 and r8 = 1 dumps (FITTED allow list; interp never did)
 fn inplace_ok(prim: &str) -> bool {
-    matches!(prim.strip_suffix("_if_needed").unwrap_or(prim), "*" | "+" | "-" | "/" | "abs" | "blur" | "get_prev_dest" | "hue_shift" | "hue_shift_preserve_luma" | "max" | "min" | "ncos" | "one_minus" | "sat_scale" | "save_prev_dest" | "screen_super" | "sharpen")
+    matches!(prim.strip_suffix("_if_needed").unwrap_or(prim), "*" | "+" | "-" | "/" | "abs" | "blur" | "get_prev_dest" | "hue_shift" | "hue_shift_preserve_luma" | "max" | "min" | "ncos" | "one_minus" | "overlay_super" | "sat_scale" | "save_prev_dest" | "screen" | "screen_super" | "sharpen")
 }
 
 fn random_access(prim: &str) -> bool {
@@ -149,6 +175,11 @@ fn fcode_n(cp: &CompiledProgram, idx: usize) -> u32 {
         return if ra { 3 } else { 2 };
     }
     2
+}
+
+/// The plan format of a node's image (2 plain image, 3 mip chain); a make_mipmap node read only linewise is format 2.
+pub fn node_format(cp: &CompiledProgram, idx: usize) -> u32 {
+    fcode_n(cp, idx)
 }
 
 /// (READ): the format propagation pass (walk: preorder, children in argument order, a node is marked visited after its
@@ -548,7 +579,9 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
                         // DONOR: the type donor prints as a constant -999 per channel of the donor and is not an image dependency
                         a.push(format!("[ {} ]", vec!["-999"; an.elnum.clamp(1, 4) as usize].join(" ")));
                     } else if an.kind == "special" && an.name == "Output" {
-                        a.push("[ -999 ]".to_string());
+                        // the destination operand prints one -999 per channel, except for v3_to_v4_if4, which reads only its lane count
+                        let lanes = if nd.prim.strip_suffix("_if_needed").unwrap_or(&nd.prim) == "v3_to_v4_if4" { 1 } else { an.elnum.clamp(1, 4) as usize };
+                        a.push(format!("[ {} ]", vec!["-999"; lanes].join(" ")));
                     } else if let Some(&ai) = (match it.alias { Some((ax, ad)) if x == ax => Some(ad), _ => item_of.get(&x).copied() }).as_ref() {
                         a.push(rf(storage[ai]));
                     } else if matches!(an.kind, "input" | "special") {
@@ -658,11 +691,11 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
         } else {
             out.push(body(its[0]));
         }
-        // top level frees after the last consumer command
+        // top level frees after the last consumer command, in the order of each image's last use inside the command (ties by operand position)
         for &i in its {
             for &d in &items[i].deps {
                 let s = storage[d];
-                if !local[s] && last_cmd.get(&s) == Some(&ci) && !freed.contains_key(&s) {
+                if !local[s] && last_cmd.get(&s) == Some(&ci) && last_use.get(&s) == Some(&gpos[i]) && !freed.contains_key(&s) {
                     freed.insert(s, true);
                     out.push(format!("({} {})", if is_head(s) { "unlock-preserved-images" } else { "free-images" }, rf(s)));
                 }

@@ -43,6 +43,8 @@ pub fn assumptions() -> Vec<Assumption> {
     ]
 }
 
+use fx_common::nanop::{fma231, fms213, NanOps};
+
 type V8 = [f32; 8];
 
 #[inline]
@@ -56,7 +58,7 @@ fn vload(x: &[f32], at: usize) -> V8 {
 fn vadd(a: &V8, b: &V8) -> V8 {
     let mut o = [0f32; 8];
     for i in 0..8 {
-        o[i] = a[i] + b[i];
+        o[i] = a[i].fadd(b[i]);
     }
     o
 }
@@ -65,10 +67,10 @@ fn vadd(a: &V8, b: &V8) -> V8 {
 /// t[k] = v[k] + v[k+4] (vextractf128 + vaddps), u0 = t0 + t2 (vmovhlps + vaddps), u1 = t1 + t3, result u0 + u1 (shufps 0xf5 + vaddss).
 #[inline]
 fn hred(v: &V8) -> f32 {
-    let t = [v[0] + v[4], v[1] + v[5], v[2] + v[6], v[3] + v[7]];
-    let u0 = t[0] + t[2];
-    let u1 = t[1] + t[3];
-    u0 + u1
+    let t = [v[0].fadd(v[4]), v[1].fadd(v[5]), v[2].fadd(v[6]), v[3].fadd(v[7])];
+    let u0 = t[0].fadd(t[2]);
+    let u1 = t[1].fadd(t[3]);
+    u0.fadd(u1)
 }
 
 /// Initial window sum S0 = sum of x[0..len] (len = r + 1), exact groupings of the listing.
@@ -95,15 +97,15 @@ fn s0(x: &[f32], len: usize, edge: i32, phase: usize) -> f32 {
             // scalar from +0.0, then the vector registers (all zero) reduce to +0.0 and are added in front (vaddss xmm0, xmm7, xmm0)
             let mut acc = 0f32;
             for i in 0..len {
-                acc += x[i];
+                acc = acc.fadd(x[i]);
             }
-            return 0f32 + acc;
+            return 0f32.fadd(acc);
         }
         Some(p) => p,
     };
     let mut acc = 0f32;
     for i in 0..p {
-        acc += x[i];
+        acc = acc.fadd(x[i]);
     }
     let nb = (len - p) / 64;
     let end = p + 64 * nb;
@@ -123,10 +125,10 @@ fn s0(x: &[f32], len: usize, edge: i32, phase: usize) -> f32 {
             pp = vadd(&pp, &vload(x, end + 8 * k));
         }
         for i in (end + 8 * n8)..len {
-            acc += x[i];
+            acc = acc.fadd(x[i]);
         }
         let v = vadd(&pp, &qq);
-        hred(&v) + acc
+        hred(&v).fadd(acc)
     } else {
         // eight independent accumulators, combined ((a0+a1)+(a2+a3))+((a4+a5)+(a6+a7))
         let mut a = [[0f32; 8]; 8];
@@ -145,9 +147,9 @@ fn s0(x: &[f32], len: usize, edge: i32, phase: usize) -> f32 {
             v = vadd(&v, &vload(x, end + 8 * k));
         }
         for i in (end + 8 * n8)..len {
-            acc += x[i];
+            acc = acc.fadd(x[i]);
         }
-        hred(&v) + acc
+        hred(&v).fadd(acc)
     }
 }
 
@@ -173,7 +175,7 @@ pub fn box_row(x: &[f32], out: &mut [f32], r: i32, edge: i32, in_phase: usize) -
     let mirror = edge == EDGE_MIRROR;
     let s = s0(x, r + 1, edge, in_phase);
     // out[0]: mode 0 = S0, mode 1 = vfmsub213ss(2.0, S0, x[r]) = fma(2, S0, -x[r]) 
-    let mut y = if mirror { 2.0f32.mul_add(s, -x[r]) } else { s };
+    let mut y = if mirror { fms213(2.0, s, x[r]) } else { s };
 
     // head: steps i -> i+1 for i in 0..r, storing out[i] first (y_r is not stored yet)
     let hp = r / 2;
@@ -181,22 +183,22 @@ pub fn box_row(x: &[f32], out: &mut [f32], r: i32, edge: i32, in_phase: usize) -
         let i = 2 * j;
         out[i] = y;
         if mirror {
-            y = (x[r + 1 + i] - x[r - 1 - i]) + y;
+            y = x[r + 1 + i].fsub(x[r - 1 - i]).fadd(y);
             out[i + 1] = y;
-            y = (y + x[r + 2 + i]) - x[r - 2 - i];
+            y = y.fadd(x[r + 2 + i]).fsub(x[r - 2 - i]);
         } else {
-            y += x[r + 1 + i];
+            y = y.fadd(x[r + 1 + i]);
             out[i + 1] = y;
-            y += x[r + 2 + i];
+            y = y.fadd(x[r + 2 + i]);
         }
     }
     if r % 2 == 1 {
         let i = r - 1;
         out[i] = y;
         if mirror {
-            y = (y + x[r + 1 + i]) - x[r - 1 - i];
+            y = y.fadd(x[r + 1 + i]).fsub(x[r - 1 - i]);
         } else {
-            y += x[r + 1 + i];
+            y = y.fadd(x[r + 1 + i]);
         }
     }
 
@@ -206,14 +208,14 @@ pub fn box_row(x: &[f32], out: &mut [f32], r: i32, edge: i32, in_phase: usize) -
     for j in 0..mp {
         let i = r + 2 * j;
         out[i] = y;
-        y = (x[i + r + 1] - x[i - r]) + y;
+        y = x[i + r + 1].fsub(x[i - r]).fadd(y);
         out[i + 1] = y;
-        y = (y - x[i + 1 - r]) + x[i + r + 2];
+        y = y.fsub(x[i + 1 - r]).fadd(x[i + r + 2]);
     }
     if m % 2 == 1 {
         let i = r + 2 * mp;
         out[i] = y;
-        y = (y - x[i - r]) + x[i + r + 1];
+        y = y.fsub(x[i - r]).fadd(x[i + r + 1]);
     }
 
     // tail: outputs i = n-r-1+t for t in 0..=r; step t removes x[m+t] and (mirror) adds x[n-1-t]
@@ -225,12 +227,12 @@ pub fn box_row(x: &[f32], out: &mut [f32], r: i32, edge: i32, in_phase: usize) -
         }
         if mirror {
             if t % 2 == 0 {
-                y = (x[n - 1 - t] - x[m + t]) + y;
+                y = x[n - 1 - t].fsub(x[m + t]).fadd(y);
             } else {
-                y = (y + x[n - 1 - t]) - x[m + t];
+                y = y.fadd(x[n - 1 - t]).fsub(x[m + t]);
             }
         } else {
-            y -= x[m + t];
+            y = y.fsub(x[m + t]);
         }
     }
     Ok(())
@@ -239,9 +241,7 @@ pub fn box_row(x: &[f32], out: &mut [f32], r: i32, edge: i32, in_phase: usize) -
 /// Blend of the subpixel path : out[i] = fma(c, out[i], frac * z[i]) (vmulss frac*z, then vfmadd231ss c*out + that).
 /// The vector form (vmulps + vfmadd231ps) is element-wise identical.
 pub fn blend(out: &mut [f32], z: &[f32], c: f32, frac: f32) {
-    for i in 0..out.len() {
-        out[i] = c.mul_add(out[i], frac * z[i]);
-    }
+    fx_common::nanop::blend_in_place(out, z, c, frac);
 }
 
 /// The job record of K1 (SPEC 2d), explicit parameters.

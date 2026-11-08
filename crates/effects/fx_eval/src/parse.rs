@@ -643,7 +643,7 @@ pub fn read_vector_literal(text: &str) -> Result<Vec<f64>, ParseError> {
 /// MEASURED-FITTED: this reproduces 181 of 183 parameter-default literals of the 56 recorded dumps bit
 /// for bit, including the 5 parameters (4 literals) where the nearest f32 differs from the original lane (0.01, 0.05 in two programs,
 /// 0.112 and 0.9). The other 2 (`affect_alpha`) are the separate
-/// `default_to_1_if_postdiv` rule, not this path. The listing function is NOT located (UNKNOWN); the tokens
+/// `default_to_1_if_postdiv` rule, not this path. The flag handler stores the flag at plugin offsets 0x105aad to 0x105ab4; the tokens
 /// are `^%-?[0-9]*%.?[0-9]+$`, so no exponent form exists. Returns the f32 result widened to f64 so that a
 /// later `as f32` is exact.
 pub fn orig_number(text: &str) -> Option<f64> {

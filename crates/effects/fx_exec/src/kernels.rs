@@ -10,6 +10,7 @@ use plane_service as ps;
 pub const SUPPORTED: &[&str] = &[
     "hue_shift", "hue_shift_preserve_luma", "sat_scale", "v3_to_v4_if4", "+", "-", "*", "/", "max", "min", "abs", "negate", "if+", "if>", "one_minus", "comp_rgba",
     "screen_super", "element_of", "v2", "v3", "v4", "diff", "clamp", "interp",
+    "overlay_super", "screen",
 ];
 
 /// Classes the executor itself serves from HOST-FRAMES (no builtin crate involved).
@@ -19,6 +20,7 @@ pub fn normalize_class(class: &str) -> &str {
     // NV3-A6: the plan prints `screen_super_if_needed` as `screen_super`
     match class {
         "screen_super_if_needed" => "screen_super",
+        "overlay_super_if_needed" => "overlay_super",
         c => c,
     }
 }
@@ -34,6 +36,16 @@ pub(crate) fn kerr(class: &str, e: impl std::fmt::Debug) -> ExecError {
 
 pub(crate) fn unsupported(class: &str, reason: &str) -> ExecError {
     ExecError::Unsupported { class: class.to_string(), reason: reason.to_string() }
+}
+
+/// Text of the FRAME-SIZE-OVER-I32 refusal: `what` of `class` is `value`, and the kernel counts in 32 bits.
+pub fn frame_size_label(class: &str, what: &str, value: usize) -> String {
+    format!("FRAME-SIZE-OVER-I32 ({}: {} is {}, the kernel counts in 32 bits and takes at most {})", class, what, value, i32::MAX)
+}
+
+/// `value` as the i32 the kernel crates take. A value above i32::MAX is refused by name (FRAME-SIZE-OVER-I32), not wrapped.
+pub(crate) fn count_i32(class: &str, what: &str, value: usize) -> Result<i32, ExecError> {
+    i32::try_from(value).map_err(|_| ExecError::Shape(frame_size_label(class, what, value)))
 }
 
 /// The block the class virtual [vtable] returns for an operand, as modelled (NV5-A1, PAD-COPY): an image
@@ -221,6 +233,36 @@ fn screen_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, Exe
     Ok(Image { n, planes: outv })
 }
 
+fn overlay_k(args: &[Arg], tag: i32, n: usize, _kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 2, "overlay_super")?;
+    let n32 = count_i32("overlay_super", "the plane length", n)?;
+    let (pa, pb) = (args[0].planes(), args[1].planes());
+    let oa = overlay_super::Operand { count: args[0].count(), is_const: args[0].is_const(), consts: args[0].f32s(), planes: &pa };
+    let ob = overlay_super::Operand { count: args[1].count(), is_const: args[1].is_const(), consts: args[1].f32s(), planes: &pb };
+    let p = overlay_super::Params { nout: tag, n: n32 };
+    let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; tag.max(0) as usize];
+    {
+        let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|v| v.as_mut_slice()).collect();
+        overlay_super::render(&p, &oa, &ob, &mut outs).map_err(|e| kerr("overlay_super", e))?;
+    }
+    Ok(Image { n, planes: outv })
+}
+
+fn screen2_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 2, "screen")?;
+    let n32 = count_i32("screen", "the plane length", n)?;
+    let (pa, pb) = (args[0].planes(), args[1].planes());
+    let oa = screen::Operand { count: args[0].count(), is_const: args[0].is_const(), consts: args[0].f32s(), planes: &pa };
+    let ob = screen::Operand { count: args[1].count(), is_const: args[1].is_const(), consts: args[1].f32s(), planes: &pb };
+    let p = screen::Params { nout: tag, n: n32, vec_one: kp.vec_one, dst3_phase_bytes: kp.dst3_phase_bytes };
+    let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; tag.max(0) as usize];
+    {
+        let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|v| v.as_mut_slice()).collect();
+        screen::render(&p, &oa, &ob, &mut outs).map_err(|e| kerr("screen", e))?;
+    }
+    Ok(Image { n, planes: outv })
+}
+
 fn unary_k(class: &str, args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
     need(args, 1, class)?;
     if args[0].is_const() {
@@ -370,6 +412,8 @@ pub fn run_class(class: &str, tag: i32, args: &[Arg], n: usize, kp: &KParams) ->
         "if+" | "if>" => if_k(c, args, tag, n),
         "comp_rgba" => comp_k(args, tag, n, kp),
         "screen_super" => screen_k(args, tag, n, kp),
+        "overlay_super" => overlay_k(args, tag, n, kp),
+        "screen" => screen2_k(args, tag, n, kp),
         "element_of" => element_k(args, tag, n, kp),
         "v2" | "v3" | "v4" => vec_k(c, args, tag, n, kp),
         "interp" => interp_k(args, tag, n),

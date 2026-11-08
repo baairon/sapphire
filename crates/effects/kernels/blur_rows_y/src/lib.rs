@@ -8,6 +8,8 @@
 //! (assumption B-A4, see `base_phase`). Single worker (B-A6), cancel polls never abort (B-A1),
 //! half-height mode (K2) is out of scope.
 
+use fx_common::nanop::{fma231, fms213, NanOps};
+
 /// Edge rule of the window sums. Other values are rejected (the original asserts, lines).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Edge {
@@ -116,9 +118,7 @@ pub fn pass_y(job: &PassYJob, src: &[f32], dst: &mut [f32]) -> Result<(), RowsYE
                     column_window(&inp, &mut z, rb, e, phase(r14));
                     column_window(&inp, &mut out, ra, e, phase(r14));
                     let cp = job.c[p];
-                    for i in 0..h {
-                        out[i] = cp.mul_add(out[i], job.frac * z[i]);
-                    }
+                    fx_common::nanop::blend_in_place(&mut out[..h], &z[..h], cp, job.frac);
                     bufs[BUF_Z] = z;
                 } else {
                     column_window(&inp, &mut out, ra, e, phase(r14));
@@ -148,14 +148,14 @@ pub fn pass_y_inplace(job: &PassYJob, plane: &mut [f32]) -> Result<(), RowsYErro
 }
 
 fn reduce8(v: [f32; 8]) -> f32 {
-    let h = [v[0] + v[4], v[1] + v[5], v[2] + v[6], v[3] + v[7]];
-    let t0 = h[0] + h[2];
-    let t1 = h[1] + h[3];
-    t0 + t1
+    let h = [v[0].fadd(v[4]), v[1].fadd(v[5]), v[2].fadd(v[6]), v[3].fadd(v[7])];
+    let t0 = h[0].fadd(h[2]);
+    let t1 = h[1].fadd(h[3]);
+    t0.fadd(t1)
 }
 
 fn vadd(a: [f32; 8], inp: &[f32], at: usize) -> [f32; 8] {
-    core::array::from_fn(|i| a[i] + inp[at + i])
+    core::array::from_fn(|i| a[i].fadd(inp[at + i]))
 }
 
 /// S0 = sum of the first `len` samples (mode 1, mode 0), exact summation order.
@@ -177,12 +177,12 @@ pub fn prefix_sum(inp: &[f32], len: usize, edge: Edge, phase: usize) -> f32 {
     let mut acc = 0.0f32;
     if !vec_ok {
         for i in 0..len {
-            acc += inp[i];
+            acc = acc.fadd(inp[i]);
         }
-        return 0.0f32 + acc;
+        return 0.0f32.fadd(acc);
     }
     for i in 0..peel {
-        acc += inp[i];
+        acc = acc.fadd(inp[i]);
     }
     let end = len - ((len - peel) & 63);
     let nblk = (end - peel) / 64;
@@ -207,7 +207,7 @@ pub fn prefix_sum(inp: &[f32], len: usize, edge: Edge, phase: usize) -> f32 {
             for k in 0..nb8 {
                 x = vadd(x, inp, end + 8 * k);
             }
-            let v: [f32; 8] = core::array::from_fn(|i| x[i] + y[i]);
+            let v: [f32; 8] = core::array::from_fn(|i| x[i].fadd(y[i]));
             total = reduce8(v);
         }
         Edge::Zero => {
@@ -218,13 +218,13 @@ pub fn prefix_sum(inp: &[f32], len: usize, edge: Edge, phase: usize) -> f32 {
                     s[k] = vadd(s[k], inp, base + 8 * k);
                 }
             }
-            let s01: [f32; 8] = core::array::from_fn(|i| s[0][i] + s[1][i]);
-            let s23: [f32; 8] = core::array::from_fn(|i| s[2][i] + s[3][i]);
-            let s45: [f32; 8] = core::array::from_fn(|i| s[4][i] + s[5][i]);
-            let s67: [f32; 8] = core::array::from_fn(|i| s[6][i] + s[7][i]);
-            let l: [f32; 8] = core::array::from_fn(|i| s01[i] + s23[i]);
-            let r: [f32; 8] = core::array::from_fn(|i| s45[i] + s67[i]);
-            let mut v: [f32; 8] = core::array::from_fn(|i| l[i] + r[i]);
+            let s01: [f32; 8] = core::array::from_fn(|i| s[0][i].fadd(s[1][i]));
+            let s23: [f32; 8] = core::array::from_fn(|i| s[2][i].fadd(s[3][i]));
+            let s45: [f32; 8] = core::array::from_fn(|i| s[4][i].fadd(s[5][i]));
+            let s67: [f32; 8] = core::array::from_fn(|i| s[6][i].fadd(s[7][i]));
+            let l: [f32; 8] = core::array::from_fn(|i| s01[i].fadd(s23[i]));
+            let r: [f32; 8] = core::array::from_fn(|i| s45[i].fadd(s67[i]));
+            let mut v: [f32; 8] = core::array::from_fn(|i| l[i].fadd(r[i]));
             for k in 0..nb8 {
                 v = vadd(v, inp, end + 8 * k);
             }
@@ -232,9 +232,9 @@ pub fn prefix_sum(inp: &[f32], len: usize, edge: Edge, phase: usize) -> f32 {
         }
     }
     for i in (end + 8 * nb8)..len {
-        acc += inp[i];
+        acc = acc.fadd(inp[i]);
     }
-    total + acc
+    total.fadd(acc)
 }
 
 /// One window pass over a column: out[i] = sum of inp over [i-r, i+r] with the edge rule,
@@ -247,7 +247,7 @@ pub fn column_window(inp: &[f32], out: &mut [f32], r: usize, edge: Edge, phase: 
     let s0 = prefix_sum(inp, r + 1, edge, phase);
     let mir = edge == Edge::Mirror;
     // vfmsub213ss: 2.0 * S0 - in[r], one rounding
-    let mut y = if mir { s0.mul_add(2.0, -inp[r]) } else { s0 };
+    let mut y = if mir { fms213(2.0, s0, inp[r]) } else { s0 };
     // head: out[0..r)
     let p = r >> 1;
     for k in 0..p {
@@ -255,21 +255,21 @@ pub fn column_window(inp: &[f32], out: &mut [f32], r: usize, edge: Edge, phase: 
         let a = inp[r + 1 + 2 * k];
         if mir {
             let s = inp[r - 1 - 2 * k];
-            let y1 = (a - s) + y;
+            let y1 = a.fsub(s).fadd(y);
             out[2 * k + 1] = y1;
             let a2 = inp[r + 2 + 2 * k];
             let s2 = inp[r - 2 - 2 * k];
-            y = (y1 + a2) - s2;
+            y = y1.fadd(a2).fsub(s2);
         } else {
-            let y1 = y + a;
+            let y1 = y.fadd(a);
             out[2 * k + 1] = y1;
-            y = y1 + inp[r + 2 + 2 * k];
+            y = y1.fadd(inp[r + 2 + 2 * k]);
         }
     }
     if r > 2 * p {
         out[2 * p] = y;
         let a = inp[r + 2 * p + 1];
-        y = if mir { (y + a) - inp[r - 2 * p - 1] } else { y + a };
+        y = if mir { y.fadd(a).fsub(inp[r - 2 * p - 1]) } else { y.fadd(a) };
     }
     // middle: out[r .. M), M = h - r - 1
     let m = h - r - 1;
@@ -280,17 +280,17 @@ pub fn column_window(inp: &[f32], out: &mut [f32], r: usize, edge: Edge, phase: 
             out[r + 2 * k] = y;
             let a = inp[2 * r + 1 + 2 * k];
             let s = inp[2 * k];
-            let y1 = (a - s) + y;
+            let y1 = a.fsub(s).fadd(y);
             out[r + 2 * k + 1] = y1;
             let s2 = inp[2 * k + 1];
             let a2 = inp[2 * r + 2 + 2 * k];
-            y = (y1 - s2) + a2;
+            y = y1.fsub(s2).fadd(a2);
         }
         if n > 2 * q {
             out[r + 2 * q] = y;
             let s = inp[2 * q];
             let a = inp[2 * r + 1 + 2 * q];
-            y = (y - s) + a;
+            y = y.fsub(s).fadd(a);
         }
     }
     // tail: out[M ..= H-1], r + 1 outputs; the removal index starts at hn = M - r
@@ -301,15 +301,15 @@ pub fn column_window(inp: &[f32], out: &mut [f32], r: usize, edge: Edge, phase: 
         let s = inp[hn + 2 * k];
         if mir {
             let a = inp[h - 1 - 2 * k];
-            let y1 = (a - s) + y;
+            let y1 = a.fsub(s).fadd(y);
             out[m + 2 * k + 1] = y1;
             let a2 = inp[h - 2 - 2 * k];
             let s2 = inp[hn + 2 * k + 1];
-            y = (y1 + a2) - s2;
+            y = y1.fadd(a2).fsub(s2);
         } else {
-            let y1 = y - s;
+            let y1 = y.fsub(s);
             out[m + 2 * k + 1] = y1;
-            y = y1 - inp[hn + 2 * k + 1];
+            y = y1.fsub(inp[hn + 2 * k + 1]);
         }
     }
     if r + 1 > 2 * p2 {

@@ -111,10 +111,25 @@ pub fn normalize_scale_record(host: f32, width: f32, ns: f32, flag40: bool) -> f
     }
 }
 
-/// (stand-in, INFERRED from not measured): the record of an unbound normalize_scale parameter.
-/// The host default is text_default x 1920 / (2 x ns) on the 16.16 grid, then the record is normalize_scale_record of it.
+/// The registered host value of a normalize_scale slider whose program text default is `text_default`, lane 0:
+/// f32(d / f32(f32(2 / 1920) x ns)), the reference width 1920 and every operation a single-precision one.
+pub fn registered_ns_host(text_default: f32, ns: f32) -> f32 {
+    let t = 2.0f32 / 1920.0f32;
+    let k = t * ns;
+    text_default / k
+}
+
+/// The registered 16.16 word of a normalize_scale slider: the registered host value widened to f64, multiplied by 65536
+/// and truncated toward zero (NaN or out of range gives i32::MIN, as the conversion does).
+pub fn registered_ns_bits(text_default: f32, ns: f32) -> i64 {
+    let v = registered_ns_host(text_default, ns) as f64 * 65536.0;
+    if v.is_nan() || v >= 2147483648.0 || v <= -2147483649.0 { i32::MIN as i64 } else { v.trunc() as i64 }
+}
+
+/// The record of an unbound normalize_scale parameter: the host value is the registered 16.16 word over 65536,
+/// then the record is normalize_scale_record of it.
 pub fn unbound_default_record(text_default: f32, ns: f32, width: f32, flag40: bool) -> f32 {
-    let host = snap_16_16(text_default as f64 * 1920.0 / (2.0 * ns as f64));
+    let host = (registered_ns_bits(text_default, ns) as f64 / 65536.0) as f32;
     normalize_scale_record(host, width, ns, flag40)
 }
 
@@ -157,6 +172,20 @@ pub fn style_param_row(program: &str, param: &str) -> Option<StyleParamRow> {
 pub fn registered_fixed_slider(program: &str, param: &str) -> bool {
     let t2 = style_param_row(program, param).map(|r| r.host_type == 2).unwrap_or(false);
     t2 && (cfg!(feature = "df_ns_mut") || ns_of(program, param).is_none())
+}
+
+/// The value an unbound popup parameter of a registered program takes: f32(max(v - 1, 0)) for v the registered default
+/// checkout integer of the parameter (the one-based popup answer converted to the loop lane). None when the parameter has no registered
+/// default, in which case its text default stays. Mutants: pd_text_mut (None, the text default), pd_nominus_mut (v in place of v - 1).
+pub fn registered_popup_default(program: &str, param: &str) -> Option<f32> {
+    if cfg!(feature = "pd_text_mut") {
+        return None;
+    }
+    let v = effects_rtdata::style_param(program, param)?.default_checkout_integer?;
+    if cfg!(feature = "pd_nominus_mut") {
+        return Some(v as f32);
+    }
+    Some((v - 1).max(0) as f32)
 }
 
 /// the registered 16.16 default of an unbound fixed-slider parameter, f32(trunc(d x 65536) / 65536) of its
@@ -205,6 +234,17 @@ mod tests {
         assert_eq!(ns_of("Diffuse_Autogen", "diffuse_amount"), Some(2.0));
         assert_eq!(ns_of("Diffuse_Autogen", "blur_mask"), Some(4.0));
         assert_eq!(ns_of("Diffuse_Autogen", "rel_amount"), None);
+    }
+    #[test]
+    fn registered_ns_bits_rows() {
+        assert_eq!(registered_ns_host(2.0, 4.0).to_bits(), 0x43efffff);
+        assert_eq!(registered_ns_bits(2.0, 4.0), 31457278);
+        assert_eq!(registered_ns_bits(0.4, 4.0), 6291456);
+        assert_eq!(registered_ns_bits(0.2, 2.0), 6291456);
+        assert_eq!(registered_ns_bits(0.01, 4.0), 157286);
+        assert_eq!(registered_ns_bits(0.112, 4.0), 1761607);
+        assert_eq!(registered_ns_bits(0.0, 4.0), 0);
+        assert!((unbound_default_record(2.0, 4.0, 1920.0, false) - 2.0).abs() < 1e-4);
     }
     // (param, ns, host, W, H, compiled as recorded): TUPLES.tsv and T2_TUPLES.tsv (EQUAL rows, distinct values)
     const T: &[(&str, f32, f64, i32, i32, &str)] = &[
@@ -307,21 +347,24 @@ mod tests {
     if !effects_rtdata::have_tables() {
         return;
     }
-        // bits = trunc(text default x 1920 / (2 x ns) x 65536) for every NS host type 2 row with bits; disagreements listed
+        // bits = registered_ns_bits(text default, ns) for every NS host type 2 row with bits; disagreements listed
         let mut bad = Vec::new();
+        let mut checked = 0;
         for l in effects_rtdata::text("fx_eval/data/NS_PARAMS.tsv").lines().skip(1) {
             let f: Vec<&str> = l.split('\t').collect();
             if f.len() < 4 { continue; }
-            let (Ok(td), Ok(ns)) = (f[2].trim().parse::<f64>(), f[3].trim().parse::<f64>()) else { continue };
+            let (Ok(td), Ok(ns)) = (f[2].trim().parse::<f32>(), f[3].trim().parse::<f32>()) else { continue };
             if let Some(row) = style_param_row(f[0], f[1]) {
                 if row.host_type == 2 {
                     if let Some(bits) = row.registered_value_bits {
-                        let want = (td * 1920.0 / (2.0 * ns) * 65536.0).trunc() as i64;
+                        checked += 1;
+                        let want = registered_ns_bits(td, ns);
                         if want != bits { bad.push(format!("{} {} bits {} want {}", f[0], f[1], bits, want)); }
                     }
                 }
             }
         }
+        assert!(checked > 0);
         assert!(bad.is_empty(), "{:?}", bad);
     }
 }

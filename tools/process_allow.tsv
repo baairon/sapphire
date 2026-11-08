@@ -7,3 +7,7 @@ crates/effects/fx_exec/src/fxrun.rs	CLASS3-BUILDER-ON-ROUTE	runtime refusal labe
 crates/effects/fx_exec/src/fxrun.rs	CLASS3-BUILDERS-NOT-ON-ROUTE	runtime report label (no plane-count builder hits in the record)
 crates/effects/kernels/hue_shift_preserve_luma/src/lib.rs	HP1-V12,V13	the assumption ids HP1-V12 and HP1-V13 of one row; assumption ids do not change
 crates/effects/kernels/warp_render/tests/warp53_entry.rs	stage1_cases=	a key of the TOTAL line the test writes (cases whose first call-record stage is ok)
+crates/effects/rtdata/src/styles/flicker.rs	Wave R Phase	the host display name of the Flicker parameter wave_r_phase (a colour channel phase), recorded text
+crates/effects/rtdata/src/styles/flicker.rs	Wave G Phase	the host display name of the Flicker parameter wave_g_phase (a colour channel phase), recorded text
+crates/effects/rtdata/src/styles/flicker.rs	Wave B Phase	the host display name of the Flicker parameter wave_b_phase (a colour channel phase), recorded text
+crates/effects/kernels/v3_to_v4_if4_a/Cargo.toml	v3_to_v4_if4_a	the plan class name v3_to_v4_if4_a, which the crate implements

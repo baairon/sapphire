@@ -22,8 +22,8 @@ pub struct Combo {
     pub tag: i32,
 }
 
-/// Class combo tables (defined in effects_rtdata; EV-T). Selection is the first entry whose values equal
-/// the per-argument element counts (R3, MEASURED by EV-T over 27,650 emulator cases).
+/// Class combo tables (defined in effects_rtdata). Selection is the first entry whose values equal
+/// the per-argument element counts.
 #[derive(Debug, Clone, Default)]
 pub struct ComboTable {
     pub classes: HashMap<String, Vec<Combo>>,
@@ -572,7 +572,23 @@ pub struct ArgView2 {
 fn default_lanes(g: &Genotype, n: &GNode, param: Option<&String>, bound: bool) -> Result<Vec<f32>, CompileError> {
     let k = n.nlanes.clamp(1, 4);
     let mut v: Vec<f32> = (0..k).map(|i| n.lanes[i]).collect();
+    if !bound && flagged_default_to_1(g, n) {
+        // DEFAULT-TO-1-READ: the original's parameter-flag handler for default_to_1_if_postdiv (plugin offsets
+        // 0x105aad to 0x105ab4) stores 1.0 into every default cell of the record with no condition; the compile's
+        // postdivide insertion is not tested. Every lane of the parameter takes 1.0.
+        for x in v.iter_mut() {
+            *x = 1.0;
+        }
+    }
     if let Some(p) = param {
+        if !bound {
+            if let Some(x) = crate::units::registered_popup_default(&g.name, p) {
+                // an unbound popup takes its registered default, not the program text's
+                for l in v.iter_mut() {
+                    *l = x;
+                }
+            }
+        }
         if !bound && crate::units::registered_fixed_slider(&g.name, p) {
             for x in v.iter_mut() {
                 *x = crate::units::registered_16_16(&g.name, p, *x).map_err(|msg| CompileError { msg })?;
@@ -580,6 +596,11 @@ fn default_lanes(g: &Genotype, n: &GNode, param: Option<&String>, bound: bool) -
         }
     }
     Ok(v)
+}
+
+/// True when the node is the value node of a parameter carrying the `default_to_1_if_postdiv` flag.
+pub fn flagged_default_to_1(g: &Genotype, n: &GNode) -> bool {
+    g.params.iter().any(|p| p.node == Some(n.index) && p.flags.iter().any(|f| f == "default_to_1_if_postdiv"))
 }
 
 
@@ -634,7 +655,6 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
     }
     let g = &g_owned;
     let mut eff = opt.clone();
-    let mut pd1: HashSet<usize> = HashSet::new();
     if opt.minimal_context {
         for i in &g.inputs {
             if let Some(&c) = opt.bound_elnum.get(&i.name) {
@@ -649,11 +669,6 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
         }
         if g.flags.iter().any(|f| f == "no_alpha_only") {
             eff.input_elnum.entry("Source".to_string()).or_insert(3);
-        }
-        for p in &g.params {
-            if let (Some(ni), true) = (p.node, p.flags.iter().any(|f| f == "default_to_1_if_postdiv")) {
-                pd1.insert(ni);
-            }
         }
     }
     let ranges_off = opt.ranges_off || crate::ranges::ranges_off_env();
@@ -749,9 +764,6 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                 // the registration is keyed by the layout name (Trails' fade is registered as prev_brightness)
                 let lname = g.params.iter().find(|q| q.node == Some(gn.index)).map(|q| if q.layout_name.is_empty() { q.name.clone() } else { q.layout_name.clone() });
                 let mut vals = default_lanes(g, gn, lname.as_ref(), bound_p)?;
-                if pd1.contains(&gn.index) {
-                    vals = vec![1.0];
-                }
                 let init_cell = vals.clone();
                 let mut row_applied = false;
                 if let Some(p) = pname.get(&gn.index) {
@@ -1197,6 +1209,28 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
             return Err(CompileError { msg: d.clone() });
         }
     }
+    // type-only operands: a computed node at a donor position is replaced by a -999 lane constant of its element count, so the
+    // operand is not a data dependency and a producer used only there is not reached from the root
+    for id in 0..nodes.len() {
+        if nodes[id].kind != CKind::Func || nodes[id].is_const || nodes[id].alias.is_some() {
+            continue;
+        }
+        let prim = nodes[id].name.clone();
+        for k in 0..nodes[id].args.len() {
+            let a = nodes[id].args[k];
+            if nodes[a].kind != CKind::Func || nodes[a].is_const || nodes[a].alias.is_some() {
+                continue;
+            }
+            if !crate::cpuplan::donor_operand(&prim, k, "func") {
+                continue;
+            }
+            let el = nodes[a].elnum.unwrap_or(1).clamp(1, 4);
+            let nid = nodes.len();
+            let bits = (-999.0f32).to_bits();
+            nodes.push(CNode { id: nid, kind: CKind::Const, name: String::new(), param: None, args: vec![], lanes: [bits; 4], nlanes: el as usize, elnum: Some(el), alias: None, is_const: true, auto: None, folded: false, cls: String::new(), input_pos: 0 });
+            nodes[id].args[k] = nid;
+        }
+    }
     let mut final_root = top;
     while let Some(k) = nodes[final_root].alias {
         match nodes[final_root].args.get(k) {
@@ -1639,7 +1673,7 @@ impl CompiledProgram {
 pub fn fixed_out(class: &str) -> Option<i32> {
     match class {
         "static2" | "get_frame_half_dims" => Some(2),
-        "get_frame_number" | "get_time" | "get_percent_time" | "get_frames_per_second" | "get_aspect_ratio" | "mocha_render" => Some(1),
+        "get_frame_number" | "get_time" | "get_percent_time" | "get_total_frames" | "get_frames_per_second" | "get_aspect_ratio" | "mocha_render" => Some(1),
         _ => None,
     }
 }

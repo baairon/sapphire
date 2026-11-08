@@ -10,6 +10,4 @@ description = "Port of the blur core driver arithmetic and helpers."
 path = "src/lib.rs"
 
 [dependencies]
-
-[dev-dependencies]
 fx_common = { path = "../../fx_common" }

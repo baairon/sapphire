@@ -69,8 +69,16 @@ fn table_is_embedded_and_complete() {
     }
     // the copy of the full table (test data); the defined rows are compared with it in t_native_defs.rs
     let t = RangeTable::parse(effects_rtdata::text("fx_eval/data/PARAM_RANGES.tsv"));
-    assert_eq!(t.rows.len(), 437, "236 range rows (REC values for three Warp_Perspective_Autogen layout rows) plus 74 Sharpen rows");
-    assert_eq!(t.programs(), vec!["Hue_Sat_Bright_Autogen", "Diffuse_Autogen", "Trails_Autogen", "Time_Warp_RGB_Autogen", "Transform_and_Blur_Autogen", "Blur_Motion_Curves_No_Transform_Autogen", "Blur_Color_Autogen", "Blur_Mono_Autogen", "Distort_RGB_Autogen", "Warp_Perspective_Autogen", "Drop_Shadow", "Hue_Sat_Bright", "Diffuse", "Trails", "Time_Warp_RGB", "Transform_and_Blur", "Blur_Motion_Curves_No_Transform", "Sharpen_Fast_Autogen", "Sharpen_Fast", "Sharpen_Best_Quality", "Sharpen_Best_Quality_Autogen"]);
+    // the first-set programs, in table order (the copy may append rows of further programs, which the tree defines)
+    const FIRST_SET: [&str; 21] = ["Hue_Sat_Bright_Autogen", "Diffuse_Autogen", "Trails_Autogen", "Time_Warp_RGB_Autogen", "Transform_and_Blur_Autogen", "Blur_Motion_Curves_No_Transform_Autogen", "Blur_Color_Autogen", "Blur_Mono_Autogen", "Distort_RGB_Autogen", "Warp_Perspective_Autogen", "Drop_Shadow", "Hue_Sat_Bright", "Diffuse", "Trails", "Time_Warp_RGB", "Transform_and_Blur", "Blur_Motion_Curves_No_Transform", "Sharpen_Fast_Autogen", "Sharpen_Fast", "Sharpen_Best_Quality", "Sharpen_Best_Quality_Autogen"];
+    let first_rows = t.rows.iter().filter(|r| FIRST_SET.contains(&r.program.as_str())).count();
+    assert_eq!(first_rows, 437, "236 range rows (REC values for three Warp_Perspective_Autogen layout rows) plus 74 Sharpen rows");
+    let progs = t.programs();
+    let first_progs: Vec<&str> = progs.iter().map(|s| s.as_str()).filter(|p| FIRST_SET.contains(p)).collect();
+    assert_eq!(first_progs, FIRST_SET.to_vec());
+    for p in progs.iter().filter(|p| !FIRST_SET.contains(&p.as_str())) {
+        assert!(effects_rtdata::range_defs().any(|d| d.program == p.as_str()), "{}: copy rows of a program the tree does not define", p);
+    }
     // the default table is REAL: Drop_Shadow shift is unbounded (min * in the layout text)
     let r = t.lookup("Drop_Shadow", "shift").unwrap();
     assert_eq!((r.lanes, r.min, r.max), (2, -1.0e6, 1.0e6));

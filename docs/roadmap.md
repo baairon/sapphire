@@ -11,6 +11,8 @@ The work that every effect shares, finished or in progress:
 - **CPU speed.** The effect stages render in process and the kernels use all cores. `blur_motion_curves_no_transform_autogen` went from 52 s to 1.1 s per 1080p frame (MEASURED, [Speed](guide.md#speed)).
 - **Keyframes.** Every effect stage but `trails_autogen` takes keyed values ([keyframes](parameters-guide.md#keyframed-values)). Values between keys are INFERRED.
 - **Device path.** OpenCL kernels for the heavy operations, byte identical to the CPU path, MEASURED on PoCL; speed on a real GPU is not yet measured ([device](guide.md#rendering-on-a-device)).
+- **Time and transitions.** The stages give each frame its time from `--fps`, and a transition stage takes a second clip and the length of the transition ([transition stages](cli.md#transition-stages)). `S_SwishPan` is the first transition.
+- **Opacity answers.** A stage can run each opacity answer with the host arrangement of that answer's own recorded renders ([effects provider](stages.md#effects-provider)); `S_Glow` and `S_SwishPan` render all three.
 - **Determinism across processors.** The golden hashes of `tools/fx_golden.py` are checked in CI on Linux, macOS and Windows, so the output bytes are held equal across processors; the effect crates avoid the platform math library for the same reason.
 
 ## Done
@@ -22,26 +24,29 @@ Each of these matches the original bit for bit on every compared case ([what tha
 - `S_Diffuse`
 - `S_DistortRGB`
 - `S_DropShadow`
+- `S_Flicker`
+- `S_Glow`
 - `S_HueSatBright`
 - `S_Sharpen`
+- `S_SwishPan`
 - `S_TimeWarpRGB`
 - `S_Trails`
 - `S_WarpPerspective`
 
 ## Tier 1: essential
 
-Ranks 1 to 8. The effects most edits reach for first. Three are done; the other five are next.
+Ranks 1 to 8. The effects most edits reach for first. Six are done; the other two are next.
 
 | Rank | Effect | Use | Status |
 |---|---|---|---|
 | 1 | `Shake` | Impact shakes, hits and dramatic moments | planned |
-| 2 | `S_Glow` | Bright highlights and a cinematic glow | planned |
+| 2 | `S_Glow` | Bright highlights and a cinematic glow | done |
 | 3 | `BlurMoCurves` | Smooth motion blur for fast, speed-ramped edits | done |
 | 4 | `S_DistortRGB` | RGB splits and chromatic distortion | done |
-| 5 | `S_Flicker` | Flashes and intensity in time with a beat | planned |
+| 5 | `S_Flicker` | Flashes and intensity in time with a beat | done |
 | 6 | `S_Sharpen` | Crisp, detailed footage | done |
 | 7 | `S_DissolveShake` | Shaky transitions between clips | planned |
-| 8 | `S_SwishPan` | Fast directional transitions | planned |
+| 8 | `S_SwishPan` | Fast directional transitions | done |
 
 ## Tier 2: very useful
 

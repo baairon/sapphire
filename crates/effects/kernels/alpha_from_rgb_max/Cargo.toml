@@ -1,0 +1,7 @@
+[package]
+name = "alpha_from_rgb_max"
+version = "0.1.0"
+edition = "2021"
+description = "CPU render of the alpha-from-rgb-max builtin: copies the colour channels and derives the fourth channel as scale times the per-pixel maximum of the first three."
+
+[dependencies]

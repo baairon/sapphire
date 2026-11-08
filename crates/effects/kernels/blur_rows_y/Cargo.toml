@@ -6,6 +6,4 @@ edition = "2021"
 publish = false
 
 [dependencies]
-
-[dev-dependencies]
 fx_common = { path = "../../fx_common" }

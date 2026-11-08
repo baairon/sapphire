@@ -25,3 +25,8 @@ path = "src/bin/fake_vfx.rs"
 [dependencies]
 neutral-ffmpeg = { path = "../neutral-ffmpeg" }
 fx_exec = { path = "../effects/fx_exec" }
+
+[features]
+# the registered popup default mutants; each must fail the manifest default test
+pd_text_mut = ["fx_exec/pd_text_mut"]
+pd_nominus_mut = ["fx_exec/pd_nominus_mut"]

@@ -251,7 +251,7 @@ pub fn unsupported_classes(cp: &CompiledProgram) -> Vec<String> {
                 v.push(c);
             }
         }
-        if nd.kind == "special" && nd.name != "xy" && !v.contains(&nd.name) {
+        if nd.kind == "special" && nd.name != "xy" && nd.name != "Output" && !v.contains(&nd.name) {
             v.push(format!("special:{}", nd.name));
         }
     }
@@ -553,6 +553,12 @@ fn eval_graph_core(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, hos
                     };
                     (v, tag)
                 };
+                // a make_mipmap node whose consumers all read it linewise has the plain image format: its value is the base image
+                let outval = match outval {
+                    Val::Mip(m) if c == "make_mipmap" && nd.idx != cp.root && fx_eval::cpuplan::node_format(cp, nd.idx) == 2 => Val::Img(Rc::new(m.base.clone())),
+                    Val::DevMip(d) if c == "make_mipmap" && nd.idx != cp.root && fx_eval::cpuplan::node_format(cp, nd.idx) == 2 => Val::Img(Rc::new(d.materialize()?.base.clone())),
+                    other => other,
+                };
                 let out_channels = match &outval {
                     Val::Img(i) => i.channels(),
                     Val::Mip(m) => m.channels,
@@ -576,6 +582,11 @@ fn eval_graph_core(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, hos
                     return Err(ExecError::Shape(format!("xy has {} channels x {} samples, needed 2 x {}", im.channels(), im.n, n)));
                 }
                 Val::Img(Rc::new(im))
+            }
+            "special" if nd.name == "Output" => {
+                // the destination type donor: a constant operand of -999 in each of the destination's channels (the plan text prints
+                // the same lanes); classes read only its lane count
+                Val::Const { n: nd.elnum.clamp(1, 4) as usize, lanes: [(-999.0f32).to_bits(); 4] }
             }
             other => return Err(ExecError::Unsupported { class: format!("special:{}", nd.name), reason: format!("plan node kind {}", other) }),
         };

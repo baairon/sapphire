@@ -5,7 +5,7 @@
 //! function; the programs' argument order is the plan's order): blur_warp (mip, p1 [2], p2 [2], two cells, modes [2],
 //! [flag_cell_a], [unused]); warp_rel (mip, coords [2], modes [2], [flag]); blur (src, amount [2], shape, scale [k], subpixel).
 
-use crate::kernels::{block_of, flat_roi, kerr, need, pad_fill, unsupported};
+use crate::kernels::{block_of, count_i32, flat_roi, kerr, need, pad_fill, unsupported};
 use crate::types::{Arg, ExecError, Geom, Image, KParams, MipImage};
 use plane_service as ps;
 
@@ -13,7 +13,7 @@ use plane_service as ps;
 pub const WIRED: &[&str] = &[
     "make_mipmap", "blur_warp", "warp_rel", "static2", "monochrome", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "rotate", "max_element",
     "min_element", "blur", "dissolve", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "v3_to_v4", "sharpen", "monochrome_a",
-    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "grad", "perspective", "perspective_alpha", "warp", "postdivide",
+    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "grad", "perspective", "perspective_alpha", "warp", "postdivide", "glow", "alpha_from_rgb_max", "append", "v3_to_v4_if4_a", "get_alpha",
 ];
 
 /// Result of one run-primitive: a plain planar image or the ripmap object of make_mipmap.
@@ -1184,6 +1184,131 @@ fn postdivide_k(args: &[Arg], tag: i32, n: usize) -> Result<Image, ExecError> {
     Ok(Image { n, planes: out.into_iter().map(|p| p.into_iter().map(f32::from_bits).collect()).collect() })
 }
 
+/// v3_to_v4_if4_a(source, alpha, extra): the selected combo row runs its pass through the plane service. Pass F reads the
+/// channel count of the second argument (INFERRED to be the value the class holds at this+0x70).
+fn v3_to_v4_if4_a_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 3, "v3_to_v4_if4_a")?;
+    let counts = [args[0].count(), args[1].count(), args[2].count()];
+    let combo = v3_to_v4_if4_a::select_combo(counts).ok_or(ExecError::NoCombo { class: "v3_to_v4_if4_a".into(), operands: counts.to_vec() })?;
+    if v3_to_v4_if4_a::COMBOS[combo].out as i32 != tag {
+        return Err(ExecError::Kernel { class: "v3_to_v4_if4_a".into(), msg: format!("selector tag {} differs from the row result count {}", tag, v3_to_v4_if4_a::COMBOS[combo].out) });
+    }
+    let (p0, p1) = (args[0].planes(), args[1].planes());
+    let (v0, v1) = (args[0].bits().to_vec(), args[1].bits().to_vec());
+    let blocks = [block_of(&args[0], &p0, &v0), block_of(&args[1], &p1, &v1)];
+    let p = v3_to_v4_if4_a::Params { combo, host: ps::Host { in_pool: kp.in_pool }, roi: flat_roi(n), this_nch: args[1].count() };
+    let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; tag.max(0) as usize];
+    {
+        let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|v| v.as_mut_slice()).collect();
+        v3_to_v4_if4_a::render(&p, &blocks, &mut outs).map_err(|e| kerr("v3_to_v4_if4_a", e))?;
+    }
+    Ok(Image { n, planes: outv })
+}
+
+/// get_alpha(source): plane 3 of a four-channel source, plane 1 of a two-channel source, else the constant 1.0 plane. One result plane.
+fn get_alpha_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 1, "get_alpha")?;
+    if tag != 1 {
+        return Err(ExecError::Kernel { class: "get_alpha".into(), msg: format!("selector tag {} differs from the single result plane", tag) });
+    }
+    let p0 = args[0].planes();
+    let v0 = args[0].bits().to_vec();
+    let blocks = [block_of(&args[0], &p0, &v0)];
+    let p = get_alpha::Params { count: args[0].count(), host: ps::Host { in_pool: kp.in_pool }, roi: flat_roi(n) };
+    let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; 1];
+    {
+        let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|v| v.as_mut_slice()).collect();
+        get_alpha::render(&p, &blocks, &mut outs).map_err(|e| kerr("get_alpha", e))?;
+    }
+    Ok(Image { n, planes: outv })
+}
+
+/// glow (render body of the glow layer class), called through the crate's `render_full` with the explicit parameters the
+/// plan binds. Argument order: source, thresholds [1 or 3], stretch [2], widths [1 or 3], brightness [1 or 3], subpixel, edge mode,
+/// show threshold (eight operands, as the program text calls it). The combination tag is the plane count (1 or 3). Render scale and
+/// aspect come from the host record fields of `KParams`; the edge mode is the plan's operand.
+fn glow_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 8, "glow")?;
+    let render_scale = if kp.blur_render_scale > 0 { kp.blur_render_scale } else { count_i32("glow", "the frame width", w)? };
+    let src = image_or_const(&args[0], w * h, "glow")?;
+    let c = tag.max(0) as usize;
+    if (c != 1 && c != 3) || src.channels() < c || src.n != w * h {
+        return Err(ExecError::Shape("glow: the combination tag must be 1 or 3 and the source must hold that many planes".into()));
+    }
+    let lanes = |a: &Arg, what: &str| -> Result<[f32; 3], ExecError> {
+        let mut v = [0.0f32; 3];
+        for (i, x) in v.iter_mut().enumerate().take(if c == 1 { 1 } else { 3 }) {
+            *x = const_lane(a, if a.count() == 1 { 0 } else { i }, "glow", what)?;
+        }
+        Ok(v)
+    };
+    let gp = glow_layer::GlowParams {
+        thresholds: lanes(&args[1], "thresholds")?,
+        width_xy: [const_lane(&args[2], 0, "glow", "stretch")?, const_lane(&args[2], if args[2].count() == 1 { 0 } else { 1 }, "glow", "stretch")?],
+        width: lanes(&args[3], "widths")?,
+        brightness: lanes(&args[4], "brightness")?,
+        subpixel: cvt_i32(const_lane(&args[5], 0, "glow", "subpixel")?),
+        edge_mode: cvt_i32(const_lane(&args[6], 0, "glow", "edge_mode")?),
+        show_threshold: cvt_i32(const_lane(&args[7], 0, "glow", "show_threshold")?),
+        plane_count: c,
+        render_scale,
+        aspect: kp.blur_aspect,
+    };
+    let sp: Vec<glow_layer::Plane> = (0..c).map(|k| glow_layer::Plane { data: &src.planes[k], width: w, height: h, stride: w }).collect();
+    let mut outv: Vec<Vec<f32>> = vec![vec![0.0; w * h]; c];
+    {
+        let mut dp: Vec<glow_layer::PlaneMut> = outv.iter_mut().map(|v| glow_layer::PlaneMut { data: v.as_mut_slice(), width: w, height: h, stride: w }).collect();
+        glow_layer::render_full(&gp, &sp, &mut dp).map_err(|e| kerr("glow", e))?;
+    }
+    Ok(Image { n: w * h, planes: outv })
+}
+
+/// alpha_from_rgb_max rgb amount output: mode 4 of the builtin (the mode word of the object is 4 on every recorded plan). The
+/// amount is the scale; the output operand only carries the output channel count, which the combo tag gives (4 for the
+/// recorded 4 channel input). Output planes 0 to 2 copy the input colour channels, plane 3 is the scaled maximum of the three.
+fn alpha_from_rgb_max_k(args: &[Arg], tag: i32, n: usize) -> Result<Image, ExecError> {
+    need(args, 3, "alpha_from_rgb_max")?;
+    if tag != 4 {
+        return Err(unsupported("alpha_from_rgb_max", "only the 4 channel output combo is wired"));
+    }
+    let scale = const_lane(&args[1], 0, "alpha_from_rgb_max", "amount")?;
+    let planes = args[0].planes();
+    let bits = args[0].bits();
+    let src = if args[0].is_const() {
+        alpha_from_rgb_max::Source::Const { bits: &bits[..(args[0].count().clamp(0, 4) as usize)], is_int: false }
+    } else {
+        alpha_from_rgb_max::Source::Planes(&planes)
+    };
+    let p = alpha_from_rgb_max::Params { mode: 4, nch: args[0].count(), scale, nout: tag, n };
+    let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; 4];
+    {
+        let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|v| v.as_mut_slice()).collect();
+        alpha_from_rgb_max::run(&p, &src, &mut outs).map_err(|e| kerr("alpha_from_rgb_max", format!("{:?}", e)))?;
+    }
+    Ok(Image { n, planes: outv })
+}
+
+/// `append` (a, b): the planes of `a` followed by the planes of `b`, at most four; constants are broadcast.
+fn append_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 2, "append")?;
+    let (first, second) = (args[0].count().max(0) as usize, args[1].count().max(0) as usize);
+    let nout = tag.max(0) as usize;
+    if nout == 0 || nout > 4 {
+        return Err(ExecError::Shape(format!("append: combo tag {} outside 1..4", tag)));
+    }
+    let p = ops_vec::Params { host: ps::Host { in_pool: kp.in_pool }, roi: flat_roi(n) };
+    let planes: Vec<Vec<&[f32]>> = args.iter().take(2).map(|a| a.planes()).collect();
+    let vals: Vec<Vec<u32>> = args.iter().take(2).map(|a| a.bits().to_vec()).collect();
+    let blocks: Vec<ps::Block> = args.iter().take(2).enumerate().map(|(i, a)| block_of(a, &planes[i], &vals[i])).collect();
+    let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; 4];
+    {
+        let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|v| v.as_mut_slice()).collect();
+        ops_vec::append::render(&p, &blocks, first, second, &mut outs).map_err(|e| kerr("append", e))?;
+    }
+    outv.truncate(nout);
+    Ok(Image { n, planes: outv })
+}
+
 /// Runs one wired class. `tag` is the selector's result; `(w, h)` the frame.
 pub fn run_wired(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, usize), kp: &KParams) -> Result<Out, ExecError> {
     let (w, h) = dims;
@@ -1216,6 +1341,11 @@ pub fn run_wired(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, us
         "perspective_alpha" => Out::Img(perspective_alpha_k(args, w, h, kp)?),
         "warp" => Out::Img(warp_k(args, tag, w, h, kp)?),
         "postdivide" => Out::Img(postdivide_k(args, tag, n)?),
+        "glow" => Out::Img(glow_k(args, tag, w, h, kp)?),
+        "alpha_from_rgb_max" => Out::Img(alpha_from_rgb_max_k(args, tag, n)?),
+        "append" => Out::Img(append_k(args, tag, n, kp)?),
+        "v3_to_v4_if4_a" => Out::Img(v3_to_v4_if4_a_k(args, tag, n, kp)?),
+        "get_alpha" => Out::Img(get_alpha_k(args, tag, n, kp)?),
         other => return Err(unsupported(other, "not a wired class")),
     })
 }

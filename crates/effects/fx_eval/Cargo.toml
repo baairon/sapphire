@@ -43,11 +43,15 @@ df_round_mut = []
 df_f32text_mut = []
 df_bound_mut = []
 df_ns_mut = []
+# mutants of the registered popup default rule (never in a shipped build)
+pd_text_mut = []
+pd_nominus_mut = []
 
 [dependencies]
 effects_rtdata = { path = "../rtdata" }
 libm_sincos = { path = "../kernels/libm_sincos" }
 tickmap = { path = "../kernels/tickmap" }
+warp_noise = { path = "../kernels/warp_noise" }
 
 [dev-dependencies]
 effects_vecdir = { path = "../vecdir" }
