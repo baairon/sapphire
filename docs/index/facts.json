@@ -372,28 +372,28 @@
    "source": "docs/data/effect_names.tsv rows"
   },
   "effects_listed": {
-   "value": 10,
-   "text": "10",
+   "value": 13,
+   "text": "13",
    "source": "docs/data/effects_status.tsv rows"
   },
   "effects_rebuilt": {
-   "value": 10,
-   "text": "10",
+   "value": 13,
+   "text": "13",
    "source": "docs/data/effects_status.tsv rows with state REBUILT"
   },
   "effects_counted_rows": {
-   "value": 425,
-   "text": "425",
+   "value": 521,
+   "text": "521",
    "source": "docs/data/effects_status.tsv sum of counted_rows"
   },
   "effects_frozen_members": {
-   "value": 989,
-   "text": "989",
+   "value": 1337,
+   "text": "1,337",
    "source": "docs/data/effects_status.tsv sum of frozen_members"
   },
   "effects_rerun_units": {
-   "value": 1039,
-   "text": "1,039",
+   "value": 1387,
+   "text": "1,387",
    "source": "docs/data/effects_status.tsv sum of landing_rerun_units"
   },
   "params_total": {
@@ -447,8 +447,8 @@
    "source": "crates/lift-* folders"
   },
   "tests_scan_total": {
-   "value": 5693,
-   "text": "5,693",
+   "value": 5717,
+   "text": "5,717",
    "source": "text scan of crates/ (#[test] lines), not a test run"
   },
   "tests_scan_lift_1": {
@@ -507,8 +507,8 @@
    "source": "text scan of crates/ (#[test] lines), not a test run"
   },
   "tests_scan_neutral_handoff": {
-   "value": 234,
-   "text": "234",
+   "value": 258,
+   "text": "258",
    "source": "text scan of crates/ (#[test] lines), not a test run"
   },
   "tests_scan_neutral_parity": {

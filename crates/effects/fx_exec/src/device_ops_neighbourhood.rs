@@ -822,6 +822,7 @@ fn blur_corpus() -> Vec<SelfCase> {
             }
         }
     }
+    out.extend(blur_nan_pair_cases());
     // a constant source (the CPU lays it out as an image of constant planes)
     for &(w, h) in &[(3usize, 5usize), (16, 16), (45, 23)] {
         for lanes in [&[0.5f32][..], &[0.25, 2.0, -1.0][..]] {
@@ -833,6 +834,48 @@ fn blur_corpus() -> Vec<SelfCase> {
                 consts: vec![cst(0, lanes), cst(1, &[0.9, 0.6]), cst(2, &[2.0]), cst(3, &[1.0]), cst(4, &[0.0])],
                 kp: Some(kp_blur(1, 0)),
             });
+        }
+    }
+    out
+}
+
+/// Planes in which NaNs of different signs and payloads (signalling and quiet) sit between finite values and infinities, so
+/// window sums see two NaN operands in one add and subtract, and infinity minus infinity makes fresh NaNs. The device result
+/// must equal the CPU bit for bit, payloads included.
+pub fn blur_nan_pair_cases() -> Vec<SelfCase> {
+    const NANS: [u32; 6] = [0x7f80_0001, 0xffc0_0000, 0x7fc0_0002, 0xff80_0003, 0x7fa0_0000, 0xffff_ffff];
+    const SPECIAL: [u32; 6] = [0x7f80_0000, 0xff80_0000, 0x0000_0000, 0x8000_0000, 0x3f80_0000, 0x7f7f_ffff];
+    let sets: [(f32, f32, f32, i32); 5] = [(0.0, 0.0, 2.0, 1), (0.5, 0.5, 2.0, 1), (1.7, 0.9, 1.0, 0), (3.0, 2.0, 0.0, 1), (8.0, 6.0, 2.0, 0)];
+    let mut out = Vec::new();
+    for &(w, h) in &[(5usize, 7usize), (16, 16), (45, 23), (130, 3), (3, 130)] {
+        let n = w * h;
+        for (si, &(ax, ay, shape, edge)) in sets.iter().enumerate() {
+            for density in [3usize, 7, 1] {
+                let mut s = 0x2545_f491_4f6c_dd1du64 ^ ((w * 131 + h * 7 + si) as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+                let plane: Vec<f32> = (0..n)
+                    .map(|i| {
+                        s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                        let r = (s >> 33) as usize;
+                        if i % density == 0 && density > 1 || density == 1 && r % 2 == 0 {
+                            f32::from_bits(NANS[r % NANS.len()])
+                        } else if r % 11 == 0 {
+                            f32::from_bits(SPECIAL[(r >> 4) % SPECIAL.len()])
+                        } else {
+                            ((s >> 40) as f32 / (1u64 << 24) as f32) * 1.5 - 0.25
+                        }
+                    })
+                    .collect();
+                let mut kp = kp_blur(edge, 0);
+                kp.blur_aspect = None;
+                out.push(SelfCase {
+                    name: format!("{w}x{h} nan pairs set {si} density {density}"),
+                    dims: (w, h),
+                    tag: 1,
+                    args: vec![Image { n, planes: vec![plane] }],
+                    consts: vec![cst(1, &[ax, ay]), cst(2, &[shape]), cst(3, &[1.0]), cst(4, &[if si % 2 == 0 { 0.0 } else { 1.0 }])],
+                    kp: Some(kp),
+                });
+            }
         }
     }
     out

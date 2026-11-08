@@ -208,3 +208,25 @@ fn not_run(why: &str) {
     }
     println!("NOT RUN: {why}");
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// two-NaN operands in the window sums: the device must return the CPU's NaN bits (first NaN operand, quieted), payloads included
+
+#[test]
+fn the_blur_kernels_equal_the_cpu_bit_for_bit_on_two_nan_operand_cases() {
+    use fx_device::selfcheck::NanPayloads;
+    let ctx = match fx_device::select(DeviceKind::Gpu) {
+        Handle::Device(d) => d,
+        other => {
+            not_run(&format!("no usable OpenCL device ({})", other.describe()));
+            return;
+        }
+    };
+    let cases = fx_exec::device_ops_neighbourhood::blur_nan_pair_cases();
+    assert!(cases.len() >= 50);
+    let mut op = fx_exec::device_ops_neighbourhood::BLUR;
+    op.corpus = fx_exec::device_ops_neighbourhood::blur_nan_pair_cases;
+    let tally = fx_exec::device_ops::selfcheck(&ctx.session, &op).expect("device equals the CPU");
+    println!("NAN-PAIR cases {} outputs {}", cases.len(), tally.outputs);
+    assert!(matches!(tally.nan_payloads, NanPayloads::Same), "NaN payloads differ: {}", tally);
+}

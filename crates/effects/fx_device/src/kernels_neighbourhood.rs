@@ -16,14 +16,54 @@ pub const NEIGHBOURHOOD_BLUR: &str = r#"
 /* MIRRORS_MUL_ADD: blur_rows::box_row (vfmsub213ss at out[0], blend), blur_rows_y::column_window, blend */
 #define BW_AT(p, i) (p)[(size_t)(i) * st]
 
+/* Binary operations with the x86 two-NaN rule (the CPU's fx_common::nanop): a NaN result is replaced by the first NaN operand in
+   instruction order, quieted, else by the default NaN 0xffc00000; any other result is the plain IEEE result. */
+float nf_pick(float a, float b) {
+    if (a != a) {
+        return as_float(as_uint(a) | 0x400000u);
+    }
+    if (b != b) {
+        return as_float(as_uint(b) | 0x400000u);
+    }
+    return as_float(0xffc00000u);
+}
+float nf_pick3(float a, float b, float c) {
+    if (a != a) {
+        return as_float(as_uint(a) | 0x400000u);
+    }
+    return nf_pick(b, c);
+}
+float nf_add(float a, float b) {
+    float r = a + b;
+    return (r == r) ? r : nf_pick(a, b);
+}
+float nf_sub(float a, float b) {
+    float r = a - b;
+    return (r == r) ? r : nf_pick(a, b);
+}
+float nf_mul(float a, float b) {
+    float r = a * b;
+    return (r == r) ? r : nf_pick(a, b);
+}
+/* vfmsub213ss d, s2, s3: d * s2 - s3, one rounding; NaN priority d, s2, s3. */
+float nf_fms213(float d, float s2, float s3) {
+    float r = fma(d, s2, -s3);
+    return (r == r) ? r : nf_pick3(d, s2, s3);
+}
+/* vfmadd231ss d, s2, s3: s2 * s3 + d, one rounding; NaN priority d, s2, s3. */
+float nf_fma231(float d, float s2, float s3) {
+    float r = fma(s2, s3, d);
+    return (r == r) ? r : nf_pick3(d, s2, s3);
+}
+
 float bw_hred(float* v) {
-    float t0 = v[0] + v[4];
-    float t1 = v[1] + v[5];
-    float t2 = v[2] + v[6];
-    float t3 = v[3] + v[7];
-    float u0 = t0 + t2;
-    float u1 = t1 + t3;
-    return u0 + u1;
+    float t0 = nf_add(v[0], v[4]);
+    float t1 = nf_add(v[1], v[5]);
+    float t2 = nf_add(v[2], v[6]);
+    float t3 = nf_add(v[3], v[7]);
+    float u0 = nf_add(t0, t2);
+    float u1 = nf_add(t1, t3);
+    return nf_add(u0, u1);
 }
 
 /* Initial window sum of x[0..len): the CPU's s0 / prefix_sum, grouping included. */
@@ -49,15 +89,15 @@ float bw_prefix(__global const float* x, size_t st, int len, int edge, uint phas
             if (i >= len) {
                 break;
             }
-            acc += BW_AT(x, i);
+            acc = nf_add(acc, BW_AT(x, i));
         }
-        return 0x0p+0f + acc;
+        return nf_add(0x0p+0f, acc);
     }
     for (int i = 0; i < 8; i++) {
         if (i >= peel) {
             break;
         }
-        acc += BW_AT(x, i);
+        acc = nf_add(acc, BW_AT(x, i));
     }
     int nb = (len - peel) / 64;
     int end = peel + 64 * nb;
@@ -78,16 +118,16 @@ float bw_prefix(__global const float* x, size_t st, int len, int edge, uint phas
             int b = peel + 64 * k;
             for (int l = 0; l < 8; l++) {
                 float p = pp[l];
-                p = p + BW_AT(x, b + l);
-                p = p + BW_AT(x, b + 16 + l);
-                p = p + BW_AT(x, b + 32 + l);
-                p = p + BW_AT(x, b + 48 + l);
+                p = nf_add(p, BW_AT(x, b + l));
+                p = nf_add(p, BW_AT(x, b + 16 + l));
+                p = nf_add(p, BW_AT(x, b + 32 + l));
+                p = nf_add(p, BW_AT(x, b + 48 + l));
                 pp[l] = p;
                 float q = qq[l];
-                q = q + BW_AT(x, b + 8 + l);
-                q = q + BW_AT(x, b + 24 + l);
-                q = q + BW_AT(x, b + 40 + l);
-                q = q + BW_AT(x, b + 56 + l);
+                q = nf_add(q, BW_AT(x, b + 8 + l));
+                q = nf_add(q, BW_AT(x, b + 24 + l));
+                q = nf_add(q, BW_AT(x, b + 40 + l));
+                q = nf_add(q, BW_AT(x, b + 56 + l));
                 qq[l] = q;
             }
         }
@@ -96,12 +136,12 @@ float bw_prefix(__global const float* x, size_t st, int len, int edge, uint phas
                 break;
             }
             for (int l = 0; l < 8; l++) {
-                pp[l] = pp[l] + BW_AT(x, end + 8 * k + l);
+                pp[l] = nf_add(pp[l], BW_AT(x, end + 8 * k + l));
             }
         }
         float v[8];
         for (int l = 0; l < 8; l++) {
-            v[l] = pp[l] + qq[l];
+            v[l] = nf_add(pp[l], qq[l]);
         }
         total = bw_hred(v);
     } else {
@@ -116,26 +156,26 @@ float bw_prefix(__global const float* x, size_t st, int len, int edge, uint phas
             int b = peel + 64 * k;
             for (int j = 0; j < 8; j++) {
                 for (int l = 0; l < 8; l++) {
-                    a[j * 8 + l] = a[j * 8 + l] + BW_AT(x, b + 8 * j + l);
+                    a[j * 8 + l] = nf_add(a[j * 8 + l], BW_AT(x, b + 8 * j + l));
                 }
             }
         }
         float v[8];
         for (int l = 0; l < 8; l++) {
-            float c01 = a[l] + a[8 + l];
-            float c23 = a[16 + l] + a[24 + l];
-            float c45 = a[32 + l] + a[40 + l];
-            float c67 = a[48 + l] + a[56 + l];
-            float lh = c01 + c23;
-            float rh = c45 + c67;
-            v[l] = lh + rh;
+            float c01 = nf_add(a[l], a[8 + l]);
+            float c23 = nf_add(a[16 + l], a[24 + l]);
+            float c45 = nf_add(a[32 + l], a[40 + l]);
+            float c67 = nf_add(a[48 + l], a[56 + l]);
+            float lh = nf_add(c01, c23);
+            float rh = nf_add(c45, c67);
+            v[l] = nf_add(lh, rh);
         }
         for (int k = 0; k < 8; k++) {
             if (k >= n8) {
                 break;
             }
             for (int l = 0; l < 8; l++) {
-                v[l] = v[l] + BW_AT(x, end + 8 * k + l);
+                v[l] = nf_add(v[l], BW_AT(x, end + 8 * k + l));
             }
         }
         total = bw_hred(v);
@@ -145,9 +185,9 @@ float bw_prefix(__global const float* x, size_t st, int len, int edge, uint phas
         if (ii >= len) {
             break;
         }
-        acc += BW_AT(x, ii);
+        acc = nf_add(acc, BW_AT(x, ii));
     }
-    return total + acc;
+    return nf_add(total, acc);
 }
 
 /* out[i] = sum of x over [i-r, i+r] with the edge rule: sliding sum, head, middle, tail. */
@@ -156,7 +196,7 @@ void bw_window(__global const float* x, __global float* out, size_t st, int n, i
     float s = bw_prefix(x, st, r + 1, edge, phase);
     float y = s;
     if (mirror != 0) {
-        y = fma(0x1p+1f, s, -BW_AT(x, r));
+        y = nf_fms213(0x1p+1f, s, BW_AT(x, r));
     }
     int hp = r / 2;
     for (int j = 0; j < 1073741824; j++) {
@@ -166,22 +206,22 @@ void bw_window(__global const float* x, __global float* out, size_t st, int n, i
         int i = 2 * j;
         BW_AT(out, i) = y;
         if (mirror != 0) {
-            y = (BW_AT(x, r + 1 + i) - BW_AT(x, r - 1 - i)) + y;
+            y = nf_add(nf_sub(BW_AT(x, r + 1 + i), BW_AT(x, r - 1 - i)), y);
             BW_AT(out, i + 1) = y;
-            y = (y + BW_AT(x, r + 2 + i)) - BW_AT(x, r - 2 - i);
+            y = nf_sub(nf_add(y, BW_AT(x, r + 2 + i)), BW_AT(x, r - 2 - i));
         } else {
-            y = y + BW_AT(x, r + 1 + i);
+            y = nf_add(y, BW_AT(x, r + 1 + i));
             BW_AT(out, i + 1) = y;
-            y = y + BW_AT(x, r + 2 + i);
+            y = nf_add(y, BW_AT(x, r + 2 + i));
         }
     }
     if ((r % 2) == 1) {
         int i = r - 1;
         BW_AT(out, i) = y;
         if (mirror != 0) {
-            y = (y + BW_AT(x, r + 1 + i)) - BW_AT(x, r - 1 - i);
+            y = nf_sub(nf_add(y, BW_AT(x, r + 1 + i)), BW_AT(x, r - 1 - i));
         } else {
-            y = y + BW_AT(x, r + 1 + i);
+            y = nf_add(y, BW_AT(x, r + 1 + i));
         }
     }
     int m = n - 2 * r - 1;
@@ -192,14 +232,14 @@ void bw_window(__global const float* x, __global float* out, size_t st, int n, i
         }
         int i = r + 2 * j;
         BW_AT(out, i) = y;
-        y = (BW_AT(x, i + r + 1) - BW_AT(x, i - r)) + y;
+        y = nf_add(nf_sub(BW_AT(x, i + r + 1), BW_AT(x, i - r)), y);
         BW_AT(out, i + 1) = y;
-        y = (y - BW_AT(x, i + 1 - r)) + BW_AT(x, i + r + 2);
+        y = nf_add(nf_sub(y, BW_AT(x, i + 1 - r)), BW_AT(x, i + r + 2));
     }
     if ((m % 2) == 1) {
         int i = r + 2 * mp;
         BW_AT(out, i) = y;
-        y = (y - BW_AT(x, i - r)) + BW_AT(x, i + r + 1);
+        y = nf_add(nf_sub(y, BW_AT(x, i - r)), BW_AT(x, i + r + 1));
     }
     for (int t = 0; t < 1073741824; t++) {
         if (t > r) {
@@ -212,12 +252,12 @@ void bw_window(__global const float* x, __global float* out, size_t st, int n, i
         }
         if (mirror != 0) {
             if ((t % 2) == 0) {
-                y = (BW_AT(x, n - 1 - t) - BW_AT(x, m + t)) + y;
+                y = nf_add(nf_sub(BW_AT(x, n - 1 - t), BW_AT(x, m + t)), y);
             } else {
-                y = (y + BW_AT(x, n - 1 - t)) - BW_AT(x, m + t);
+                y = nf_sub(nf_add(y, BW_AT(x, n - 1 - t)), BW_AT(x, m + t));
             }
         } else {
-            y = y - BW_AT(x, m + t);
+            y = nf_sub(y, BW_AT(x, m + t));
         }
     }
 }
@@ -257,7 +297,7 @@ __kernel void blur_x_f32(__global const float* src, __global float* dst, __globa
                 if (i >= (int)w) {
                     break;
                 }
-                outp[i] = fma(cc, outp[i], frac * zb[i]);
+                outp[i] = nf_fma231(nf_mul(frac, zb[i]), cc, outp[i]);
             }
         }
         inp = outp;
@@ -307,7 +347,7 @@ __kernel void blur_y_f32(__global const float* src, __global float* dst, __globa
                 if (i >= (int)h) {
                     break;
                 }
-                BW_AT(outp, i) = fma(cc, BW_AT(outp, i), frac * BW_AT(zb, i));
+                BW_AT(outp, i) = nf_fma231(nf_mul(frac, BW_AT(zb, i)), cc, BW_AT(outp, i));
             }
         }
         inp = outp;
@@ -327,7 +367,7 @@ __kernel void scale_f32(__global const float* src, __global float* dst, uint n, 
     if (i >= n) {
         return;
     }
-    dst[i] = src[i] * scale;
+    dst[i] = nf_mul(src[i], scale);
 }
 "#;
 

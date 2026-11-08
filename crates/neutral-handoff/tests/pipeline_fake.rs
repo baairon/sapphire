@@ -158,6 +158,8 @@ fn an_in_process_stage_twice_returns_the_input() {
 
 #[test]
 fn a_misbehaving_stage_ends_in_one_error_object() {
+    // The hang rows use a 3 second silence limit: with 1 second, an encoder that is still starting under heavy
+    // machine load can stay silent that long and be blamed instead of the stage that hangs.
     let Some(case) = Case::new("fake_failures") else { return };
     // (effect, code, exit code of this tool, exit code of the stage, message fragment)
     let table: [(&str, &str, i64, Option<i64>, &str); 9] = [
@@ -168,12 +170,12 @@ fn a_misbehaving_stage_ends_in_one_error_object() {
         ("fake-close-early", "broken_pipe", 4, Some(0), "pre1 closed its"),
         ("fake-short", "broken_pipe", 4, Some(0), "pre1 closed its output after 11 of 12 frames"),
         ("fake-extra", "stage_failed", 1, Some(0), "pre1 returned 13 frames for the 12 it was given"),
-        ("fake-hang", "stage_timeout", 5, None, "pre1 moved no data for 1 seconds and was killed"),
+        ("fake-hang", "stage_timeout", 5, None, "pre1 moved no data for 3 seconds and was killed"),
         ("fake-hang-mid", "stage_timeout", 5, None, "pre1 moved no data"),
     ];
     for (effect, code, exit, stage_exit, fragment) in table {
         let out = case.out(&format!("{}.mkv", effect));
-        let ran = case.go(&["--stage", &stage_cmd(effect), "--stage-timeout", "1", "--depth", "8", "--lossless", "-o", &out, "--json"]);
+        let ran = case.go(&["--stage", &stage_cmd(effect), "--stage-timeout", "3", "--depth", "8", "--lossless", "-o", &out, "--json"]);
         assert_eq!(ran.code as i64, exit, "{}: {}", effect, ran.stderr);
         let (got_code, stage, got_exit, message, _) = error_object(&ran);
         assert_eq!((got_code.as_str(), got_exit), (code, stage_exit), "{}: {}", effect, message);
@@ -193,7 +195,7 @@ fn a_misbehaving_stage_ends_in_one_error_object() {
 fn a_hang_after_the_last_frame_is_a_timeout_too() {
     let Some(case) = Case::new("fake_hang_end") else { return };
     let out = case.out("x.mkv");
-    let ran = case.go(&["--stage", &stage_cmd("fake-hang-at-end"), "--stage-timeout", "1", "--depth", "8", "--lossless", "-o", &out, "--json"]);
+    let ran = case.go(&["--stage", &stage_cmd("fake-hang-at-end"), "--stage-timeout", "3", "--depth", "8", "--lossless", "-o", &out, "--json"]);
     let (code, stage, exit, message, _) = error_object(&ran);
     assert_eq!((code.as_str(), stage.as_deref(), exit, ran.code), ("stage_timeout", Some("pre1"), None, 5), "{}", message);
     assert!(ran.seconds < 30.0);
@@ -214,7 +216,7 @@ fn the_failing_stage_is_named_even_with_healthy_neighbours() {
         ("fake-hang", "fake-copy", "pre1", "stage_timeout"),
         ("fake-copy", "fake-hang", "pre2", "stage_timeout"),
     ] {
-        let ran = case.go(&["--stage", &stage_cmd(first), "--stage", &stage_cmd(second), "--stage-timeout", "1", "--depth", "8", "--lossless", "-o", &out, "--json"]);
+        let ran = case.go(&["--stage", &stage_cmd(first), "--stage", &stage_cmd(second), "--stage-timeout", "3", "--depth", "8", "--lossless", "-o", &out, "--json"]);
         let (got_code, stage, _, message, _) = error_object(&ran);
         assert_eq!((got_code.as_str(), stage.as_deref()), (code, Some(culprit)), "{} then {}: {}", first, second, message);
         assert!(case.leftovers().is_empty(), "{} then {}: {:?}", first, second, case.leftovers());

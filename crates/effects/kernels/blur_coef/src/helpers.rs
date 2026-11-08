@@ -1,6 +1,8 @@
 //! Scale-or-copy (with job) and clear on dense buffers of w*h floats, render flag 0,
 //! single worker (partition gives start 0, count total). Roi record: c == w, element 4 bytes (stand-in B-A2, B-U6).
 
+use fx_common::nanop::NanOps;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HelperError {
     /// A buffer is shorter than w*h floats.
@@ -35,16 +37,8 @@ pub fn scale_or_copy(dst: &mut [f32], src: Option<&[f32]>, scale: f32, w: i32, h
         dst[..n].fill(0.0);
     } else {
         match src {
-            Some(s) => {
-                for i in 0..n {
-                    dst[i] = s[i] * scale;
-                }
-            }
-            None => {
-                for v in dst[..n].iter_mut() {
-                    *v *= scale;
-                }
-            }
+            Some(s) => fx_common::nanop::scale_into(&mut dst[..n], &s[..n], scale),
+            None => fx_common::nanop::scale_in_place(&mut dst[..n], scale),
         }
     }
     Ok(())

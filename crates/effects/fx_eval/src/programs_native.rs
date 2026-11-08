@@ -1,4 +1,4 @@
-//! Native builders of the programs the thirteen styles reach: the same `Corpus` structures `Corpus::from_programs_tsv` produces, made through
+//! Native builders of the programs the registered styles reach: the same `Corpus` structures `Corpus::from_programs_tsv` produces, made through
 //! a small constructor API instead of parsing program text. One function per program row (def_effect, defun, layout_effect).
 //!
 //! The text parser stays as code (`parse`, `Corpus::from_programs_tsv`); no product path reads a programs table. The builders are written
@@ -84,7 +84,7 @@ fn param(ar: &mut Arena, name: &str, d: D, flags: &[&str]) -> Param {
 }
 
 impl Corpus {
-    /// The corpus of the programs the thirteen styles reach (25 def_effect, 14 defun, 13 layout rows), built natively. Same bookkeeping as `add_text`:
+    /// The corpus of the programs the registered styles reach (def_effect, defun and layout rows), built natively. Same bookkeeping as `add_text`:
     /// the last definition of a name wins.
     pub fn native() -> Corpus {
         let mut c = Corpus::new();
@@ -2329,6 +2329,598 @@ fn layout_warp_perspective_autogen() -> Vec<Sx> {
     ]
 }
 
+fn eff_flicker(a: &mut Arena) -> EffectDef {
+    let params = vec![
+        param(a, "amplitude", D::N(0.2), &["slider_max", "1", "auto_anim_floor0"]),
+        param(a, "blue_amp", D::N(1.0), &["slider_max", "2", "big_slider_max", "5"]),
+        param(a, "brightness", D::N(1.0), &[]),
+        param(a, "green_amp", D::N(1.0), &["slider_max", "2", "big_slider_max", "5"]),
+        param(a, "rand_color_amp", D::N(0.0), &["slider_max", "2", "big_slider_max", "5"]),
+        param(a, "rand_freq", D::N(30.0), &["slider_max", "60"]),
+        param(a, "rand_luma_amp", D::N(1.0), &["slider_max", "2", "big_slider_max", "5"]),
+        param(a, "red_amp", D::N(1.0), &["slider_max", "2", "big_slider_max", "5"]),
+        param(a, "seed", D::N(0.123), &[]),
+        param(a, "wave_amp", D::N(0.0), &["slider_max", "2", "big_slider_max", "5"]),
+        param(a, "wave_b_phase", D::N(0.0), &["min", "*", "slider_range", "-1", "1"]),
+        param(a, "wave_freq", D::N(5.0), &["slider_max", "60"]),
+        param(a, "wave_g_phase", D::N(0.0), &["min", "*", "slider_range", "-1", "1"]),
+        param(a, "wave_r_phase", D::N(0.0), &["min", "*", "slider_range", "-1", "1"]),
+    ];
+    let body = lower(a, &lt(vec![
+        (&["color_phase"], call("v3", vec![id("wave_r_phase"), id("wave_g_phase"), id("wave_b_phase")])),
+        (&["amp3"], call("*", vec![id("amplitude"), call("v3", vec![id("red_amp"), id("green_amp"), id("blue_amp")])])),
+        (&["t2"], call("v2", vec![call("get_time", vec![]), n(0.0)])),
+        (&["rand"], call("*", vec![
+            call("+", vec![
+                call("*", vec![
+                    id("rand_luma_amp"),
+                    call("-", vec![
+                        call("warp_noise", vec![id("t2"), id("rand_freq"), n(1.0), id("seed")]),
+                        n(0.5),
+                    ]),
+                ]),
+                call("*", vec![
+                    id("rand_color_amp"),
+                    call("-", vec![
+                        call("warp_noise3", vec![
+                            id("t2"),
+                            id("rand_freq"),
+                            n(1.0),
+                            call("+", vec![id("seed"), n(0.3333)]),
+                        ]),
+                        n(0.5),
+                    ]),
+                ]),
+            ]),
+            n(2.0),
+        ])),
+        (&["wave"], call("*", vec![
+            call("sin", vec![
+                call("+", vec![
+                    call("*", vec![call("get_time", vec![]), id("wave_freq")]),
+                    call("-", vec![n(0.25), id("color_phase")]),
+                ]),
+            ]),
+            id("wave_amp"),
+        ])),
+    ], call("*", vec![
+        id("Source"),
+        call("+", vec![
+            id("brightness"),
+            call("*", vec![id("amp3"), call("+", vec![id("rand"), id("wave")])]),
+        ]),
+    ])));
+    EffectDef { name: "Flicker".into(), va: "0x13fc760".into(), inputs: vec![inp("Source", None)], flags: strv(&["generates_color", "skip_auto_mocha", "skip_auto_mask"]), params, body }
+}
+
+fn eff_glow(a: &mut Arena) -> EffectDef {
+    let params = vec![
+        param(a, "comp_premult", D::N(0.0), &["shared", "boolean"]),
+        param(a, "affect_alpha", D::N(0.0), &["shared", "dont_save", "slider_max", "1", "default_to_1_if_postdiv"]),
+        param(a, "brightness", D::N(2.0), &["auto_anim_floor0"]),
+        param(a, "color", D::V(&[1.0, 1.0, 1.0]), &["color"]),
+        param(a, "combine", D::N(2.0), &["popup", "Mult", "Add", "Screen", "Difference", "Overlay"]),
+        param(a, "glow_from_alpha", D::N(0.0), &["shared", "max", "1"]),
+        param(a, "glow_under_source", D::N(0.0), &["shared", "max", "1"]),
+        param(a, "invert_mask", D::N(0.0), &["shared", "show_with_mask", "boolean"]),
+        param(a, "light_bg", D::N(0.0), &["shared", "max", "1"]),
+        param(a, "scale_background", D::N(1.0), &["shared", "slider_max", "1"]),
+        param(a, "scale_source", D::N(1.0), &["shared", "max", "1"]),
+        param(a, "show", D::N(0.0), &["popup", "Result", "Threshold"]),
+        param(a, "subpixel", D::N(1.0), &["boolean"]),
+        param(a, "threshold", D::N(0.5), &["slider_max", "1"]),
+        param(a, "threshold_add_color", D::V(&[0.0, 0.0, 0.0]), &["color"]),
+        param(a, "width", D::N(0.4), &["normalize_scale", "4", "slider_max", "2"]),
+        param(a, "width_blue", D::N(1.4), &["widget", "glow.size_blue"]),
+        param(a, "width_green", D::N(1.2), &["widget", "glow.size_green"]),
+        param(a, "width_red", D::N(1.0), &["widget", "glow.size_red"]),
+        param(a, "width_x", D::N(1.0), &["widget", "glow.size_x"]),
+        param(a, "width_y", D::N(1.0), &["widget", "glow.size_y"]),
+        param(a, "edge_mode", D::N(1.0), &["old_default", "v7", "0"]),
+        param(a, "atmosphere_amp", D::N(0.0), &["slider_max", "5"]),
+        param(a, "atmosphere_freq", D::N(1.0), &["min", ".1"]),
+        param(a, "atmosphere_detail", D::N(0.6), &["max", "1"]),
+        param(a, "atmosphere_seed", D::N(0.123), &[]),
+        param(a, "atmosphere_speed", D::N(1.0), &["min", "*", "slider_range", "-5", "5"]),
+        param(a, "eclipse_with_bg", D::N(0.0), &["max", "1"]),
+        param(a, "mocha_project", D::N(0.0), &["optional", "mocha_data", "builder_disable", "shared"]),
+        param(a, "blur_mocha_mask", D::N(0.0), &["optional", "disable_motion_blur", "normalize_scale", "4", "slider_max", "0.2", "builder_disable", "shared"]),
+        param(a, "mocha_mask_opacity", D::N(1.0), &["optional", "disable_motion_blur", "builder_disable_1", "max", "1", "shared"]),
+        param(a, "invert_mocha_mask", D::N(0.0), &["optional", "boolean", "builder_disable", "shared"]),
+        param(a, "resize_mocha_mask", D::N(1.0), &["optional", "disable_motion_blur", "builder_disable_1", "max", "2", "shared"]),
+        param(a, "resize_mocha_rel_x", D::N(1.0), &["optional", "disable_motion_blur", "builder_disable_1", "max", "2", "shared"]),
+        param(a, "resize_mocha_rel_y", D::N(1.0), &["optional", "disable_motion_blur", "builder_disable_1", "max", "2", "shared"]),
+        param(a, "shift_mocha_mask", D::V(&[0.0, 0.0]), &["optional", "disable_motion_blur", "builder_disable", "normalize_scale", "1", "min", "*", "slider_range", "-2", "2", "shared"]),
+        param(a, "bypass_mocha_mask", D::N(0.0), &["optional", "boolean", "builder_disable", "shared"]),
+        param(a, "show_mocha_mask_only", D::N(0.0), &["optional", "boolean", "builder_disable", "shared"]),
+        param(a, "combine_masks", D::N(0.0), &["optional", "popup", "Union", "Intersect", "Mocha_Only", "builder_disable", "shared"]),
+    ];
+    let body = lower(a, &lt(vec![
+        (&["source"], call("maybe_add_alpha", vec![id("Source"), id("SparksMatte"), id("comp_premult")])),
+        (&["mask", "mocha_mask"], call("PROCESS_COLOR_MASKS", vec![
+            id("Mask"),
+            id("invert_mask"),
+            n(0.0),
+            n(1.0),
+            id("mocha_project"),
+            id("bypass_mocha_mask"),
+            id("invert_mocha_mask"),
+            id("blur_mocha_mask"),
+            id("combine_masks"),
+            id("mocha_mask_opacity"),
+            id("resize_mocha_mask"),
+            id("resize_mocha_rel_x"),
+            id("resize_mocha_rel_y"),
+            id("shift_mocha_mask"),
+        ])),
+        (&["s"], call("interp", vec![id("source"), call("coerce_to_alpha", vec![id("source")]), id("glow_from_alpha")])),
+        (&["atmosphere"], call("RAYS_ATMOSPHERE", vec![
+            id("atmosphere_amp"),
+            id("atmosphere_freq"),
+            id("atmosphere_detail"),
+            id("atmosphere_seed"),
+            id("atmosphere_speed"),
+        ])),
+        (&["glow3"], call("*", vec![
+            id("atmosphere"),
+            call("glow", vec![
+                call("*", vec![id("s"), id("mask")]),
+                call("+", vec![id("threshold"), id("threshold_add_color")]),
+                call("v2", vec![id("width_x"), id("width_y")]),
+                call("*", vec![
+                    id("width"),
+                    call("v3", vec![id("width_red"), id("width_green"), id("width_blue")]),
+                ]),
+                call("*", vec![id("brightness"), id("color")]),
+                id("subpixel"),
+                id("edge_mode"),
+                id("show"),
+            ]),
+        ])),
+        (&["dest_threshold"], id("glow3")),
+        (&["glow4"], call("glow_rgba_combine", vec![
+            id("Background"),
+            id("source"),
+            id("affect_alpha"),
+            id("combine"),
+            id("dest_threshold"),
+            id("glow3"),
+            id("glow_under_source"),
+            id("light_bg"),
+            id("scale_background"),
+            id("scale_source"),
+            id("show"),
+            id("eclipse_with_bg"),
+        ])),
+    ], call("if+", vec![id("show_mocha_mask_only"), id("mocha_mask"), id("glow4")])));
+    EffectDef { name: "Glow".into(), va: "0x1406320".into(), inputs: vec![inp("Source", None), inp("Background", Some("0")), inp("SparksMatte", Some("1")), inp("Mask", Some("1"))], flags: strv(&["rgba_ok", "generates_color", "generates_alpha"]), params, body }
+}
+
+fn eff_swishpan(a: &mut Arena) -> EffectDef {
+    let params = vec![
+        param(a, "transition_dir", D::N(0.0), &["popup", "Wipe_Off_to_Bg", "Wipe_On_from_Bg"]),
+        param(a, "auto_trans", D::N(0.0), &["popup", "\"No: use Wipe%\"", "\"Yes: ignore Wipe%\""]),
+        param(a, "wipe_amt", D::N(0.0), &["shared", "autotrans", "auto_anim_ramp_up"]),
+        param(a, "swish_auto_trans", D::N(0.0), &["hidden"]),
+        param(a, "blur_amount", D::N(2.0), &["normalize_scale", "4", "slider_max", "2"]),
+        param(a, "direction", D::N(0.0), &["popup", "Left", "Right", "Up", "Down"]),
+        param(a, "overlap", D::N(0.0), &["min", "*", "slider_range", "-1", "1"]),
+        param(a, "slow_in", D::N(0.5), &[]),
+        param(a, "slow_out", D::N(0.5), &[]),
+    ];
+    let body = lower(a, &lt(vec![
+        (&["amount"], id("wipe_amt")),
+        (&["from", "to"], call("transition_swap_inputs", vec![id("From"), id("To"), id("transition_dir")])),
+        (&["amount2"], call("transition_amount", vec![id("auto_trans"), id("amount")])),
+        (&["time"], call("slow_in_out", vec![id("amount2"), id("slow_in"), id("slow_out"), n(0.0)])),
+        (&["blur_use_auto_trans"], call("max", vec![id("auto_trans"), id("swish_auto_trans")])),
+        (&["blur_width"], call("if+", vec![
+            id("blur_use_auto_trans"),
+            call("*", vec![
+                id("blur_amount"),
+                call("slow_in_out", vec![id("amount2"), id("slow_in"), id("slow_out"), n(1.0)]),
+            ]),
+            call("*", vec![
+                id("blur_amount"),
+                call("*", vec![
+                    call("diff", vec![
+                        call("slow_in_out", vec![
+                            call("get_curve_val", vec![id("amount"), n(0.5)]),
+                            id("slow_in"),
+                            id("slow_out"),
+                            n(0.0),
+                        ]),
+                        call("slow_in_out", vec![
+                            call("get_curve_val", vec![id("amount"), n(-0.5)]),
+                            id("slow_in"),
+                            id("slow_out"),
+                            n(0.0),
+                        ]),
+                    ]),
+                    call("get_total_frames", vec![]),
+                ]),
+            ]),
+        ])),
+        (&["shift"], call("if>", vec![
+            id("direction"),
+            n(2.0),
+            call("v2", vec![n(0.0), call("*", vec![n(2.0), call("get_aspect_ratio", vec![])])]),
+            call("if>", vec![
+                id("direction"),
+                n(1.0),
+                call("v2", vec![n(0.0), call("*", vec![n(-2.0), call("get_aspect_ratio", vec![])])]),
+                call("if+", vec![id("direction"), v(&[-2.0, 0.0]), v(&[2.0, 0.0])]),
+            ]),
+        ])),
+        (&["over"], call("*", vec![id("shift"), id("overlap")])),
+        (&["shift2"], call("-", vec![id("shift"), id("over")])),
+        (&["from_coords"], call("+", vec![id("xy"), call("*", vec![id("shift2"), id("time")])])),
+        (&["to_coords"], call("-", vec![id("from_coords"), id("shift2")])),
+        (&["blur_dir"], call("if>", vec![id("direction"), n(1.0), v(&[0.0, 1.0]), v(&[1.0, 0.0])])),
+        (&["warp_from"], call("warp", vec![
+            call("make_mipmap", vec![id("from"), v(&[0.0, 0.0]), n(1.0)]),
+            id("from_coords"),
+            v(&[0.0, 0.0]),
+            n(1.0),
+        ])),
+        (&["warp_to"], call("warp", vec![
+            call("make_mipmap", vec![id("to"), v(&[0.0, 0.0]), n(1.0)]),
+            id("to_coords"),
+            v(&[0.0, 0.0]),
+            n(1.0),
+        ])),
+    ], call("blur", vec![
+        call("screen_super_if_needed", vec![id("warp_from"), id("warp_to")]),
+        call("*", vec![id("blur_dir"), id("blur_width")]),
+        n(0.0),
+        n(1.0),
+        n(0.0),
+    ])));
+    EffectDef { name: "SwishPan".into(), va: "0x1481ba0".into(), inputs: vec![inp("From", Some("0")), inp("To", Some("0"))], flags: strv(&["rgba_ok", "transition"]), params, body }
+}
+
+fn defun_combine_color_masks(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &call("if_neq_const", vec![
+        id("Mask"),
+        n(1.0),
+        call("if_neq_const", vec![
+            id("m2"),
+            n(1.0),
+            call("switch", vec![
+                id("combine_mode"),
+                n(0.0),
+                call("max", vec![id("m1"), id("m2")]),
+                n(1.0),
+                call("*", vec![id("m1"), id("m2")]),
+                n(2.0),
+                id("m2"),
+                call("max", vec![id("m1"), id("m2")]),
+            ]),
+            id("m1"),
+        ]),
+        id("m2"),
+    ]));
+    DefunDef { name: "COMBINE_COLOR_MASKS".into(), va: "0x13bbb20".into(), args: strv(&["Mask", "m1", "m2", "combine_mode"]), body }
+}
+
+fn defun_process_color_masks(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &lt(vec![
+        (&["mask1", "mask3", "mask_color_p"], call("color_mask", vec![id("Mask"), id("mask_type"), id("invert_mask"), id("blur_mask")])),
+        (&["mocha_mask"], call("MOCHA_MASK", vec![
+            id("mocha_project"),
+            id("bypass_mocha_mask"),
+            id("invert_mocha_mask"),
+            id("blur_mocha_mask"),
+            id("mocha_mask_opacity"),
+            id("resize_mocha_mask"),
+            id("resize_mocha_rel_x"),
+            id("resize_mocha_rel_y"),
+            id("shift_mocha_mask"),
+        ])),
+        (&["combined_mask1"], call("COMBINE_MASKS", vec![id("Mask"), id("mask1"), id("mocha_mask"), id("combine_mode")])),
+        (&["combined_mask3"], call("COMBINE_COLOR_MASKS", vec![id("Mask"), id("mask3"), id("mocha_mask"), id("combine_mode")])),
+        (&["mask"], call("if+", vec![id("mask_color_p"), id("combined_mask3"), id("combined_mask1")])),
+    ], call("values", vec![id("mask"), id("mocha_mask")])));
+    DefunDef { name: "PROCESS_COLOR_MASKS".into(), va: "0x14623e0".into(), args: strv(&["Mask", "invert_mask", "blur_mask", "mask_type", "mocha_project", "bypass_mocha_mask", "invert_mocha_mask", "blur_mocha_mask", "combine_mode", "mocha_mask_opacity", "resize_mocha_mask", "resize_mocha_rel_x", "resize_mocha_rel_y", "shift_mocha_mask"]), body }
+}
+
+fn defun_rays_atmosphere(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &call("-", vec![
+        n(1.0),
+        call("*", vec![
+            call("simplex_noise", vec![
+                call("append", vec![
+                    call("*", vec![id("atmosphere_freq"), id("xy")]),
+                    call("*", vec![
+                        call("*", vec![
+                            id("atmosphere_speed"),
+                            call("+", vec![call("get_time", vec![]), n(1.0)]),
+                        ]),
+                        n(0.1),
+                    ]),
+                ]),
+                n(8.0),
+                id("atmosphere_turbulence"),
+                id("atmosphere_seed"),
+                n(0.0),
+            ]),
+            id("atmosphere_amp"),
+        ]),
+    ]));
+    DefunDef { name: "RAYS_ATMOSPHERE".into(), va: "0x1469000".into(), args: strv(&["atmosphere_amp", "atmosphere_freq", "atmosphere_turbulence", "atmosphere_seed", "atmosphere_speed"]), body }
+}
+
+fn defun_color_mask(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &lt(vec![
+        (&["mask1"], call("blur", vec![
+            call("if+", vec![
+                id("invert_mask"),
+                call("one_minus", vec![
+                    call("if>", vec![
+                        id("mask_type"),
+                        n(1.0),
+                        call("coerce_to_alpha", vec![id("Mask")]),
+                        call("monochrome", vec![id("Mask")]),
+                    ]),
+                ]),
+                call("if>", vec![
+                    id("mask_type"),
+                    n(1.0),
+                    call("coerce_to_alpha", vec![id("Mask")]),
+                    call("monochrome", vec![id("Mask")]),
+                ]),
+            ]),
+            id("blur_mask"),
+            n(3.0),
+            n(1.0),
+            n(0.0),
+        ])),
+        (&["mask3"], call("blur", vec![
+            call("if+", vec![
+                id("invert_mask"),
+                call("one_minus", vec![call("remove_alpha", vec![id("Mask")])]),
+                call("remove_alpha", vec![id("Mask")]),
+            ]),
+            id("blur_mask"),
+            n(3.0),
+            n(1.0),
+            n(0.0),
+        ])),
+        (&["mask_color_p"], call("mod", vec![id("mask_type"), n(2.0)])),
+    ], call("values", vec![id("mask1"), id("mask3"), id("mask_color_p")])));
+    DefunDef { name: "color_mask".into(), va: "0x14d1e40".into(), args: strv(&["Mask", "mask_type", "invert_mask", "blur_mask"]), body }
+}
+
+fn defun_glow_rgba_combine(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &lt(vec![
+        (&["glowB"], call("*", vec![
+            id("glow3"),
+            call("interp", vec![
+                n(1.0),
+                call("*", vec![
+                    n(2.0),
+                    call("if_neq_const", vec![id("Background"), n(0.0), id("Background"), id("Source")]),
+                ]),
+                id("light_bg"),
+            ]),
+        ])),
+        (&["glow"], call("alpha_from_rgb_max", vec![id("glowB"), id("affect_alpha"), id("Output")])),
+        (&["source"], call("*", vec![id("Source"), id("scale_source")])),
+        (&["back"], call("if_neq_const", vec![
+            id("Background"),
+            n(0.0),
+            call("scale_rgb", vec![id("Background"), id("scale_background")]),
+            call("coerce_up", vec![n(0.0), id("Output")]),
+        ])),
+        (&["source_on_back"], call("comp_rgba", vec![id("back"), id("source")])),
+        (&["elnum_source_back"], call("coerce_up", vec![id("glow"), id("source_on_back")])),
+        (&["elnum_back"], call("coerce_up", vec![id("glow"), id("back")])),
+        (&["glow_on_src_back"], call("if>", vec![
+            id("combine"),
+            n(3.0),
+            call("overlay_super_if_needed", vec![id("glow"), id("source_on_back")]),
+            call("if>", vec![
+                id("combine"),
+                n(2.0),
+                call("v3_to_v4_if4", vec![
+                    call("diff", vec![
+                        call("remove_alpha", vec![id("glow")]),
+                        call("remove_alpha", vec![id("source_on_back")]),
+                    ]),
+                    call("screen", vec![
+                        call("get_alpha", vec![id("glow")]),
+                        call("get_alpha", vec![id("source_on_back")]),
+                    ]),
+                    id("elnum_source_back"),
+                ]),
+                call("if>", vec![
+                    id("combine"),
+                    n(1.0),
+                    call("screen_super_if_needed", vec![id("glow"), id("source_on_back")]),
+                    call("if+", vec![
+                        id("combine"),
+                        call("+", vec![id("glow"), id("source_on_back")]),
+                        call("*", vec![id("glow"), id("source_on_back")]),
+                    ]),
+                ]),
+            ]),
+        ])),
+        (&["glow_on_back"], call("if>", vec![
+            id("combine"),
+            n(3.0),
+            call("overlay_super_if_needed", vec![id("glow"), id("back")]),
+            call("if>", vec![
+                id("combine"),
+                n(2.0),
+                call("v3_to_v4_if4", vec![
+                    call("diff", vec![
+                        call("remove_alpha", vec![id("glow")]),
+                        call("remove_alpha", vec![id("back")]),
+                    ]),
+                    call("screen", vec![
+                        call("get_alpha", vec![id("glow")]),
+                        call("get_alpha", vec![id("back")]),
+                    ]),
+                    id("elnum_back"),
+                ]),
+                call("if>", vec![
+                    id("combine"),
+                    n(1.0),
+                    call("screen_super_if_needed", vec![id("glow"), id("back")]),
+                    call("if+", vec![
+                        id("combine"),
+                        call("+", vec![id("glow"), id("back")]),
+                        call("*", vec![id("glow"), id("back")]),
+                    ]),
+                ]),
+            ]),
+        ])),
+        (&["dest_normal"], call("interp", vec![
+            call("interp", vec![
+                id("glow_on_src_back"),
+                call("+", vec![id("source_on_back"), id("glow")]),
+                id("light_bg"),
+            ]),
+            call("comp_rgba", vec![
+                call("interp", vec![
+                    id("glow_on_back"),
+                    call("+", vec![id("back"), id("glow")]),
+                    id("light_bg"),
+                ]),
+                id("source"),
+            ]),
+            call("screen", vec![id("glow_under_source"), id("light_bg")]),
+        ])),
+        (&["dest_eclipse"], call("+", vec![
+            call("*", vec![
+                id("Source"),
+                call("*", vec![call("one_minus", vec![id("eclipse_with_bg")]), id("scale_source")]),
+            ]),
+            call("-", vec![
+                id("glow"),
+                call("*", vec![id("glow"), call("*", vec![id("source"), id("scale_source")])]),
+            ]),
+        ])),
+        (&["result"], call("if+", vec![
+            id("show"),
+            call("coerce_up_a1", vec![id("dest_threshold"), id("dest_normal")]),
+            call("if+", vec![id("eclipse_with_bg"), id("dest_eclipse"), id("dest_normal")]),
+        ])),
+    ], id("result")));
+    DefunDef { name: "glow_rgba_combine".into(), va: "0x14d43e0".into(), args: strv(&["Background", "Source", "affect_alpha", "combine", "dest_threshold", "glow3", "glow_under_source", "light_bg", "scale_background", "scale_source", "show", "eclipse_with_bg"]), body }
+}
+
+fn defun_transition_amount(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &call("if+", vec![id("auto_trans"), call("get_percent_time", vec![]), id("orig_amount")]));
+    DefunDef { name: "transition_amount".into(), va: "0x14e3ac0".into(), args: strv(&["auto_trans", "orig_amount"]), body }
+}
+
+fn defun_transition_swap_inputs(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &call("values", vec![
+        call("if+", vec![id("transition_dir"), id("bg"), id("fg")]),
+        call("if+", vec![id("transition_dir"), id("fg"), id("bg")]),
+    ]));
+    DefunDef { name: "transition_swap_inputs".into(), va: "0x14e3b40".into(), args: strv(&["fg", "bg", "transition_dir"]), body }
+}
+
+fn layout_flicker() -> Vec<Sx> {
+    vec![
+        a("layout_effect"),
+        a("Flicker"),
+        l(vec![a("Source")]),
+        l(vec![]),
+        l(vec![
+            a("amplitude"),
+            a("rand_luma_amp"),
+            a("rand_color_amp"),
+            a("rand_freq"),
+            l(vec![a(":modify"), a("wave_amp"), l(vec![a("group_start_open"), a("wave"), a("new_column")])]),
+            a("wave_freq"),
+            a("wave_r_phase"),
+            a("wave_g_phase"),
+            l(vec![a(":modify"), a("wave_b_phase"), l(vec![a("group_end"), a("wave")])]),
+            l(vec![a(":modify"), a("red_amp"), l(vec![a("new_column")])]),
+            a("green_amp"),
+            a("blue_amp"),
+            a("brightness"),
+            a("seed"),
+        ]),
+    ]
+}
+
+fn layout_glow() -> Vec<Sx> {
+    vec![
+        a("layout_effect"),
+        a("Glow"),
+        l(vec![a("Source"), a("Background"), l(vec![a("Matte"), a("Mask")])]),
+        l(vec![a("mask_color")]),
+        l(vec![
+            l(vec![a(":modify"), a("mocha_project"), l(vec![a("id_insert"), a("520")])]),
+            l(vec![a(":modify"), a("blur_mocha"), a("blur_mocha_mask"), l(vec![a("id_insert"), a("521"), a("group_start"), a("mocha")])]),
+            l(vec![a(":modify"), a("mocha_opacity"), a("mocha_mask_opacity"), l(vec![a("id_insert"), a("522")])]),
+            l(vec![a(":modify"), a("invert_mocha"), a("invert_mocha_mask"), l(vec![a("id_insert"), a("523")])]),
+            l(vec![a(":modify"), a("resize_mocha"), a("resize_mocha_mask"), l(vec![a("id_insert"), a("524")])]),
+            l(vec![a(":modify"), a("resize_rel_x"), a("resize_mocha_rel_x"), l(vec![a("id_insert"), a("525")])]),
+            l(vec![a(":modify"), a("resize_rel_y"), a("resize_mocha_rel_y"), l(vec![a("id_insert"), a("526")])]),
+            l(vec![a(":modify"), a("shift_mocha"), a("shift_mocha_mask"), l(vec![a("id_insert"), a("527")])]),
+            l(vec![a(":modify"), a("bypass_mocha"), a("bypass_mocha_mask"), l(vec![a("id_insert"), a("531")])]),
+            l(vec![a(":modify"), a("show_mocha_only"), a("show_mocha_mask_only"), l(vec![a("id_insert"), a("529")])]),
+            l(vec![a(":modify"), a("combine_masks"), l(vec![a("id_insert"), a("530"), a("group_end"), a("mocha")])]),
+            a("brightness"),
+            a("color"),
+            a("threshold"),
+            l(vec![a(":modify"), a("threshold_add_color"), l(vec![a("shared")])]),
+            l(vec![a(":modify"), a("glow_width"), a("width"), l(vec![a("new_column"), a("widget"), a("glow.size")])]),
+            a("width_x"),
+            a("width_y"),
+            a("width_red"),
+            a("width_green"),
+            a("width_blue"),
+            l(vec![a(":modify"), a("subpixel"), l(vec![a("shared")])]),
+            l(vec![a(":modify"), a("show"), l(vec![a("id_insert"), a("100")])]),
+            l(vec![a(":modify"), a("combine"), l(vec![a("id_insert"), a("101")])]),
+            l(vec![a(":modify"), a("edge_mode"), l(vec![a("id_insert"), a("102"), a("popup"), a("Transparent"), a("Reflect")])]),
+            a("affect_alpha"),
+            a("glow_from_alpha"),
+            a("glow_under_source"),
+            l(vec![a(":modify"), a("light_background"), a("light_bg")]),
+            l(vec![a(":modify"), a("source_opacity"), a("scale_source")]),
+            l(vec![a(":modify"), a("bg_brightness"), a("scale_background"), l(vec![a("ignore")])]),
+            l(vec![a(":modify"), a("invert_matte"), a("invert_mask"), l(vec![a("new_column")])]),
+            l(vec![a(":extra"), a("expand_borders"), a("="), a("0"), l(vec![a("ignore"), a("boolean")])]),
+            l(vec![a(":modify"), a("atmosphere_amp"), l(vec![a("group_start"), a("atmosphere"), a("id_insert"), a("103")])]),
+            l(vec![a(":modify"), a("atmosphere_freq"), l(vec![a("max"), a("20"), a("id_insert"), a("104")])]),
+            l(vec![a(":modify"), a("atmosphere_detail"), l(vec![a("id_insert"), a("105")])]),
+            l(vec![a(":modify"), a("atmosphere_seed"), l(vec![a("id_insert"), a("106")])]),
+            l(vec![a(":modify"), a("atmosphere_speed"), l(vec![a("group_end"), a("atmosphere"), a("id_insert"), a("107")])]),
+            l(vec![a(":extra"), a("opacity"), a("="), a("1"), l(vec![a("ignore"), a("popup"), a("All_Opaque"), a("Normal"), a("As_Premult")])]),
+            l(vec![a(":hardcode"), a("eclipse_with_bg"), a("="), a("0")]),
+            l(vec![a(":hardcode"), a("comp_premult"), a("="), a("0")]),
+        ]),
+    ]
+}
+
+fn layout_swishpan() -> Vec<Sx> {
+    vec![
+        a("layout_effect"),
+        a("SwishPan"),
+        l(vec![l(vec![a("Foreground"), a("From"), a("required")]), l(vec![a("Background"), a("To"), a("required")])]),
+        l(vec![]),
+        l(vec![
+            l(vec![a(":modify"), a("transition_dir"), l(vec![a("dont_save"), a("shared")])]),
+            l(vec![a(":modify"), a("auto_trans"), l(vec![a("dont_save"), a("shared")])]),
+            l(vec![a(":modify"), a("wipe_percent"), a("wipe_amt"), l(vec![a("percent"), a("shared")])]),
+            l(vec![a(":modify"), a("direction"), l(vec![a("new_column")])]),
+            a("blur_amount"),
+            a("overlap"),
+            l(vec![a(":modify"), a("slow_in"), l(vec![a("max"), a("1")])]),
+            l(vec![a(":modify"), a("slow_out"), l(vec![a("max"), a("1")])]),
+            l(vec![a(":extra"), a("opacity"), a("="), a("1"), l(vec![a("ignore"), a("popup"), a("All_Opaque"), a("Normal"), a("As_Premult")])]),
+            a("swish_auto_trans"),
+        ]),
+    ]
+}
+
 pub(crate) fn effects(a: &mut Arena) -> Vec<EffectDef> {
     vec![
         eff_blur_color(a),
@@ -2356,6 +2948,9 @@ pub(crate) fn effects(a: &mut Arena) -> Vec<EffectDef> {
         eff_transform_and_blur_autogen(a),
         eff_warp_perspective(a),
         eff_warp_perspective_autogen(a),
+        eff_flicker(a),
+        eff_glow(a),
+        eff_swishpan(a),
     ]
 }
 
@@ -2375,6 +2970,13 @@ pub(crate) fn defuns(a: &mut Arena) -> Vec<DefunDef> {
         defun_feedback_init_prev(a),
         defun_maybe_add_alpha(a),
         defun_warp_combine(a),
+        defun_combine_color_masks(a),
+        defun_process_color_masks(a),
+        defun_rays_atmosphere(a),
+        defun_color_mask(a),
+        defun_glow_rgba_combine(a),
+        defun_transition_amount(a),
+        defun_transition_swap_inputs(a),
     ]
 }
 
@@ -2393,5 +2995,8 @@ pub(crate) fn layouts() -> Vec<Vec<Sx>> {
         layout_time_warp_rgb_autogen(),
         layout_trails_autogen(),
         layout_warp_perspective_autogen(),
+        layout_flicker(),
+        layout_glow(),
+        layout_swishpan(),
     ]
 }

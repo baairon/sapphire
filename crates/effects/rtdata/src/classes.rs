@@ -1,4 +1,4 @@
-// Generated from the recorded host data of the 13 styles; plain definitions, no file is read.
+// Generated from the recorded host data of the styles; plain definitions, no file is read.
 // Rows are the ones the effects read; each field is a value the code uses. Do not edit by hand.
 //! Class tables: flag words, argument kinds and the combination tables of the classes the effects use.
 use crate::types::*;
@@ -11,22 +11,33 @@ pub static CLASS_FLAGS: &[(&str, u32)] = &[
     ("/", 0x34),
     ("abs", 0x34),
     ("add_rgb", 0x34),
+    ("alpha_from_rgb_max", 0x70),
+    ("append", 0x34),
     ("blur", 0x2235),
     ("blur_warp", 0xa030),
     ("coerce_to_alpha", 0x30),
     ("coerce_to_v3", 0x30),
     ("coerce_up", 0x70),
+    ("coerce_up_a1", 0x70),
     ("comp_premult", 0x30),
     ("comp_rgba", 0x30),
     ("copy", 0x30),
+    ("diff", 0x34),
+    ("direction", 0x30),
     ("dissolve", 0x30),
     ("edge_aware_sharpen", 0x31),
     ("element_of", 0x30),
     ("force_no_cache", 0xb0),
+    ("get_alpha", 0x30),
+    ("get_aspect_ratio", 0x10),
     ("get_curve_val", 0x110),
     ("get_frame", 0x413),
     ("get_frame_number", 0x110),
+    ("get_percent_time", 0x110),
     ("get_prev_dest", 0x917),
+    ("get_time", 0x110),
+    ("get_total_frames", 0x10),
+    ("glow", 0x2235),
     ("grad", 0x2231),
     ("hue_shift", 0x34),
     ("hue_shift_preserve_luma", 0x34),
@@ -42,27 +53,38 @@ pub static CLASS_FLAGS: &[(&str, u32)] = &[
     ("min", 0x34),
     ("min_element", 0x30),
     ("mocha_render", 0xb1),
+    ("mod", 0x34),
     ("monochrome", 0x30),
     ("monochrome_a", 0x30),
     ("motion_blur", 0x50010),
     ("negate", 0x34),
     ("one_minus", 0x34),
+    ("overlay_super", 0x34),
     ("perspective", 0x30),
     ("perspective_alpha", 0x30),
     ("postdivide", 0x34),
+    ("remove_alpha", 0x30),
     ("rotate", 0x30),
     ("sat_scale", 0x34),
     ("save_prev_dest", 0x15),
+    ("scale_rgb", 0x34),
+    ("screen", 0x34),
     ("screen_super", 0x34),
     ("sharpen", 0x2235),
+    ("simplex_noise", 0x30),
+    ("sin", 0x34),
+    ("slow_in_out", 0x10),
     ("static2", 0x132),
     ("switch", 0x10010),
+    ("threshold", 0x34),
     ("v2", 0x30),
     ("v3", 0x30),
     ("v3_to_v4", 0x34),
     ("v3_to_v4_if4", 0x74),
     ("v4", 0x30),
     ("warp", 0x6030),
+    ("warp_noise", 0x30),
+    ("warp_noise3", 0x30),
     ("warp_rel", 0x6030),
 ];
 
@@ -71,6 +93,7 @@ pub static IMG_ONLY_ARGS: &[(&str, usize)] = &[
     ("blur", 0),
     ("blur_warp", 0),
     ("edge_aware_sharpen", 0),
+    ("glow", 0),
     ("grad", 0),
     ("make_mipmap", 0),
     ("masked_blur", 0),
@@ -91,18 +114,25 @@ pub static INT_TYPED_ARGS: &[(&str, usize)] = &[
     ("blur_warp", 6),
     ("blur_warp", 7),
     ("get_frame", 2),
+    ("glow", 5),
+    ("glow", 6),
+    ("glow", 7),
     ("grad", 3),
     ("make_mipmap", 1),
     ("make_mipmap", 2),
     ("masked_blur", 3),
     ("masked_blur", 4),
     ("postdivide", 1),
+    ("simplex_noise", 1),
+    ("simplex_noise", 4),
     ("switch", 0),
     ("switch", 1),
     ("switch", 3),
     ("switch", 9),
     ("warp", 2),
     ("warp", 3),
+    ("warp_noise", 2),
+    ("warp_noise3", 2),
     ("warp_rel", 2),
     ("warp_rel", 3),
     ("switch", 5),
@@ -205,6 +235,31 @@ pub static COMBOS: &[ComboClass] = &[
         ],
     },
     ComboClass {
+        class: "alpha_from_rgb_max",
+        entries: &[
+            ComboEntry { vals: &[1, 1, 4], tag: 4 },
+            ComboEntry { vals: &[3, 1, 4], tag: 4 },
+            ComboEntry { vals: &[4, 1, 4], tag: 4 },
+            ComboEntry { vals: &[1, 1, 3], tag: 3 },
+            ComboEntry { vals: &[3, 1, 3], tag: 3 },
+            ComboEntry { vals: &[4, 1, 3], tag: 3 },
+            ComboEntry { vals: &[1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[3, 1, 1], tag: 3 },
+            ComboEntry { vals: &[4, 1, 1], tag: 3 },
+        ],
+    },
+    ComboClass {
+        class: "append",
+        entries: &[
+            ComboEntry { vals: &[1, 1], tag: 2 },
+            ComboEntry { vals: &[2, 1], tag: 3 },
+            ComboEntry { vals: &[3, 1], tag: 4 },
+            ComboEntry { vals: &[1, 2], tag: 3 },
+            ComboEntry { vals: &[2, 2], tag: 4 },
+            ComboEntry { vals: &[1, 3], tag: 4 },
+        ],
+    },
+    ComboClass {
         class: "blur",
         entries: &[
             ComboEntry { vals: &[1, 1, 1, 1, 1], tag: 1 },
@@ -271,6 +326,25 @@ pub static COMBOS: &[ComboClass] = &[
         ],
     },
     ComboClass {
+        class: "coerce_up_a1",
+        entries: &[
+            ComboEntry { vals: &[1, 2], tag: 2 },
+            ComboEntry { vals: &[1, 3], tag: 3 },
+            ComboEntry { vals: &[1, 4], tag: 4 },
+            ComboEntry { vals: &[3, 4], tag: 4 },
+            ComboEntry { vals: &[1, 1], tag: 1 },
+            ComboEntry { vals: &[2, 1], tag: 2 },
+            ComboEntry { vals: &[2, 2], tag: 2 },
+            ComboEntry { vals: &[3, 1], tag: 3 },
+            ComboEntry { vals: &[3, 3], tag: 3 },
+            ComboEntry { vals: &[4, 1], tag: 4 },
+            ComboEntry { vals: &[4, 3], tag: 4 },
+            ComboEntry { vals: &[4, 4], tag: 4 },
+            ComboEntry { vals: &[2, 3], tag: 3 },
+            ComboEntry { vals: &[2, 4], tag: 4 },
+        ],
+    },
+    ComboClass {
         class: "comp_premult",
         entries: &[
             ComboEntry { vals: &[4, 4, 1], tag: 4 },
@@ -308,6 +382,29 @@ pub static COMBOS: &[ComboClass] = &[
             ComboEntry { vals: &[2], tag: 2 },
             ComboEntry { vals: &[3], tag: 3 },
             ComboEntry { vals: &[4], tag: 4 },
+        ],
+    },
+    ComboClass {
+        class: "diff",
+        entries: &[
+            ComboEntry { vals: &[1, 1], tag: 1 },
+            ComboEntry { vals: &[2, 2], tag: 2 },
+            ComboEntry { vals: &[2, 1], tag: 2 },
+            ComboEntry { vals: &[1, 2], tag: 2 },
+            ComboEntry { vals: &[3, 3], tag: 3 },
+            ComboEntry { vals: &[3, 1], tag: 3 },
+            ComboEntry { vals: &[1, 3], tag: 3 },
+            ComboEntry { vals: &[4, 4], tag: 4 },
+            ComboEntry { vals: &[4, 1], tag: 4 },
+            ComboEntry { vals: &[1, 4], tag: 4 },
+            ComboEntry { vals: &[3, 4], tag: 4 },
+            ComboEntry { vals: &[4, 3], tag: 4 },
+        ],
+    },
+    ComboClass {
+        class: "direction",
+        entries: &[
+            ComboEntry { vals: &[2, 1], tag: 1 },
         ],
     },
     ComboClass {
@@ -383,6 +480,15 @@ pub static COMBOS: &[ComboClass] = &[
         ],
     },
     ComboClass {
+        class: "get_alpha",
+        entries: &[
+            ComboEntry { vals: &[1], tag: 1 },
+            ComboEntry { vals: &[2], tag: 1 },
+            ComboEntry { vals: &[3], tag: 1 },
+            ComboEntry { vals: &[4], tag: 1 },
+        ],
+    },
+    ComboClass {
         class: "get_curve_val",
         entries: &[
             ComboEntry { vals: &[1, 1], tag: 1 },
@@ -405,6 +511,25 @@ pub static COMBOS: &[ComboClass] = &[
             ComboEntry { vals: &[1], tag: 3 },
             ComboEntry { vals: &[3], tag: 3 },
             ComboEntry { vals: &[4], tag: 4 },
+        ],
+    },
+    ComboClass {
+        class: "glow",
+        entries: &[
+            ComboEntry { vals: &[1, 1, 2, 1, 1, 1, 1, 1], tag: 1 },
+            ComboEntry { vals: &[1, 1, 2, 1, 3, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[1, 1, 2, 3, 1, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[1, 1, 2, 3, 3, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[1, 3, 2, 3, 3, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[3, 1, 2, 1, 1, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[3, 1, 2, 1, 3, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[3, 1, 2, 3, 1, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[3, 1, 2, 3, 3, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[3, 3, 2, 1, 1, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[3, 3, 2, 1, 3, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[3, 3, 2, 3, 1, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[3, 3, 2, 3, 3, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[4, 3, 2, 3, 3, 1, 1, 1], tag: 3 },
         ],
     },
     ComboClass {
@@ -575,6 +700,23 @@ pub static COMBOS: &[ComboClass] = &[
         ],
     },
     ComboClass {
+        class: "mod",
+        entries: &[
+            ComboEntry { vals: &[1, 1], tag: 1 },
+            ComboEntry { vals: &[2, 2], tag: 2 },
+            ComboEntry { vals: &[2, 1], tag: 2 },
+            ComboEntry { vals: &[1, 2], tag: 2 },
+            ComboEntry { vals: &[3, 3], tag: 3 },
+            ComboEntry { vals: &[3, 1], tag: 3 },
+            ComboEntry { vals: &[1, 3], tag: 3 },
+            ComboEntry { vals: &[4, 4], tag: 4 },
+            ComboEntry { vals: &[4, 1], tag: 4 },
+            ComboEntry { vals: &[1, 4], tag: 4 },
+            ComboEntry { vals: &[3, 4], tag: 4 },
+            ComboEntry { vals: &[4, 3], tag: 4 },
+        ],
+    },
+    ComboClass {
         class: "monochrome",
         entries: &[
             ComboEntry { vals: &[1], tag: 1 },
@@ -620,6 +762,23 @@ pub static COMBOS: &[ComboClass] = &[
         ],
     },
     ComboClass {
+        class: "overlay_super",
+        entries: &[
+            ComboEntry { vals: &[1, 1], tag: 1 },
+            ComboEntry { vals: &[2, 2], tag: 2 },
+            ComboEntry { vals: &[2, 1], tag: 2 },
+            ComboEntry { vals: &[1, 2], tag: 2 },
+            ComboEntry { vals: &[3, 3], tag: 3 },
+            ComboEntry { vals: &[3, 1], tag: 3 },
+            ComboEntry { vals: &[1, 3], tag: 3 },
+            ComboEntry { vals: &[4, 4], tag: 4 },
+            ComboEntry { vals: &[4, 1], tag: 4 },
+            ComboEntry { vals: &[1, 4], tag: 4 },
+            ComboEntry { vals: &[3, 4], tag: 4 },
+            ComboEntry { vals: &[4, 3], tag: 4 },
+        ],
+    },
+    ComboClass {
         class: "perspective",
         entries: &[
             ComboEntry { vals: &[2, 1, 1, 1], tag: 2 },
@@ -641,6 +800,15 @@ pub static COMBOS: &[ComboClass] = &[
         ],
     },
     ComboClass {
+        class: "remove_alpha",
+        entries: &[
+            ComboEntry { vals: &[1], tag: 1 },
+            ComboEntry { vals: &[2], tag: 1 },
+            ComboEntry { vals: &[3], tag: 3 },
+            ComboEntry { vals: &[4], tag: 3 },
+        ],
+    },
+    ComboClass {
         class: "rotate",
         entries: &[
             ComboEntry { vals: &[2, 1, 2], tag: 2 },
@@ -653,6 +821,40 @@ pub static COMBOS: &[ComboClass] = &[
             ComboEntry { vals: &[2, 1], tag: 2 },
             ComboEntry { vals: &[3, 1], tag: 3 },
             ComboEntry { vals: &[4, 1], tag: 4 },
+        ],
+    },
+    ComboClass {
+        class: "screen",
+        entries: &[
+            ComboEntry { vals: &[1, 1], tag: 1 },
+            ComboEntry { vals: &[2, 2], tag: 2 },
+            ComboEntry { vals: &[2, 1], tag: 2 },
+            ComboEntry { vals: &[1, 2], tag: 2 },
+            ComboEntry { vals: &[3, 3], tag: 3 },
+            ComboEntry { vals: &[3, 1], tag: 3 },
+            ComboEntry { vals: &[1, 3], tag: 3 },
+            ComboEntry { vals: &[4, 4], tag: 4 },
+            ComboEntry { vals: &[4, 1], tag: 4 },
+            ComboEntry { vals: &[1, 4], tag: 4 },
+            ComboEntry { vals: &[3, 4], tag: 4 },
+            ComboEntry { vals: &[4, 3], tag: 4 },
+        ],
+    },
+    ComboClass {
+        class: "scale_rgb",
+        entries: &[
+            ComboEntry { vals: &[1, 1], tag: 1 },
+            ComboEntry { vals: &[2, 2], tag: 2 },
+            ComboEntry { vals: &[2, 1], tag: 2 },
+            ComboEntry { vals: &[1, 2], tag: 2 },
+            ComboEntry { vals: &[3, 3], tag: 3 },
+            ComboEntry { vals: &[3, 1], tag: 3 },
+            ComboEntry { vals: &[1, 3], tag: 3 },
+            ComboEntry { vals: &[4, 4], tag: 4 },
+            ComboEntry { vals: &[4, 1], tag: 4 },
+            ComboEntry { vals: &[1, 4], tag: 4 },
+            ComboEntry { vals: &[3, 4], tag: 4 },
+            ComboEntry { vals: &[4, 3], tag: 4 },
         ],
     },
     ComboClass {
@@ -680,6 +882,40 @@ pub static COMBOS: &[ComboClass] = &[
             ComboEntry { vals: &[3, 1, 1], tag: 3 },
             ComboEntry { vals: &[4, 1, 1], tag: 4 },
             ComboEntry { vals: &[3, 3, 1], tag: 3 },
+        ],
+    },
+    ComboClass {
+        class: "simplex_noise",
+        entries: &[
+            ComboEntry { vals: &[2, 1, 1, 1, 1], tag: 1 },
+            ComboEntry { vals: &[3, 1, 1, 1, 1], tag: 1 },
+            ComboEntry { vals: &[4, 1, 1, 1, 1], tag: 1 },
+        ],
+    },
+    ComboClass {
+        class: "sin",
+        entries: &[
+            ComboEntry { vals: &[1], tag: 1 },
+            ComboEntry { vals: &[2], tag: 2 },
+            ComboEntry { vals: &[3], tag: 3 },
+            ComboEntry { vals: &[4], tag: 4 },
+        ],
+    },
+    ComboClass {
+        class: "slow_in_out",
+        entries: &[
+            ComboEntry { vals: &[1, 1, 1, 1], tag: 1 },
+        ],
+    },
+    ComboClass {
+        class: "threshold",
+        entries: &[
+            ComboEntry { vals: &[1, 1], tag: 1 },
+            ComboEntry { vals: &[3, 1], tag: 3 },
+            ComboEntry { vals: &[4, 1], tag: 4 },
+            ComboEntry { vals: &[1, 3], tag: 1 },
+            ComboEntry { vals: &[3, 3], tag: 3 },
+            ComboEntry { vals: &[4, 3], tag: 4 },
         ],
     },
     ComboClass {
@@ -731,6 +967,20 @@ pub static COMBOS: &[ComboClass] = &[
             ComboEntry { vals: &[2, 2, 2, 1], tag: 2 },
             ComboEntry { vals: &[3, 2, 2, 1], tag: 3 },
             ComboEntry { vals: &[4, 2, 2, 1], tag: 4 },
+        ],
+    },
+    ComboClass {
+        class: "warp_noise",
+        entries: &[
+            ComboEntry { vals: &[2, 1, 1, 1], tag: 1 },
+            ComboEntry { vals: &[2, 2, 1, 1], tag: 1 },
+        ],
+    },
+    ComboClass {
+        class: "warp_noise3",
+        entries: &[
+            ComboEntry { vals: &[2, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[2, 2, 1, 1], tag: 3 },
         ],
     },
     ComboClass {
@@ -841,6 +1091,31 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         ],
     },
     ExecClass {
+        class: "alpha_from_rgb_max",
+        entries: &[
+            ExecEntry { vals: &[1, 1, 4], tag: 4, len: 3 },
+            ExecEntry { vals: &[3, 1, 4], tag: 4, len: 3 },
+            ExecEntry { vals: &[4, 1, 4], tag: 4, len: 3 },
+            ExecEntry { vals: &[1, 1, 3], tag: 3, len: 3 },
+            ExecEntry { vals: &[3, 1, 3], tag: 3, len: 3 },
+            ExecEntry { vals: &[4, 1, 3], tag: 3, len: 3 },
+            ExecEntry { vals: &[1, 1, 1], tag: 3, len: 3 },
+            ExecEntry { vals: &[3, 1, 1], tag: 3, len: 3 },
+            ExecEntry { vals: &[4, 1, 1], tag: 3, len: 3 },
+        ],
+    },
+    ExecClass {
+        class: "append",
+        entries: &[
+            ExecEntry { vals: &[1, 1], tag: 2, len: 2 },
+            ExecEntry { vals: &[2, 1], tag: 3, len: 2 },
+            ExecEntry { vals: &[3, 1], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 2], tag: 3, len: 2 },
+            ExecEntry { vals: &[2, 2], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 3], tag: 4, len: 2 },
+        ],
+    },
+    ExecClass {
         class: "blur",
         entries: &[
             ExecEntry { vals: &[1, 1, 1, 1, 1], tag: 1, len: 5 },
@@ -907,6 +1182,25 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         ],
     },
     ExecClass {
+        class: "coerce_up_a1",
+        entries: &[
+            ExecEntry { vals: &[1, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[1, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[1, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[3, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
+            ExecEntry { vals: &[2, 1], tag: 2, len: 2 },
+            ExecEntry { vals: &[2, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[3, 1], tag: 3, len: 2 },
+            ExecEntry { vals: &[3, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[4, 1], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 3], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[2, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[2, 4], tag: 4, len: 2 },
+        ],
+    },
+    ExecClass {
         class: "comp_premult",
         entries: &[
             ExecEntry { vals: &[4, 4, 1], tag: 4, len: 3 },
@@ -944,6 +1238,29 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
             ExecEntry { vals: &[2], tag: 2, len: 1 },
             ExecEntry { vals: &[3], tag: 3, len: 1 },
             ExecEntry { vals: &[4], tag: 4, len: 1 },
+        ],
+    },
+    ExecClass {
+        class: "diff",
+        entries: &[
+            ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
+            ExecEntry { vals: &[2, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[2, 1], tag: 2, len: 2 },
+            ExecEntry { vals: &[1, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[3, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[3, 1], tag: 3, len: 2 },
+            ExecEntry { vals: &[1, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[4, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 1], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[3, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 3], tag: 4, len: 2 },
+        ],
+    },
+    ExecClass {
+        class: "direction",
+        entries: &[
+            ExecEntry { vals: &[2, 1], tag: 1, len: 2 },
         ],
     },
     ExecClass {
@@ -1006,6 +1323,15 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         ],
     },
     ExecClass {
+        class: "get_alpha",
+        entries: &[
+            ExecEntry { vals: &[1], tag: 1, len: 1 },
+            ExecEntry { vals: &[2], tag: 1, len: 1 },
+            ExecEntry { vals: &[3], tag: 1, len: 1 },
+            ExecEntry { vals: &[4], tag: 1, len: 1 },
+        ],
+    },
+    ExecClass {
         class: "get_curve_val",
         entries: &[
             ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
@@ -1028,6 +1354,25 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
             ExecEntry { vals: &[1], tag: 3, len: 1 },
             ExecEntry { vals: &[3], tag: 3, len: 1 },
             ExecEntry { vals: &[4], tag: 4, len: 1 },
+        ],
+    },
+    ExecClass {
+        class: "glow",
+        entries: &[
+            ExecEntry { vals: &[1, 1, 2, 1, 1, 1, 1, 1], tag: 1, len: 8 },
+            ExecEntry { vals: &[1, 1, 2, 1, 3, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[1, 1, 2, 3, 1, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[1, 1, 2, 3, 3, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[1, 3, 2, 3, 3, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[3, 1, 2, 1, 1, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[3, 1, 2, 1, 3, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[3, 1, 2, 3, 1, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[3, 1, 2, 3, 3, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[3, 3, 2, 1, 1, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[3, 3, 2, 1, 3, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[3, 3, 2, 3, 1, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[3, 3, 2, 3, 3, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[4, 3, 2, 3, 3, 1, 1, 1], tag: 3, len: 8 },
         ],
     },
     ExecClass {
@@ -1198,6 +1543,23 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         ],
     },
     ExecClass {
+        class: "mod",
+        entries: &[
+            ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
+            ExecEntry { vals: &[2, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[2, 1], tag: 2, len: 2 },
+            ExecEntry { vals: &[1, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[3, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[3, 1], tag: 3, len: 2 },
+            ExecEntry { vals: &[1, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[4, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 1], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[3, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 3], tag: 4, len: 2 },
+        ],
+    },
+    ExecClass {
         class: "monochrome",
         entries: &[
             ExecEntry { vals: &[1], tag: 1, len: 1 },
@@ -1243,6 +1605,23 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         ],
     },
     ExecClass {
+        class: "overlay_super",
+        entries: &[
+            ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
+            ExecEntry { vals: &[2, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[2, 1], tag: 2, len: 2 },
+            ExecEntry { vals: &[1, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[3, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[3, 1], tag: 3, len: 2 },
+            ExecEntry { vals: &[1, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[4, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 1], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[3, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 3], tag: 4, len: 2 },
+        ],
+    },
+    ExecClass {
         class: "perspective",
         entries: &[
             ExecEntry { vals: &[2, 1, 1, 1], tag: 2, len: 4 },
@@ -1264,6 +1643,15 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         ],
     },
     ExecClass {
+        class: "remove_alpha",
+        entries: &[
+            ExecEntry { vals: &[1], tag: 1, len: 1 },
+            ExecEntry { vals: &[2], tag: 1, len: 1 },
+            ExecEntry { vals: &[3], tag: 3, len: 1 },
+            ExecEntry { vals: &[4], tag: 3, len: 1 },
+        ],
+    },
+    ExecClass {
         class: "rotate",
         entries: &[
             ExecEntry { vals: &[2, 1, 2], tag: 2, len: 3 },
@@ -1276,6 +1664,40 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
             ExecEntry { vals: &[2, 1], tag: 2, len: 2 },
             ExecEntry { vals: &[3, 1], tag: 3, len: 2 },
             ExecEntry { vals: &[4, 1], tag: 4, len: 2 },
+        ],
+    },
+    ExecClass {
+        class: "screen",
+        entries: &[
+            ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
+            ExecEntry { vals: &[2, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[2, 1], tag: 2, len: 2 },
+            ExecEntry { vals: &[1, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[3, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[3, 1], tag: 3, len: 2 },
+            ExecEntry { vals: &[1, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[4, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 1], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[3, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 3], tag: 4, len: 2 },
+        ],
+    },
+    ExecClass {
+        class: "scale_rgb",
+        entries: &[
+            ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
+            ExecEntry { vals: &[2, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[2, 1], tag: 2, len: 2 },
+            ExecEntry { vals: &[1, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[3, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[3, 1], tag: 3, len: 2 },
+            ExecEntry { vals: &[1, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[4, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 1], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[3, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 3], tag: 4, len: 2 },
         ],
     },
     ExecClass {
@@ -1306,9 +1728,43 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         ],
     },
     ExecClass {
+        class: "simplex_noise",
+        entries: &[
+            ExecEntry { vals: &[2, 1, 1, 1, 1], tag: 1, len: 5 },
+            ExecEntry { vals: &[3, 1, 1, 1, 1], tag: 1, len: 5 },
+            ExecEntry { vals: &[4, 1, 1, 1, 1], tag: 1, len: 5 },
+        ],
+    },
+    ExecClass {
+        class: "sin",
+        entries: &[
+            ExecEntry { vals: &[1], tag: 1, len: 1 },
+            ExecEntry { vals: &[2], tag: 2, len: 1 },
+            ExecEntry { vals: &[3], tag: 3, len: 1 },
+            ExecEntry { vals: &[4], tag: 4, len: 1 },
+        ],
+    },
+    ExecClass {
+        class: "slow_in_out",
+        entries: &[
+            ExecEntry { vals: &[1, 1, 1, 1], tag: 1, len: 4 },
+        ],
+    },
+    ExecClass {
         class: "static2",
         entries: &[
             ExecEntry { vals: &[], tag: 2, len: 0 },
+        ],
+    },
+    ExecClass {
+        class: "threshold",
+        entries: &[
+            ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
+            ExecEntry { vals: &[3, 1], tag: 3, len: 2 },
+            ExecEntry { vals: &[4, 1], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 3], tag: 1, len: 2 },
+            ExecEntry { vals: &[3, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[4, 3], tag: 4, len: 2 },
         ],
     },
     ExecClass {
@@ -1360,6 +1816,20 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
             ExecEntry { vals: &[2, 2, 2, 1], tag: 2, len: 4 },
             ExecEntry { vals: &[3, 2, 2, 1], tag: 3, len: 4 },
             ExecEntry { vals: &[4, 2, 2, 1], tag: 4, len: 4 },
+        ],
+    },
+    ExecClass {
+        class: "warp_noise",
+        entries: &[
+            ExecEntry { vals: &[2, 1, 1, 1], tag: 1, len: 4 },
+            ExecEntry { vals: &[2, 2, 1, 1], tag: 1, len: 4 },
+        ],
+    },
+    ExecClass {
+        class: "warp_noise3",
+        entries: &[
+            ExecEntry { vals: &[2, 1, 1, 1], tag: 3, len: 4 },
+            ExecEntry { vals: &[2, 2, 1, 1], tag: 3, len: 4 },
         ],
     },
     ExecClass {

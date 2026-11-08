@@ -261,6 +261,35 @@ fn ns_registered_default(prog: &str, name: &str, uw: f32) -> Option<Vec<f32>> {
     Some(texts.iter().map(|t| fx_eval::units::unbound_default_record(*t, ns, uw, false)).collect())
 }
 
+/// One label per unbound popup parameter whose registered default differs from its program-text default lane.
+fn popup_default_labels(g: &fx_eval::Genotype, overrides: &BTreeMap<String, Vec<f32>>) -> Vec<String> {
+    let mut out = Vec::new();
+    for p in &g.params {
+        if overrides.get(&p.name).map(|o| !o.is_empty()).unwrap_or(false) {
+            continue;
+        }
+        let key = if p.layout_name.is_empty() { p.name.clone() } else { p.layout_name.clone() };
+        let (x, node) = match (fx_eval::units::registered_popup_default(&g.name, &key), p.node) {
+            (Some(x), Some(n)) => (x, n),
+            _ => continue,
+        };
+        let text = g.nodes.iter().find(|n| n.index == node).map(|n| n.lanes[0]);
+        if text.map(|t| t.to_bits()) != Some(x.to_bits()) {
+            out.push(format!(
+                "label POPUP-DEFAULT-RECORD-ROUTE ({} {}: unbound popup takes its registered default {} = f32(max(v - 1, 0)) for v the registered checkout integer of the style table, not the program text's {}; the same function serves every route)",
+                g.name, key, x, text.map(|t| format!("{}", t)).unwrap_or_else(|| "-".into())
+            ));
+        }
+    }
+    out
+}
+
+/// The registered default of an unbound popup parameter as manifest text (one lane), or None when the parameter has no
+/// registered default. It is the value the compile gives the unbound parameter.
+pub fn popup_manifest_default(prog: &str, param: &str) -> Option<String> {
+    fx_eval::units::registered_popup_default(prog, param).map(|x| format!("{}", x))
+}
+
 /// `fx_run --describe-params PROGRAM...`: the native range definitions of the programs as one JSON object (program, then its parameters with
 /// type, lanes, min, max and default text). The stage provider builds its manifest from this.
 pub fn describe_params_json(progs: &[&str]) -> String {
@@ -387,6 +416,10 @@ fn run_locked(a0: &[String]) -> i32 {
     let mut mask_bad = false;
     let mut bind_supplied = false;
     let mut legacy_seed_w = false;
+    // `--plan-text PATH`: the plan the run executes, written once after a successful run (no effect on any output)
+    let mut plan_text_path: Option<String> = None;
+    let mut plan_text: Option<String> = None;
+    let mut host_value_given: Vec<String> = Vec::new();
     let mut seed_missing = false;
     let mut mask_image = false;
     let (mut ins, mut frames): (Vec<(String, String)>, Vec<(String, String)>) = (Vec::new(), Vec::new());
@@ -430,6 +463,14 @@ fn run_locked(a0: &[String]) -> i32 {
                 i += 1;
             }
             "--no-layout-merge" => {} // A/B gate only, read again below
+            "--plan-text" => {
+                if val.is_empty() || val.starts_with("--") {
+                    crate::fxrun::elog!("--plan-text: refused: the option needs a file path");
+                    return 2;
+                }
+                plan_text_path = Some(val);
+                i += 1;
+            }
             // opt-in: an unbound normalize_scale parameter takes its registered default from the native definitions instead of the PARAM-UNITS refusal
             "--ns-default-unbound" => ae.ns_default_unbound = true,
             "--hc" => b.host_curves_unkeyed = true,
@@ -502,6 +543,35 @@ fn run_locked(a0: &[String]) -> i32 {
             "--host-frame" => {
                 // [ctx] as a float, truncated with cvttss2si32
                 host_frame = val.parse().ok();
+                i += 1;
+            }
+            "--host-value" => {
+                // NAME=VALUE: an explicit host scalar for get_percent_time, get_total_frames, get_aspect_ratio or get_time (decimal, or 0x hex f32 bits)
+                let ok = val.split_once('=').and_then(|(n, v)| {
+                    let x = match v.strip_prefix("0x") {
+                        Some(h) => u32::from_str_radix(h, 16).ok().map(f32::from_bits),
+                        None => v.parse::<f32>().ok(),
+                    };
+                    if matches!(n, "get_percent_time" | "get_total_frames" | "get_aspect_ratio" | "get_time") { x.map(|x| (n.to_string(), x)) } else { None }
+                });
+                match ok {
+                    Some((n, x)) => {
+                        if !x.is_finite() {
+                            crate::fxrun::elog!("--host-value: refused: {} is not finite (nan, inf and -inf are refused; a decimal above the f32 range reads as inf)", n);
+                            return 2;
+                        }
+                        if host_value_given.contains(&n) {
+                            crate::fxrun::elog!("--host-value: refused: {} is given twice", n);
+                            return 2;
+                        }
+                        host_value_given.push(n.clone());
+                        b.host.insert(n, vec![x]);
+                    }
+                    None => {
+                        crate::fxrun::elog!("--host-value takes get_percent_time|get_total_frames|get_aspect_ratio|get_time=VALUE");
+                        return 2;
+                    }
+                }
                 i += 1;
             }
             "--tw-route" => {
@@ -673,6 +743,19 @@ fn run_locked(a0: &[String]) -> i32 {
         }
         i += 1;
     }
+    if let Some(p) = &plan_text_path {
+        // refuse by name before any frame work when the folder does not accept a new file; PATH itself is neither created nor truncated here
+        let probe = format!("{}.probe{}", p, std::process::id());
+        match std::fs::File::create(&probe) {
+            Ok(_) => {
+                let _ = std::fs::remove_file(&probe);
+            }
+            Err(e) => {
+                crate::fxrun::elog!("--plan-text: refused: cannot write {}: {}", p, e);
+                return 2;
+            }
+        }
+    }
     if cell != 1 {
         crate::fxrun::elog!("{}", crate::ExecError::CellGt1NotClaimed(cell));
         return 1;
@@ -737,6 +820,11 @@ fn run_locked(a0: &[String]) -> i32 {
     b.bound_input_mask = bmask;
     if w == 0 || h == 0 || out.is_empty() {
         crate::fxrun::elog!("need --size WxH and --out PREFIX");
+        return 2;
+    }
+    // every kernel of the executor counts a plane in 32 bits: a larger frame is refused by name before any input is read
+    if let Some(l) = frame_over_i32(w, h) {
+        crate::fxrun::elog!("{}", l);
         return 2;
     }
     let n = w * h;
@@ -987,11 +1075,6 @@ fn run_locked(a0: &[String]) -> i32 {
         if let Some(n) = ae.palpha_base { b.kp.palpha_base = n; }
         if let Some(n) = ae.xy_base { b.kp.xy_base = n; }
         b.kp.palpha_cells = ae.palpha_cells;
-        // v2: every plan that reads the default xy (the xy special node, or perspective) needs --xy-base; no 'ae32' line reaches xy_grid
-        if ae.xy_base.is_none() && g.nodes.iter().any(|n| (n.kind == fx_eval::build::NodeKind::Special && n.name == "xy") || (n.kind == fx_eval::build::NodeKind::Function && n.name.strip_suffix("_if_needed").unwrap_or(&n.name) == "perspective")) {
-            crate::fxrun::elog!("XY-BASE-UNGIVEN ({}: the plan reads the default xy; the base phase of its x writer's destination is a per-run host input (ALIGN-HOST-PER-RUN))", prog);
-            return 2;
-        }
         for (kern, given) in [("perspective", ae.persp_base.is_some()), ("perspective_alpha", ae.palpha_base.is_some())] {
             let reaches = g.nodes.iter().any(|n| n.kind == fx_eval::build::NodeKind::Function && n.name.strip_suffix("_if_needed").unwrap_or(&n.name) == kern);
             if reaches && !given {
@@ -1111,6 +1194,9 @@ fn run_locked(a0: &[String]) -> i32 {
     }
     if let (Some(r), Some(l)) = (ae32.as_mut(), style_label.as_ref()) {
         r.labels.push(l.clone());
+    }
+    if let Some(r) = ae32.as_mut() {
+        r.labels.extend(popup_default_labels(&g, &b.overrides));
     }
     if let Some(r) = ae32.as_mut() {
         match owner_inputs_derived(&g, &r.arm) {
@@ -1355,6 +1441,27 @@ fn run_locked(a0: &[String]) -> i32 {
             return 1;
         }
     };
+    if plan_text_path.is_some() {
+        plan_text = Some(plan_print(&cp));
+    }
+    // a host getter that stayed an unfolded node on the executed route has no value to read
+    if let Some((idx, getter)) = host_getter_on_route(&cp.nodes, cp.root) {
+        crate::fxrun::elog!("HOST-VALUE-MISSING ({}: plan node {} calls {} and no --host-value {}=VALUE was given)", prog, idx, getter, getter);
+        return 2;
+    }
+    // a plan that runs simplex_noise is not rendered: the gradient tables of that noise have no documented formula
+    if op_on_route(&cp.nodes, cp.root, "simplex_noise") {
+        crate::fxrun::elog!("SIMPLEX-GRADIENT-TABLE-ABSENT (simplex_noise: the gradient tables of this noise have no documented formula, so the route is not rendered; Glow renders with atmosphere_amp 0)");
+        return 2;
+    }
+    // every executed reader of the default xy (the xy special, or perspective) needs --xy-base; no 'ae32' line reaches xy_grid. A reader
+    // that is folded, pruned or not reached from the root does not run and asks for nothing (XY-NOT-ON-ROUTE).
+    if ae.active() && ae.xy_base.is_none() {
+        if let Some(idx) = xy_reader_on_route(&cp.nodes, cp.root) {
+            crate::fxrun::elog!("XY-BASE-UNGIVEN ({}: plan node {} reads the default xy on the executed route; the base phase of its x writer's destination is a per-run host input (ALIGN-HOST-PER-RUN))", prog, idx);
+            return 2;
+        }
+    }
     // the fed 16.16 value of every unbound fixed-slider (host type 2, non-normalize_scale) parameter, one
     // diagnostic line each, for the per-run check against the run's own checkout bytes (PARAM-DEFAULT-BITS-MISMATCH is the checker's label).
     if let Some(r) = ae32.as_mut() {
@@ -1705,7 +1812,7 @@ fn run_locked(a0: &[String]) -> i32 {
                 if let Some(p) = &o.exec.saved_prev_dest {
                     let _ = write_f32(&format!("{}.prev.f32", out), p);
                 }
-                0
+                write_plan_text(&plan_text_path, &plan_text)
             }
             Err(e) => {
                 crate::fxrun::elog!("ERR {}", e);
@@ -1772,13 +1879,28 @@ fn run_locked(a0: &[String]) -> i32 {
             if let Some(p) = &o.saved_prev_dest {
                 let _ = write_f32(&format!("{}.prev.f32", out), p);
             }
-            0
+            write_plan_text(&plan_text_path, &plan_text)
         }
         Err(e) => {
             crate::fxrun::elog!("ERR {}", e);
             exec_failure_code()
         }
     }
+}
+
+/// The plan text in the recorded CPU-driver print form, then one NODE row per plan node with its four lanes in hex.
+pub fn plan_print(cp: &fx_eval::compile::CompiledProgram) -> String {
+    let mut s = fx_eval::cpuplan::plan_text_mode(cp, fx_eval::cpuplan::PlanMode::CpuDriver);
+    if !s.ends_with('\n') {
+        s.push('\n');
+    }
+    for n in &cp.nodes {
+        s.push_str(&format!(
+            "NODE\tN{}\t{}\t{}\tprim={}\tel={}\targs={:?}\tconst={}\tfolded={}\tlanes={:08x},{:08x},{:08x},{:08x}\n",
+            n.idx, n.kind, n.name, n.prim, n.elnum, n.args, n.b160, n.folded, n.lanes[0], n.lanes[1], n.lanes[2], n.lanes[3]
+        ));
+    }
+    s
 }
 
 /// The status of a failed execution: 2 (a refusal) when the failure is the missing device that `SAPPHIRE_REQUIRE_DEVICE=1` demands,
@@ -1895,6 +2017,16 @@ fn note_postdiv(v: u8) {
 
 fn hex32(s: &str) -> Result<u32, String> {
     u32::from_str_radix(s.trim().trim_start_matches("0x"), 16).map_err(|_| format!("not a hex word: {}", s))
+}
+
+/// The parity text of the DEST-ROUTE label for a destination mode byte: the mode-2 body is paired with its head only on the route,
+/// every other mode names its body.
+fn dest_route_parity_text(mode: i32) -> String {
+    if mode == 2 {
+        "R-PARITY (mode-2 body at its floor); HEAD-BODY-PAIR-BY-E2E (head and body are each at their floor and meet only on the route)".to_string()
+    } else {
+        format!("R-PARITY (mode-{} body at its floor)", mode)
+    }
 }
 
 fn read_words(path: &str) -> Result<Vec<u32>, String> {
@@ -2262,7 +2394,7 @@ impl Ae32Args {
         let (dp, dm) = self.dest.unwrap();
         let prior = read_words(self.prior.as_ref().unwrap())?;
         let copier = self.copier.unwrap();
-        labels.push(format!("label DEST-ROUTE (code 14, stack word {}, {} planes, mode {}, copier {:?}; R-PARITY (FLOOR-PENDING))", self.dest_sw.unwrap(), dp, dm, copier));
+        labels.push(format!("label DEST-ROUTE (code 14, stack word {}, {} planes, mode {}, copier {:?}; {})", self.dest_sw.unwrap(), dp, dm, copier, dest_route_parity_text(dm)));
         let route = crate::hostconv14::Ae32Route {
             sources,
             dest_stack_word: self.dest_sw.unwrap(),
@@ -2832,6 +2964,114 @@ fn native_args(a: &[String]) -> Vec<String> {
     v
 }
 
+/// Whether the native definition of `prog` carries the flag `flag` (for example `transition`).
+pub fn program_has_flag(prog: &str, flag: &str) -> bool {
+    let c = fx_eval::Corpus::native();
+    c.effect_idx.get(prog).map_or(false, |i| c.effects[*i].flags.iter().any(|f| f == flag))
+}
+
+/// Writes the `--plan-text` file after a successful run: to a temporary file in the same folder, then renamed over PATH. Returns the
+/// run status (0, or 2 when the file cannot be written).
+fn write_plan_text(path: &Option<String>, text: &Option<String>) -> i32 {
+    if let (Some(p), Some(t)) = (path, text) {
+        let tmp = format!("{}.tmp{}", p, std::process::id());
+        if let Err(e) = std::fs::write(&tmp, t).and_then(|_| std::fs::rename(&tmp, p)) {
+            let _ = std::fs::remove_file(&tmp);
+            crate::fxrun::elog!("--plan-text: refused: cannot write {}: {}", p, e);
+            return 2;
+        }
+    }
+    0
+}
+
+/// The first unfolded host getter (`get_time`, `get_percent_time`, `get_total_frames`, `get_aspect_ratio`) on the executed route, as the
+/// plan index and the getter name. A getter with a host value is folded and never found here.
+fn host_getter_on_route(nodes: &[fx_eval::compile::PlanNode], root: usize) -> Option<(usize, String)> {
+    let pos: BTreeMap<usize, usize> = nodes.iter().enumerate().map(|(p, n)| (n.idx, p)).collect();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut stack = vec![root];
+    let mut found: Option<(usize, String)> = None;
+    while let Some(i) = stack.pop() {
+        if !seen.insert(i) {
+            continue;
+        }
+        let nd = match pos.get(&i) {
+            Some(p) => &nodes[*p],
+            None => continue,
+        };
+        if nd.folded || nd.b160 || nd.kind == "const" {
+            continue;
+        }
+        let g = nd.prim.strip_suffix("_if_needed").unwrap_or(&nd.prim);
+        if matches!(g, "get_time" | "get_percent_time" | "get_total_frames" | "get_aspect_ratio") && found.as_ref().map_or(true, |f| nd.idx < f.0) {
+            found = Some((nd.idx, g.to_string()));
+        }
+        stack.extend(nd.args.iter().copied());
+    }
+    found
+}
+
+/// The FRAME-SIZE-OVER-I32 refusal for a frame whose plane length W x H does not fit the i32 count the kernels use; None when it fits.
+fn frame_over_i32(w: usize, h: usize) -> Option<String> {
+    match w.checked_mul(h) {
+        Some(n) if n <= i32::MAX as usize => None,
+        n => Some(crate::kernels::frame_size_label("fx_run", "the plane length W x H", n.unwrap_or(usize::MAX))),
+    }
+}
+
+/// Whether a node of primitive `op` is on the executed route: reached from `root` through the arguments of nodes that run
+/// (folded nodes, constants and nodes that are not computed are not entered).
+fn op_on_route(nodes: &[fx_eval::compile::PlanNode], root: usize, op: &str) -> bool {
+    let pos: BTreeMap<usize, usize> = nodes.iter().enumerate().map(|(p, n)| (n.idx, p)).collect();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut stack = vec![root];
+    while let Some(i) = stack.pop() {
+        if !seen.insert(i) {
+            continue;
+        }
+        let nd = match pos.get(&i) {
+            Some(p) => &nodes[*p],
+            None => continue,
+        };
+        if nd.folded || nd.b160 || nd.kind == "const" {
+            continue;
+        }
+        if nd.prim.strip_suffix("_if_needed").unwrap_or(&nd.prim) == op {
+            return true;
+        }
+        stack.extend(nd.args.iter().copied());
+    }
+    false
+}
+
+/// The first node (plan index) on the executed route that reads the default xy: the xy special or a perspective primitive that is not
+/// folded and not a constant, reached from `root` through the arguments of nodes that run.
+fn xy_reader_on_route(nodes: &[fx_eval::compile::PlanNode], root: usize) -> Option<usize> {
+    let pos: BTreeMap<usize, usize> = nodes.iter().enumerate().map(|(p, n)| (n.idx, p)).collect();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut stack = vec![root];
+    let mut found: Option<usize> = None;
+    while let Some(i) = stack.pop() {
+        if !seen.insert(i) {
+            continue;
+        }
+        let nd = match pos.get(&i) {
+            Some(p) => &nodes[*p],
+            None => continue,
+        };
+        if nd.folded || nd.b160 || nd.kind == "const" {
+            continue;
+        }
+        let reads = (nd.kind == "special" && nd.name == "xy")
+            || ((nd.kind == "func" || nd.kind == "auto") && nd.prim.strip_suffix("_if_needed").unwrap_or(&nd.prim) == "perspective");
+        if reads {
+            found = Some(found.map_or(nd.idx, |f: usize| f.min(nd.idx)));
+        }
+        stack.extend(nd.args.iter().copied());
+    }
+    found
+}
+
 /// The program corpus: the native builders for `-`, else the programs table at `path` (optional override, text route).
 fn corpus_for(path: &str) -> Result<Corpus, String> {
     if path == NATIVE_PROGRAMS {
@@ -2933,6 +3173,22 @@ mod int29_tests {
         b.copier = Some(0);
         assert!(class3_admit("S", 0, "Source", 2, 2, &a).unwrap().iter().any(|l| l.starts_with("label SOURCE-HEAD-R3-ON-CLASS3")));
         assert!(class3_admit("S", 0, "Source", 2, 2, &b).unwrap().iter().any(|l| l.starts_with("label CONVERT-VARIANT-B-UNWEIGHTED")));
+    }
+    /// The Flicker host arrangement (variant-B 3-plane head, 3 destination planes, mode byte 2, row copier from source 0) is admitted
+    /// by the ported mode-2 body; the variant-B 4-plane head at mode 2 stays refused by name, and so does a missing copier.
+    #[test]
+    fn flicker_arrangement_admitted_at_mode2() {
+        let mut a = g3(crate::hostconv14::VB3_HEAD);
+        a.class3_rec = Some((0, 1, 3, 1));
+        a.copier = Some(0);
+        let ls = class3_admit("Flicker", 0, "Source", 2, 2, &a).unwrap();
+        assert!(ls.iter().any(|l| l.starts_with("label DEST-ALPHA-FROM-SOURCE-ROW")));
+        let mut v = g3(crate::hostconv14::VB4_HEAD);
+        v.sources[0].2 = 4;
+        v.copier = Some(0);
+        assert!(class3_admit("Flicker", 0, "Source", 2, 2, &v).unwrap_err().starts_with("MODE-BODY-NOT-PORTED"));
+        a.copier = None;
+        assert!(class3_admit("Flicker", 0, "Source", 2, 2, &a).unwrap_err().starts_with("DEST-ALPHA-FROM-SOURCE-ROW-UNRECORDED"));
     }
     /// every --tw-route field is required.
     #[test]
@@ -3299,6 +3555,16 @@ fn registered_default(prog: &str, name: &str) -> Option<(i32, String, String, St
     Some((v, r.display_name.to_string(), r.record.to_string(), r.style.to_string()))
 }
 
+/// The host answer (one-based popup checkout integer) that PROG registers as the default of the parameter shown under DISPLAY.
+pub fn registered_answer_default(prog: &str, display: &str) -> Option<i32> {
+    effects_rtdata::style_params_of(prog).find(|r| r.display_name == display).and_then(|r| r.default_checkout_integer)
+}
+
+/// The registered item count N of the popup shown under DISPLAY in PROG's registration (the host answer lies in 1..N); None when the registration has no count.
+pub fn registered_answer_count(prog: &str, display: &str) -> Option<i32> {
+    popup_choice_count(prog, display)
+}
+
 /// the checkout integer v of an owner opacity extra: the bound answer (host-answer form) or the registered default.
 /// `text_default` is the layout text default, used only by the mutant l2_textconv_mut (the converted text default).
 fn owner_opacity_v(prog: &str, name: &str, host: Option<i32>, text_default: f32) -> Result<(i32, Option<(String, String, String)>), String> {
@@ -3584,6 +3850,7 @@ mod g2_popup_tests {
     }
         let mut hdr: Vec<&str> = Vec::new();
         let (mut n7, mut with) = (0, 0);
+        let mut progs: Vec<String> = Vec::new();
         for l in effects_rtdata::text("data/STYLE_PARAM_INDEX.tsv").lines() {
             if l.starts_with('#') {
                 continue;
@@ -3594,6 +3861,11 @@ mod g2_popup_tests {
                 continue;
             }
             let col = |c: &str| hdr.iter().position(|h| *h == c).and_then(|k| f.get(k).copied());
+            if let Some(p) = col("program") {
+                if !progs.iter().any(|q| q == p) {
+                    progs.push(p.to_string());
+                }
+            }
             if col("host_type") == Some("7") {
                 n7 += 1;
                 if col("popup_choices").and_then(|x| x.parse::<i32>().ok()).map(|n| n >= 1).unwrap_or(false) {
@@ -3601,7 +3873,10 @@ mod g2_popup_tests {
                 }
             }
         }
-        assert_eq!((n7, with), (59, 59), "host type 7 rows with a popup_choices count");
+        assert_eq!(n7, with, "host type 7 rows with a popup_choices count");
+        // the count equals the host type 7 rows the tree defines for the programs the copy holds (59 on the first-set copy)
+        let defined = progs.iter().flat_map(|p| effects_rtdata::style_params_of(p)).filter(|r| r.host_type == 7).count();
+        assert_eq!(n7, defined, "host type 7 rows of the copy against the tree's definitions");
     }
     #[test]
     fn popup_unknown_name_is_not_judged_here() {
@@ -3709,5 +3984,97 @@ mod device_tests {
         let (code, io) = r.run(vec!["Blur".to_string()], StageIo::default());
         assert_eq!(code, 2);
         assert!(io.log.contains("usage: fx_run"));
+    }
+}
+
+#[cfg(test)]
+mod dest_route_text_tests {
+    use super::*;
+
+    #[test]
+    fn the_destination_route_text_names_its_mode_body() {
+        assert!(dest_route_parity_text(2).contains("HEAD-BODY-PAIR-BY-E2E"));
+        for m in [1, 3] {
+            let t = dest_route_parity_text(m);
+            assert_eq!(t, format!("R-PARITY (mode-{} body at its floor)", m));
+            assert!(!t.contains("PENDING"));
+        }
+    }
+}
+
+#[cfg(test)]
+mod xy_route_tests {
+    use super::*;
+    use fx_eval::compile::PlanNode;
+
+    fn node(idx: usize, kind: &'static str, name: &str, prim: &str, args: &[usize]) -> PlanNode {
+        PlanNode {
+            gid: idx,
+            idx,
+            name: name.to_string(),
+            kind,
+            prim: prim.to_string(),
+            elnum: 4,
+            fmt: "",
+            args: args.to_vec(),
+            lanes: [0; 4],
+            param: None,
+            identity: false,
+            all_const_args: false,
+            b160: false,
+            folded: false,
+            cls: String::new(),
+            input_pos: 0,
+        }
+    }
+
+    #[test]
+    fn an_xy_node_that_reaches_the_root_is_on_the_route() {
+        let nodes = vec![node(0, "input", "Source", "", &[]), node(1, "special", "xy", "", &[]), node(2, "func", "_add", "add", &[0, 1])];
+        assert_eq!(xy_reader_on_route(&nodes, 2), Some(1));
+    }
+
+    #[test]
+    fn an_unreached_xy_node_is_not() {
+        let nodes = vec![node(0, "input", "Source", "", &[]), node(1, "special", "xy", "", &[]), node(2, "func", "_mul", "mul", &[0, 0])];
+        assert_eq!(xy_reader_on_route(&nodes, 2), None);
+    }
+
+    #[test]
+    fn a_folded_reader_and_its_arguments_do_not_run() {
+        let mut nodes = vec![node(0, "special", "xy", "", &[]), node(1, "func", "_perspective", "perspective", &[0]), node(2, "func", "_out", "mul", &[1, 1])];
+        nodes[1].folded = true;
+        assert_eq!(xy_reader_on_route(&nodes, 2), None);
+        nodes[1].folded = false;
+        assert_eq!(xy_reader_on_route(&nodes, 2), Some(0));
+    }
+
+    #[test]
+    fn a_perspective_primitive_counts() {
+        let nodes = vec![node(0, "input", "Source", "", &[]), node(1, "func", "_p", "perspective_if_needed", &[0])];
+        assert_eq!(xy_reader_on_route(&nodes, 1), Some(1));
+    }
+
+    #[test]
+    fn a_simplex_noise_node_is_found_only_when_it_runs() {
+        let mut nodes = vec![node(0, "input", "Source", "", &[]), node(1, "func", "_n", "simplex_noise", &[0]), node(2, "func", "_out", "mul", &[1, 1])];
+        assert!(op_on_route(&nodes, 2, "simplex_noise"));
+        nodes[1].folded = true;
+        assert!(!op_on_route(&nodes, 2, "simplex_noise"));
+        nodes[1].folded = false;
+        let unreached = vec![node(0, "input", "Source", "", &[]), node(1, "func", "_n", "simplex_noise", &[0]), node(2, "func", "_out", "mul", &[0, 0])];
+        assert!(!op_on_route(&unreached, 2, "simplex_noise"));
+        let renamed = vec![node(0, "input", "Source", "", &[]), node(1, "func", "_n", "simplex_noise_if_needed", &[0])];
+        assert!(op_on_route(&renamed, 1, "simplex_noise"));
+    }
+
+    #[test]
+    fn a_plane_length_over_i32_max_is_refused_by_name() {
+        assert_eq!(frame_over_i32(46340, 46340), None);
+        assert_eq!(frame_over_i32(i32::MAX as usize, 1), None);
+        let l = frame_over_i32(46341, 46341).unwrap();
+        assert!(l.starts_with("FRAME-SIZE-OVER-I32 (fx_run: the plane length W x H is 2147488281,"), "{}", l);
+        assert!(frame_over_i32(i32::MAX as usize + 1, 1).is_some());
+        assert!(frame_over_i32(usize::MAX, 2).unwrap().contains("FRAME-SIZE-OVER-I32"));
     }
 }

@@ -277,9 +277,9 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
         // screen_super_if_needed a b: b zero -> a (the class is its own: it collapses, it is not `screen_super`)
         "screen_super_if_needed" => z(a, 1).then_some(0),
         "copy" => Some(0),
-        // alpha_from_rgb_max rgb amount output: forwards rgb when its output element count equals rgb's (Z_Glow: 3 -> 3
-        // collapses; Glow: 4 -> 3 stays; both have amount 1, so the earlier amount-zero reading was wrong). INFERRED.
-        "alpha_from_rgb_max" => (a.first().and_then(|x| x.elnum).is_some() && a.first().and_then(|x| x.elnum) == out_el).then_some(0),
+        // alpha_from_rgb_max rgb amount output: with 3 channels in and 3 out the builtin copies the three colour channels and
+        // writes no fourth, so it is the identity. With 4 out it derives the alpha plane from the maximum, so it never folds.
+        "alpha_from_rgb_max" => (a.first().and_then(|x| x.elnum) == Some(3) && out_el == Some(3)).then_some(0),
         // M12 (Warp_Transform, INFERRED from 2 dumps): host context has shutter 0, so motion_blur is the identity;
         // force_no_cache is a compile hint; tilt is the identity when shift, shear, rotate, tilt2 and the extra
         // vector are zero and the scale is one (args 1,3,4,6,7 zero, 5 one; 2 = perspective_amount is ignored)
@@ -346,7 +346,11 @@ pub fn fold_kind(class: &str) -> Option<(FoldKind, bool)> {
         "append" => (FoldKind::Concat, false),
         "v3_to_v4" => (FoldKind::V3ToV4, true),
         "v3_to_v4_if4" => (FoldKind::V3ToV4If4, true),
-        "get_curve_val" | "get_frame_number" | "get_time" => (FoldKind::Host, true),
+        "get_curve_val" | "get_frame_number" => (FoldKind::Host, true),
+        // host scalars read from the host state (total frames, percent time, aspect ratio); the value is an explicit input
+        "get_percent_time" | "get_total_frames" | "get_aspect_ratio" | "get_time" => (FoldKind::Host, false),
+        // easing of a time value by slow-in and slow-out fractions (constant path)
+        "slow_in_out" => (FoldKind::Special, false),
         // 30 in all 24 folded nodes of the dumps (HOST-CONTEXT-MINIMAL frame rate)
         "get_frames_per_second" => (FoldKind::Host, true),
         "cmult" | "cexp" => (FoldKind::Complex, true),
@@ -360,6 +364,8 @@ pub fn fold_kind(class: &str) -> Option<(FoldKind, bool)> {
         "channels_equal" | "element_of" => (FoldKind::Special, true),
         "random_sawtooth" => (FoldKind::Special, false),
         "shake_shift" => (FoldKind::Special, false),
+        // value noise at constant arguments: warp_noise gives one lane, warp_noise3 three (the ported bodies, no executor op)
+        "warp_noise" | "warp_noise3" => (FoldKind::Special, false),
         _ => return None,
     })
 }
@@ -425,7 +431,7 @@ fn math1(class: &str, x: f32) -> f32 {
         // the fitted rules for atan in revolutions and for the log(2.0) lane are NOT merged; atan and log keep the plain f32 forms (correctly rounded by detmath) until the one-argument origin is traced (M9)
         "atan" => crate::detmath::atan(x),
         "log" => crate::detmath::ln(x),
-        "sin" => crate::svml_trig::sin_rev(x),
+        "sin" => crate::svml_sin_avx2::sin_rev(x),
         "tan" => crate::detmath::tan(x),
         "exp" => crate::detmath::exp(x),
         _ => {
@@ -485,6 +491,11 @@ pub fn v3_note(id: usize, a: &[ArgView2], out_el: i32, res: &[u32; 4]) {
 /// The folds noted since the last take, reset.
 pub fn v3_take() -> Vec<(usize, usize, usize, Vec<u32>, [u32; 4], &'static str, Vec<u32>)> {
     V3_FOLDS.with(|v| std::mem::take(&mut *v.borrow_mut()))
+}
+
+fn noise_tables() -> &'static warp_noise::Tables {
+    static T: std::sync::OnceLock<warp_noise::Tables> = std::sync::OnceLock::new();
+    T.get_or_init(warp_noise::Tables::build)
 }
 
 pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>) -> Option<[u32; 4]> {
@@ -647,6 +658,9 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
             out[3] = a[1].lanes[0];
         }
         FoldKind::Host => {
+            if host.is_none() && matches!(class, "get_percent_time" | "get_total_frames" | "get_aspect_ratio" | "get_time") {
+                return None;
+            }
             if let Some(h) = host {
                 for i in 0..n.min(h.len()) {
                     out[i] = h[i];
@@ -760,9 +774,32 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                 }
             }
             // every shake_shift lane of the original is NaN 0xffc00000 at the minimal host context (146 folded nodes in Shake_Normal a and b, MEASURED); WHY (missing time/fps/duration vs the body) is UNKNOWN, so this is FITTED to the minimal context
+            "slow_in_out" => {
+                let (t, si, so, fl) = (a.first()?, a.get(1)?, a.get(2)?, a.get(3)?);
+                out[0] = slow_in_out(t.lanes[0], si.lanes[0], so.lanes[0], fl.lanes[0].to_bits() != 0);
+            }
             "shake_shift" => {
                 for i in 0..n {
                     out[i] = f32::from_bits(0xffc0_0000);
+                }
+            }
+            // warp_noise (one lane) and warp_noise3 (three lanes) at a constant position, frequency, octave count and seed: the ported noise bodies with the computed tables
+            "warp_noise" | "warp_noise3" => {
+                let three = class == "warp_noise3";
+                if a.len() < 4 || n != if three { 3 } else { 1 } || a[0].n < 2 {
+                    return None;
+                }
+                let node = warp_noise::Node {
+                    freq: [a[1].lanes[0], if a[1].n > 1 { a[1].lanes[1] } else { a[1].lanes[0] }],
+                    freq_count: a[1].n as i32,
+                    octaves: warp_noise::cvtt(a[2].lanes[0]),
+                    seed: a[3].lanes[0],
+                };
+                let t = noise_tables();
+                if three {
+                    out[..3].copy_from_slice(&warp_noise::eval3(t, &node, a[0].lanes[0], a[0].lanes[1]).ok()?);
+                } else {
+                    out[0] = warp_noise::eval(t, &node, a[0].lanes[0], a[0].lanes[1]).ok()?;
                 }
             }
             //, READ: blur slot 36 writes 0 to every lane (loops)
@@ -856,6 +893,38 @@ pub fn coerce_extra_off() -> bool {
 /// bit for bit (checked in fx_exec `tests/t13.rs` against the crate for finite, special and NaN pairs).
 pub fn diff_const(x: f32, y: f32) -> f32 {
     f32::from_bits((x - y).to_bits() & 0x7fff_ffff)
+}
+
+/// Constant path of `slow_in_out(t, slow_in, slow_out, deriv)`: the FMA variant of the class body (the variant the feature word
+/// selects). `deriv` is the integer flag (nonzero bits). Max follows the Intel operand order (NaN or equal gives the second operand).
+pub fn slow_in_out(t: f32, slow_in: f32, slow_out: f32, deriv: bool) -> f32 {
+    let (zero, one, half) = (0.0f32, 1.0f32, 0.5f32);
+    if zero > t {
+        return if deriv { one } else { zero };
+    }
+    if t > one {
+        return one;
+    }
+    let (x, y) = (slow_in * half, slow_out * half);
+    let mut a = if zero > x { zero } else { x };
+    let mut b = if zero > y { zero } else { y };
+    let mut s = a + b;
+    if s > one {
+        a /= s;
+        b /= a + b;
+        s = a + b;
+    }
+    let k = s.mul_add(half, one) - (a + b);
+    if a > t {
+        if deriv { t / (a * k) } else { (t * t) / (a * k) * half }
+    } else if t > one - b {
+        let u = one - t;
+        if deriv { u / (b * k) } else { (-half).mul_add((u * u) / (b * k), one) }
+    } else if deriv {
+        one / k
+    } else {
+        (-half).mul_add(a, t) / k
+    }
 }
 
 /// the constant path of `round(x, y)` (snap x down to a multiple of y) is taken to be the element kernel of the class body 

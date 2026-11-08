@@ -30,13 +30,18 @@ hue_shift = { path = "../kernels/hue_shift" }
 sat_scale = { path = "../kernels/sat_scale" }
 hue_shift_preserve_luma = { path = "../kernels/hue_shift_preserve_luma" }
 v3_to_v4_if4 = { path = "../kernels/v3_to_v4_if4" }
+v3_to_v4_if4_a = { path = "../kernels/v3_to_v4_if4_a" }
+get_alpha = { path = "../kernels/get_alpha" }
 ops_arith = { path = "../kernels/ops_arith" }
 ops_minmax = { path = "../kernels/ops_minmax" }
 ops_if = { path = "../kernels/ops_if" }
 comp_rgba = { path = "../kernels/comp_rgba" }
 one_minus = { path = "../kernels/one_minus" }
 screen_super = { path = "../kernels/screen_super" }
+overlay_super = { path = "../kernels/overlay_super" }
+screen = { path = "../kernels/screen" }
 ops_element = { path = "../kernels/ops_element" }
+alpha_from_rgb_max = { path = "../kernels/alpha_from_rgb_max" }
 ops_vec = { path = "../kernels/ops_vec" }
 ops_diff = { path = "../kernels/ops_diff" }
 ops_clamp = { path = "../kernels/ops_clamp" }
@@ -63,6 +68,7 @@ rotate2d = { path = "../kernels/rotate2d" }
 libm_sincos = { path = "../kernels/libm_sincos" }
 ops_coerce = { path = "../kernels/ops_coerce" }
 blur = { path = "../kernels/blur" }
+glow_layer = { path = "../kernels/glow_layer" }
 blur_coef = { path = "../kernels/blur_coef" }
 edge_aware_sharpen_jobs = { path = "../kernels/edge_aware_sharpen_jobs" }
 libm_powf = { path = "../kernels/libm_powf" }
@@ -103,6 +109,9 @@ envfence_nv3e_mut = []
 # The opacity mutants; each must fail int31_l2_tests
 l2_textconv_mut = []
 l2_nominus_mut = []
+# the registered popup default mutants; each must fail the popup default tests
+pd_text_mut = ["fx_eval/pd_text_mut"]
+pd_nominus_mut = ["fx_eval/pd_nominus_mut"]
 l2_hostignored_mut = []
 # The output_opacity mutants; each must fail the l2b tests in int31_l2_tests
 l2b_outset_taken_mut = []

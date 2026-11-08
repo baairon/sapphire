@@ -72,5 +72,6 @@ fn collapse_rules_m3_to_m8() {
     assert_eq!(collapse_arm("copy", &[img(1)], Some(1)), Some(0));
     assert_eq!(collapse_arm("alpha_from_rgb_max", &[img(3), o.clone(), z.clone()], Some(3)), Some(0));
     assert_eq!(collapse_arm("alpha_from_rgb_max", &[img(4), o.clone(), z.clone()], Some(3)), None);
+    assert_eq!(collapse_arm("alpha_from_rgb_max", &[img(4), o.clone(), z.clone()], Some(4)), None);
     assert_eq!(collapse_arm("motion_blur", &[img(4)], Some(4)), Some(0));
 }

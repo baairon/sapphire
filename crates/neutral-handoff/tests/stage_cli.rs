@@ -128,7 +128,7 @@ fn stage_list_reports_the_contract_and_what_exists() {
     );
     let stages = doc.get("stages").and_then(|v| v.as_array()).unwrap();
     let ids: Vec<&str> = stages.iter().map(|s| s.get("id").and_then(|v| v.as_str()).unwrap()).collect();
-    assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen"], "the vocabulary is exactly what exists");
+    assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen", "flicker", "glow", "swishpan"], "the vocabulary is exactly what exists");
     let invert = &stages[0];
     assert_eq!(invert.get("kind").and_then(|v| v.as_str()), Some("frame"));
     let params = invert.get("params").and_then(|v| v.as_array()).unwrap();
@@ -413,16 +413,22 @@ fn effect_stages_list_no_layers() {
     let doc = Json::parse(&ran.out_text()).expect("JSON");
     let stages = doc.get("stages").and_then(|v| v.as_array()).unwrap();
     let mut n = 0;
-    for s in stages.iter().filter(|s| s.get("id").and_then(|v| v.as_str()).map_or(false, |i| i != "selftest-invert" && i != "ffmpeg-filter")) {
+    for s in stages.iter().filter(|s| s.get("id").and_then(|v| v.as_str()).map_or(false, |i| i != "selftest-invert" && i != "ffmpeg-filter" && i != "swishpan")) {
         assert_eq!(s.get("layers").and_then(|v| v.as_array()).map(|a| a.len()), Some(0), "{:?}", s.get("id").and_then(|v| v.as_str()));
         n += 1;
     }
-    assert_eq!(n, 13);
+    assert_eq!(n, 15);
+    // the transition stage declares its second input as one optional layer
+    let swish = stages.iter().find(|s| s.get("id").and_then(|v| v.as_str()) == Some("swishpan")).expect("swishpan");
+    let layers = swish.get("layers").and_then(|v| v.as_array()).unwrap();
+    assert_eq!(layers.len(), 1);
+    assert_eq!(layers[0].get("id").and_then(|v| v.as_str()), Some("To"));
+    assert_eq!(layers[0].get("optional").and_then(|v| v.as_bool()), Some(true));
 }
 
 #[test]
 fn layer_on_an_effect_stage_is_refused_with_exit_3_before_rendering() {
-    for (stage, layer) in [("drop_shadow", "Matte"), ("drop_shadow", "Background"), ("distort_rgb_autogen", "Lens")] {
+    for (stage, layer) in [("drop_shadow", "Matte"), ("drop_shadow", "Background"), ("distort_rgb_autogen", "Lens"), ("distort_rgb_autogen", "To")] {
         let a = args(&["stage", "apply", stage, "--width", "16", "--height", "8", "--depth", "32", "--fps", "24", "--layer", &format!("{}=/nonexistent.u32", layer)]);
         let ran = run_env(&handoff_exe(), &a, &[], Some(vec![0u8; 16 * 8 * 16]), Duration::from_secs(30));
         assert_eq!(ran.code, 3, "{} {}: {}", stage, layer, ran.stderr);

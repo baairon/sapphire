@@ -1,6 +1,6 @@
 # Adding an effect
 
-The conventions every new effect follows, and the parity proof it shows before it is added. The ten effects of [Effects](effects.md) follow them.
+The conventions every new effect follows, and the parity proof it shows before it is added. The thirteen effects of [Effects](effects.md) follow them.
 
 ## Crate layout
 
@@ -38,11 +38,12 @@ A mathematical table the effect needs is computed from its definition, at build 
 
 ## Stage rows
 
-- The style's host arrangement is one row of `crates/neutral-handoff/data/fx_stages.tsv`: stage id, program, family, kind, spool, layers, source name, hidden, fixed options, host options and placement by size. The arrangement is taken from the recorded runs of its verified comparisons.
+- The style's host arrangement is one row of `crates/neutral-handoff/data/fx_stages.tsv`: stage id, program, family, kind, spool, layers, source name, hidden, fixed options, host options, placement by size, notes and host variants. The arrangement is taken from the recorded runs of its verified comparisons.
+- The host variants column is `-` unless the recorded runs at some value of one offered parameter used other host options; then it holds one `PARAM_ID=VALUE:--opt value|--opt value` entry per such value, with the options of that value's own recorded runs, and none at the registered default ([Effects provider](stages.md#effects-provider)).
 - The kind of an effect stage is `temporal`, so that the stage accepts keyframes. Only a stage that reads other frames needs more than that; `time_warp_rgb_autogen` and `trails_autogen` do.
 - Its offered parameters are rows of `crates/neutral-handoff/data/fx_params.tsv`: stage id, parameter id, the `fx_run` option form and option name. Type and lanes come from `fx_run --describe-params`.
-- **Golden rows.** Each stage has rows in `tools/fx_golden.tsv` in three groups: plain sizes, the special group (size suffix `s`: infinities, both default NaN patterns, subnormal values and operand pairs that make invalid operations) and the threaded group (suffix `t`: the plain sizes rendered with `SAPPHIRE_PAR_MIN=0` and `SAPPHIRE_THREADS=3`, which must equal the plain rows). After building `sapphire`, `python -I tools/fx_golden.py --write` renders every case and rewrites the table; `python -I tools/fx_golden.py` compares. `python -I tools/test_effect_rules.py` fails when a stage of `fx_stages.tsv` lacks a row in any of the three groups.
-- `sapphire stage list --json` then lists the stage, and `python -I tools/conformance.py --stage "PATH/sapphire stage apply STAGE"` passes L1 and L3, with only the documented 1x1 size refusals.
+- **Golden rows.** Each stage has rows in `tools/fx_golden.tsv` in four groups: plain sizes, the special group (size suffix `s`: infinities, both default NaN patterns, subnormal values and operand pairs that make invalid operations), the threaded group (suffix `t`: the plain sizes rendered with `SAPPHIRE_PAR_MIN=0` and `SAPPHIRE_THREADS=3`, which must equal the plain rows) and the variant group (suffix `+o1` and `+o3`: the `cset_opacity` answers 1 and 3 of `glow` and `swishpan`; suffix `+to`: `swishpan` with a `To` layer). After building `sapphire`, `python -I tools/fx_golden.py --write` renders every case and rewrites the table; `python -I tools/fx_golden.py` compares. `python -I tools/test_effect_rules.py` fails when a stage of `fx_stages.tsv` lacks a row in any of the first three groups.
+- `sapphire stage list --json` then lists the stage, and `python -I tools/conformance.py --stage "PATH/sapphire stage apply STAGE"` passes L1 and L3, with only the documented 1x1 size refusals. The tool prints each refused case as a `FAIL` line and ends with exit 1. A transition stage needs its clip length in the command, `--stage "PATH/sapphire stage apply STAGE --frames 12"`; it then also refuses the cases of 1 or 2 frames and the empty input of L3 with exit 4, and without `--frames`, or with `--frames 1`, every L1 case is refused with `FRAMES-REQUIRED` or `FRAMES-TOO-SMALL` (exit 3). The refusals are listed in [Conformance](stages.md#conformance).
 
 ## Device
 
@@ -68,7 +69,7 @@ The self-check results are cached per build, device, driver, kernel sources, bui
 
 ## Reference section
 
-Add a section to [Effects](effects.md), in the order of the status table, with the same template as the ten:
+Add a section to [Effects](effects.md), in the order of the status table, with the same template as the others:
 
 1. A heading with the effect's exact bank name in code font.
 2. What it does, in plain words of its own.

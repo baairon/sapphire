@@ -5,8 +5,9 @@
 //! route carries the parity and this module touches no effect crate. The data is in two tables:
 //!
 //! - `data/fx_stages.tsv`: per style the stage id, program, family, kind, spool, layers, the name of
-//!   the source input, the fixed options, the canonical host tuple and the buffer placement per
-//!   measured size.
+//!   the source input, the fixed options, the canonical host tuple, the buffer placement per
+//!   measured size, the notes and `host_variants` (`-`, or entries `PARAM_ID=VALUE:--opt v|--opt v` that replace or add host
+//!   options when the frame's value of that one offered parameter is VALUE).
 //! - `data/fx_params.tsv`: per offered parameter its id, the `fx_run` option form, type, lanes,
 //!   registered default and range.
 //!
@@ -56,6 +57,8 @@ pub struct Param {
     pub ptype: String,
     /// The registered default, as text.
     pub default: String,
+    /// For a `--cset` parameter: the host answer the host registers as its default (empty for any other parameter).
+    pub answer_default: String,
     /// The smallest value.
     pub min: Option<f64>,
     /// The largest value.
@@ -89,6 +92,124 @@ pub struct Profile {
     pub placement: Vec<(String, Vec<(String, String)>)>,
     /// The offered parameters.
     pub params: Vec<Param>,
+    /// The host options that follow the value of one offered parameter (empty for `-`).
+    pub variants: Vec<HostVariant>,
+    /// Why the `host_variants` column does not parse, if it does not.
+    pub variants_error: Option<String>,
+}
+
+/// One host arrangement selected by the value of an offered parameter.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostVariant {
+    /// The selecting parameter id.
+    pub param: String,
+    /// The value that selects this entry.
+    pub value: String,
+    /// The options that replace or add to the host column.
+    pub opts: Vec<(String, String)>,
+}
+
+/// Parse the `host_variants` column: `-`, or `PARAM_ID=VALUE:--opt v|--opt v` entries separated by `;`.
+pub fn parse_variants(text: &str) -> std::result::Result<Vec<HostVariant>, String> {
+    let text = text.trim();
+    if text == "-" || text.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for entry in text.split(';') {
+        let (key, opts) = entry.split_once(':').ok_or_else(|| format!("HOST-VARIANT-MALFORMED: `{}` has no `:` after PARAM_ID=VALUE", entry))?;
+        let (param, value) = key.split_once('=').ok_or_else(|| format!("HOST-VARIANT-MALFORMED: `{}` is not PARAM_ID=VALUE", key))?;
+        if param.is_empty() || value.is_empty() {
+            return Err(format!("HOST-VARIANT-MALFORMED: `{}` has an empty PARAM_ID or VALUE", key));
+        }
+        let opts = pairs(opts);
+        if opts.is_empty() || opts.iter().any(|(k, _)| !k.starts_with("--")) {
+            return Err(format!("HOST-VARIANT-MALFORMED: `{}` holds no options, or an item that is not `--opt value`", key));
+        }
+        out.push(HostVariant { param: param.to_string(), value: value.to_string(), opts });
+    }
+    Ok(out)
+}
+
+/// Options an entry never carries: derived by the run (`--do-postdiv`, `--owner-opacity`, `--size`, `--out`, `--ae32-src`,
+/// `--ae32-prior`, `--ae32-out`, `--geom`, `--host-frame`, `--ctx-time`, `--host-times`, `--host-value`, `--ns-default-unbound`,
+/// `--frame-words`), given by a parameter (`--cset`, `--set`, `--host-param`, `--host-curve-values`) or fixed per style
+/// (`--prior-fill`); an option of the row's fixed column is refused as well.
+const VARIANT_FORBIDDEN: [&str; 19] = [
+    "--do-postdiv", "--owner-opacity", "--cset", "--set", "--host-param", "--host-curve-values", "--prior-fill", "--size", "--out", "--ae32-src",
+    "--ae32-prior", "--ae32-out", "--geom", "--host-frame", "--ctx-time", "--host-times", "--host-value", "--ns-default-unbound", "--frame-words",
+];
+
+fn same_number(a: &str, b: &str) -> bool {
+    match (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => a.trim() == b.trim(),
+    }
+}
+
+/// Check a profile's variants against its parameters, placement and defaults. Refusals are named and exit 3.
+pub fn check_variants(p: &Profile) -> Result<()> {
+    let bad = |m: String| Err(Error::unsupported(format!("{}: {}", p.id, m)));
+    if let Some(e) = &p.variants_error {
+        return bad(e.clone());
+    }
+    let mut selector: Option<&str> = None;
+    for (i, v) in p.variants.iter().enumerate() {
+        match selector {
+            None => selector = Some(&v.param),
+            Some(s) if s != v.param => return bad(format!("HOST-VARIANT-PARAMS: entries select on both `{}` and `{}`; one selecting parameter per row", s, v.param)),
+            _ => {}
+        }
+        let q = match p.params.iter().find(|q| q.id == v.param) {
+            Some(q) => q,
+            None => return bad(format!("HOST-VARIANT-PARAM-UNKNOWN: `{}` is not an offered parameter", v.param)),
+        };
+        if p.variants[..i].iter().any(|u| same_number(&u.value, &v.value)) {
+            return bad(format!("HOST-VARIANT-DUPLICATE: value `{}` of `{}` has two entries", v.value, v.param));
+        }
+        let dflt = if q.form == "--cset" { &q.answer_default } else { &q.default };
+        if !dflt.is_empty() && same_number(dflt, &v.value) {
+            return bad(format!("HOST-VARIANT-AT-DEFAULT: value `{}` of `{}` is the registered default; the host column serves it", v.value, v.param));
+        }
+        for (k, val) in &v.opts {
+            if val.is_empty() {
+                return bad(format!("HOST-VARIANT-MALFORMED: option `{}` of `{}={}` has no value", k, v.param, v.value));
+            }
+            if VARIANT_FORBIDDEN.contains(&k.as_str()) || p.fixed.iter().any(|(n, _)| n == k) {
+                return bad(format!("HOST-VARIANT-OPTION: `{}` is derived, given by a parameter or fixed, never part of an entry", k));
+            }
+            if p.placement.iter().any(|(_, o)| o.iter().any(|(n, _)| n == k)) {
+                return bad(format!("HOST-VARIANT-PLACEMENT: `{}` is a placement option, which stays per size", k));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The host options of one frame: the host column, with the options of the entry the frame's value of the selecting parameter selects
+/// replacing the option of the same name or added after it. A value with no entry, or an unbound parameter, gives the host column.
+pub fn host_at(p: &Profile, values: &[(String, String)]) -> Vec<(String, String)> {
+    let mut host = p.host.clone();
+    let chosen = p.variants.iter().find(|v| values.iter().rev().find(|(id, _)| *id == v.param).map_or(false, |(_, x)| same_number(x, &v.value)));
+    if let Some(v) = chosen {
+        for (k, val) in &v.opts {
+            if let Some(at) = host.iter().position(|(n, _)| n == k) {
+                host[at].1 = val.clone();
+                let mut seen = false;
+                host.retain(|(n, _)| {
+                    if n != k {
+                        return true;
+                    }
+                    let keep = !seen;
+                    seen = true;
+                    keep
+                });
+            } else {
+                host.push((k.clone(), val.clone()));
+            }
+        }
+    }
+    host
 }
 
 fn pairs(text: &str) -> Vec<(String, String)> {
@@ -141,7 +262,14 @@ pub fn parse_tables(stages: &str, params: &str) -> Vec<Profile> {
             prior_fill,
             placement,
             params: Vec::new(),
+            variants: Vec::new(),
+            variants_error: None,
         });
+        let last = out.last_mut().expect("pushed");
+        match parse_variants(c.get(12).copied().unwrap_or("-")) {
+            Ok(v) => last.variants = v,
+            Err(e) => last.variants_error = Some(e),
+        }
     }
     for line in params.lines().skip(1).filter(|l| !l.trim().is_empty()) {
         let c: Vec<&str> = line.split('\t').collect();
@@ -159,7 +287,8 @@ pub fn parse_tables(stages: &str, params: &str) -> Vec<Profile> {
                 lanes: 1,
                 ptype: String::new(),
                 default: String::new(),
-                min: if c[2] == "--cset" { Some(0.0) } else { None },
+                answer_default: String::new(),
+                min: if c[2] == "--cset" { Some(1.0) } else { None },
                 max: None,
             });
         }
@@ -231,6 +360,10 @@ pub fn enrich(ps: &mut [Profile], described: &[(String, Vec<Described>)]) {
             None => continue,
         };
         for q in p.params.iter_mut() {
+            if q.form == "--cset" {
+                q.answer_default = fx_exec::fxrun::registered_answer_default(&p.program, &q.name).map(|v| v.to_string()).unwrap_or_default();
+                q.max = fx_exec::fxrun::registered_answer_count(&p.program, &q.name).map(|n| n as f64);
+            }
             if q.form == "--cset" || q.form == "--host-curve-values" {
                 continue;
             }
@@ -245,6 +378,12 @@ pub fn enrich(ps: &mut [Profile], described: &[(String, Vec<Described>)]) {
                 q.lanes = d.lanes;
                 q.ptype = d.ptype.clone();
                 q.default = d.default.split_whitespace().collect::<Vec<_>>().join(",");
+                if d.ptype == "popup" && d.lanes == 1 {
+                    // an unbound popup renders its registered default, which the manifest offers as its default
+                    if let Some(x) = fx_exec::fxrun::popup_manifest_default(&p.program, &q.name) {
+                        q.default = x;
+                    }
+                }
                 q.min = Some(d.min);
                 q.max = Some(d.max);
             }
@@ -293,7 +432,7 @@ pub fn definitions() -> Vec<StageDef> {
                             max: q.max.unwrap_or(f64::MAX),
                         },
                         "int" => ParamKind::Int {
-                            default: q.default.trim().parse::<f64>().unwrap_or(0.0) as i64,
+                            default: if q.form == "--cset" { q.answer_default.trim().parse::<i64>().unwrap_or(0) } else { q.default.trim().parse::<f64>().unwrap_or(0.0) as i64 },
                             min: q.min.unwrap_or(i64::MIN as f64) as i64,
                             max: q.max.unwrap_or(i64::MAX as f64) as i64,
                         },
@@ -510,7 +649,7 @@ pub fn constant_curve(w: u32, h: u32, tick: u64, extra: &[CurveKey]) -> String {
         }
     }
     for k in extra {
-        if let Some((name, v)) = identity_sample(k.index) {
+        if let Some((name, v)) = identity_value(k.index) {
             let line = format!("value {} {} {} {} {} 0 {}\n", name, k.index, k.tick, k.step, k.scale, v);
             if !values.contains(&line) {
                 values.push_str(&line);
@@ -544,13 +683,30 @@ pub struct CurveKey {
 
 /// The parameter name and identity value of a curve parameter index of the two curve styles, or `None` for an index
 /// the constant identity curve does not carry.
-pub fn identity_sample(index: i32) -> Option<(&'static str, i64)> {
+fn identity_value(index: i32) -> Option<(&'static str, i64)> {
     match index {
         23 => Some(("rotate", 0)),
         24 | 25 => Some(("shift", 0)),
         22 => Some(("z_dist", 65536)),
+        6 => Some(("wipe_amt", 0)),
         _ => None,
     }
+}
+
+/// The parameter name and identity value of a curve parameter index that the stage's own program carries: index 6 (wipe_amt) for
+/// SwishPan, indices 22 to 25 for the two curve styles. `None` for any other program or index.
+pub fn identity_sample(program: &str, index: i32) -> Option<(&'static str, i64)> {
+    let curve_style = matches!(program, "Transform_and_Blur_Autogen" | "Blur_Motion_Curves_No_Transform_Autogen");
+    match index {
+        6 if program == "SwishPan" => identity_value(index),
+        22..=25 if curve_style => identity_value(index),
+        _ => None,
+    }
+}
+
+/// The parameter the stage row offers for a curve index, when the identity curve would stand in for a value the user can set.
+fn offered_sample<'a>(p: &Profile, index: i32) -> Option<&'a str> {
+    identity_sample(&p.program, index).map(|x| x.0).filter(|n| p.params.iter().any(|q| q.id == *n))
 }
 
 /// The sample named by `fx_run`'s refusal `HOST-CURVE-VALUE-MISSING (PROGRAM: index I, tick T, step S, scale C)`.
@@ -624,6 +780,8 @@ struct Extra {
     frame_words: Vec<(String, Vec<u32>)>,
     /// The whole clip for the history route (Trails): render k is clip frame k-1 at time k.
     history: Option<Vec<Vec<u32>>>,
+    /// `--host-value NAME=VALUE` entries (get_percent_time, get_total_frames), values as f32 bits.
+    host_values: Vec<(String, f32)>,
 }
 
 /// The in-memory files of one run: names are the virtual paths on the command line.
@@ -645,6 +803,12 @@ impl Drop for ForwardDeviceLines<'_> {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The arguments and the named word files of the last `run_fx` call on this thread (tests read it).
+    static LAST_RUN: std::cell::RefCell<Option<(Vec<String>, Vec<(String, std::sync::Arc<Vec<u32>>)>)>> = std::cell::RefCell::new(None);
+}
+
 struct RunFiles {
     words: Vec<(String, std::sync::Arc<Vec<u32>>)>,
     curve: Option<(String, String)>,
@@ -658,6 +822,7 @@ fn run_fx(
     src: Vec<u32>,
     layers: Vec<(String, Vec<u32>)>,
     params: &[String],
+    host: &[(String, String)],
     extra: Extra,
     learned: &Learned,
 ) -> Result<Vec<Vec<u32>>> {
@@ -694,7 +859,7 @@ fn run_fx(
         let times: Vec<String> = (1..=count).map(|k| k.to_string()).collect();
         args.extend(["--host-times".to_string(), times.join(",")]);
     }
-    for (k, v) in p.host.iter().chain(placement_for(p, w, h).iter()).chain(p.fixed.iter()) {
+    for (k, v) in host.iter().chain(placement_for(p, w, h).iter()).chain(p.fixed.iter()) {
         if v == "<path>" {
             continue;
         }
@@ -703,6 +868,10 @@ fn run_fx(
         args.push(if k == "--palpha-cells" { v.replacen('W', &w.to_string(), 1) } else { v.clone() });
     }
     args.extend(params.iter().cloned());
+    for (name, v) in &extra.host_values {
+        args.push("--host-value".into());
+        args.push(format!("{}=0x{:08x}", name, v.to_bits()));
+    }
     // an unbound normalize_scale parameter takes its registered default from the native definitions
     args.push("--ns-default-unbound".into());
     let own_curve = p.params.iter().any(|q| q.id == "host_curve_values") && !args.iter().any(|a| a == "--host-curve-values");
@@ -739,6 +908,8 @@ fn run_fx(
     if let Some(n) = learned.xy_writers.get() {
         fit_xy_list(&mut args, n, index)?;
     }
+    #[cfg(test)]
+    LAST_RUN.with(|l| *l.borrow_mut() = Some((args.clone(), files.words.iter().map(|(k, v)| (k.clone(), v.clone())).collect())));
     let (mut code, mut io) = exec(&args, &files);
     // The owner-arm `do_postdiv` is a required cross-check that the run reveals only through its refusal; the library hands
     // over the value the owner arm derives, it is learned once per clip and kept. The samples the route reads from the stage's
@@ -758,7 +929,10 @@ fn run_fx(
         if own_curve && matches!(code, 1 | 2) && text.contains("HOST-CURVE-VALUE-MISSING (") {
             let line = text.lines().find(|l| l.contains("HOST-CURVE-VALUE-MISSING")).unwrap_or("").to_string();
             let key = match parse_curve_missing(&text) {
-                Some(k) if identity_sample(k.index).is_some() => k,
+                Some(k) if offered_sample(p, k.index).is_some() => {
+                    return Err(Error::unsupported(format!("frame {}: HOST-CURVE-SAMPLE-UNSERVED: {} is an offered parameter and the constant identity curve does not serve it: {}", index, offered_sample(p, k.index).unwrap_or(""), line)).with_tail(tail_lines(&text, 3)))
+                }
+                Some(k) if identity_sample(&p.program, k.index).is_some() => k,
                 _ => return Err(Error::unsupported(format!("frame {}: HOST-CURVE-SAMPLE-UNSERVED: the constant identity curve cannot serve this sample; pass host_curve_values: {}", index, line)).with_tail(tail_lines(&text, 3))),
             };
             let entry = (key.index, key.tick - index as i64, key.step, key.scale);
@@ -816,29 +990,55 @@ fn run_fx(
     Ok(outs)
 }
 
-/// A layer file: one frame (held) or one frame per input frame.
+/// A layer file: one frame (held in memory) or one frame per input frame (read from the file when its frame is asked for, so a
+/// long clip is never held whole).
 struct Layer {
     id: String,
-    frames: Vec<Vec<u32>>,
+    spec: FrameSpec,
+    frames: u64,
+    held: Option<Vec<u32>>,
+    file: Option<std::cell::RefCell<std::fs::File>>,
 }
 
 impl Layer {
     fn load(id: &str, path: &str, spec: FrameSpec) -> Result<Layer> {
-        let bytes = std::fs::read(path).map_err(|e| Error::bad_input(format!("cannot open layer {} at {}: {}", id, path, e)))?;
-        let fb = spec.frame_bytes() as usize;
-        if bytes.is_empty() || bytes.len() % fb != 0 {
-            return Err(Error::bad_input(format!("layer {} holds {} bytes, which is not a whole number of {}x{} frames", id, bytes.len(), spec.width, spec.height)));
+        use std::io::{Read, Seek, SeekFrom};
+        let open_err = |e: std::io::Error| Error::bad_input(format!("cannot open layer {} at {}: {}", id, path, e));
+        let mut file = std::fs::File::open(path).map_err(open_err)?;
+        let len = file.metadata().map_err(open_err)?.len();
+        let fb = spec.frame_bytes();
+        if len == 0 || len % fb != 0 {
+            return Err(Error::bad_input(format!("layer {} holds {} bytes, which is not a whole number of {}x{} frames", id, len, spec.width, spec.height)));
         }
-        Ok(Layer { id: id.to_string(), frames: bytes.chunks(fb).map(|c| frame_to_words(spec, c)).collect() })
+        let frames = len / fb;
+        if frames == 1 {
+            let mut buf = vec![0u8; fb as usize];
+            file.seek(SeekFrom::Start(0)).and_then(|_| file.read_exact(&mut buf)).map_err(open_err)?;
+            return Ok(Layer { id: id.to_string(), spec, frames, held: Some(frame_to_words(spec, &buf)), file: None });
+        }
+        Ok(Layer { id: id.to_string(), spec, frames, held: None, file: Some(std::cell::RefCell::new(file)) })
+    }
+
+    /// A held layer of one frame that is not read from a file.
+    fn held(id: &str, spec: FrameSpec, words: Vec<u32>) -> Layer {
+        Layer { id: id.to_string(), spec, frames: 1, held: Some(words), file: None }
     }
 
     fn at(&self, index: u64) -> Result<(String, Vec<u32>)> {
-        let n = self.frames.len();
-        let k = if n == 1 { 0 } else { index as usize };
-        match self.frames.get(k) {
-            Some(f) => Ok((self.id.clone(), f.clone())),
-            None => Err(Error::bad_input(format!("layer {} holds {} frames but the input has more", self.id, n))),
+        use std::io::{Read, Seek, SeekFrom};
+        if let Some(f) = &self.held {
+            return Ok((self.id.clone(), f.clone()));
         }
+        if index >= self.frames {
+            return Err(Error::bad_input(format!("layer {} holds {} frames but the input has more", self.id, self.frames)));
+        }
+        let fb = self.spec.frame_bytes();
+        let mut buf = vec![0u8; fb as usize];
+        let mut file = self.file.as_ref().expect("a layer of several frames has a file").borrow_mut();
+        file.seek(SeekFrom::Start(index * fb))
+            .and_then(|_| file.read_exact(&mut buf))
+            .map_err(|e| Error::bad_input(format!("cannot read frame {} of layer {}: {}", index, self.id, e)))?;
+        Ok((self.id.clone(), frame_to_words(self.spec, &buf)))
     }
 }
 
@@ -974,6 +1174,137 @@ pub fn command_line(id: &str, spec: FrameSpec, rate: &crate::rate::Rate, params:
     argv
 }
 
+impl Profile {
+    /// A transition stage: it declares a second layer (the To clip).
+    pub fn is_transition(&self) -> bool {
+        !self.layers.is_empty() && fx_exec::fxrun::program_has_flag(&self.program, "transition")
+    }
+
+    /// Whether the bound parameters keep `get_percent_time` live, so the stage must be told the clip length.
+    /// The transition stages map the clip onto the layer and the composition alike.
+    pub fn time_live(&self) -> bool {
+        self.is_transition()
+    }
+}
+
+/// `get_percent_time` of frame `f` in a clip of `n` frames: f32(f) / f32(n - 1).
+pub fn percent_time(f: u64, n: u64) -> f32 {
+    f as f32 / (n - 1) as f32
+}
+
+/// The refusal of a rate or frame whose time fields do not fit the host's 32-bit fields.
+fn time_range_error(num: u128, den: u128, f: u64) -> Error {
+    Error::unsupported(format!("HOST-TIME-RANGE (get_time: --fps {}/{} at frame {} needs a host time field outside 32 bits)", num, den, f))
+}
+
+/// The largest numerator (time scale, unsigned 32-bit) and denominator (local time step, signed 32-bit) the host fields hold.
+const HOST_SCALE_MAX: u128 = u32::MAX as u128;
+const HOST_STEP_MAX: u128 = i32::MAX as u128;
+
+/// Refuse a rate whose time scale or local time step does not fit the host's 32-bit time fields, before any frame is read.
+fn check_time_rate(rate: Option<&crate::rate::Rate>) -> Result<()> {
+    match rate {
+        Some(r) if r.num() > HOST_SCALE_MAX || r.den() > HOST_STEP_MAX => Err(time_range_error(r.num(), r.den(), 0)),
+        _ => Ok(()),
+    }
+}
+
+/// `get_time` of frame `f` at the frame rate `num/den`, in the order the host computes it for a time scale `num` and a local time step
+/// `den`: with tick = f * den, F = f32(tick) / f32(den) and rate = f32(num) / f32(den), the value is F / d, where d is 30.0 when
+/// 1.0e-4 is above the rate and the rate otherwise. Every conversion is the correctly rounded f32 of the integer and every division
+/// is an f32 division. A tick above 2^31 - 1, a time scale above 2^32 - 1 or a local time step above 2^31 - 1 is refused.
+pub fn host_time(f: u64, num: u64, den: u64) -> Result<f32> {
+    let tick = f as u128 * den as u128;
+    if num as u128 > HOST_SCALE_MAX || den as u128 > HOST_STEP_MAX || tick > HOST_STEP_MAX {
+        return Err(time_range_error(num as u128, den as u128, f));
+    }
+    let (t, s, n) = (tick as f32, den as f32, num as f32);
+    let elapsed = t / s;
+    let rate = n / s;
+    let d = if 1.0e-4f32 > rate { 30.0f32 } else { rate };
+    Ok(elapsed / d)
+}
+
+/// `get_aspect_ratio` of a frame: f32(height) / f32(width), the host fields +0x54 (the ratio) times +0x34 (the unit factor, 1.0).
+pub fn aspect_ratio(width: u32, height: u32) -> f32 {
+    height as f32 / width as f32
+}
+
+/// The host values of frame `f`: `get_time` when the rate is known, and percent time and total frames when the
+/// clip length is known (a transition stage also gets the frame's aspect ratio, `spec` being its size).
+fn time_values(total: Option<u64>, rate: Option<&crate::rate::Rate>, f: u64, spec: FrameSpec) -> Result<Vec<(String, f32)>> {
+    let mut out = Vec::new();
+    if let Some(r) = rate {
+        if r.num() > HOST_SCALE_MAX || r.den() > HOST_STEP_MAX {
+            return Err(time_range_error(r.num(), r.den(), f));
+        }
+        out.push(("get_time".to_string(), host_time(f, r.num() as u64, r.den() as u64)?));
+    }
+    if let Some(n) = total {
+        out.push(("get_percent_time".to_string(), percent_time(f, n)));
+        out.push(("get_total_frames".to_string(), n as f32));
+        out.push(("get_aspect_ratio".to_string(), aspect_ratio(spec.width, spec.height)));
+    }
+    Ok(out)
+}
+
+/// The clip length a time-live stage needs: `--frames N` with N of 2 or more, refused by name otherwise.
+fn check_time(p: &Profile, frames: Option<u64>) -> Result<Option<u64>> {
+    if !p.time_live() {
+        return Ok(None);
+    }
+    match frames {
+        None => Err(Error::unsupported(format!("FRAMES-REQUIRED: {} keeps get_percent_time live and needs `--frames N` (the clip length)", p.id))),
+        Some(n) if n < 2 => Err(Error::unsupported(format!("FRAMES-TOO-SMALL: {} needs `--frames` of 2 or more, got {}", p.id, n))),
+        Some(n) => Ok(Some(n)),
+    }
+}
+
+/// Load the `--layer ID=PATH` inputs of a transition stage. `To` names the stage's second layer; the declared layer id
+/// is accepted as well. A missing file, a size that is not whole frames of the main size, an unknown id and a layer
+/// given twice are refused by name (exit 3), as is a required layer that is absent.
+fn load_layers(p: &Profile, layers: &[String], spec: FrameSpec) -> Result<Vec<Layer>> {
+    let mut out: Vec<Layer> = Vec::new();
+    for l in layers {
+        let (id, path) = l.split_once('=').filter(|(i, v)| !i.is_empty() && !v.is_empty()).ok_or_else(|| Error::usage(format!("`--layer {}`: expected ID=PATH", l)))?;
+        let declared = p
+            .layers
+            .iter()
+            .find(|(d, _)| d == id)
+            .or_else(|| if id == "To" { p.layers.first() } else { None })
+            .ok_or_else(|| Error::unsupported(format!("LAYER-ID-UNKNOWN: {} has no layer `{}`", p.id, id)))?;
+        if out.iter().any(|x| x.id == declared.0) {
+            return Err(Error::unsupported(format!("LAYER-DUPLICATE: layer `{}` of {} is given twice", declared.0, p.id)));
+        }
+        let meta = std::fs::metadata(path).map_err(|e| Error::unsupported(format!("LAYER-FILE-MISSING: cannot open layer {} at {}: {}", id, path, e)))?;
+        let fb = spec.frame_bytes();
+        if meta.len() == 0 || meta.len() % fb != 0 {
+            return Err(Error::unsupported(format!(
+                "LAYER-SIZE-MISMATCH: layer {} holds {} bytes, which is not a whole number of {}x{} frames ({} bytes each)",
+                id,
+                meta.len(),
+                spec.width,
+                spec.height,
+                fb
+            )));
+        }
+        out.push(Layer::load(&declared.0, path, spec)?);
+    }
+    for (d, optional) in &p.layers {
+        if out.iter().any(|x| &x.id == d) {
+            continue;
+        }
+        if !optional {
+            return Err(Error::unsupported(format!("LAYER-INPUT-MISSING: {} needs `--layer To=FILE` (the second clip)", p.id)));
+        }
+        // an optional layer that is not given is a layer at None: the host answers it with NULL pixels, and the plan's
+        // convert of such a layer reads all-zero planes (one held frame of zero words, alpha included)
+        let words = spec.width as usize * spec.height as usize * 4;
+        out.push(Layer::held(d, spec, vec![0u32; words]));
+    }
+    Ok(out)
+}
+
 /// Run the effect stage over `input`.
 pub fn apply(
     id: &str,
@@ -987,9 +1318,11 @@ pub fn apply(
     output: &mut dyn Write,
 ) -> Result<()> {
     let p = profile(id).ok_or_else(|| Error::unsupported(format!("unknown stage `{}`", id)))?;
-    if !layers.is_empty() {
-        return Err(Error::unsupported(format!("LAYER-INPUT-UNSUPPORTED: {} takes no `--layer` input; the effect stages render the source clip only", p.id)));
+    if !layers.is_empty() && !p.is_transition() {
+        return Err(Error::unsupported(format!("LAYER-INPUT-UNSUPPORTED: {} takes no `--layer` input; only transition stages take a second layer", p.id)));
     }
+    let total = check_time(p, frames)?;
+    check_variants(p)?;
     if let Some(m) = missing() {
         return Err(Error::unsupported(format!("the effect stages need fx_run: {}", m)));
     }
@@ -999,9 +1332,10 @@ pub fn apply(
         return Err(Error::unsupported(format!("{} needs a width of 2 or more (the host grid needs two columns)", p.id)));
     }
     let keyed = Keyed::new(p, values, rate)?;
+    check_time_rate(rate)?;
     // the arguments of frame `f`: a keyed parameter takes its value at that frame
     let args_at = |f: u64| param_args(p, &keyed.values_at(f));
-    let ls: Vec<Layer> = Vec::new();
+    let ls: Vec<Layer> = load_layers(p, layers, spec)?;
     let fb = spec.frame_bytes() as usize;
     let mut buf = vec![0u8; fb];
     let mut out = vec![0u8; fb];
@@ -1035,13 +1369,13 @@ pub fn apply(
                 let k = k.min(last - 1);
                 &window[(k - base) as usize]
             };
-            let mut extra = Extra::default();
+            let mut extra = Extra { host_values: time_values(total, rate, f, spec)?, ..Extra::default() };
             let vf = keyed.values_at(f);
             for s in tw_shifts(p, &vf) {
                 let k = (f as i64 + s as i64).max(0) as u64;
                 extra.frame_words.push((format!("{},{}", k, k), get(k).clone()));
             }
-            let words = run_fx(&runner, p, spec, f, get(f).clone(), layer_words(f)?, &param_args(p, &vf)?, extra, &learned)?.remove(0);
+            let words = run_fx(&runner, p, spec, f, get(f).clone(), layer_words(f)?, &param_args(p, &vf)?, &host_at(p, &vf), extra, &learned)?.remove(0);
             words_to_frame(spec, &words, &mut out);
             write_out(output, &out, f)?;
             count += 1;
@@ -1058,8 +1392,8 @@ pub fn apply(
             clip.push(frame_to_words(spec, &buf));
         }
         if !clip.is_empty() {
-            let extra = Extra { frame_words: Vec::new(), history: Some(clip) };
-            let outs = run_fx(&runner, p, spec, 0, Vec::new(), Vec::new(), &args_at(0)?, extra, &learned)?;
+            let extra = Extra { frame_words: Vec::new(), history: Some(clip), host_values: Vec::new() };
+            let outs = run_fx(&runner, p, spec, 0, Vec::new(), Vec::new(), &args_at(0)?, &host_at(p, &keyed.values_at(0)), extra, &learned)?;
             for (i, words) in outs.iter().enumerate() {
                 words_to_frame(spec, words, &mut out);
                 write_out(output, &out, i as u64)?;
@@ -1071,8 +1405,13 @@ pub fn apply(
             if !read_frame(input, &mut buf, count)? {
                 break;
             }
+            if let Some(n) = total {
+                if count >= n {
+                    return Err(Error::bad_input(format!("the input holds more than {} frames, but --frames says {}", n, n)));
+                }
+            }
             let src = frame_to_words(spec, &buf);
-            let words = run_fx(&runner, p, spec, count, src, layer_words(count)?, &args_at(count)?, Extra::default(), &learned)?.remove(0);
+            let words = run_fx(&runner, p, spec, count, src, layer_words(count)?, &args_at(count)?, &host_at(p, &keyed.values_at(count)), Extra { host_values: time_values(total, rate, count, spec)?, ..Extra::default() }, &learned)?.remove(0);
             words_to_frame(spec, &words, &mut out);
             write_out(output, &out, count)?;
             count += 1;
@@ -1161,9 +1500,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tables_parse_for_thirteen_stages() {
+    fn tables_parse_for_sixteen_stages() {
         let ps = profiles();
-        assert_eq!(ps.len(), 13);
+        assert_eq!(ps.len(), 16);
         let hsb = profile("hue_sat_bright_autogen").expect("hsb");
         assert_eq!(hsb.family, "S_HueSatBright");
         assert_eq!(hsb.kind, "temporal");
@@ -1171,7 +1510,9 @@ mod tests {
         assert!(hsb.params.iter().any(|q| q.id == "hue_shift"));
         assert_eq!(profile("trails_autogen").unwrap().spool, true);
         assert_eq!(profile("time_warp_rgb_autogen").unwrap().kind, "temporal");
-        assert!(ps.iter().all(|q| q.layers.is_empty()));
+        // only the transition stage declares a layer: its second clip, optional
+        assert!(ps.iter().filter(|q| q.id != "swishpan").all(|q| q.layers.is_empty()));
+        assert_eq!(profile("swishpan").unwrap().layers, vec![("To".to_string(), true)]);
     }
 
     #[test]
@@ -1229,7 +1570,12 @@ mod tests {
         let k = parse_curve_missing(e).unwrap();
         assert_eq!(k, CurveKey { index: 23, tick: 1, step: 1, scale: 24 });
         assert!(parse_curve_missing("HOST-CURVE-VALUE-MISSING (P: time argument not a constant)").is_none());
-        assert!(identity_sample(99).is_none());
+        assert!(identity_sample("Transform_and_Blur_Autogen", 99).is_none());
+        assert_eq!(identity_sample("SwishPan", 6), Some(("wipe_amt", 0)));
+        assert!(identity_sample("Blur_Motion_Curves_No_Transform_Autogen", 6).is_none());
+        assert!(identity_sample("SwishPan", 23).is_none());
+        assert_eq!(identity_sample("Transform_and_Blur_Autogen", 22), Some(("z_dist", 65536)));
+        assert!(identity_sample("Blur_Color_Autogen", 22).is_none());
         let t = constant_curve(64, 32, 0, &[k, CurveKey { index: 22, tick: -1, step: 1, scale: 24 }]);
         assert!(t.ends_with("value z_dist 22 0 1 24 0 65536\nvalue rotate 23 1 1 24 0 0\nvalue z_dist 22 -1 1 24 0 65536\n"));
         assert_eq!(constant_curve(64, 32, 0, &[CurveKey { index: 23, tick: 0, step: 1, scale: 24 }]), constant_curve(64, 32, 0, &[]));
@@ -1306,5 +1652,500 @@ mod tests {
         assert_eq!(l.at(2).unwrap_err().exit_code(), 4);
         assert_eq!(Layer::load("Lens", bad.to_str().unwrap(), spec).err().unwrap().exit_code(), 4);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `run_fx` of the real SwishPan row for frame 0 at 64x32, with the time values the row's route reads.
+    fn run_swishpan(p: &Profile) -> Result<Vec<Vec<u32>>> {
+        let spec = FrameSpec { width: 64, height: 32, depth: Depth::F32 };
+        let extra = Extra { host_values: time_values(Some(3), None, 0, spec).unwrap(), ..Extra::default() };
+        let runner = Runner::new(fx_exec::fxrun::Device::Cpu);
+        let layers: Vec<(String, Vec<u32>)> = load_layers(p, &[], spec).unwrap().iter().map(|l| l.at(0).unwrap()).collect();
+        run_fx(&runner, p, spec, 0, vec![0u32; 64 * 32 * 4], layers, &[], &host_at(p, &[]), extra, &Learned::default())
+    }
+
+    #[test]
+    fn run_fx_refuses_an_offered_curve_parameter_and_serves_a_hidden_one() {
+        let row = profile("swishpan").unwrap().clone();
+        assert!(offered_sample(&row, 6).is_none());
+        // the row does not offer wipe_amt: the constant identity curve serves the sample fx_run asks for, and the frame renders
+        let served = run_swishpan(&row).unwrap_or_else(|e| panic!("{} {:?}", e.message, e.stderr_tail));
+        assert_eq!(served.len(), 1);
+        // a row that offers wipe_amt is refused by name when fx_run asks for that sample
+        let mut offered = row.clone();
+        offered.params.push(Param { id: "wipe_amt".into(), form: "--set".into(), name: "wipe_amt".into(), kind: "float".into(), lanes: 1, ptype: String::new(), default: String::new(), answer_default: String::new(), min: None, max: None });
+        assert_eq!(offered_sample(&offered, 6), Some("wipe_amt"));
+        let e = run_swishpan(&offered).unwrap_err();
+        assert_eq!(e.exit_code(), 3, "{}", e.message);
+        assert!(e.message.contains("HOST-CURVE-SAMPLE-UNSERVED") && e.message.contains("wipe_amt is an offered parameter"), "{}", e.message);
+    }
+
+    fn transition() -> Profile {
+        let mut p = profile("distort_rgb_autogen").unwrap().clone();
+        p.program = "SwishPan".to_string();
+        p.layers = vec![("Background".to_string(), false)];
+        p
+    }
+
+    fn temp(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("sapphire-fx-{}-{}", tag, std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn percent_time_formula() {
+        let n = 25u64;
+        assert_eq!(percent_time(0, n), 0.0);
+        assert_eq!(percent_time(12, n).to_bits(), (12f32 / 24f32).to_bits());
+        assert_eq!(percent_time(n - 1, n), 1.0);
+        let sp = FrameSpec { width: 50, height: 7, depth: Depth::F32 };
+        let v = time_values(Some(n), None, 12, sp).unwrap();
+        assert_eq!(v[2], ("get_aspect_ratio".to_string(), 7f32 / 50f32));
+        assert_eq!(aspect_ratio(64, 32), 0.5);
+        assert_eq!(v[0], ("get_percent_time".to_string(), 0.5));
+        assert_eq!(v[1], ("get_total_frames".to_string(), 25.0));
+        assert!(time_values(None, None, 3, sp).unwrap().is_empty());
+        let r = crate::rate::Rate::parse("24/1").unwrap();
+        for f in [0u64, 7, 17] {
+            assert_eq!(time_values(None, Some(&r), f, sp).unwrap()[0].1.to_bits(), (f as f32 / 24f32).to_bits());
+        }
+        assert_eq!(host_time(7, 24, 1).unwrap(), 7f32 / 24f32);
+    }
+
+    #[test]
+    fn an_offered_parameter_is_never_served_by_the_identity_curve() {
+        let mut p = profile("distort_rgb_autogen").unwrap().clone();
+        p.program = "SwishPan".to_string();
+        assert!(offered_sample(&p, 6).is_none());
+        p.params.push(Param { id: "wipe_amt".into(), form: "--set".into(), name: "wipe_amt".into(), kind: "float".into(), lanes: 1, ptype: String::new(), default: String::new(), answer_default: String::new(), min: None, max: None });
+        assert_eq!(offered_sample(&p, 6), Some("wipe_amt"));
+        assert!(offered_sample(&p, 23).is_none());
+    }
+
+    #[test]
+    fn a_declared_layer_alone_does_not_make_a_stage_a_transition() {
+        assert!(transition().is_transition());
+        let mut p = profile("distort_rgb_autogen").unwrap().clone();
+        p.layers = vec![("Background".to_string(), false)];
+        assert!(!p.is_transition() && !p.time_live());
+    }
+
+    /// The three f32 divisions of the host's time computation, written out independently of `host_time`.
+    fn reference_time(f: u64, num: u64, den: u64) -> f32 {
+        let tick: f32 = (f * den) as f32;
+        let step: f32 = den as f32;
+        let scale: f32 = num as f32;
+        let elapsed: f32 = tick / step;
+        let rate: f32 = scale / step;
+        let divisor: f32 = if rate < 1.0e-4 { 30.0 } else { rate };
+        elapsed / divisor
+    }
+
+    #[test]
+    fn get_time_at_whole_rates_is_the_plain_f32_quotient() {
+        for (num, den) in [(24u64, 1u64), (30, 1), (60, 1), (2997, 1)] {
+            for f in 0..=1000u64 {
+                let want = (f as f32) / (num as f32);
+                assert_eq!(host_time(f, num, den).unwrap().to_bits(), want.to_bits(), "{}/{} frame {}", num, den, f);
+            }
+        }
+    }
+
+    #[test]
+    fn get_time_follows_the_read_order_and_differs_from_the_single_division_where_expected() {
+        for (num, den, expect) in [(24000u64, 1001u64, 312usize), (30000, 1001, 69), (60000, 1001, 69), (2997, 100, 277)] {
+            let mut differ = 0usize;
+            for f in 0..=1000u64 {
+                let got = host_time(f, num, den).unwrap();
+                assert_eq!(got.to_bits(), reference_time(f, num, den).to_bits(), "{}/{} frame {}", num, den, f);
+                let single = ((f * den) as f32) / (num as f32);
+                if got.to_bits() != single.to_bits() {
+                    differ += 1;
+                }
+            }
+            assert_eq!(differ, expect, "{}/{}", num, den);
+        }
+    }
+
+    #[test]
+    fn a_rate_below_the_floor_divides_by_thirty() {
+        // rate = 1/100000 is below 1.0e-4, so the divisor is 30.0
+        let got = host_time(7, 1, 100000).unwrap();
+        assert_eq!(got.to_bits(), ((7u64 * 100000) as f32 / 100000f32 / 30.0f32).to_bits());
+    }
+
+    #[test]
+    fn get_time_refuses_values_outside_the_host_time_fields() {
+        // the last frame at 30000/1001 whose tick fits 2^31 - 1 is served, the next one is refused
+        assert!(host_time(2145338, 30000, 1001).is_ok());
+        let e = host_time(2145339, 30000, 1001).unwrap_err();
+        assert!(e.to_string().starts_with("HOST-TIME-RANGE (get_time: --fps 30000/1001 at frame 2145339 needs a host time field outside 32 bits)"), "{}", e);
+        assert!(host_time(0, 4294967296, 1).is_err());
+        assert!(host_time(0, 4294967295, 1).is_ok());
+        assert!(host_time(0, 24, 2147483648).is_err());
+        assert!(host_time(0, 24, 2147483647).is_ok());
+        // the rate check runs before any frame is read
+        let big = crate::rate::Rate::new(4294967296, 1).unwrap();
+        assert!(check_time_rate(Some(&big)).is_err());
+        assert!(check_time_rate(Some(&crate::rate::Rate::new(30000, 1001).unwrap())).is_ok());
+        assert!(check_time_rate(None).is_ok());
+        let sp = FrameSpec { width: 2, height: 2, depth: Depth::F32 };
+        assert!(time_values(None, Some(&big), 0, sp).is_err());
+        let r = crate::rate::Rate::new(30000, 1001).unwrap();
+        assert!(time_values(None, Some(&r), 2145338, sp).is_ok());
+        assert!(time_values(None, Some(&r), 2145339, sp).is_err());
+    }
+
+    #[test]
+    fn layer_frames_are_read_when_asked_for() {
+        let spec = FrameSpec { width: 2, height: 1, depth: Depth::U8 };
+        let dir = temp("layerstream");
+        let f = dir.join("four.raw");
+        let bytes: Vec<u8> = (0u8..32).collect();
+        std::fs::write(&f, &bytes).unwrap();
+        let l = Layer::load("Lens", f.to_str().unwrap(), spec).unwrap();
+        assert!(l.held.is_none() && l.frames == 4);
+        for k in [3u64, 0, 2, 2, 1] {
+            let (_, w) = l.at(k).unwrap();
+            assert_eq!(w, frame_to_words(spec, &bytes[8 * k as usize..8 * k as usize + 8]));
+        }
+        assert_eq!(l.at(4).unwrap_err().exit_code(), 4);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn frames_are_required_by_name_for_a_time_live_stage() {
+        let p = transition();
+        for (frames, name) in [(None, "FRAMES-REQUIRED"), (Some(1), "FRAMES-TOO-SMALL")] {
+            let e = check_time(&p, frames).unwrap_err();
+            assert_eq!(e.exit_code(), 3);
+            assert!(e.message.starts_with(name), "{}", e.message);
+        }
+        assert_eq!(check_time(&p, Some(2)).unwrap(), Some(2));
+        let plain = profile("distort_rgb_autogen").unwrap();
+        assert!(!plain.time_live());
+        assert_eq!(check_time(plain, None).unwrap(), None);
+    }
+
+    #[test]
+    fn to_layer_is_loaded_and_refused_by_name() {
+        let spec = FrameSpec { width: 2, height: 1, depth: Depth::U8 };
+        let p = transition();
+        let dir = temp("tolayer");
+        let good = dir.join("to.raw");
+        let bytes: Vec<u8> = (0u8..16).collect();
+        std::fs::write(&good, &bytes).unwrap();
+        let ok = load_layers(&p, &[format!("To={}", good.display())], spec).unwrap();
+        assert_eq!(ok.len(), 1);
+        let (name, words) = ok[0].at(1).unwrap();
+        assert_eq!(name, "Background");
+        assert_eq!(words, frame_to_words(spec, &bytes[8..16]));
+        let bad = dir.join("bad.raw");
+        std::fs::write(&bad, vec![0u8; 5]).unwrap();
+        let name_of = |l: &[String]| {
+            let e = load_layers(&p, l, spec).err().unwrap();
+            assert_eq!(e.exit_code(), 3, "{}", e.message);
+            e.message
+        };
+        assert!(name_of(&[format!("To={}", bad.display())]).starts_with("LAYER-SIZE-MISMATCH"));
+        assert!(name_of(&["To=/nonexistent/to.raw".to_string()]).starts_with("LAYER-FILE-MISSING"));
+        assert!(name_of(&[format!("Other={}", good.display())]).starts_with("LAYER-ID-UNKNOWN"));
+        assert!(name_of(&[]).starts_with("LAYER-INPUT-MISSING"));
+        let twice = format!("To={}", good.display());
+        assert!(name_of(&[twice.clone(), twice]).starts_with("LAYER-DUPLICATE"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn absent_optional_layer_is_a_zero_frame() {
+        let spec = FrameSpec { width: 2, height: 1, depth: Depth::U8 };
+        let mut p = transition();
+        p.layers = vec![("To".to_string(), true)];
+        let ls = load_layers(&p, &[], spec).unwrap();
+        assert_eq!(ls.len(), 1);
+        let (name, words) = ls[0].at(7).unwrap();
+        assert_eq!(name, "To");
+        assert_eq!(words, vec![0u32; 8]);
+    }
+
+    #[test]
+    fn to_layer_and_host_values_reach_fx_run() {
+        let spec = FrameSpec { width: 64, height: 32, depth: Depth::U8 };
+        let p = transition();
+        let dir = temp("reach");
+        let to = dir.join("to.raw");
+        let bytes: Vec<u8> = (0..spec.frame_bytes() as usize).map(|i| (i * 7 % 251) as u8).collect();
+        std::fs::write(&to, &bytes).unwrap();
+        let layers = load_layers(&p, &[format!("To={}", to.display())], spec).unwrap();
+        let runner = Runner::new(fx_exec::fxrun::Device::Cpu);
+        let src = vec![0u32; 64 * 32 * 4];
+        let extra = Extra { host_values: time_values(Some(25), None, 12, FrameSpec { width: 64, height: 32, depth: Depth::F32 }).unwrap(), ..Extra::default() };
+        // the stand-in program has no To parameter, so the run itself may refuse; the command line is what is checked
+        let _ = run_fx(&runner, &p, spec, 12, src, vec![layers[0].at(12).unwrap()], &[], &p.host, extra, &Learned::default());
+        let (args, files) = LAST_RUN.with(|l| l.borrow().clone()).unwrap();
+        assert!(args.windows(2).any(|w| w[0] == "--ae32-src" && w[1] == "Background=layer_Background.u32"), "{:?}", args);
+        let half = format!("get_percent_time=0x{:08x}", 0.5f32.to_bits());
+        assert!(args.windows(2).any(|w| w[0] == "--host-value" && w[1] == half), "{:?}", args);
+        let total = format!("get_total_frames=0x{:08x}", 25f32.to_bits());
+        assert!(args.windows(2).any(|w| w[0] == "--host-value" && w[1] == total));
+        let (_, words) = files.iter().find(|(k, _)| k == "layer_Background.u32").unwrap();
+        assert_eq!(**words, frame_to_words(spec, &bytes));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn with_variants(text: &str) -> Profile {
+        let mut p = profile("blur_color_autogen").unwrap().clone();
+        p.variants = parse_variants(text).unwrap();
+        p
+    }
+
+    const VARIANT_TEXT: &str = "cset_opacity=1:--src-planes 3|--src-head 0x7e91c0|--extra-opt 9;cset_opacity=3:--src-head 0x7ea840";
+
+    fn val(v: &str) -> Vec<(String, String)> {
+        vec![("cset_opacity".to_string(), v.to_string())]
+    }
+
+    #[test]
+    fn host_variants_column_parses() {
+        assert!(parse_variants("-").unwrap().is_empty());
+        let v = parse_variants(VARIANT_TEXT).unwrap();
+        assert_eq!(v.len(), 2);
+        assert_eq!((v[0].param.as_str(), v[0].value.as_str()), ("cset_opacity", "1"));
+        assert_eq!(v[0].opts, vec![("--src-planes".to_string(), "3".to_string()), ("--src-head".to_string(), "0x7e91c0".to_string()), ("--extra-opt".to_string(), "9".to_string())]);
+        for bad in ["cset_opacity=1", "cset_opacity:--a 1", "=1:--a 1", "cset_opacity=1:", "cset_opacity=1:src 3"] {
+            assert!(parse_variants(bad).unwrap_err().starts_with("HOST-VARIANT-MALFORMED"), "{}", bad);
+        }
+    }
+
+    #[test]
+    fn every_landed_row_parses_its_variants_and_the_table_checks() {
+        for p in profiles() {
+            assert!(p.variants_error.is_none(), "{}", p.id);
+            check_variants(p).unwrap();
+            // only the stages whose recorded runs differ by opacity answer carry entries, keyed on cset_opacity at the answers 1 and 3
+            let keyed: Vec<(&str, &str)> = p.variants.iter().map(|v| (v.param.as_str(), v.value.as_str())).collect();
+            if p.id == "glow" || p.id == "swishpan" {
+                assert_eq!(keyed, [("cset_opacity", "1"), ("cset_opacity", "3")], "{}", p.id);
+            } else {
+                assert!(keyed.is_empty(), "{}", p.id);
+            }
+        }
+    }
+
+    #[test]
+    fn variant_selection_replaces_adds_and_falls_back() {
+        let p = with_variants(VARIANT_TEXT);
+        let base = p.host.clone();
+        // unbound, an unlisted value and the default value run the host column
+        assert_eq!(host_at(&p, &[]), base);
+        assert_eq!(host_at(&p, &val("2")), base);
+        assert_eq!(host_at(&p, &val("4")), base);
+        let one = host_at(&p, &val("1"));
+        let planes = base.iter().position(|(k, _)| k == "--src-planes").unwrap();
+        assert_eq!(one[planes], ("--src-planes".to_string(), "3".to_string()));
+        assert_eq!(one.iter().find(|(k, _)| k == "--src-head").unwrap().1, "0x7e91c0");
+        assert_eq!(one.last().unwrap(), &("--extra-opt".to_string(), "9".to_string()));
+        assert_eq!(one.len(), base.len() + 1);
+        // an option the entry does not name keeps the host column's value
+        assert_eq!(one.iter().find(|(k, _)| k == "--ae32-dest").unwrap(), base.iter().find(|(k, _)| k == "--ae32-dest").unwrap());
+        let three = host_at(&p, &val("3"));
+        assert_eq!(three.iter().find(|(k, _)| k == "--src-head").unwrap().1, "0x7ea840");
+        assert_eq!(three.len(), base.len());
+        assert_eq!(three.iter().find(|(k, _)| k == "--src-planes"), base.iter().find(|(k, _)| k == "--src-planes"));
+        // numeric spelling does not matter
+        assert_eq!(host_at(&p, &val("1.0")), one);
+    }
+
+    #[test]
+    fn a_keyed_selecting_parameter_gives_the_options_of_each_frame_value() {
+        let p = with_variants(VARIANT_TEXT);
+        let rate = crate::rate::Rate::parse("24").unwrap();
+        let keyed = Keyed::new(&p, &val("1@0;3@2;2@4"), Some(&rate)).unwrap();
+        for (f, plain) in [(0u64, "1"), (1, "1"), (2, "3"), (3, "3"), (4, "2"), (5, "2")] {
+            assert_eq!(host_at(&p, &keyed.values_at(f)), host_at(&p, &val(plain)), "frame {}", f);
+        }
+    }
+
+    #[test]
+    fn invalid_variant_tables_are_refused_by_name() {
+        let named = |p: &Profile, name: &str| {
+            let e = check_variants(p).unwrap_err();
+            assert_eq!(e.exit_code(), 3, "{}", e.message);
+            assert!(e.message.contains(name), "{} in {}", name, e.message);
+        };
+        check_variants(&with_variants(VARIANT_TEXT)).unwrap();
+        named(&with_variants("no_such=1:--a 1"), "HOST-VARIANT-PARAM-UNKNOWN");
+        named(&with_variants("cset_opacity=1:--a 1;cset_opacity=1.0:--a 2"), "HOST-VARIANT-DUPLICATE");
+        for opt in ["--do-postdiv 1", "--owner-opacity 1", "--cset Opacity=2", "--set a=1", "--host-param a=1", "--prior-fill 0"] {
+            named(&with_variants(&format!("cset_opacity=1:{}", opt)), "HOST-VARIANT-OPTION");
+        }
+        for opt in ["--host-frame 3", "--ctx-time 3", "--geom 1", "--host-value get_time=0", "--ns-default-unbound x", "--size 4x4", "--ae32-src a=b", "--ae32-out o", "--host-times 1"] {
+            named(&with_variants(&format!("cset_opacity=1:{}", opt)), "HOST-VARIANT-OPTION");
+        }
+        let mut fixed = with_variants("cset_opacity=1:--tw-route 1,2");
+        fixed.fixed.push(("--tw-route".to_string(), "9".to_string()));
+        named(&fixed, "HOST-VARIANT-OPTION");
+        let mut empty = with_variants("cset_opacity=1:--a 1");
+        empty.variants[0].opts.push(("--src-planes".to_string(), String::new()));
+        named(&empty, "HOST-VARIANT-MALFORMED");
+        let mut p = with_variants("cset_opacity=1:--xy-base 4");
+        p.placement = vec![("64x32".to_string(), vec![("--xy-base".to_string(), "0".to_string())])];
+        named(&p, "HOST-VARIANT-PLACEMENT");
+        let mut p = with_variants("cset_opacity=1:--a 1;hue=2:--a 2");
+        p.params.push(Param { id: "hue".into(), form: "--set".into(), name: "hue".into(), kind: "float".into(), lanes: 1, ptype: String::new(), default: String::new(), answer_default: String::new(), min: None, max: None });
+        named(&p, "HOST-VARIANT-PARAMS");
+        let mut p = with_variants("cset_opacity=2:--a 1");
+        p.params.iter_mut().find(|q| q.id == "cset_opacity").unwrap().answer_default = "2".to_string();
+        named(&p, "HOST-VARIANT-AT-DEFAULT");
+        let mut p = profile("blur_color_autogen").unwrap().clone();
+        p.variants_error = Some("HOST-VARIANT-MALFORMED: x".to_string());
+        named(&p, "HOST-VARIANT-MALFORMED");
+    }
+
+    #[test]
+    fn cset_selector_gets_its_registered_answer_default() {
+        let row = profile("blur_color_autogen").expect("row");
+        let q = row.params.iter().find(|q| q.id == "cset_opacity").expect("cset_opacity");
+        assert_eq!(q.answer_default, "2");
+        // the parameter definition the stage offers is unchanged
+        assert!(q.default.is_empty());
+        let keyed_at_default = |ans: &str| {
+            let mut p = row.clone();
+            p.variants = parse_variants(&format!("cset_opacity={}:--src-planes 3", ans)).unwrap();
+            check_variants(&p)
+        };
+        let e = keyed_at_default("2").unwrap_err();
+        assert_eq!(e.exit_code(), 3, "{}", e.message);
+        assert!(e.message.contains("HOST-VARIANT-AT-DEFAULT"), "{}", e.message);
+        let e = keyed_at_default("2.0").unwrap_err();
+        assert!(e.message.contains("HOST-VARIANT-AT-DEFAULT"), "{}", e.message);
+        keyed_at_default("1").unwrap();
+        keyed_at_default("3").unwrap();
+        // every offered --cset selector of every row carries a registered answer
+        for p in profiles() {
+            for q in p.params.iter().filter(|q| q.form == "--cset") {
+                assert!(!q.answer_default.is_empty(), "{} {}", p.id, q.id);
+            }
+        }
+    }
+
+    #[test]
+    fn listed_cset_default_is_the_registered_answer() {
+        let defs = definitions();
+        let mut seen = 0;
+        for p in profiles() {
+            let def = defs.iter().find(|d| d.id == p.id).expect("def");
+            for q in p.params.iter().filter(|q| q.form == "--cset") {
+                let listed = def.params.iter().find(|d| d.id == q.id).expect("param");
+                match &listed.kind {
+                    ParamKind::Int { default, .. } => assert_eq!(default.to_string(), q.answer_default, "{} {}", p.id, q.id),
+                    _ => panic!("{} {} is not an int", p.id, q.id),
+                }
+                seen += 1;
+            }
+        }
+        assert!(seen > 0);
+        let def = defs.iter().find(|d| d.id == "time_warp_rgb_autogen").expect("def");
+        let out = def.params.iter().find(|d| d.id == "cset_output_opacity").expect("param");
+        assert!(matches!(out.kind, ParamKind::Int { default: 1, .. }));
+    }
+
+    #[test]
+    fn listed_cset_range_is_one_to_the_registered_item_count() {
+        let defs = definitions();
+        let mut seen = 0;
+        for p in profiles() {
+            let def = defs.iter().find(|d| d.id == p.id).expect("def");
+            for q in p.params.iter().filter(|q| q.form == "--cset") {
+                // the popup item counts of the registrations, fixed here: the Opacity and Input Opacity popups hold 3 items, the Output Opacity popup 2
+                let n: i64 = match q.id.as_str() {
+                    "cset_opacity" | "cset_input_opacity" => 3,
+                    "cset_output_opacity" => 2,
+                    other => panic!("{} {}: no expected item count", p.id, other),
+                };
+                let listed = def.params.iter().find(|d| d.id == q.id).expect("param");
+                match &listed.kind {
+                    ParamKind::Int { default, min, max } => {
+                        assert_eq!((*min, *max), (1, n), "{} {}", p.id, q.id);
+                        assert!(*default >= *min && *default <= *max, "{} {}", p.id, q.id);
+                    }
+                    _ => panic!("{} {} is not an int", p.id, q.id),
+                }
+                // the runner's own count agrees with the fixed one
+                assert_eq!(fx_exec::fxrun::registered_answer_count(&p.program, &q.name), Some(n as i32), "{} {}", p.id, q.id);
+                seen += 1;
+            }
+        }
+        assert_eq!(seen, 14);
+    }
+
+    #[test]
+    fn variant_options_reach_fx_run() {
+        let spec = FrameSpec { width: 64, height: 32, depth: Depth::U8 };
+        let p = with_variants(VARIANT_TEXT);
+        let runner = Runner::new(fx_exec::fxrun::Device::Cpu);
+        let _ = run_fx(&runner, &p, spec, 0, vec![0u32; 64 * 32 * 4], Vec::new(), &[], &host_at(&p, &val("1")), Extra::default(), &Learned::default());
+        let (args, _) = LAST_RUN.with(|l| l.borrow().clone()).unwrap();
+        assert!(args.windows(2).any(|w| w[0] == "--src-head" && w[1] == "0x7e91c0"), "{:?}", args);
+        assert_eq!(args.iter().filter(|a| *a == "--src-head").count(), 1);
+        assert!(args.windows(2).any(|w| w[0] == "--extra-opt" && w[1] == "9"));
+    }
+}
+
+#[cfg(test)]
+mod popup_default_tests {
+    use super::*;
+
+    fn test_profile(program: &str, name: &str) -> Profile {
+        Profile {
+            id: "t".into(),
+            program: program.into(),
+            family: "t".into(),
+            kind: "frame".into(),
+            spool: false,
+            layers: vec![],
+            src_name: "From".into(),
+            fixed: vec![],
+            host: vec![],
+            prior_fill: 0,
+            placement: vec![],
+            params: vec![Param {
+                id: name.into(),
+                form: "--set".into(),
+                name: name.into(),
+                kind: String::new(),
+                lanes: 1,
+                ptype: String::new(),
+                default: String::new(),
+                answer_default: String::new(),
+                min: None,
+                max: None,
+            }],
+            variants: vec![],
+            variants_error: None,
+        }
+    }
+
+    #[test]
+    fn manifest_default_of_an_unbound_popup_is_the_registered_default() {
+        let mut ps = vec![test_profile("SwishPan", "auto_trans"), test_profile("SwishPan", "wipe_amt")];
+        let described = describe_programs(&ps).expect("describe");
+        enrich(&mut ps, &described);
+        assert_eq!(ps[0].params[0].ptype, "popup");
+        assert_eq!(ps[0].params[0].default, "1");
+        assert_eq!(fx_exec::fxrun::popup_manifest_default("SwishPan", "auto_trans").as_deref(), Some("1"));
+        // a scalar keeps the range column's default
+        assert_eq!(ps[1].params[0].default, "0");
+        // a popup whose registered default equals its text default keeps it
+        let mut qs = vec![test_profile("SwishPan", "transition_dir")];
+        let d2 = describe_programs(&qs).unwrap();
+        enrich(&mut qs, &d2);
+        assert_eq!(qs[0].params[0].default, "0");
+    }
+
+    #[test]
+    fn describe_params_keeps_the_range_column_default() {
+        let doc = fx_exec::fxrun::describe_params_json(&["SwishPan"]);
+        assert!(doc.contains("\"name\":\"auto_trans\",\"type\":\"popup\",\"lanes\":1,\"min\":0,\"max\":1,\"default\":\"0\""), "{}", doc);
     }
 }

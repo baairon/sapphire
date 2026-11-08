@@ -7,6 +7,10 @@ name = "add_rgb"
 version = "0.1.0"
 
 [[package]]
+name = "alpha_from_rgb_max"
+version = "0.1.0"
+
+[[package]]
 name = "blur"
 version = "0.0.0"
 dependencies = [
@@ -200,6 +204,7 @@ dependencies = [
  "effects_vecdir",
  "libm_sincos",
  "tickmap",
+ "warp_noise",
 ]
 
 [[package]]
@@ -207,6 +212,7 @@ name = "fx_exec"
 version = "0.1.0"
 dependencies = [
  "add_rgb",
+ "alpha_from_rgb_max",
  "blur",
  "blur_coef",
  "blur_warp",
@@ -228,6 +234,8 @@ dependencies = [
  "fx_common",
  "fx_device",
  "fx_eval",
+ "get_alpha",
+ "glow_layer",
  "grad",
  "hue_shift",
  "hue_shift_preserve_luma",
@@ -247,18 +255,36 @@ dependencies = [
  "ops_if",
  "ops_minmax",
  "ops_vec",
+ "overlay_super",
  "plane_service",
  "rotate2d",
  "sat_scale",
  "scale_rgb",
+ "screen",
  "screen_super",
  "sharpen",
  "static2",
  "v3_to_v4_if4",
+ "v3_to_v4_if4_a",
  "warp_log_gradient",
  "warp_rel",
  "warp_render",
  "warp_sampler",
+]
+
+[[package]]
+name = "get_alpha"
+version = "0.0.0"
+dependencies = [
+ "plane_service",
+]
+
+[[package]]
+name = "glow_layer"
+version = "0.0.0"
+dependencies = [
+ "blur",
+ "fx_common",
 ]
 
 [[package]]
@@ -475,6 +501,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "overlay_super"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
 name = "perspective"
 version = "0.0.0"
 dependencies = [
@@ -509,6 +542,13 @@ name = "scale_rgb"
 version = "0.1.0"
 
 [[package]]
+name = "screen"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
 name = "screen_super"
 version = "0.1.0"
 
@@ -540,6 +580,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "v3_to_v4_if4_a"
+version = "0.0.0"
+dependencies = [
+ "plane_service",
+]
+
+[[package]]
 name = "warp_driver"
 version = "0.0.0"
 dependencies = [
@@ -551,6 +598,13 @@ dependencies = [
 [[package]]
 name = "warp_log_gradient"
 version = "0.1.0"
+
+[[package]]
+name = "warp_noise"
+version = "0.0.0"
+dependencies = [
+ "fx_common",
+]
 
 [[package]]
 name = "warp_rel"

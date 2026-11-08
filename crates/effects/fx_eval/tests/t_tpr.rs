@@ -105,6 +105,8 @@ fn tpr_other_rows_unchanged() {
     for l in pre.lines() {
         assert!(RECORDS.lines().any(|x| x == l), "row changed or missing: {}", l);
     }
-    // with the Blur_Only centre row the table has 15 lines
-    assert_eq!(RECORDS.lines().count(), 15);
+    // with the Blur_Only centre row the table has 15 lines (the header and 14 rows) for the programs of the rows above; rows of further programs are not counted
+    let first_progs: Vec<&str> = pre.lines().map(|l| l.split('\t').next().unwrap()).chain(STYLES.iter().copied()).collect();
+    let first_set = RECORDS.lines().filter(|l| l.starts_with("program\t") || first_progs.contains(&l.split('\t').next().unwrap_or(""))).count();
+    assert_eq!(first_set, 15);
 }

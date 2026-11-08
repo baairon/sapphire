@@ -42,8 +42,8 @@ pub fn derive(cells_mode_d: u32, host_inplace: bool, w: usize, h: usize) -> Resu
 }
 
 /// the programs whose own counted records show the five terms (desc, desc, in[idx],
-///). record (Hue_Sat_Bright_Autogen, rj1M3F, 64x32) and the Time_Warp_RGB_Autogen O2 records (64x32 and 50x7, FIVE_TERMS.tsv).
-pub const TERMS_RECORDED: &[&str] = &["Hue_Sat_Bright_Autogen", "Time_Warp_RGB_Autogen"];
+///). record (Hue_Sat_Bright_Autogen, rj1M3F, 64x32), the Time_Warp_RGB_Autogen O2 records (64x32 and 50x7, FIVE_TERMS.tsv) and the Flicker records at 64x32 and 50x7 (read at the descriptor mode test, the pointer comparison and the input row cells: terms 2, 2, 2, widths nonzero, pointers different).
+pub const TERMS_RECORDED: &[&str] = &["Hue_Sat_Bright_Autogen", "Time_Warp_RGB_Autogen", "Flicker"];
 
 /// The label for a program whose own record of the terms is owed (None for a program in TERMS_RECORDED).
 pub fn terms_unrecorded_label(program: &str) -> Option<String> {
@@ -63,6 +63,10 @@ mod tests {
     #[test]
     fn terms_label_time_warp_recorded() {
         assert!(terms_unrecorded_label("Time_Warp_RGB_Autogen").is_none());
+    }
+    #[test]
+    fn terms_label_flicker_recorded() {
+        assert!(terms_unrecorded_label("Flicker").is_none());
     }
     #[test]
     fn terms_label_other_style_unrecorded() {

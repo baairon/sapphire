@@ -1,0 +1,12 @@
+[package]
+name = "get_alpha"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the builtin class get_alpha: the slot 52 body 0x553e50 (alpha plane extraction through the host plane service)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+plane_service = { path = "../plane_service" }

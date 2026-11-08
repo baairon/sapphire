@@ -1,0 +1,14 @@
+[package]
+name = "glow_layer"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the glow layer: copy, bright pass and separable blur of the S_Glow render body."
+
+[lib]
+name = "glow_layer"
+path = "src/lib.rs"
+
+[dependencies]
+blur = { path = "../blur" }
+fx_common = { path = "../../fx_common" }

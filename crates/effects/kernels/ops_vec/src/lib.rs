@@ -1,4 +1,4 @@
-//! ops_vec: native port of the slot 53 plane assemblers of the builtin classes `v2` (vtable, entry),
+//! ops_vec: native port of the slot 53 plane assemblers of the builtin classes `append`, `v2` (vtable, entry),
 //! `v3` (vtable, entry) and the sibling `v4` (vtable, entry), listing offsets.
 //!
 //! Each entry is arithmetic-free. For output channel i = 0..N-1 (N = 2, 3, 4) it calls the host plane service with
@@ -13,6 +13,7 @@ pub use plane_service::{Action, Block, Host, PlError, Roi, Sel};
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
+pub mod append;
 pub mod v2;
 pub mod v3;
 pub mod v4;

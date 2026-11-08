@@ -815,6 +815,9 @@ pub struct Queue {
     api: &'static Api,
     handle: Handle,
     context: Handle,
+    /// Launches on this queue run one at a time across all threads and finish before the lock is
+    /// released (set for the PoCL runtime only, see [`Queue::run`]).
+    serial_launch: bool,
 }
 
 // SAFETY: every queue call of OpenCL 1.2 is thread safe; the executor still serialises on one
@@ -862,7 +865,13 @@ impl Queue {
         if err != CL_SUCCESS || handle.is_null() {
             return Err(ClError::Api { call: "clCreateCommandQueue", code: if err == CL_SUCCESS { -6 } else { err } });
         }
-        Ok(Queue { api, handle, context: context.handle })
+        // PoCL names itself "Portable Computing Language"; an unreadable name leaves launches unserialised.
+        let serial_launch = context
+            .device
+            .platform()
+            .info_string(CL_PLATFORM_NAME)
+            .is_ok_and(|n| n.contains("Portable Computing Language"));
+        Ok(Queue { api, handle, context: context.handle, serial_launch })
     }
 
     /// `CL_QUEUE_PROPERTIES`: 0 for the in-order queue of this module.
@@ -1025,6 +1034,12 @@ impl Queue {
             Range::D1(n) => (1, [n, 1]),
             Range::D2(w, h) => (2, [w, h]),
         };
+        // PoCL keeps a process wide table of loaded kernel objects with a reference count. A launch takes a
+        // reference and its completion drops it on a driver thread, and that table is not safe against a
+        // launch or completion on one thread racing the kernel creation or release of another (SIGABRT on
+        // `found->ref_count > 0` in parallel tests with a cold kernel cache). The creation lock therefore
+        // covers the launch and its completion: the guard is held until `clFinish` returns.
+        let _launch = self.serial_launch.then(serialize_creation);
         // SAFETY: `global` holds `dims` sizes; no offset, no local size, no events. Every argument
         // was set just above from live objects.
         check("clEnqueueNDRangeKernel", unsafe {
@@ -1039,7 +1054,11 @@ impl Queue {
                 ptr::null(),
                 ptr::null_mut(),
             )
-        })
+        })?;
+        if self.serial_launch {
+            self.finish()?;
+        }
+        Ok(())
     }
 
     /// Submits the queued commands to the device without waiting.

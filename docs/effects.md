@@ -1,8 +1,8 @@
 # Effects
 
-Ten of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program name, a size and the input planes, with no external data ([Build and run](#build-and-run)). Each registered style of the ten effects is also offered as a stage of `sapphire stage apply`, which reads and writes raw video frames ([Adding a provider](stages.md#effects-provider)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)).
+Thirteen of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program name, a size and the input planes, with no external data ([Build and run](#build-and-run)). Each registered style of the thirteen effects is also offered as a stage of `sapphire stage apply`, which reads and writes raw video frames ([Adding a provider](stages.md#effects-provider)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)).
 
-Effects rebuilt: <!--f:effects_rebuilt-->10<!--/f--> of <!--f:effects_listed-->10<!--/f--> listed here, the first milestone of the effect rebuild. The other effects of the plugin are not rebuilt; their names are strings only ([names](../README.md#names)). A new effect follows the conventions of [Adding an effect](adding-an-effect.md).
+Effects rebuilt: <!--f:effects_rebuilt-->13<!--/f--> of <!--f:effects_listed-->13<!--/f--> listed here: the ten of the first milestone and three of Tier 1 of [the roadmap](roadmap.md). The other effects of the plugin are not rebuilt; their names are strings only ([names](../README.md#names)). A new effect follows the conventions of [Adding an effect](adding-an-effect.md).
 
 ## What rebuilt means
 
@@ -16,14 +16,17 @@ An effect counts as rebuilt when every one of its registered styles passes seven
 | `S_Diffuse` | Diffuse_Autogen | 31 | 54 | 54 |
 | `S_DistortRGB` | Distort_RGB_Autogen | 30 | 30 | 30 |
 | `S_DropShadow` | registered without a wrapper program | 24 | 26 | 26 |
+| `S_Flicker` | registered without a wrapper program | 24 | 24 | 24 |
+| `S_Glow` | registered without a wrapper program | 36 | 36 | 36 |
 | `S_HueSatBright` | Hue_Sat_Bright_Autogen | 130 | 196 | 196 |
 | `S_Sharpen` | Sharpen_Best_Quality_Autogen, Sharpen_Fast_Autogen | 43 | 114 | 114 |
+| `S_SwishPan` | registered without a wrapper program | 36 | 288 | 288 |
 | `S_TimeWarpRGB` | Time_Warp_RGB_Autogen | 22 | 22 | 22 |
 | `S_Trails` | Trails_Autogen | 78 | 170 | 220 |
 | `S_WarpPerspective` | Warp_Perspective_Autogen | 19 | 256 | 256 |
 <!--/gen:effects_status-->
 
-*Verified comparisons* are the comparisons between the original's emulator runs and the native code that count toward the effect: <!--f:effects_counted_rows-->425<!--/f--> in all. *Recorded renders* are the outputs of the final binary, recorded as the expected result of each case: <!--f:effects_frozen_members-->989<!--/f--> in all. A few of them are controls, recorded and not counted; the rest are the *counted* recorded renders. *Re-rendered units* are the same cases rendered again with the binary built from this repository, with a second render for the cases that render twice: <!--f:effects_rerun_units-->1,039<!--/f--> units, every one byte identical to its recorded render by full SHA-256 in the three output files (`ae32`, `dest` and `src0`). `BlurMoCurves` is listed by the name of its host record; that string is not in the [name bank](glossary.md#name-bank)'s list of effect names.
+*Verified comparisons* are the comparisons between the original's emulator runs and the native code that count toward the effect: <!--f:effects_counted_rows-->521<!--/f--> in all. *Recorded renders* are the outputs of the final binary, recorded as the expected result of each case: <!--f:effects_frozen_members-->1,337<!--/f--> in all. A few of them are controls, recorded and not counted; the rest are the *counted* recorded renders. *Re-rendered units* are the same cases rendered again with the binary built from this repository, with a second render for the cases that render twice: <!--f:effects_rerun_units-->1,387<!--/f--> units, every one byte identical to its recorded render by full SHA-256 in the three output files (`ae32`, `dest` and `src0`). `BlurMoCurves` is listed by the name of its host record; that string is not in the [name bank](glossary.md#name-bank)'s list of effect names.
 
 The *verified render path* of an effect is the host arrangement its verified comparisons used: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state, 32-bit float images and the effect's own host settings. The stages of `sapphire stage apply` run each style on that path (see [Adding a provider](stages.md#effects-provider)).
 
@@ -40,9 +43,9 @@ The effect stages are linked into `sapphire`, so no `fx_run` executable is neede
 
 The parameter tables list each stage's parameters as `sapphire stage list --json` prints them: the option that sets it, the stage type and the number of lanes of the value `V`. A parameter with more than one lane is passed as comma separated numbers, for example `--param blur_rel=0.5,1.25`. A parameter that is not passed keeps its registered default. The defaults and valid ranges are printed by `fx_run --describe-params PROGRAM`, for example `target/release/fx_run --describe-params Trails_Autogen`; the stage refuses a value outside the range with exit 3.
 
-Parameters whose names contain `mocha` belong to the mask controls of the original. They are offered because verified comparisons set them, but mask tracking data is not part of the rebuild ([Limits common to the ten effects](#limits-common-to-the-ten-effects)).
+Parameters whose names contain `mocha` belong to the mask controls of the original. They are offered because verified comparisons set them, but mask tracking data is not part of the rebuild ([Limits common to the effects](#limits-common-to-the-effects)).
 
-Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. Of the opacity choices only Normal (`2`) renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED). `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items.
+Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. On the stages of the first ten effects only Normal (`2`) of the opacity choices renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED), and `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items. `glow` and `swishpan` render all three answers: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)).
 
 See [Driving the effect parameters](parameters-guide.md) for every stage parameter, how to write its value and the values verified against recorded renders.
 
@@ -206,6 +209,77 @@ target/release/sapphire stage apply drop_shadow --width 64 --height 32 --depth 3
 
 Parity: 24 verified comparisons, 26 recorded renders and 26 re-rendered units, all equal in both renders. None of the approximate reciprocal instructions in the effect's code is reached on the verified render path (MEASURED for 11 sites; the logarithm sites INFERRED from the plan constants). 20 of 24 counted recorded renders match the stage's host arrangement.
 
+### `S_Flicker`
+
+Changes the brightness of the image from frame to frame. Every pixel of a frame is multiplied, per colour channel, by one factor: `brightness` plus `amplitude` times the sum of a random part and a wave part. The random part is a noise of the frame time at the random frequency and seed, with one value for all channels (scaled by `rand_luma_amp`) and one value per channel (scaled by `rand_color_amp`). The wave part is a sine of the frame time at the wave frequency, with a phase per channel, scaled by `wave_amp`. `red_amp`, `green_amp` and `blue_amp` weight the factor per channel. The alpha of the input is kept.
+
+| style | stage |
+|---|---|
+| Flicker | `stage apply flicker` |
+
+This effect has no wrapper program; the stage runs its registered program, Flicker. The factor depends on the frame time, so the stage needs `--fps`: frame f is rendered at time f / rate in seconds ([Host values](cli.md#host-values)). Without `--fps` the run is refused with `HOST-VALUE-MISSING` (exit 3) and no frame is written.
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param amplitude=V` | float | 1 |
+| `--param rand_luma_amp=V` | float | 1 |
+| `--param rand_color_amp=V` | float | 1 |
+| `--param rand_freq=V` | float | 1 |
+| `--param wave_amp=V` | float | 1 |
+| `--param wave_freq=V` | float | 1 |
+| `--param wave_r_phase=V` | float | 1 |
+| `--param wave_g_phase=V` | float | 1 |
+| `--param wave_b_phase=V` | float | 1 |
+| `--param red_amp=V` | float | 1 |
+| `--param green_amp=V` | float | 1 |
+| `--param blue_amp=V` | float | 1 |
+| `--param brightness=V` | float | 1 |
+| `--param seed=V` | float | 1 |
+
+```sh
+target/release/sapphire stage apply flicker --width 64 --height 32 --depth 32 --fps 24/1 --param amplitude=0.330001831 --param rand_luma_amp=0.5 --param rand_color_amp=0.800003052 --param rand_freq=12 --param seed=0.770004272 --param blue_amp=1.69999695 --param brightness=1.19999695 --param wave_g_phase=-0.899993896 --param wave_amp=0.25 < in.raw > out.raw
+```
+
+Parity: 24 verified comparisons (12 at 64x32 and 12 at 50x7), 24 recorded renders and 24 re-rendered units, all equal. No approximate reciprocal instruction is used on the verified render path (MEASURED). The verified times are whole frames from 0 to 29 at 24 frames a second; other rates and times between frames run the same code and are INFERRED. The sine of the wave part follows the original's AVX2 and FMA route on every CPU; on a CPU without AVX2 and FMA the original takes another sine routine, which differs from it on 10.7 percent of argument bit patterns by at most 2 ulp (MEASURED on the original's two routines), and those results are not reproduced. The output alpha is the input alpha, verified with input alpha other than 1 at both sizes. 24 of 24 counted recorded renders match the stage's host arrangement.
+
+### `S_Glow`
+
+Adds light around the bright parts of the image. The parts above a threshold are spread out by a wide blur, whose size is set by `width` and scaled per axis (`width_x`, `width_y`) and per colour channel (`width_red`, `width_green`, `width_blue`); the spread light is scaled by the brightness and combined with the source by one of five blend modes (`combine`). `glow_under_source`, `scale_source`, `scale_background`, `light_bg` and `affect_alpha` set how much of the source, the background and the alpha goes into the mix, `show` outputs either the result or the thresholded image the light is made from, and `edge_mode` chooses how the spread treats the border of the frame. Atmosphere is not rendered. The glow stage has no `atmosphere_amp`, and `fx_run` refuses a Glow plan with `atmosphere_amp` other than 0 (`SIMPLEX-GRADIENT-TABLE-ABSENT`): the original's atmosphere noise reads gradient tables that no documented formula reproduces. Its registered default leaves Atmosphere off, so the stage renders without it, and the four parameters that shape the noise are not offered either.
+
+| style | stage |
+|---|---|
+| Glow | `stage apply glow` |
+
+This effect has no wrapper program; the stage runs its registered program, Glow. The effect's background, matte and tracker mask inputs are not connected: the stage takes no extra layer, and `--layer` is refused with `LAYER-INPUT-UNSUPPORTED`.
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param width=V` | float | 1 |
+| `--param width_x=V` | float | 1 |
+| `--param width_y=V` | float | 1 |
+| `--param width_red=V` | float | 1 |
+| `--param width_green=V` | float | 1 |
+| `--param width_blue=V` | float | 1 |
+| `--param brightness=V` | float | 1 |
+| `--param threshold=V` | float | 1 |
+| `--param combine=V` | int | 1 |
+| `--param show=V` | int | 1 |
+| `--param edge_mode=V` | int | 1 |
+| `--param glow_under_source=V` | float | 1 |
+| `--param scale_source=V` | float | 1 |
+| `--param scale_background=V` | float | 1 |
+| `--param light_bg=V` | float | 1 |
+| `--param affect_alpha=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+
+`cset_opacity` takes all three answers on this stage: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)).
+
+```sh
+target/release/sapphire stage apply glow --width 64 --height 32 --depth 32 --fps 24/1 --param width=12.5 --param brightness=1.3500061 --param threshold=0.300003052 --param width_x=1.5 --param width_red=0.800003052 --param edge_mode=0 < in.raw > out.raw
+```
+
+Parity: 36 verified comparisons (18 at 64x32 and 18 at 50x7), 36 recorded renders and 36 re-rendered units, all equal. No approximate reciprocal instruction runs on the verified render path: the blur's code holds twelve, six that it does not reach at the one to three planes Glow gives it and six in code tiers that do not run, and no other operation of the route holds one (MEASURED by a static scan of the original's code; that this route reaches none of the twelve is INFERRED). The Opacity answers 1, 2 and 3 are each verified at 64x32 and 50x7, with input alpha other than 1. The verified renders have no mask, no matte and no background: a bound mask or matte, the tracker mask, mocha with tracking data and a background layer are not verified, and the stage does not offer `combine_masks`, which has no effect without a mask. Atmosphere is not rendered (above), and no verified render uses it. 36 of 36 counted recorded renders match the stage's host arrangement.
+
 ### `S_HueSatBright`
 
 Adjusts colour: rotates the hue, scales the saturation, scales the brightness and offsets the dark values. With `preserve_luma` the hue rotation keeps each pixel's luma. `scale_colors` scales the red, green and blue channels separately.
@@ -276,6 +350,38 @@ target/release/sapphire stage apply sharpen_fast_autogen --width 64 --height 32 
 ```
 
 Parity: 43 verified comparisons, 114 recorded renders and 114 re-rendered units, all equal in both renders. The edge-aware core of Best Quality is sensitive to approximate reciprocals, with a bound of 6 ulp (INFERRED); Fast uses none (INFERRED). Of the counted recorded renders, 19 of 42 (Best Quality) and 16 of 36 (Fast) match the stage's host arrangement.
+
+### `S_SwishPan`
+
+A transition between two clips: the first clip moves out of the frame and the second clip follows it in, to the left, right, up or down (`direction`), with a motion blur along the move. `transition_dir` swaps which clip leaves and which arrives. With `auto_trans` on, the move runs over the whole clip given to the stage, from its first frame to its last, eased at the start and the end by `slow_in` and `slow_out`; with it off, the progress is read from a curve of the host (`host_curve_values`). `overlap` changes how far the second clip trails the first, and `blur_amount` scales the blur, which follows the speed of the move.
+
+| style | stage |
+|---|---|
+| the registered program, without a wrapper | `stage apply swishpan` |
+
+This effect has no wrapper program; the stage runs its registered program (`fx_run --describe-params SwishPan` prints its parameters; for `auto_trans` it prints the program text default, while an unset `auto_trans` takes the registered default that `stage list` prints, see [Parameter discovery](cli.md#parameter-discovery)). It is the transition stage of this build ([Transition stages](cli.md#transition-stages)): the second clip is `--layer To=PATH`, and `--frames N` gives the length of the transition, which spans the clip from its first frame to its last. The layer is optional; without it the effect runs with no second clip, as some verified renders did. As a pipeline stage (`--stage @swishpan`) it is refused with `FRAMES-REQUIRED`, because the pipeline passes no `--frames`.
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param transition_dir=V` | int | 1 |
+| `--param auto_trans=V` | int | 1 |
+| `--param direction=V` | int | 1 |
+| `--param blur_amount=V` | float | 1 |
+| `--param overlap=V` | float | 1 |
+| `--param slow_in=V` | float | 1 |
+| `--param slow_out=V` | float | 1 |
+| `--param swish_auto_trans=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+| `--param host_curve_values=V` | text | a file path |
+
+`cset_opacity` takes all three answers on this stage: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)). `host_curve_values` names a curve file in the recorded format; without it the stage writes a constant curve file, as for `BlurMoCurves`. With `auto_trans` 0 the effect reads its progress, the original's Wipe Percent, from that file; the constant file holds a Wipe Percent of 0 on every frame. The verified renders with `auto_trans` 0 run through the stage with a curve file that holds their recorded Wipe Percent ([Host curves](stages.md#effects-provider)).
+
+```sh
+ffmpeg -f lavfi -i testsrc2=size=64x32:rate=25 -frames:v 3 -f rawvideo -pix_fmt gbrapf32le to.raw
+target/release/sapphire stage apply swishpan --width 64 --height 32 --depth 32 --fps 24/1 --frames 3 --layer To=to.raw --param transition_dir=0 --param auto_trans=1 --param direction=2 --param blur_amount=300.0 --param overlap=0.1999969482421875 --param slow_in=0.3000030517578125 --param slow_out=0.8000030517578125 --param swish_auto_trans=0.0 < in.raw > out.raw
+```
+
+Parity: 36 verified comparisons (18 at 64x32 and 18 at 50x7), 288 recorded renders and 288 re-rendered units, all equal. One approximate reciprocal instruction runs on the verified render path, inside the logarithm that sizes the mipmap levels; its effect on the output is 0 ulp (MEASURED on that logarithm; that the route enters it, and that the reciprocal estimates of the blur are not reached, is INFERRED). The Opacity answers 1, 2 and 3 are each verified at 64x32 and 50x7. Each verified render is one frame of a transition of 100 to 480 frames at 24 frames a second, at frames 0 to 120, with the second clip absent or present; the time values of other clip lengths and rates are INFERRED. The effect reads the default xy from a one-row host buffer whose base phase is an input of each run (`fx_run --xy-base`): each verified render is rendered and recorded at the eight base phases 0, 4, ..., 28, hence the 288 recorded renders, and the original's output is compared with the one at the phase its run used. At 64x32 the eight phases give the same bytes. At 50x7 four verified renders depend on the phase and were recorded at phase 16; the stage uses phase 0 at every size (`--xy-base 0`), so these four are verified through `fx_run` at phase 16, and through the stage each is checked against the native render at phase 0. 32 of 36 counted recorded renders match the stage's host arrangement.
 
 ### `S_TimeWarpRGB`
 
@@ -383,8 +489,8 @@ fx_run PROGRAM --size WxH --out PREFIX [--synth SEED] [options]
 
 The effects need no external data. Nothing is read from the original plugin or from a copied file at run time: `fx_run` takes no table argument and reads only the input planes and the output path it is given.
 
-- **Effect graphs.** The programs of the thirteen styles are built by Rust constructor code in `fx_eval` (`programs_native`). That code is a tool-made translation of the plugin's program rows into Rust: a development tool produced it from the parsed program structure. It holds no program text and reads no table.
-- **Parameter and class facts.** The registered parameters, ranges, input indices, class flags and combination tables that the thirteen programs need are Rust definitions in the crate `effects_rtdata`. A definition is kept only if it is keyed by one of the 25 programs of the styles, by a class they name, or by a builtin they call. A lookup that has no row misses, as it did with the tables.
+- **Effect graphs.** The programs of the sixteen styles are built by Rust constructor code in `fx_eval` (`programs_native`). That code is a tool-made translation of the plugin's program rows into Rust: a development tool produced it from the parsed program structure. It holds no program text and reads no table.
+- **Parameter and class facts.** The registered parameters, ranges, input indices, class flags and combination tables that the sixteen programs need are Rust definitions in the crate `effects_rtdata`. A definition is kept only if it is keyed by one of the 28 programs of the styles, by a class they name, or by a builtin they call. A lookup that has no row misses, as it did with the tables.
 - **Sin and cos tables.** The sin and cos routines of the effects need four tables. None is stored; all are computed from their mathematical definition at first use, with a small fixed-point big number (320 bit, written for this repository, no crate):
 
 - The sincosf table has 64 entries: the correctly rounded (sin, cos) of k pi/32, exact 0 and 1 at the axes.
@@ -394,6 +500,18 @@ The effects need no external data. Nothing is read from the original plugin or f
 
 Known limit: none for these tables. Bytes of the original 2304 byte tables that no reader touches are not reproduced.
 
+The `sin` of `S_Flicker` follows the 8 lane AVX2 and FMA sine routine of the original. Its slow route, for large arguments, needs two more tables, computed from their definition in the same way at first use:
+
+- The window table has 256 entries of three words: the 96 bits of floor(2^(e-54) / (2 pi)) modulo 2^96 for each biased exponent e.
+- The lookup table has 256 entries of four words for the angle 2 pi k / 256: the cosine rounded to a power of two, the rest of the cosine against it, the sine rounded to f32 and the rest of the sine against that.
+
+- **Noise tables.** The noise of `S_Flicker` reads a hash table and a weight table. Neither is stored; both are computed from their definition at first use:
+
+- The hash table has 256 entries of 32 bits. Entry k is (y1 >> 2) + (y2 << 8) + (y3 << 18) modulo 2^32, where y1, y2 and y3 are three successive values of the generator x -> (4096 x + 150889) mod 714025, which starts at 0 and carries from one entry to the next.
+- The weight table has 4608 entries. Entry i is round(4096 w(s)) / 4096 with s = sqrt(i / 4608), where w(s) = 1 - 2 s^2 for s below 0.5 and 2 (1 - s)^2 otherwise, evaluated with the fused operations of the original's AVX2 and FMA route and rounded half away from zero.
+
+The atmosphere noise of `S_Glow` needs gradient tables that no documented formula reproduces. It is not rendered, and no table of it is stored.
+
 Tests that compare the definitions or the computed tables with copies of the plugin's tables, or sweep whole tables, read those copies from the stored test data under `VEC_DIR` (`effects/rtdata/` and `effects/native_tables/`) and print a `NOT RUN` line when it is absent. No copy is part of the repository.
 
 ## Tests
@@ -402,7 +520,7 @@ Tests that compare the definitions or the computed tables with copies of the plu
 - `cargo test --release -p fx_eval -p fx_exec` runs the rest of the evaluator and the executor. A test that needs stored data from the original (recorded plans, emulator rows, the program corpus) prints a `NOT RUN` line and passes, the way the lift crates' vector tests stay out of a plain `cargo test`.
 - `VEC_DIR` names a folder that holds an `effects` folder with the stored data, laid out with the relative paths the tests print in their `NOT RUN` line; with it every test runs. Tests write their files to the system temporary folder, never into the source tree.
 
-## Limits common to the ten effects
+## Limits common to the effects
 
 - Every result is judged by the emulator, which follows Intel's specification (SDM), not by real CPU silicon.
 - `ROUTE AVX2-ONLY`: the original selects one of several code tiers from the CPU's features. The native code reproduces the tier that runs on CPUs with AVX2 and FMA; on CPUs without them the original runs other tiers with different rounding, and those results are not reproduced.
@@ -412,6 +530,8 @@ Tests that compare the definitions or the computed tables with copies of the plu
 - Sapphire's own keyframed values between keys are INFERRED (each frame is a plain run at the value the keys give, MEASURED), and its device path is MEASURED on PoCL only.
 - Licence, activation, trial and machine identity code of the original is not rebuilt.
 - Cases outside an effect's verified comparisons, such as other sizes and parameter values, run the same code and are INFERRED.
+- `S_Flicker`, which reads the frame time, was verified with host times at whole frames of a 24 frames a second clock, and `S_SwishPan`, which reads the transition time, at transitions of 100 to 480 frames. The time values the stages give at other rates and lengths are INFERRED ([Host values](cli.md#host-values)).
+- The Atmosphere of `S_Glow` is not rendered: its noise needs gradient tables that no documented formula reproduces, so the glow stage has no `atmosphere_amp`, and `fx_run` refuses a Glow plan with `atmosphere_amp` other than 0 (`SIMPLEX-GRADIENT-TABLE-ABSENT`). The parity record lists no simplex_noise function.
 
 ## Evidence
 

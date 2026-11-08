@@ -1,6 +1,6 @@
-// Generated from the recorded host data of the 13 styles; plain definitions, no file is read.
+// Generated from the recorded host data of the styles; plain definitions, no file is read.
 // Rows are the ones the effects read; each field is a value the code uses. Do not edit by hand.
-//! The 13 styles and their recorded host data.
+//! The styles and their recorded host data.
 use crate::types::Style;
 
 mod blur_color;
@@ -16,6 +16,9 @@ mod time_warp_rgb;
 mod trails;
 mod transform_and_blur;
 mod warp_perspective;
+mod flicker;
+mod swishpan;
+mod glow;
 
 /// Every style, in the order of the effect list.
 pub static STYLES: &[&Style] = &[
@@ -32,4 +35,7 @@ pub static STYLES: &[&Style] = &[
     &trails::STYLE,
     &transform_and_blur::STYLE,
     &warp_perspective::STYLE,
+    &flicker::STYLE,
+    &swishpan::STYLE,
+    &glow::STYLE,
 ];

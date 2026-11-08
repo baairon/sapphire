@@ -1,4 +1,4 @@
-"""Check that the sapphire stage route renders the 13 effect styles the same way on this machine as on the reference build.
+"""Check that the sapphire stage route renders the 16 effect styles the same way on this machine as on the reference build.
 
 Usage:
   python -I tools/fx_golden.py              render every case and compare with tools/fx_golden.tsv (exit 1 on any difference)
@@ -9,6 +9,10 @@ Besides the plain cases the table has two more groups. The special group (size s
 holds +inf, -inf, both default NaN patterns, huge and subnormal values and neighbouring words that make invalid operations
 (inf - inf, 0 * inf, 0 / 0); it is where the default NaN of an ARM processor would show. The threaded group (suffix `t`)
 renders the plain sizes with SAPPHIRE_PAR_MIN=0 and SAPPHIRE_THREADS=3, so row bands run at every size; it must equal the plain rows.
+
+The variant group (size suffix `+TAG`, rendered on the plain sizes) runs a stage with options that select a host variant or a second
+clip: `+o1` and `+o3` give the `cset_opacity` answers 1 and 3 of `glow` and `swishpan` (their `host_variants` entries in
+crates/neutral-handoff/data/fx_stages.tsv), and `+to` gives `swishpan` its `To` layer, a second clip from the seed plus one.
 
 Each case runs one effect stage (`sapphire stage apply STAGE`, which renders in process with the stage's canonical
 host options from crates/neutral-handoff/data/fx_stages.tsv) on a synthetic clip of 3 frames at depth 32 and
@@ -23,6 +27,7 @@ import os
 import struct
 import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TABLE = os.path.join(ROOT, "tools", "fx_golden.tsv")
@@ -33,6 +38,14 @@ FRAMES = 3
 SEED = 20261106
 THREADED = {"SAPPHIRE_PAR_MIN": "0", "SAPPHIRE_THREADS": "3"}
 EXE = ".exe" if os.name == "nt" else ""
+# (stage, tag, extra stage options, give the stage a To layer): rendered at the plain sizes, row size `WxH+tag`
+VARIANTS = [
+    ("glow", "o1", ["--param", "cset_opacity=1"], False),
+    ("glow", "o3", ["--param", "cset_opacity=3"], False),
+    ("swishpan", "o1", ["--param", "cset_opacity=1"], False),
+    ("swishpan", "o3", ["--param", "cset_opacity=3"], False),
+    ("swishpan", "to", [], True),
+]
 
 
 def synth_clip(width, height, frames, seed):
@@ -98,9 +111,9 @@ def find_bin(given):
     sys.exit("fx_golden: no sapphire in " + ", ".join(dirs) + " (cargo build --release -p neutral-handoff)")
 
 
-def render(bindir, stage, width, height, clip, extra_env=None):
+def render(bindir, stage, width, height, clip, extra_env=None, extra_args=()):
     cmd = [os.path.join(bindir, "sapphire" + EXE), "stage", "apply", stage, "--width", str(width), "--height", str(height),
-           "--depth", "32", "--fps", "24", "--frames", str(FRAMES)]
+           "--depth", "32", "--fps", "24", "--frames", str(FRAMES)] + list(extra_args)
     env = dict(os.environ)
     env.update(extra_env or {})
     r = subprocess.run(cmd, input=clip, capture_output=True, env=env)
@@ -121,6 +134,13 @@ def main(argv=None):
         for s in stage_ids():
             got[(s, "{}x{}".format(w, h))] = render(bindir, s, w, h, clip)
             got[(s, "{}x{}t".format(w, h))] = render(bindir, s, w, h, clip, THREADED)
+        with tempfile.TemporaryDirectory() as tmp:
+            layer = os.path.join(tmp, "to.raw")
+            with open(layer, "wb") as f:
+                f.write(synth_clip(w, h, FRAMES, SEED + 1))
+            for (s, tag, opts, with_layer) in VARIANTS:
+                args = opts + (["--layer", "To=" + layer] if with_layer else [])
+                got[(s, "{}x{}+{}".format(w, h, tag))] = render(bindir, s, w, h, clip, None, args)
     sw, sh = SPECIAL_SIZE
     special = synth_special(sw, sh, FRAMES, SEED)
     for s in stage_ids():

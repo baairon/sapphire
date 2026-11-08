@@ -168,6 +168,38 @@ fn record_pass_for(info: &DeviceInfo, id: Ident, tag: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, MutexGuard};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Points `SAPPHIRE_CACHE_DIR` at a private directory for one test and holds a process-wide lock, so tests that
+    /// set the variable never overlap. The variable is restored and the directory removed on drop.
+    struct CacheDir {
+        dir: PathBuf,
+        prev: Option<std::ffi::OsString>,
+        _lock: MutexGuard<'static, ()>,
+    }
+
+    impl CacheDir {
+        fn new(name: &str) -> Self {
+            let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let dir = std::env::temp_dir().join(format!("sapphire-checkcache-{}-{}", name, std::process::id()));
+            let prev = std::env::var_os("SAPPHIRE_CACHE_DIR");
+            let _ = std::fs::remove_dir_all(&dir);
+            std::env::set_var("SAPPHIRE_CACHE_DIR", &dir);
+            CacheDir { dir, prev, _lock: lock }
+        }
+    }
+
+    impl Drop for CacheDir {
+        fn drop(&mut self) {
+            match &self.prev {
+                Some(v) => std::env::set_var("SAPPHIRE_CACHE_DIR", v),
+                None => std::env::remove_var("SAPPHIRE_CACHE_DIR"),
+            }
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
 
     fn info(driver: &str) -> DeviceInfo {
         DeviceInfo { index: 0, platform: "P".into(), platform_version: "1".into(), name: "D".into(), board: String::new(), vendor: "V".into(), version: "OpenCL 3.0".into(), driver: driver.into(), c_version: String::new(), profile: "FULL_PROFILE".into(), device_type: 4, little_endian: true, available: true, compiler_available: true, global_memory: 0, max_allocation: 0, ..Default::default() }
@@ -179,8 +211,8 @@ mod tests {
 
     #[test]
     fn a_pass_is_remembered_per_driver_and_tag() {
-        let dir = std::env::temp_dir().join(format!("sapphire-checkcache-test-{}", std::process::id()));
-        std::env::set_var("SAPPHIRE_CACHE_DIR", &dir);
+        let cache = CacheDir::new("pass");
+        let dir = cache.dir.clone();
         let a = info("1.0");
         let i = id(1, 2);
         assert!(!passed_for(&a, i, "base"));
@@ -188,7 +220,6 @@ mod tests {
         record_pass_for(&a, i, "copy");
         assert!(passed_for(&a, i, "base") && passed_for(&a, i, "copy") && !passed_for(&a, i, "one_minus"));
         assert!(!passed_for(&info("2.0"), i, "base"), "a new driver version invalidates the entry");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -203,8 +234,8 @@ mod tests {
 
     #[test]
     fn an_entry_written_under_one_identity_is_not_read_under_another() {
-        let dir = std::env::temp_dir().join(format!("sapphire-checkcache-ident-{}", std::process::id()));
-        std::env::set_var("SAPPHIRE_CACHE_DIR", &dir);
+        let cache = CacheDir::new("ident");
+        let dir = cache.dir.clone();
         let a = info("9.0");
         record_pass_for(&a, id(10, 20), "base");
         assert!(passed_for(&a, id(10, 20), "base"));
@@ -213,13 +244,12 @@ mod tests {
         // even a file copied onto the other identity's name is refused: the key text inside differs
         std::fs::copy(path_for(&a, id(10, 20)), path_for(&a, id(11, 20))).unwrap();
         assert!(!passed_for(&a, id(11, 20), "base"));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn the_cache_is_unused_for_a_device_without_a_registered_binary() {
-        let dir = std::env::temp_dir().join(format!("sapphire-checkcache-unreg-{}", std::process::id()));
-        std::env::set_var("SAPPHIRE_CACHE_DIR", &dir);
+        let cache = CacheDir::new("unreg");
+        let dir = cache.dir.clone();
         let a = info("unregistered");
         record_pass(&a, "base");
         assert!(!passed(&a, "base"));

@@ -10,6 +10,4 @@ description = "Port of the blur core horizontal row kernel K1 (AVX2 body)."
 path = "src/lib.rs"
 
 [dependencies]
-
-[dev-dependencies]
 fx_common = { path = "../../fx_common" }

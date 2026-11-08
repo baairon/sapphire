@@ -63,13 +63,13 @@ jobs:
           cargo build --release -p fx_exec
           cargo test --release -p fx_eval -p fx_exec -p edge_aware_sharpen_weights -p edge_aware_sharpen_jobs -p edge_aware_sharpen_blur_core -p edge_aware_sharpen_box_filter -p edge_aware_sharpen_render -p edge_aware_sharpen -p sharpen -p warp_render -p make_mipmap -p rotate2d -p interp -p effects_rtdata -p effects_vecdir
 
-      # Each of the 13 effect styles renders a fixed synthetic clip at 64x32 and 50x7 through its stage, and the
+      # Each of the 16 effect styles renders a fixed synthetic clip at 64x32 and 50x7 through its stage, and the
       # SHA-256 of every output must equal tools/fx_golden.tsv (this repository's own Linux renders); a difference
       # names the style.
       - run: python3 -I tools/fx_golden.py
 
       # The device foundation: source lint, host simulator, probe and self-check corpus, then, with PoCL installed above, the
-      # allowlisted ops against the CPU kernels and the 13 styles rendered through the device backend to the same hashes.
+      # allowlisted ops against the CPU kernels and the 16 styles rendered through the device backend to the same hashes.
       # SAPPHIRE_REQUIRE_DEVICE=1 turns a missing device into a failure, so an unusable PoCL install cannot pass as NOT RUN.
       # The device integration tests run one binary at a time on one thread: OpenCL platform discovery is not thread safe.
       - env:

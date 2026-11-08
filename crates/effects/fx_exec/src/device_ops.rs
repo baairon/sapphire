@@ -133,6 +133,13 @@ pub const ALLOWLIST: &[&str] = &["copy", "one_minus", "warp_rel", "warp", "rotat
 /// Ops with no device kernel, each with the reason. The list shrinks as kernels land. `get_frame`, `get_prev_dest` and
 /// `save_prev_dest` are host data movement (`kernels::HOST_CLASSES`) and are not kernel ops.
 pub const CPU_ONLY: &[(&str, &str)] = &[
+    ("v3_to_v4_if4_a", "plane assembly through the host plane service, no arithmetic"),
+    ("get_alpha", "plane assembly through the host plane service, no arithmetic"),
+    ("glow", "separable blur with data-dependent bright pass, no device kernel yet"),
+    ("append", "plane assembly through the host plane service (copies and broadcasts), no device kernel"),
+    ("alpha_from_rgb_max", "element-wise copy and maximum on 4 planes, bandwidth bound; no device kernel yet"),
+    ("overlay_super", "conditional fused multiply-add branch per element, no device kernel yet"),
+    ("screen", "fixed 1.0 and (1+a)-a extension kernels are not covered by the screen_super device kernel, no device kernel yet"),
 ];
 
 fn copy_calls_are_identity(tag: i32) -> bool {

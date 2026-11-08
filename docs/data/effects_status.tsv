@@ -4,8 +4,11 @@ BlurMoCurves	Transform_and_Blur_Autogen; Blur_Motion_Curves_No_Transform_Autogen
 S_Diffuse	Diffuse_Autogen	31	54	54	REBUILT
 S_DistortRGB	Distort_RGB_Autogen	30	30	30	REBUILT
 S_DropShadow	registered without a wrapper program	24	26	26	REBUILT
+S_Flicker	registered without a wrapper program	24	24	24	REBUILT
+S_Glow	registered without a wrapper program	36	36	36	REBUILT
 S_HueSatBright	Hue_Sat_Bright_Autogen	130	196	196	REBUILT
 S_Sharpen	Sharpen_Best_Quality_Autogen; Sharpen_Fast_Autogen	43	114	114	REBUILT
+S_SwishPan	registered without a wrapper program	36	288	288	REBUILT
 S_TimeWarpRGB	Time_Warp_RGB_Autogen	22	22	22	REBUILT
 S_Trails	Trails_Autogen	78	170	220	REBUILT
 S_WarpPerspective	Warp_Perspective_Autogen	19	256	256	REBUILT
