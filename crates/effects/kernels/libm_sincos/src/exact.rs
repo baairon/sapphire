@@ -463,3 +463,145 @@ pub fn svml_a() -> &'static SvmlA {
         SvmlA { chunks, sin_pairs: sp, cos_pairs: cp, c540: c540.to_f64().to_bits(), c548: c548.to_f64().to_bits() }
     })
 }
+
+// ---- logarithms, powers of two and splits of pi/4 and 2/pi, from their definitions
+
+/// atanh(a / b) for 0 <= a < b with small a and b (b < 2^16), by its power series.
+fn atanh_ratio(a: u64, b: u64) -> Fx {
+    let mut term = Fx::from_int(a as i64).div_u64(b);
+    let mut sum = term;
+    let (a2, b2) = (a * a, b * b);
+    let mut k = 1u64;
+    while !term.is_zero() {
+        term = term.mul_u64(a2).div_u64(b2);
+        k += 2;
+        sum = sum.add(&term.div_u64(k));
+    }
+    sum
+}
+
+/// ln 2 = 2 atanh(1/3).
+pub fn ln2() -> &'static Fx {
+    static V: OnceLock<Fx> = OnceLock::new();
+    V.get_or_init(|| atanh_ratio(1, 3).mul_u64(2))
+}
+
+/// log2(e) = 1 / ln 2.
+pub fn log2e() -> &'static Fx {
+    static V: OnceLock<Fx> = OnceLock::new();
+    V.get_or_init(|| ln2().recip())
+}
+
+/// log2(p / q) for small positive integers p and q (q < 2^15), as 2 atanh((p - q) / (p + q)) / ln 2.
+pub fn log2_ratio(p: u64, q: u64) -> Fx {
+    if p == q {
+        return Fx::zero();
+    }
+    let z = atanh_ratio(p.abs_diff(q), p + q).mul_u64(2).mul(log2e());
+    if p < q { z.neg() } else { z }
+}
+
+/// 2^(j / 32) for 0 <= j < 32, by the exponential series of j ln 2 / 32.
+pub fn exp2_32nd(j: u64) -> Fx {
+    let y = ln2().mul_u64(j).div_u64(32);
+    let mut term = Fx::from_int(1);
+    let mut sum = term;
+    let mut k = 1u64;
+    loop {
+        term = term.mul(&y).div_u64(k);
+        if term.is_zero() {
+            break;
+        }
+        sum = sum.add(&term);
+        k += 1;
+    }
+    sum
+}
+
+/// Round the magnitude to a multiple of 2^-s (nearest, ties to even) and return it as a double (exact for results below 2^53).
+fn round_to_grid(v: &Fx, s: u32) -> f64 {
+    let sc = v.abs().mul_u64(1u64 << s);
+    let mut n = sc.m[FRAC_LIMBS];
+    let half = sc.m[FRAC_LIMBS - 1] >> 63 == 1;
+    let rest = (sc.m[FRAC_LIMBS - 1] << 1) != 0 || sc.m[..FRAC_LIMBS - 1].iter().any(|&w| w != 0);
+    if half && (rest || n & 1 == 1) {
+        n += 1;
+    }
+    let r = n as f64 * f64::from_bits(((1023 - s as i32) as u64) << 52);
+    if v.is_neg() { -r } else { r }
+}
+
+/// The 164 qwords of the powf table: for i in 0..=64 the pair (log2(e) / x, log2 of the interval start) with x = 1 + i / 64
+/// (the logarithm of x / 2 from i = 32 on, quantised to a multiple of 2^-44), two zero qwords, then 2^(j / 32) for j in 0..32.
+pub fn powf_table() -> [u64; 164] {
+    let mut t = [0u64; 164];
+    for i in 0..=64u64 {
+        let c = log2e().mul_u64(64).div_u64(64 + i);
+        t[2 * i as usize] = c.to_f64().to_bits();
+        let lg = if i < 32 { log2_ratio(64 + i, 64) } else { log2_ratio(64 + i, 128) };
+        t[2 * i as usize + 1] = round_to_grid(&lg, 44).to_bits();
+    }
+    for j in 0..32u64 {
+        t[132 + j as usize] = exp2_32nd(j).to_f64().to_bits();
+    }
+    t
+}
+
+impl Fx {
+    /// Round the magnitude to `n` significant bits (nearest, ties to even) or truncate it.
+    fn split_piece(&self, n: i32, nearest: bool) -> Fx {
+        let hb = match self.top_bit() {
+            None => return Fx::zero(),
+            Some(h) => h,
+        };
+        let low = hb - (n - 1);
+        let mut r = self.abs().trunc_sig(n);
+        if nearest && self.bit(low - 1) && (self.any_below(low - 1) || self.bit(low)) {
+            let mut add = Fx::zero();
+            add.m[(low / 64) as usize] = 1u64 << (low % 64);
+            r = r.add(&add);
+        }
+        if self.is_neg() { r.neg() } else { r }
+    }
+}
+
+/// Split pi/4 into consecutive pieces: piece i keeps `bits` significant bits of what is left, rounded to nearest (`true`) or
+/// truncated (`false`); the last piece is the remainder rounded to a double.
+fn split_pi_over_4(recipe: &[(bool, i32)]) -> Vec<u64> {
+    let mut r = pi().shr(2);
+    let mut out = Vec::new();
+    for &(nearest, bits) in recipe {
+        let v = r.split_piece(bits, nearest);
+        out.push(v.to_f64().to_bits());
+        r = r.sub(&v);
+    }
+    out
+}
+
+/// Cody-Waite pieces of pi/4 for the single precision path (28, 28, 27 and 53 bit pieces, all rounded to nearest).
+pub fn pi4_pieces_s() -> [u64; 4] {
+    let v = split_pi_over_4(&[(true, 28), (true, 28), (true, 27), (true, 53)]);
+    [v[0], v[1], v[2], v[3]]
+}
+
+/// Cody-Waite pieces of pi/4 for the double precision path: truncated to 20 bits, rounded to nearest at 21, truncated to 20, rounded to nearest at 21, then the remainder rounded to nearest at 53.
+pub fn pi4_pieces_b() -> [u64; 5] {
+    let v = split_pi_over_4(&[(false, 20), (true, 21), (false, 20), (true, 21), (true, 53)]);
+    [v[0], v[1], v[2], v[3], v[4]]
+}
+
+/// Limbs of 2/pi for the large argument reducer: entry 0 is zero; entry k (1..14) holds bits 25(k-1)..25k-1 after the binary
+/// point of 2/pi as an integer times 2^(201 - 25k); only bits before position 316 are taken (the last limb holds 16 bits).
+pub fn two_over_pi_limbs() -> [u64; 14] {
+    let tp = pi().recip().mul_u64(2);
+    let mut out = [0u64; 14];
+    for k in 1..14usize {
+        let g = tp.frac_shl(25 * (k as u32 - 1)).mul_u64(1 << 25);
+        // bits at or beyond position 316 are below the working precision (320 bits, a few guard bits): they are not taken
+        let keep = (316 - 25 * (k as i32 - 1)).clamp(0, 25);
+        let chunk = g.m[FRAC_LIMBS] & !((1u64 << (25 - keep)) - 1);
+        let e = 201 - 25 * k as i32;
+        out[k] = (chunk as f64 * f64::from_bits(((e + 1023) as u64) << 52)).to_bits();
+    }
+    out
+}

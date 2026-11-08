@@ -304,7 +304,7 @@
   "path": "docs/lifting.md",
   "title": "Lift crates",
   "line": "How the Rust in the `lift-*` crates was produced from the [dump](glossary.md#dump), how the crates are laid out, and the x86 rules the ports reproduce.",
-  "bytes": 7563,
+  "bytes": 7758,
   "generated": false
  },
  {

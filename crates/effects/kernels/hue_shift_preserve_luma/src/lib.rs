@@ -56,9 +56,17 @@ pub const W_B: f32 = 0.1875;
 pub const SIXTH: f32 = f32::from_bits(0x3e2aaaad);
 pub const SIX: f32 = 6.0;
 
-/// / as read from the original file (MEASURED-DYLIB, 32 B each):
-/// dwords 0, 2, 4, 6, 0, 0, 0, 0 (both cells equal).
-pub const PERM_FILE: [u32; 8] = [0, 2, 4, 6, 0, 0, 0, 0];
+/// Lane selector of the vpermd step: dwords 0, 2, 4, 6 (the even lanes) in the low four slots, zero in the high four.
+pub const PERM_FILE: [u32; 8] = even_lanes();
+const fn even_lanes() -> [u32; 8] {
+    let mut a = [0u32; 8];
+    let mut i = 0;
+    while i < 4 {
+        a[i] = 2 * i as u32;
+        i += 1;
+    }
+    a
+}
 /// The old stand-in (identity), kept only for the before/after comparison and the mutants.
 pub const PERM_OLD: [u32; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
 

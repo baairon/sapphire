@@ -92,4 +92,4 @@ The crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions for t
 | `minss`, `maxss` | the second operand when either is NaN or both are zero: `if a < b { a } else { b }`, not `f32::min` |
 | `rcpss`, `rsqrtss` | hardware approximations the emulator does not reproduce; such functions cannot be P1 |
 | SIMD | scalar loops over lanes with the exact saturation and rounding of each instruction |
-| Jump tables | read from the dump and ported as a `match` |
+| Jump tables and compare trees | read from the dump; a jump table is ported as a `match` or as a constant array of the values its targets return, and a compare tree over constant ranges may be ported as per-class runs and bit masks (`scripts/lift2.py`) |

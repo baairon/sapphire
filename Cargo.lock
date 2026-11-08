@@ -289,6 +289,9 @@ version = "0.1.0"
 [[package]]
 name = "libm_powf"
 version = "0.0.0"
+dependencies = [
+ "libm_sincos",
+]
 
 [[package]]
 name = "libm_sincos"
