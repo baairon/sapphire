@@ -134,7 +134,7 @@ pub fn plan(n: i32, phase: usize) -> Option<Plan> {
 /// One element: q = f32(ecx) * fma(-P, v, -r1); q < 0 gives +0.0 (the integer 0 store or the cmpltps/andnps mask), else min(max, q)
 /// with the minss/minps rule (second operand on NaN or equality).
 fn ramp(cf: f32, p: f32, r1: f32, v: f32, max: f32) -> f32 {
-    let q = cf * (-p).mul_add(v, -r1);
+    let q = nx_mul(cf, nx_fma(-p, v, -r1));
     if q < 0.0 {
         0.0
     } else if max < q {
@@ -157,9 +157,9 @@ pub fn perspective_alpha_with(
     dst: &mut [f32],
     dst_phase: usize,
 ) -> Result<Outcome, Error> {
-    let theta = (K_CELL_A * par.params_b) * K_CELL_C;
+    let theta = nx_mul(nx_mul(K_CELL_A, par.params_b), K_CELL_C);
     let (r0, r1) = sc(theta).ok_or(Error::SincosOutOfContract)?;
-    let x8 = r1 * par.params_a;
+    let x8 = nx_mul(r1, par.params_a);
     let mut o = Outcome { route: Route::Ramp, theta, r0, r1, x8, edi: None, ecx: None, p: None, plan: None };
     if x8 == 0.0 {
         let b = info.port_blk_b;
@@ -176,8 +176,8 @@ pub fn perspective_alpha_with(
         }
         return Ok(o);
     }
-    let p = par.params_c * r0;
-    let den = (par.params_c * (info.port_info_b as f32)) as f64;
+    let p = nx_mul(par.params_c, r0);
+    let den = nx_mul(par.params_c, info.port_info_b as f32) as f64;
     let num = ((info.s8 as f64) * K_CELL_B) * info.port_info_a;
     let edi = cvttsd2si32(num / den);
     let m = edi.max(4);
@@ -209,6 +209,8 @@ pub fn perspective_alpha_with(
 pub fn perspective_alpha(par: &Params, info: &Info, flag: bool, src: &[f32], dst: &mut [f32], dst_phase: usize) -> Result<Outcome, Error> {
     perspective_alpha_with(&sincos_native, RAMP_MAX_STANDIN, par, info, flag, src, dst, dst_phase)
 }
+
+use fx_common::x86::{nx_fma, nx_mul};
 
 pub struct Assumption {
     pub id: &'static str,

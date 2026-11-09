@@ -8,6 +8,8 @@
 //! Labels: MEASURED-DYLIB constants (approved original file, read only); HOST: the partition service (start, count) is an
 //! explicit input; the job context is the explicit `Ctx`. No approximate (rcp, rsqrt) instruction exists in these three jobs.
 //! CONTRACT-LIMIT (host supplied): nch <= 4, w >= 1, s >= 1, 0 <= start < total, 0 <= count <= total - start.
+use fx_common::nanop::{fma213, fma231, NanOps};
+use fx_common::x86::{nx_fma, nx_mul};
 
 /// MEASURED-DYLIB : double 2.687.
 pub const D1: f64 = 2.687;
@@ -76,7 +78,7 @@ pub fn cvtt64(x: f32) -> i64 {
 
 /// One element of job, operation by operation.
 pub fn exp_tanh_elem(s0: f32, x: f32) -> f32 {
-    let t1 = s0 * x;
+    let t1 = nx_mul(s0, x);
     let t1 = C_LOG2E * t1;
     let p = f32::from_bits(t1.to_bits() ^ 0x8000_0000);
     let off = if 0.0f32 > p { ONE } else { 0.0f32 }; // vcomiss xmm12, xmm0 / ja: 0 > p, unordered is not above
@@ -91,7 +93,7 @@ pub fn exp_tanh_elem(s0: f32, x: f32) -> f32 {
     let x4 = x3 - off;
     let q = C_B / x4;
     let v = a1 + q;
-    let v = (-z0).mul_add(C_D, v); // vfnmadd231ss: -(z0 * C_D) + v, fused
+    let v = nx_fma(-z0, C_D, v); // vfnmadd231ss: -(z0 * C_D) + v, fused
     let m = TWO23 * v;
     let lo = cvtt64(m) as u64 as u32; // esi
     let d = ONE + f32::from_bits(lo);
@@ -133,10 +135,18 @@ pub fn job_cell_a(w: i32, s: i32, t1: (i32, i32), t2: (i32, i32), a: &[f32], t: 
             break;
         }
         let base = line * wu;
+        // plain running sum; a NaN anywhere makes the final sum NaN, and then the line is redone with the NaN rule
         let mut acc = 0.0f32;
         for j in 0..wu {
             acc += a[base + j];
             p0[base + j] = acc;
+        }
+        if acc != acc {
+            let mut acc = 0.0f32;
+            for j in 0..wu {
+                acc = acc.fadd(a[base + j]);
+                p0[base + j] = acc;
+            }
         }
     }
     for col in (t2.0.max(0) as usize)..((t2.0 + t2.1).max(0) as usize) {
@@ -148,6 +158,13 @@ pub fn job_cell_a(w: i32, s: i32, t1: (i32, i32), t2: (i32, i32), a: &[f32], t: 
         for j in 0..su {
             acc += t[base + j];
             p1[base + j] = acc;
+        }
+        if acc != acc {
+            let mut acc = 0.0f32;
+            for j in 0..su {
+                acc = acc.fadd(t[base + j]);
+                p1[base + j] = acc;
+            }
         }
     }
     Ok(())
@@ -196,7 +213,7 @@ pub fn g_t(m: f32, k: f32, cb: f32, kcb: f32) -> f32 {
     } else if md > HIGH {
         k
     } else {
-        k * minss(ONE / m, cb)
+        k.fmul(minss(ONE / m, cb))
     }
 }
 
@@ -207,7 +224,8 @@ pub struct Bufs<'a> {
     pub t: &'a mut [f32],
 }
 
-/// Sum over the channels of |x - y| (sequential, starting from +0.0, each `acc + |d|`): the scalar chains .
+/// Sum over the channels of |x - y| (sequential, starting from +0.0, each `acc + |d|`): the scalar chains . Plain arithmetic: the result is
+/// exact unless an operand is NaN, which the callers detect on the final fused value.
 #[inline]
 fn l1(ch: &[&[f32]; 4], nch: usize, i: usize, j: usize) -> f32 {
     let mut acc = 0.0f32;
@@ -215,6 +233,80 @@ fn l1(ch: &[&[f32]; 4], nch: usize, i: usize, j: usize) -> f32 {
         acc += (c[i] - c[j]).abs();
     }
     acc
+}
+
+struct LineParams {
+    w: usize,
+    s: usize,
+    nch: usize,
+    line: usize,
+    n: usize,
+    mode_b: bool,
+    d: f32,
+    e: f32,
+    k: f32,
+    cb: f32,
+    kcb: f32,
+    ca: f32,
+    c10: f32,
+    c11: f32,
+}
+
+/// gT(m) with the plain product (`RULE` false) or the NaN rule of the product (`RULE` true).
+#[inline(always)]
+fn g_t_r<const RULE: bool>(m: f32, k: f32, cb: f32, kcb: f32) -> f32 {
+    if RULE {
+        return g_t(m, k, cb, kcb);
+    }
+    let md = m as f64;
+    if LOW > md {
+        kcb
+    } else if md > HIGH {
+        k
+    } else {
+        k * minss(ONE / m, cb)
+    }
+}
+
+/// Sum over the channels of |x - y| times `d`, plus `h` (fused): plain when `RULE` is false, else each step with the NaN rule of its instruction
+/// (guide mode `vfmadd231ss`, constant mode `vfmadd213ss`).
+#[inline(always)]
+fn l1_fz<const RULE: bool>(ch: &[&[f32]; 4], nch: usize, i: usize, j: usize, d: f32, h: f32, guide: bool) -> f32 {
+    if RULE {
+        let mut sa = 0.0f32;
+        for c in ch.iter().take(nch) {
+            sa = sa.fadd(c[i].fsub(c[j]).abs());
+        }
+        if guide { fma231(h, sa, d) } else { fma213(sa, d, h) }
+    } else {
+        l1(ch, nch, i, j).mul_add(d, h)
+    }
+}
+
+/// One line (not the first line of row 0) of job_2. Returns whether a written value is NaN (always false for `RULE`).
+fn line_pass<const RULE: bool>(lp: &LineParams, b: &mut Bufs) -> bool {
+    let LineParams { w, s, nch, line, n, mode_b, d, e, k, cb, kcb, ca, c10, c11 } = *lp;
+    let base = line * w;
+    let prev = base - w;
+    let mut bad = false;
+    b.a[base] = ONE;
+    let g0 = if mode_b { g_t_r::<RULE>(minss(b.cur[prev], b.cur[base]), k, cb, kcb) } else { c11 };
+    let v = l1_fz::<RULE>(&b.ch, nch, base, prev, e, g0, mode_b);
+    bad |= v != v;
+    b.t[line] = v;
+    for j in 1..=n {
+        let (h, g) = if mode_b {
+            (h_a(minss(b.cur[base + j - 1], b.cur[base + j]), ca), g_t_r::<RULE>(minss(b.cur[prev + j], b.cur[base + j]), k, cb, kcb))
+        } else {
+            (c10, c11)
+        };
+        let va = l1_fz::<RULE>(&b.ch, nch, base + j, base + j - 1, d, h, mode_b);
+        let vt = l1_fz::<RULE>(&b.ch, nch, base + j, prev + j, e, g, mode_b);
+        bad |= (va != va) | (vt != vt);
+        b.a[base + j] = va;
+        b.t[j * s + line] = vt;
+    }
+    bad && !RULE
 }
 
 /// Job on the tile (`startcount`). Row 0 (start == 0) and the line loop follow the listing. The vector (vgatherqps) arms of the
@@ -232,21 +324,21 @@ pub fn job_2(ctx: &Ctx, start: i32, count: i32, b: &mut Bufs) -> Result<(), Err>
     let (d, e, k) = (ctx.f0, ctx.f8, ctx.k);
     let ca = c_a(ctx.f4);
     let cb = c_a(ctx.fc);
-    let kcb = k * cb;
+    let kcb = k.fmul(cb);
     let (mut c10, mut c11) = (0.0f32, 0.0f32);
     if !mode_b {
         // 
         c10 = ca;
         let bd = ctx.esh2_job_ctx_a as f64;
         if LOW > bd {
-            c11 = k * cb;
+            c11 = k.fmul(cb);
         } else if bd > HIGH {
             c10 = ONE;
             c11 = k;
         } else {
             let x = ONE / ctx.esh2_job_ctx_a;
             c10 = minss(x, c10);
-            c11 = k * minss(x, cb);
+            c11 = k.fmul(minss(x, cb));
         }
     }
     b.a[st * w] = ONE; // pre-stores 
@@ -259,9 +351,9 @@ pub fn job_2(ctx: &Ctx, start: i32, count: i32, b: &mut Bufs) -> Result<(), Err>
                 b.t[row * s] = ONE;
             }
             for j in 1..=n {
-                let sa = l1(&b.ch, nch, j, j - 1);
                 let h = if mode_b { h_a(minss(b.cur[j - 1], b.cur[j]), ca) } else { c10 };
-                b.a[j] = sa.mul_add(d, h);
+                let v = l1_fz::<false>(&b.ch, nch, j, j - 1, d, h, mode_b);
+                b.a[j] = if v != v { l1_fz::<true>(&b.ch, nch, j, j - 1, d, h, mode_b) } else { v };
             }
         }
         first_line = 1;
@@ -269,22 +361,11 @@ pub fn job_2(ctx: &Ctx, start: i32, count: i32, b: &mut Bufs) -> Result<(), Err>
     let line0 = st + first_line;
     let lines_end = st + count as usize;
     for line in line0..lines_end.max(line0) {
-        let base = line * w;
-        let prev = base - w;
-        b.a[base] = ONE;
-        let s0 = l1(&b.ch, nch, base, prev);
-        let g0 = if mode_b { g_t(minss(b.cur[prev], b.cur[base]), k, cb, kcb) } else { c11 };
-        b.t[line] = s0.mul_add(e, g0);
-        for j in 1..=n {
-            let sa = l1(&b.ch, nch, base + j, base + j - 1);
-            let sv = l1(&b.ch, nch, base + j, prev + j);
-            let (h, g) = if mode_b {
-                (h_a(minss(b.cur[base + j - 1], b.cur[base + j]), ca), g_t(minss(b.cur[prev + j], b.cur[base + j]), k, cb, kcb))
-            } else {
-                (c10, c11)
-            };
-            b.a[base + j] = sa.mul_add(d, h);
-            b.t[j * s + line] = sv.mul_add(e, g);
+        // plain arithmetic first; a NaN anywhere in the line's results (a NaN operand always reaches the result of a fused step)
+        // sends the line through the NaN-rule pass, which rewrites every element of the line
+        let lp = LineParams { w, s, nch, line, n, mode_b, d, e, k, cb, kcb, ca, c10, c11 };
+        if line_pass::<false>(&lp, b) {
+            line_pass::<true>(&lp, b);
         }
     }
     Ok(())

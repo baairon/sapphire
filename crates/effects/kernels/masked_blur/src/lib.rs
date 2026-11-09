@@ -6,6 +6,7 @@
 //! T = blur(T) (in place); dst[c] = combine(M, T, W, src[c]).
 use blur::{blur_core, pass_count, Edge};
 pub use fx_common::plane::{FxError, Plane, PlaneMut};
+use fx_common::nanop::{canon, fma231, has_nan, NanOps};
 
 /// min with the x86 operand rule of minss/minps: returns the second operand when unordered or equal.
 #[inline]
@@ -39,13 +40,22 @@ pub fn clamp_in_place(buf: &mut [f32], lo: f32, hi: f32) {
 #[inline]
 pub fn premultiply_px(m: f32, d: f32) -> f32 {
     let c = if 0.0f32 > m { 0.0 } else { min_x86(1.0, m) };
-    c * d
+    // vmulss c, c, d: with two NaN operands the first source (the clamped mask value) is the result
+    c.fmul(d)
 }
 
-/// dst[i] = clamp01(mask[i]) * dst[i].
+/// dst[i] = clamp01(mask[i]) * dst[i]. When no operand is a NaN a product can only be a fresh NaN (zero times infinity), so a plain
+/// loop with a canonicalizing select gives the same bits; otherwise each element follows [`premultiply_px`].
 pub fn premultiply_in_place(dst: &mut [f32], mask: &[f32]) {
-    for (d, m) in dst.iter_mut().zip(mask.iter()) {
-        *d = premultiply_px(*m, *d);
+    if !has_nan(mask) && !has_nan(dst) {
+        for (d, m) in dst.iter_mut().zip(mask.iter()) {
+            let c = if 0.0f32 > *m { 0.0 } else { min_x86(1.0, *m) };
+            *d = canon(c * *d);
+        }
+    } else {
+        for (d, m) in dst.iter_mut().zip(mask.iter()) {
+            *d = premultiply_px(*m, *d);
+        }
     }
 }
 
@@ -66,7 +76,9 @@ pub fn combine_px(m: f32, b: f32, w: f32, s: f32, thr: f32) -> f32 {
         b /= min_x86(w, 1.0);
     }
     let m1 = min_x86(m, 1.0);
-    (b - s).mul_add(m1, s)
+    // vsubss d = b - s; vfmadd231ss s = d * m1 + s: NaN priority s, then d (m1 is never a NaN here)
+    let d = b.fsub(s);
+    fma231(s, d, m1)
 }
 
 /// Job over a whole dense plane.

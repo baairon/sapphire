@@ -21,6 +21,7 @@
 //!   node's elnum are zero (MEASURED: `(1.5, 0.75, 3, 0)`).
 
 use crate::compile::ArgView2;
+use fx_common::x86::{nx_add, nx_div, nx_fma, nx_fma64, nx_mul, nx_mul64, nx_sqrt, nx_sub, nx_sub64};
 
 pub const ZERO_EPS: f64 = f64::from_bits(0x3ddb7cdfd9d7bdbb);
 pub const ZERO_EPS_NEG: f64 = f64::from_bits(0xbddb7cdfd9d7bdbb);
@@ -454,7 +455,7 @@ fn cx(a: &ArgView2) -> (f32, f32) {
 fn math1(class: &str, x: f32) -> f32 {
     match class {
         "abs" => x.abs(),
-        "one_minus" => 1.0 - x,
+        "one_minus" => nx_sub(1.0, x),
         "negate" => -x,
         "cos" => crate::svml_trig::cos_rev(x),
         // the fitted rules for atan in revolutions and for the log(2.0) lane are NOT merged; atan and log keep the plain f32 forms (correctly rounded by detmath) until the one-argument origin is traced (M9)
@@ -564,12 +565,12 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
             for i in 0..n {
                 let (x, y) = (lane(&a[0], i), lane(&a[1], i));
                 out[i] = match class {
-                    "*" => x * y,
-                    "+" => x + y,
+                    "*" => nx_mul(x, y),
+                    "+" => nx_add(x, y),
                     // 1 - (1 - x) (1 - y), INFERRED (Glow: screen of two zeros folds)
                     // MEASURED (81 of 81 exact-atom cases): x + y (1 - x), not 1 - (1 - x)(1 - y)
-                    "screen" => x + y * (1.0 - x),
-                    "-" => x - y,
+                    "screen" => nx_add(x, nx_mul(y, nx_sub(1.0, x))),
+                    "-" => nx_sub(x, y),
                     "diff" => diff_const(x, y),
                     // IN7-A4: the (3,4) and (4,3) operand pairs write lane 3 by the alpha synthesis and drop loops of the class body
                     "round" => {
@@ -584,9 +585,9 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                     }
                     // a zero divisor is replaced by 1e-6 (Rays rays_length 0: 1 / [0 0 0] folds to 1e6 = 0x49742400 per lane, MEASURED for numerator 1; the clamp threshold for other small divisors is UNKNOWN)
                     // MEASURED through the original compile: a zero divisor of either sign is replaced by +1e-6 (1 / -0 folds to +1e6)
-                    "/" => x / if y == 0.0 { 1e-6f32 } else { y },
+                    "/" => nx_div(x, if y == 0.0 { 1e-6f32 } else { y }),
                     // GLSL style mod (INFERRED, one sample: 1 mod 2 = 1)
-                    "mod" => x - y * (x / y).floor(),
+                    "mod" => nx_sub(x, nx_mul(y, nx_div(x, y).floor())),
                     "max" => {
                         if x > y {
                             x
@@ -729,25 +730,25 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
         FoldKind::Complex => match class {
             "cmult" => {
                 let ((ar, ai), (br, bi)) = (cx(a.first()?), cx(a.get(1)?));
-                out[0] = ar * br - ai * bi;
-                out[1] = ar * bi + ai * br;
+                out[0] = nx_sub(nx_mul(ar, br), nx_mul(ai, bi));
+                out[1] = nx_add(nx_mul(ar, bi), nx_mul(ai, br));
             }
             "cdiv" => {
                 let ((ar, ai), (br, bi)) = (cx(a.first()?), cx(a.get(1)?));
-                let d = br * br + bi * bi;
-                out[0] = (ar * br + ai * bi) / d;
-                out[1] = (ai * br - ar * bi) / d;
+                let d = nx_add(nx_mul(br, br), nx_mul(bi, bi));
+                out[0] = nx_div(nx_add(nx_mul(ar, br), nx_mul(ai, bi)), d);
+                out[1] = nx_div(nx_sub(nx_mul(ai, br), nx_mul(ar, bi)), d);
             }
             "cexp" => {
                 let (re, im) = cx(a.first()?);
                 let e = crate::detmath::exp(re);
                 let (s, c) = crate::detmath::sin_cos(im);
-                out[0] = e * c;
-                out[1] = e * s;
+                out[0] = nx_mul(e, c);
+                out[1] = nx_mul(e, s);
             }
             _ => {
                 let (re, im) = cx(a.first()?);
-                out[0] = crate::detmath::ln((re * re + im * im).sqrt());
+                out[0] = crate::detmath::ln(nx_sqrt(nx_add(nx_mul(re, re), nx_mul(im, im))));
                 out[1] = crate::detmath::atan2(im, re);
             }
         },
@@ -758,7 +759,7 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                 for i in 0..n {
                     let tt = lane(t, i);
                     // candidate a + (b - a) t (the a (1 - t) + b t form gives NaN for a = 0, t = inf where the original gives inf); kept only if the rerun shows 0 differing
-                    out[i] = lane(x, i) + (lane(y, i) - lane(x, i)) * tt;
+                    out[i] = nx_add(lane(x, i), nx_mul(nx_sub(lane(y, i), lane(x, i)), tt));
                 }
             }
             "min_element" | "max_element" => {
@@ -869,18 +870,18 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                 let x = a.first()?;
                 let mut s = 0f32;
                 for i in 0..x.n.clamp(1, 4) {
-                    s += x.lanes[i] * x.lanes[i];
+                    s = nx_add(s, nx_mul(x.lanes[i], x.lanes[i]));
                 }
-                out[0] = s.sqrt();
+                out[0] = nx_sqrt(s);
             }
             _ => {
                 let (x, y) = (a.first()?, a.get(1)?);
                 let mut s = 0f32;
                 for i in 0..x.n.clamp(1, 4) {
-                    let d = x.lanes[i] - lane(y, i);
-                    s += d * d;
+                    let d = nx_sub(x.lanes[i], lane(y, i));
+                    s = nx_add(s, nx_mul(d, d));
                 }
-                out[0] = s.sqrt();
+                out[0] = nx_sqrt(s);
             }
         },
     }
@@ -953,7 +954,7 @@ pub fn coerce_extra_off() -> bool {
 /// (a NaN keeps its payload apart from the sign bit). Replaces INFERRED fold flag: the executor's wrapper and this fold agree
 /// bit for bit (checked in fx_exec `tests/t13.rs` against the crate for finite, special and NaN pairs).
 pub fn diff_const(x: f32, y: f32) -> f32 {
-    f32::from_bits((x - y).to_bits() & 0x7fff_ffff)
+    f32::from_bits(nx_sub(x, y).to_bits() & 0x7fff_ffff)
 }
 
 /// Constant path of `slow_in_out(t, slow_in, slow_out, deriv)`: the FMA variant of the class body (the variant the feature word
@@ -969,22 +970,22 @@ pub fn slow_in_out(t: f32, slow_in: f32, slow_out: f32, deriv: bool) -> f32 {
     let (x, y) = (slow_in * half, slow_out * half);
     let mut a = if zero > x { zero } else { x };
     let mut b = if zero > y { zero } else { y };
-    let mut s = a + b;
+    let mut s = nx_add(a, b);
     if s > one {
-        a /= s;
-        b /= a + b;
-        s = a + b;
+        a = nx_div(a, s);
+        b = nx_div(b, nx_add(a, b));
+        s = nx_add(a, b);
     }
-    let k = s.mul_add(half, one) - (a + b);
+    let k = nx_sub(nx_fma(s, half, one), nx_add(a, b));
     if a > t {
-        if deriv { t / (a * k) } else { (t * t) / (a * k) * half }
-    } else if t > one - b {
-        let u = one - t;
-        if deriv { u / (b * k) } else { (-half).mul_add((u * u) / (b * k), one) }
+        if deriv { nx_div(t, nx_mul(a, k)) } else { nx_mul(nx_div(nx_mul(t, t), nx_mul(a, k)), half) }
+    } else if t > nx_sub(one, b) {
+        let u = nx_sub(one, t);
+        if deriv { nx_div(u, nx_mul(b, k)) } else { nx_fma(-half, nx_div(nx_mul(u, u), nx_mul(b, k)), one) }
     } else if deriv {
-        one / k
+        nx_div(one, k)
     } else {
-        (-half).mul_add(a, t) / k
+        nx_div(nx_fma(-half, a, t), k)
     }
 }
 
@@ -999,9 +1000,9 @@ pub fn snap_const(x: f32, y: f32) -> f32 {
     }
     let yd = y as f64;
     if !(x < 0.0) {
-        (yd * (x / y).floor() as f64) as f32
+        nx_mul64(yd, nx_div(x, y).floor() as f64) as f32
     } else {
-        ((x / y).ceil() as f64).mul_add(yd, -(y.abs() as f64)) as f32
+        nx_fma64(nx_div(x, y).ceil() as f64, yd, -(y.abs() as f64)) as f32
     }
 }
 
@@ -1010,14 +1011,14 @@ pub fn snap_one_over_const(y: f32) -> f32 {
     if y == 0.0 {
         1.0
     } else {
-        ((y as f64) * ((1.0f32 / y) as f64).floor()) as f32
+        nx_mul64(y as f64, (nx_div(1.0f32, y) as f64).floor()) as f32
     }
 }
 
 /// alpha drop lane of `round` with a 4 lane first and a 3 lane second operand: `floor(x)` (x >= 0 or NaN), `ceil(x) - 1` (x < 0), in double.
 pub fn snap_unit_const(x: f32) -> f32 {
     let xd = x as f64;
-    if !(x < 0.0) { xd.floor() as f32 } else { (xd.ceil() - 1.0) as f32 }
+    if !(x < 0.0) { xd.floor() as f32 } else { nx_sub64(xd.ceil(), 1.0) as f32 }
 }
 
 /// IN4A: the constant path of `clamp(x, lo, hi)` is the class's own median ladder, not `max(x, lo).min(hi)` (finding: the max/min

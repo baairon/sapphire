@@ -96,6 +96,9 @@ dependencies = [
 [[package]]
 name = "comp_premult"
 version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
 
 [[package]]
 name = "comp_rgba"
@@ -144,6 +147,7 @@ name = "edge_aware_sharpen_box_filter"
 version = "0.0.0"
 dependencies = [
  "effects_vecdir",
+ "fx_common",
 ]
 
 [[package]]
@@ -151,6 +155,7 @@ name = "edge_aware_sharpen_jobs"
 version = "0.0.0"
 dependencies = [
  "effects_vecdir",
+ "fx_common",
 ]
 
 [[package]]
@@ -162,6 +167,7 @@ dependencies = [
  "edge_aware_sharpen_jobs",
  "edge_aware_sharpen_weights",
  "effects_vecdir",
+ "fx_common",
  "libm_powf",
 ]
 
@@ -170,6 +176,7 @@ name = "edge_aware_sharpen_weights"
 version = "0.0.0"
 dependencies = [
  "effects_vecdir",
+ "fx_common",
 ]
 
 [[package]]
@@ -206,6 +213,7 @@ version = "0.1.0"
 dependencies = [
  "effects_rtdata",
  "effects_vecdir",
+ "fx_common",
  "libm_sincos",
  "shake_shift",
  "tickmap",
@@ -305,10 +313,16 @@ dependencies = [
 [[package]]
 name = "hue_shift"
 version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
 
 [[package]]
 name = "hue_shift_preserve_luma"
 version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
 
 [[package]]
 name = "interp"
@@ -317,6 +331,9 @@ version = "0.1.0"
 [[package]]
 name = "libm_fmod"
 version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
 
 [[package]]
 name = "libm_powf"
@@ -517,6 +534,7 @@ dependencies = [
 name = "perspective"
 version = "0.0.0"
 dependencies = [
+ "fx_common",
  "libm_sincos",
 ]
 
@@ -536,12 +554,16 @@ version = "0.0.0"
 name = "rotate2d"
 version = "0.0.0"
 dependencies = [
+ "fx_common",
  "libm_sincos",
 ]
 
 [[package]]
 name = "sat_scale"
 version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
 
 [[package]]
 name = "scale_rgb"
@@ -581,6 +603,9 @@ dependencies = [
 [[package]]
 name = "tickmap"
 version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
 
 [[package]]
 name = "v3_to_v4_if4"

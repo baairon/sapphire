@@ -430,6 +430,10 @@ pub fn run_any(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, usiz
             return Err(ExecError::Shape(format!("{}: combo tag {} outside 1..4", c, tag)));
         }
         let mut out = crate::kernels2::run_wired(c, tag, args, n, dims, kp)?;
+        if let (true, crate::kernels2::Out::Mip(m)) = (crate::nanrule::ACTIVE, &mut out) {
+            let arm = args.iter().any(|a| crate::nanrule::has_arm_nan(&a.f32s()) || a.planes().iter().any(|p| crate::nanrule::has_arm_nan(p)));
+            crate::nanrule::canon_bit_planes(&mut m.ripmap.planes, arm);
+        }
         if let (true, crate::kernels2::Out::Img(img)) = (crate::nanrule::ACTIVE && !crate::nanrule::NO_OUTPUT_REWRITE.contains(&c), &mut out) {
             let arm = args.iter().any(|a| crate::nanrule::has_arm_nan(&a.f32s()) || a.planes().iter().any(|p| crate::nanrule::has_arm_nan(p)));
             crate::nanrule::canon_planes(&mut img.planes, arm);

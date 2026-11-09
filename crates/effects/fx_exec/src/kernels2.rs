@@ -467,9 +467,7 @@ fn sharpen_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result
         for v in outv.iter_mut() {
             dp.push(fx_common::plane::PlaneMut::new(v.as_mut_slice(), w, h, w).map_err(|e| kerr("sharpen", e))?);
         }
-        // a default NaN of the ARM pattern in the blur is an invalid operation unless the source already holds that pattern
-        let x86_nan = crate::nanrule::ACTIVE && !src.planes.iter().any(|p| crate::nanrule::has_arm_nan(p));
-        sharpen::render_alias_nan(&sp, &planes, &mut dp, kp.sharpen_alias, x86_nan).map_err(|e| kerr("sharpen", e))?;
+        sharpen::render_alias(&sp, &planes, &mut dp, kp.sharpen_alias).map_err(|e| kerr("sharpen", e))?;
     }
     Ok(Image { n: w * h, planes: outv })
 }

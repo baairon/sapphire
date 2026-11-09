@@ -11,6 +11,8 @@
 //! the out2 pointer (`out2_phase_bytes`). The flag path (cl != 0) calls the GPU stub .
 
 /// Assumption record (stand-ins, never data requests).
+use fx_common::x86::{nx_add, nx_div, nx_fma, nx_mul, nx_sub};
+
 pub struct Assumption {
     pub id: &'static str,
     pub text: &'static str,
@@ -53,7 +55,7 @@ pub struct GpuCall {
 
 /// Argument of the callee (xmm0).
 pub fn sincos_arg(gpu_call_a: f32) -> f32 {
-    (C_QUARTER_NEG * gpu_call_a) * C_TWO_PI
+    nx_mul(nx_mul(C_QUARTER_NEG, gpu_call_a), C_TWO_PI)
 }
 
 /// The one native for the callee (crate libm_sincos): (r0, r1) = (sin, cos) as f32, bit exact against the emulated routine.
@@ -75,14 +77,14 @@ pub struct K {
 }
 
 pub fn constants(o: &Obj, r0: f32, r1: f32) -> K {
-    K { m1: o.port_obj_c * r0, p: o.port_obj_c * r1, m4: r0 * o.port_obj_d, m5: r1 * o.port_obj_d, m6: r0, m7: r1, b: o.port_obj_d }
+    K { m1: nx_mul(o.port_obj_c, r0), p: nx_mul(o.port_obj_c, r1), m4: nx_mul(r0, o.port_obj_d), m5: nx_mul(r1, o.port_obj_d), m6: r0, m7: r1, b: o.port_obj_d }
 }
 
 fn d_of(k: &K, v: f32) -> f32 {
-    (-k.m4).mul_add(v, -k.m7) // vfnmsub213ss / vfmsub213ps with the negated m4
+    nx_fma(-k.m4, v, -k.m7) // vfnmsub213ss / vfmsub213ps with the negated m4
 }
 fn dneg_of(k: &K, v: f32) -> f32 {
-    k.m4.mul_add(v, k.m7) // vfnmadd213ps (-(-m4 * v) + m7)
+    nx_fma(k.m4, v, k.m7) // vfnmadd213ps (-(-m4 * v) + m7)
 }
 
 /// Scalar parts (prologue peel, tails).
@@ -93,9 +95,9 @@ pub fn q_scalar(k: &K, v: f32) -> f32 {
     }
     let dgt = d > 0.0;
     if (k.p > 0.0) == dgt {
-        (C_ONE_HALF_PLUS - k.p) / d
+        nx_div(nx_sub(C_ONE_HALF_PLUS, k.p), d)
     } else {
-        k.p / (-d)
+        nx_div(k.p, -d)
     }
 }
 
@@ -128,11 +130,11 @@ pub enum Part {
 }
 
 fn rcp_exact(_s: RcpSite, x: f32) -> f32 {
-    1.0f32 / x // PX1-A2 (APPROX-MODEL): the exact f32 reciprocal stands for vrcpps on both sides
+    nx_div(1.0f32, x) // PX1-A2 (APPROX-MODEL): the exact f32 reciprocal stands for vrcpps on both sides
 }
 fn nr_inv(s: RcpSite, x: f32, rcp: &dyn Fn(RcpSite, f32) -> f32) -> f32 {
     let r = rcp(s, x);
-    (r + r) - ((r * x) * r) // the code's own Newton step: 2r - (r*x)*r
+    nx_sub(nx_add(r, r), nx_mul(nx_mul(r, x), r)) // the code's own Newton step: 2r - (r*x)*r
 }
 
 /// 8 and 16 wide parts (reciprocal by vrcpps and one Newton step, no division). `part` selects the vrcpps site.
@@ -149,9 +151,9 @@ pub fn q_vector_with(k: &K, v: f32, part: Part, rcp: &dyn Fn(RcpSite, f32) -> f3
     if zero {
         k.p
     } else if pgt == dgt {
-        (C_ONE_HALF_PLUS - k.p) * nr_inv(sd, d, rcp)
+        nx_mul(nx_sub(C_ONE_HALF_PLUS, k.p), nr_inv(sd, d, rcp))
     } else {
-        k.p * nr_inv(sn, dneg_of(k, v), rcp)
+        nx_mul(k.p, nr_inv(sn, dneg_of(k, v), rcp))
     }
 }
 
@@ -161,8 +163,8 @@ pub fn q_vector(k: &K, v: f32) -> f32 {
 
 fn elem(k: &K, u: f32, v: f32, part: Part, rcp: &dyn Fn(RcpSite, f32) -> f32) -> (f32, f32) {
     let q = if part == Part::Scalar { q_scalar(k, v) } else { q_vector_with(k, v, part, rcp) };
-    let t = v.mul_add(k.m5, -k.m6); // vfmsub213ss / ps
-    ((k.b * u) * q, t.mul_add(q, k.m1))
+    let t = nx_fma(v, k.m5, -k.m6); // vfmsub213ss / ps
+    (nx_mul(nx_mul(k.b, u), q), nx_fma(t, q, k.m1))
 }
 
 /// Section plan: (peel scalar count, 16 wide end, 8 wide end, scalar start of the tail).

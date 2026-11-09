@@ -10,6 +10,7 @@ description = "Std-only port of the CPU render entry of edge_aware_sharpen (slot
 path = "src/lib.rs"
 
 [dependencies]
+fx_common = { path = "../../fx_common" }
 edge_aware_sharpen_weights = { path = "../edge_aware_sharpen_weights" }
 edge_aware_sharpen_jobs = { path = "../edge_aware_sharpen_jobs" }
 libm_powf = { path = "../libm_powf" }

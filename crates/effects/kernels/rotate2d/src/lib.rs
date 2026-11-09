@@ -8,6 +8,7 @@
 //! evaluated with the original's exact fused-multiply-add chains (seven code paths, one per operand-kind combination, each with its own
 //! operation order; the chains are NOT interchangeable bit for bit). sincos is the finished crate `libm_sincos`.
 
+use fx_common::x86::{nx_add, nx_fma, nx_mul, nx_sub};
 use libm_sincos::sincosf_x;
 
 /// captured f32, bytes db0fc940 = 6.2831855f (CAPTURED, lookup_rt.tsv)
@@ -64,14 +65,14 @@ impl Cfg {
     #[inline]
     fn f(&self, site: u32, a: f32, b: f32, c: f32) -> f32 {
         if (self.unfuse >> site) & 1 == 1 {
-            a * b + c
+            nx_add(nx_mul(a, b), c)
         } else {
-            a.mul_add(b, c)
+            nx_fma(a, b, c)
         }
     }
     #[inline]
     fn sc(&self, arg: f32) -> (f32, f32) {
-        let x = if self.logic == Logic::NoScale { arg } else { TWO_PI * arg };
+        let x = if self.logic == Logic::NoScale { arg } else { nx_mul(TWO_PI, arg) };
         let (mut s, mut c) = if self.logic == Logic::StdSinCos { x.sin_cos() } else { sincosf_x(x) };
         match self.logic {
             Logic::SwapSinCos => core::mem::swap(&mut s, &mut c),
@@ -121,13 +122,13 @@ pub fn render_cfg(g: Cfg, v: Vec2, angle: Angle, center: Vec2, n: i32, ox: &mut 
     }
     let rev = g.logic == Logic::DeltaReversed;
     // delta helper: v - center (original) or center - v (mutant)
-    let dl = |a: f32, b: f32| if rev { b - a } else { a - b };
+    let dl = |a: f32, b: f32| if rev { nx_sub(b, a) } else { nx_sub(a, b) };
     match angle {
         Angle::Plane(ang) => match (v, center) {
             // P1:, v and center constant
             (Vec2::Const(a, b), Vec2::Const(cc, d)) => {
-                let dx = a - cc;
-                let dy = b - d;
+                let dx = nx_sub(a, cc);
+                let dy = nx_sub(b, d);
                 for i in 0..nn {
                     let (s, c) = g.sc(ld(ang, i));
                     let t1 = g.f(0, -dy, s, cc);

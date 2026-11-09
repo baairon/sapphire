@@ -15,3 +15,4 @@ name = "tickmap_case"
 path = "src/main.rs"
 
 [dependencies]
+fx_common = { path = "../../fx_common" }

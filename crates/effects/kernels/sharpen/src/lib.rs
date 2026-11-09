@@ -56,14 +56,6 @@ pub fn sharpen_plane_alias<F>(x: &[f32], w: usize, h: usize, radius: f32, gain: 
 where
     F: FnOnce(&[f32], f32) -> Result<Vec<f32>, FxError>,
 {
-    sharpen_plane_alias_nan(x, w, h, radius, gain, count, alias, false, blur)
-}
-
-/// [`sharpen_plane_alias`] with the NaN rule of [`combine::combine_x86_nan`] when `x86_nan` is set.
-pub fn sharpen_plane_alias_nan<F>(x: &[f32], w: usize, h: usize, radius: f32, gain: f32, count: usize, alias: bool, x86_nan: bool, blur: F) -> Result<Vec<f32>, FxError>
-where
-    F: FnOnce(&[f32], f32) -> Result<Vec<f32>, FxError>,
-{
     let total = w.checked_mul(h).ok_or(FxError::Geometry)?;
     if x.len() < total || count > total {
         return Err(FxError::Geometry);
@@ -77,11 +69,7 @@ where
             }
             // tail source: blurred plane (non-alias) or the input plane (alias)
             let mut out = if alias { x[..total].to_vec() } else { b.clone() };
-            if x86_nan {
-                combine::combine_x86_nan(&x[..total], &b, g, &mut out, count)?;
-            } else {
-                combine::combine(&x[..total], &b, g, &mut out, count)?;
-            }
+            combine::combine(&x[..total], &b, g, &mut out, count)?;
             Ok(out)
         }
     }
@@ -113,15 +101,7 @@ where
 /// The slot function with the alias flag: `alias` is true when the destination planes are the source planes (the host hands the same node as input and
 /// output: the split branch `sharpen :ref16.2 . :ref16.2`); the original then blurs into a host scratch plane (call [[ctx]]) and the
 /// samples beyond `p.count` keep the input value.
-pub fn render_with_alias<F>(p: &Params, src: &[Plane], dst: &mut [PlaneMut], alias: bool, blur: F) -> Result<(), FxError>
-where
-    F: FnMut(&[f32], usize, usize, f32) -> Result<Vec<f32>, FxError>,
-{
-    render_with_alias_nan(p, src, dst, alias, false, blur)
-}
-
-/// [`render_with_alias`] with the NaN rule of [`combine::combine_x86_nan`] when `x86_nan` is set.
-pub fn render_with_alias_nan<F>(p: &Params, src: &[Plane], dst: &mut [PlaneMut], alias: bool, x86_nan: bool, mut blur: F) -> Result<(), FxError>
+pub fn render_with_alias<F>(p: &Params, src: &[Plane], dst: &mut [PlaneMut], alias: bool, mut blur: F) -> Result<(), FxError>
 where
     F: FnMut(&[f32], usize, usize, f32) -> Result<Vec<f32>, FxError>,
 {
@@ -146,7 +126,7 @@ where
         let idx = gain_index(ch, p.in_count);
         let g = *p.gains.get(idx).ok_or(FxError::PlaneCount)?;
         let x = dense(&src[ch]);
-        let out = sharpen_plane_alias_nan(&x, w, h, r, g, count, alias, x86_nan, |xs, rr| blur(xs, w, h, rr))?;
+        let out = sharpen_plane_alias(&x, w, h, r, g, count, alias, |xs, rr| blur(xs, w, h, rr))?;
         let d = &mut dst[ch];
         for y in 0..h {
             d.row_mut(y)[..w].copy_from_slice(&out[y * w..(y + 1) * w]);
@@ -173,29 +153,13 @@ pub fn render(p: &Params, src: &[Plane], dst: &mut [PlaneMut]) -> Result<(), FxE
 /// the audited render with the alias flag and the explicit host count (Params.count). `alias` = the destination node is the source node in the plan.
 #[cfg(feature = "blur")]
 pub fn render_alias(p: &Params, src: &[Plane], dst: &mut [PlaneMut], alias: bool) -> Result<(), FxError> {
-    render_alias_nan(p, src, dst, alias, false)
-}
-
-/// [`render_alias`] with the NaN rule of a processor whose default NaN is `0x7fc00000`: with `x86_nan` the NaN words of the blurred
-/// plane that hold that pattern are the default NaN of an invalid operation in the blur, so they are set to the x86 default NaN
-/// `0xffc00000` before the combine job negates them (`x * 2 - b` flips the sign of a NaN `b`, which would otherwise give the two
-/// processors opposite signs).
-#[cfg(feature = "blur")]
-pub fn render_alias_nan(p: &Params, src: &[Plane], dst: &mut [PlaneMut], alias: bool, x86_nan: bool) -> Result<(), FxError> {
     if dst.len() != src.len() || p.in_count != src.len() {
         return Err(FxError::PlaneCount);
     }
     let aspect = p.aspect;
-    render_with_alias_nan(p, src, dst, alias, x86_nan, |xs, w, h, rr| {
+    render_with_alias(p, src, dst, alias, |xs, w, h, rr| {
         let mut b = vec![0.0f32; xs.len()];
         blur::blur_core_phase(xs, &mut b, w, h, rr, rr, plan::BLUR_GAIN, blur::Edge::Mirror, plan::BLUR_PASSES, false, aspect, BASE_PHASE)?;
-        if x86_nan {
-            for v in b.iter_mut() {
-                if v.to_bits() == 0x7fc0_0000 {
-                    *v = f32::from_bits(0xffc0_0000);
-                }
-            }
-        }
         Ok(b)
     })
 }

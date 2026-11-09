@@ -23,6 +23,8 @@
 //!     
 //!   (28, matches fn_stats_bodies.tsv fma=28). No rcp/rsqrt, no x87.
 
+use fx_common::x86::{nx_add, nx_div, nx_fma, nx_mul, nx_sub};
+
 /// 4.0, 1/6, 0.5,
 /// 1.0, 2.0 : CAPTURED.
 /// 6.0 : NOT CAPTURED (lookup_hue.tsv U4), stand-in (HU1-A1).
@@ -122,18 +124,18 @@ pub fn pixel_traced(mut r: f32, mut g: f32, mut b: f32, shift: f32) -> ([f32; 3]
         hi = mx;
         lo = mn;
     }
-    let delta = hi - lo;
+    let delta = nx_sub(hi, lo);
     if hi == 0.0 {
         return ([v, v, v], tr | T_HI_ZERO);
     }
-    let mut s = delta / hi;
+    let mut s = nx_div(delta, hi);
     if s == 0.0 {
         return ([v, v, v], tr | T_S_ZERO);
     }
     let h = if r == hi {
         tr |= T_HUE_R;
-        let q = (g - b) / delta;
-        let q6 = q + SIX;
+        let q = nx_div(nx_sub(g, b), delta);
+        let q6 = nx_add(q, SIX);
         if 0.0 > q {
             tr |= T_Q_NEG;
             q6
@@ -142,23 +144,23 @@ pub fn pixel_traced(mut r: f32, mut g: f32, mut b: f32, shift: f32) -> ([f32; 3]
         }
     } else if g == hi {
         tr |= T_HUE_G;
-        TWO + (b - r) / delta
+        nx_add(TWO, nx_div(nx_sub(b, r), delta))
     } else {
         tr |= T_HUE_B;
-        FOUR + (r - g) / delta
+        nx_add(FOUR, nx_div(nx_sub(r, g), delta))
     };
-    let x = h.mul_add(SIXTH, shift);
+    let x = nx_fma(h, SIXTH, shift);
     let frac;
     if 0.0 > s {
         tr |= T_S_NEG;
         s = -s;
-        let y = HALF + x;
-        frac = y - y.floor();
+        let y = nx_add(HALF, x);
+        frac = nx_sub(y, y.floor());
     } else {
-        frac = x - x.floor();
+        frac = nx_sub(x, x.floor());
     }
-    let c = v * s;
-    let t6 = SIX * frac;
+    let c = nx_mul(v, s);
+    let t6 = nx_mul(SIX, frac);
     //  vcomiss t6,6; jb keeps t6 (unordered sets CF, so NaN is kept), otherwise 0
     let t = if t6 < SIX || t6.is_nan() {
         t6
@@ -170,11 +172,11 @@ pub fn pixel_traced(mut r: f32, mut g: f32, mut b: f32, shift: f32) -> ([f32; 3]
         tr |= T_T_NAN;
     }
     let i = cvtt(t);
-    let f = t - (i as f32);
-    let omf = ONE - f;
-    let p = v - c;
-    let tq = (-omf).mul_add(c, v); // V - (1-f) C
-    let qq = (-f).mul_add(c, v); // V - f C
+    let f = nx_sub(t, i as f32);
+    let omf = nx_sub(ONE, f);
+    let p = nx_sub(v, c);
+    let tq = nx_fma(-omf, c, v); // V - (1-f) C
+    let qq = nx_fma(-f, c, v); // V - f C
     tr |= if (0..=5).contains(&i) { 1 << (T_SECTOR0 + i as u32) } else { T_SECTOR_OTHER };
     let out = if i < 3 {
         if i == 0 {

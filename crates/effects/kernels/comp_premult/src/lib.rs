@@ -100,6 +100,8 @@ pub enum Error {
     ShortOutput(usize),
 }
 
+use fx_common::x86::{nx_add, nx_fma, nx_mul, nx_sub};
+
 const ONE: f32 = 1.0;
 
 /// cvttss2si followed by cvtsi2ss: truncation toward zero; NaN and out of range give the integer indefinite 0x80000000.
@@ -123,24 +125,24 @@ fn int_round_trip(v: f32, m: Mutant) -> f32 {
 fn pick(t: f32, a: f32, b: f32, c3: bool, m: Mutant) -> f32 {
     let ge1 = if m == Mutant::GtOne { t > ONE } else { t >= ONE };
     if ge1 {
-        return if m == Mutant::OneBranchSum { a + b } else { b };
+        return if m == Mutant::OneBranchSum { nx_add(a, b) } else { b };
     }
     let le0 = if m == Mutant::LtZero { t < 0.0 } else { t <= 0.0 };
     if m == Mutant::NanAdds && t.is_nan() {
-        return a + b;
+        return nx_add(a, b);
     }
     if le0 {
-        return if m == Mutant::SumDropsB { a } else { a + b };
+        return if m == Mutant::SumDropsB { a } else { nx_add(a, b) };
     }
     if c3 && m != Mutant::C3Generic {
         // vfnmadd213ss xmm1(t), xmm7(a), xmm7(a): x = fma(-t, a, a); then b + x
-        let x = (-t).mul_add(a, a);
-        return b + x;
+        let x = nx_fma(-t, a, a);
+        return nx_add(b, x);
     }
     match m {
-        Mutant::NonFused => a * (ONE - t) + b,
-        Mutant::FmaSwapped => b.mul_add(ONE - t, a),
-        _ => a.mul_add(ONE - t, b),
+        Mutant::NonFused => nx_add(nx_mul(a, nx_sub(ONE, t)), b),
+        Mutant::FmaSwapped => nx_fma(b, nx_sub(ONE, t), a),
+        _ => nx_fma(a, nx_sub(ONE, t), b),
     }
 }
 

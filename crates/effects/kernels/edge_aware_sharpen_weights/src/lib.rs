@@ -12,6 +12,7 @@
 //!
 //! Every arithmetic site follows the listing: f64 compares and scaling constants, `vminss` operand order (NaN yields the second operand),
 //! FMA only where the listing fuses (`vfmadd*`), the reciprocal-Newton step `2r - (r*m)*r` in vector lanes, `1/m` (vdivss) in scalar lanes.
+use fx_common::nanop::{fma213, fma231, NanOps};
 
 /// MEASURED-DYLIB (captured): double 2.687.
 pub const D1: f64 = 2.687;
@@ -115,7 +116,7 @@ pub fn g_t(m: f32, lane: Lane, k: f32, cb: f32, kcb: f32) -> f32 {
     } else if md > HIGH {
         k
     } else {
-        k * minss(recip(m, lane), cb)
+        k.fmul(minss(recip(m, lane), cb))
     }
 }
 
@@ -167,6 +168,89 @@ pub struct Bufs<'a> {
     pub t: &'a mut [f32],
 }
 
+struct LineParams {
+    w: usize,
+    s: usize,
+    line: usize,
+    n: usize,
+    mode_b: bool,
+    d: f32,
+    e: f32,
+    k: f32,
+    cb: f32,
+    kcb: f32,
+    ca: f32,
+    c10: f32,
+    c11: f32,
+    cur_addr: u64,
+}
+
+/// gT(m) with the plain product (`RULE` false) or the NaN rule of the product (`RULE` true).
+#[inline(always)]
+fn g_t_r<const RULE: bool>(m: f32, lane: Lane, k: f32, cb: f32, kcb: f32) -> f32 {
+    if RULE {
+        return g_t(m, lane, k, cb, kcb);
+    }
+    let md = m as f64;
+    if LOW > md {
+        kcb
+    } else if md > HIGH {
+        k
+    } else {
+        k * minss(recip(m, lane), cb)
+    }
+}
+
+/// `x * d + c` (fused): the plain result, or the NaN rule of the instruction form (`guide` selects the 231 form with the addend as destination).
+#[inline(always)]
+fn fz<const RULE: bool>(x: f32, d: f32, c: f32, guide: bool) -> f32 {
+    if RULE {
+        if guide { fma231(c, x, d) } else { fma213(x, d, c) }
+    } else {
+        x.mul_add(d, c)
+    }
+}
+
+/// One line (`line` >= 1 and not the first line of row 0) of weights. Returns whether a written value is NaN (always false for `RULE`).
+fn line_pass<const RULE: bool>(lp: &LineParams, b: &mut Bufs) -> bool {
+    let LineParams { w, s, line, n, mode_b, d, e, k, cb, kcb, ca, c10, c11, cur_addr } = *lp;
+    let base = line * w;
+    let mut bad = false;
+    b.a[base] = ONE;
+    if !mode_b {
+        let v = fz::<RULE>(b.p1[base].abs(), e, c11, false);
+        bad |= v != v;
+        b.t[line] = v;
+        for j in 1..=n {
+            let va = fz::<RULE>(b.p0[base + j].abs(), d, c10, false);
+            let vt = fz::<RULE>(b.p1[base + j].abs(), e, c11, false);
+            bad |= (va != va) | (vt != vt);
+            b.a[base + j] = va;
+            b.t[j * s + line] = vt;
+        }
+    } else {
+        let prev = base - w;
+        let m0 = minss(b.cur[prev], b.cur[base]);
+        let v = fz::<RULE>(b.p1[base].abs(), e, g_t_r::<RULE>(m0, Lane::Scalar, k, cb, kcb), true);
+        bad |= v != v;
+        b.t[line] = v;
+        if w > 1 {
+            let plan = lane_plan(n, cur_addr.wrapping_add((4 * base) as u64));
+            for j in 1..=n {
+                let lane = plan[j - 1];
+                let ma = minss(b.cur[base + j - 1], b.cur[base + j]);
+                let va = fz::<RULE>(b.p0[base + j].abs(), d, h_a(ma, lane, ca), true);
+                let mt = minss(b.cur[prev + j], b.cur[base + j]);
+                let vt = fz::<RULE>(b.p1[base + j].abs(), e, g_t_r::<RULE>(mt, lane, k, cb, kcb), true);
+                bad |= (va != va) | (vt != vt);
+                b.a[base + j] = va;
+                b.t[j * s + line] = vt;
+            }
+        }
+    }
+    bad && !RULE
+}
+
 /// Runs the job for the partition tile (`start`, `count`). `cur_addr` is the byte address of `cur[0]` (only its value modulo 64 matters).
 /// CONTRACT-LIMIT: w >= 1, s >= 1, 0 <= start < s, 0 <= count <= s - start, slices of at least w*s floats (the original does not check).
 pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_addr: u64, b: &mut Bufs) -> Result<(), Err> {
@@ -182,7 +266,7 @@ pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_addr: u64, b: &mut Bufs) -> 
     let (d, e, k) = (ctx.f0, ctx.f8, ctx.k);
     let ca = c_a(ctx);
     let cb = c_b(ctx);
-    let kcb = k * cb;
+    let kcb = k.fmul(cb);
     // constants of mode A : c10 added to |p0| * d, c11 added to |p1| * e
     let (mut c10, mut c11) = (0.0f32, 0.0f32);
     if !mode_b {
@@ -190,7 +274,7 @@ pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_addr: u64, b: &mut Bufs) -> 
         c10 = ca_a;
         let bd = ctx.esh2_job_ctx_a as f64;
         if LOW > bd {
-            c11 = k * ((D1 * ((ctx.fc + ONE) as f64)) as f32);
+            c11 = k.fmul((D1 * ((ctx.fc + ONE) as f64)) as f32);
         } else if bd > HIGH {
             c10 = ONE;
             c11 = k;
@@ -198,7 +282,7 @@ pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_addr: u64, b: &mut Bufs) -> 
             let x3 = ONE / ctx.esh2_job_ctx_a;
             let cb_a = (D1 * ((ONE + ctx.fc) as f64)) as f32;
             c10 = minss(x3, c10);
-            c11 = k * minss(x3, cb_a);
+            c11 = k.fmul(minss(x3, cb_a));
         }
     }
     // pre-stores : a[start*w] = 1, t[start] = 1
@@ -213,13 +297,13 @@ pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_addr: u64, b: &mut Bufs) -> 
             }
             if !mode_b {
                 for j in 1..=n {
-                    b.a[j] = b.p0[j].abs().mul_add(d, c10);
+                    b.a[j] = fma213(b.p0[j].abs(), d, c10);
                 }
             } else {
                 let plan = lane_plan(n, cur_addr);
                 for j in 1..=n {
                     let m = minss(b.cur[j - 1], b.cur[j]);
-                    b.a[j] = b.p0[j].abs().mul_add(d, h_a(m, plan[j - 1], ca));
+                    b.a[j] = fma231(h_a(m, plan[j - 1], ca), b.p0[j].abs(), d);
                 }
             }
         }
@@ -228,28 +312,11 @@ pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_addr: u64, b: &mut Bufs) -> 
     let lines_end = st + count as usize;
     let line0 = st + first_line;
     for line in line0..lines_end.max(line0) {
-        let base = line * w;
-        b.a[base] = ONE;
-        if !mode_b {
-            b.t[line] = b.p1[base].abs().mul_add(e, c11);
-            for j in 1..=n {
-                b.a[base + j] = b.p0[base + j].abs().mul_add(d, c10);
-                b.t[j * s + line] = b.p1[base + j].abs().mul_add(e, c11);
-            }
-        } else {
-            let prev = base - w;
-            let m0 = minss(b.cur[prev], b.cur[base]);
-            b.t[line] = b.p1[base].abs().mul_add(e, g_t(m0, Lane::Scalar, k, cb, kcb));
-            if w > 1 {
-                let plan = lane_plan(n, cur_addr.wrapping_add((4 * base) as u64));
-                for j in 1..=n {
-                    let lane = plan[j - 1];
-                    let ma = minss(b.cur[base + j - 1], b.cur[base + j]);
-                    b.a[base + j] = b.p0[base + j].abs().mul_add(d, h_a(ma, lane, ca));
-                    let mt = minss(b.cur[prev + j], b.cur[base + j]);
-                    b.t[j * s + line] = b.p1[base + j].abs().mul_add(e, g_t(mt, lane, k, cb, kcb));
-                }
-            }
+        // plain arithmetic first; a NaN anywhere in the line's results (a NaN operand always reaches the result of a fused step)
+        // sends the line through the NaN-rule pass, which rewrites every element of the line
+        let lp = LineParams { w, s, line, n, mode_b, d, e, k, cb, kcb, ca, c10, c11, cur_addr };
+        if line_pass::<false>(&lp, b) {
+            line_pass::<true>(&lp, b);
         }
     }
     Ok(())
