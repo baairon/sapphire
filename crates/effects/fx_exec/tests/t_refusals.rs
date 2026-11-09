@@ -1,5 +1,6 @@
 //! Refusals by name that no shipped stage reaches: a frame the 32 bit kernels cannot count (FRAME-SIZE-OVER-I32, at the kernel entry
-//! and through `fx_run`) and the Glow atmosphere (SIMPLEX-GRADIENT-TABLE-ABSENT, through `fx_run`).
+//! and through `fx_run`), the Glow atmosphere (SIMPLEX-GRADIENT-TABLE-ABSENT, through `fx_run`) and a shake_shift node that the fold leaves in the plan
+//! (SHAKE-SHIFT-UNFOLDED, through `fx_run`).
 use fx_exec::kernels::run_any;
 use fx_exec::*;
 use std::path::PathBuf;
@@ -112,4 +113,22 @@ fn a_frame_over_32_bits_is_refused_before_any_input_is_read() {
         assert!(e.contains("FRAME-SIZE-OVER-I32") && e.contains("the plane length W x H is"), "{}: {}", size, e);
         assert!(out.is_empty());
     }
+}
+
+#[test]
+fn a_shake_shift_node_with_a_non_constant_argument_is_refused_by_name() {
+    // twelve image arguments cannot fold to a constant, so the node stays in the plan and the renderer has no run-time kernel for it
+    let d = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("refusals_{}_shake_shift", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let tsv = d.join("programs.tsv");
+    std::fs::write(&tsv, "def_effect\tT\t0x0\t0\t(def_effect T ( S ) ( ) ( ) ( shake_shift S S S S S S S S S S S S ))\n").unwrap();
+    let os = d.join("o").to_str().unwrap().to_string();
+    let p = Command::new(env!("CARGO_BIN_EXE_fx_run"))
+        .arg(&tsv)
+        .args(["T", "--size", "16x8", "--out", &os, "--ctx-time", "0", "--ctx-word2", "0", "--ctx-1ae", "4", "--ctx-has-data", "f8", "--ranges", "REAL", "--bound-mask", "1"])
+        .output()
+        .expect("fx_run");
+    let e = String::from_utf8_lossy(&p.stderr).to_string();
+    assert_eq!(p.status.code(), Some(2), "{}", e);
+    assert!(e.contains("SHAKE-SHIFT-UNFOLDED"), "{}", e);
 }
