@@ -52,6 +52,7 @@ add_rgb = { path = "../kernels/add_rgb" }
 masked_blur = { path = "../kernels/masked_blur" }
 comp_premult = { path = "../kernels/comp_premult" }
 copy_planes = { path = "../kernels/copy_planes" }
+copy_alpha = { path = "../kernels/copy_alpha" }
 grad = { path = "../kernels/grad" }
 warp_render = { path = "../kernels/warp_render" }
 warp_log_gradient = { path = "../kernels/warp_log_gradient" }
@@ -84,6 +85,8 @@ svb1_r4_mut = []
 svb1_lane_mut = []
 # Mutant: the two-lane host route with the width fixed at 64; must fail K_50x7 (and every 50x7 and 49x9 row with a shift)
 nss1_w64_mut = []
+# the single-lane normalize_scale 1 host route reads the frame height in place of the width; must fail fx_eval's t_host_param_ns1
+ns1_height_mut = ["fx_eval/ns1_height_mut"]
 # FLD3-FORM: wrong candidate forms and the classifier kept refusing; each must fail t_fld3_form
 fld3_form_kept_mut = ["fx_eval/fld3_form_kept_mut"]
 fld3_bcast_mut = ["fx_eval/fld3_bcast_mut"]

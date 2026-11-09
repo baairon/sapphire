@@ -128,7 +128,7 @@ fn stage_list_reports_the_contract_and_what_exists() {
     );
     let stages = doc.get("stages").and_then(|v| v.as_array()).unwrap();
     let ids: Vec<&str> = stages.iter().map(|s| s.get("id").and_then(|v| v.as_str()).unwrap()).collect();
-    assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen", "flicker", "glow", "swishpan"], "the vocabulary is exactly what exists");
+    assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen", "flicker", "glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake"], "the vocabulary is exactly what exists");
     let invert = &stages[0];
     assert_eq!(invert.get("kind").and_then(|v| v.as_str()), Some("frame"));
     let params = invert.get("params").and_then(|v| v.as_array()).unwrap();
@@ -413,17 +413,37 @@ fn effect_stages_list_no_layers() {
     let doc = Json::parse(&ran.out_text()).expect("JSON");
     let stages = doc.get("stages").and_then(|v| v.as_array()).unwrap();
     let mut n = 0;
-    for s in stages.iter().filter(|s| s.get("id").and_then(|v| v.as_str()).map_or(false, |i| i != "selftest-invert" && i != "ffmpeg-filter" && i != "swishpan")) {
+    for s in stages.iter().filter(|s| s.get("id").and_then(|v| v.as_str()).map_or(false, |i| i != "selftest-invert" && i != "ffmpeg-filter" && i != "swishpan" && i != "dissolve_shake")) {
         assert_eq!(s.get("layers").and_then(|v| v.as_array()).map(|a| a.len()), Some(0), "{:?}", s.get("id").and_then(|v| v.as_str()));
         n += 1;
     }
-    assert_eq!(n, 15);
-    // the transition stage declares its second input as one optional layer
-    let swish = stages.iter().find(|s| s.get("id").and_then(|v| v.as_str()) == Some("swishpan")).expect("swishpan");
-    let layers = swish.get("layers").and_then(|v| v.as_array()).unwrap();
-    assert_eq!(layers.len(), 1);
-    assert_eq!(layers[0].get("id").and_then(|v| v.as_str()), Some("To"));
-    assert_eq!(layers[0].get("optional").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(n, 18);
+    // the transition stages declare their second input as one optional layer
+    for id in ["swishpan", "dissolve_shake"] {
+        let st = stages.iter().find(|s| s.get("id").and_then(|v| v.as_str()) == Some(id)).expect(id);
+        let layers = st.get("layers").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(layers.len(), 1, "{}", id);
+        assert_eq!(layers[0].get("id").and_then(|v| v.as_str()), Some("To"));
+        assert_eq!(layers[0].get("optional").and_then(|v| v.as_bool()), Some(true));
+    }
+}
+
+#[test]
+fn a_stage_that_reads_the_frame_rate_is_refused_without_fps() {
+    // every Shake style and Dissolve_Shake read get_frames_per_second: without `--fps` the run is refused by name, exit 3
+    for (stage, extra) in [("shake_normal_autogen", vec![]), ("shake_twitchy_autogen", vec![]), ("shake_jumpy_autogen", vec![]), ("dissolve_shake", vec!["--frames", "2"])] {
+        let mut a = args(&["stage", "apply", stage, "--width", "16", "--height", "8", "--depth", "32"]);
+        a.extend(extra.iter().map(|s| s.to_string()));
+        let ran = run_env(&handoff_exe(), &a, &[], Some(vec![0u8; 16 * 8 * 16 * 2]), Duration::from_secs(60));
+        assert_eq!(ran.code, 3, "{}: {}", stage, ran.stderr);
+        assert!(ran.stderr.contains("FPS-UNGIVEN"), "{}: {}", stage, ran.stderr);
+        assert!(ran.stdout.is_empty(), "{}", stage);
+        // with the rate the same command renders
+        a.extend(["--fps".to_string(), "24".to_string()]);
+        let ran = run_env(&handoff_exe(), &a, &[], Some(vec![0u8; 16 * 8 * 16 * 2]), Duration::from_secs(120));
+        assert_eq!(ran.code, 0, "{}: {}", stage, ran.stderr);
+        assert_eq!(ran.stdout.len(), 16 * 8 * 16 * 2, "{}", stage);
+    }
 }
 
 #[test]

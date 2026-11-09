@@ -109,6 +109,10 @@ name = "convert_pair"
 version = "0.1.0"
 
 [[package]]
+name = "copy_alpha"
+version = "0.0.0"
+
+[[package]]
 name = "copy_planes"
 version = "0.1.0"
 
@@ -203,6 +207,7 @@ dependencies = [
  "effects_rtdata",
  "effects_vecdir",
  "libm_sincos",
+ "shake_shift",
  "tickmap",
  "warp_noise",
 ]
@@ -219,6 +224,7 @@ dependencies = [
  "comp_premult",
  "comp_rgba",
  "convert_pair",
+ "copy_alpha",
  "copy_planes",
  "dissolve",
  "edge_aware_sharpen",
@@ -550,6 +556,10 @@ dependencies = [
 
 [[package]]
 name = "screen_super"
+version = "0.1.0"
+
+[[package]]
+name = "shake_shift"
 version = "0.1.0"
 
 [[package]]

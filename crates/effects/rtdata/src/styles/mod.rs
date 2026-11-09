@@ -19,6 +19,10 @@ mod warp_perspective;
 mod flicker;
 mod swishpan;
 mod glow;
+mod shake_normal;
+mod shake_twitchy;
+mod shake_jumpy;
+mod dissolve_shake;
 
 /// Every style, in the order of the effect list.
 pub static STYLES: &[&Style] = &[
@@ -38,4 +42,8 @@ pub static STYLES: &[&Style] = &[
     &flicker::STYLE,
     &swishpan::STYLE,
     &glow::STYLE,
+    &shake_normal::STYLE,
+    &shake_twitchy::STYLE,
+    &shake_jumpy::STYLE,
+    &dissolve_shake::STYLE,
 ];

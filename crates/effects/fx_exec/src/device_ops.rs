@@ -133,6 +133,7 @@ pub const ALLOWLIST: &[&str] = &["copy", "one_minus", "warp_rel", "warp", "rotat
 /// Ops with no device kernel, each with the reason. The list shrinks as kernels land. `get_frame`, `get_prev_dest` and
 /// `save_prev_dest` are host data movement (`kernels::HOST_CLASSES`) and are not kernel ops.
 pub const CPU_ONLY: &[(&str, &str)] = &[
+    ("copy_alpha", "plane copies and constant fills are memory bound and the pooled zero clear is a host store route; no device kernel yet"),
     ("v3_to_v4_if4_a", "plane assembly through the host plane service, no arithmetic"),
     ("get_alpha", "plane assembly through the host plane service, no arithmetic"),
     ("glow", "separable blur with data-dependent bright pass, no device kernel yet"),

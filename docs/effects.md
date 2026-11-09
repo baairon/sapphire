@@ -1,8 +1,8 @@
 # Effects
 
-Thirteen of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program name, a size and the input planes, with no external data ([Build and run](#build-and-run)). Each registered style of the thirteen effects is also offered as a stage of `sapphire stage apply`, which reads and writes raw video frames ([Adding a provider](stages.md#effects-provider)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)).
+Fifteen of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program name, a size and the input planes, with no external data ([Build and run](#build-and-run)). Each registered style of the fifteen effects is also offered as a stage of `sapphire stage apply`, which reads and writes raw video frames ([Adding a provider](stages.md#effects-provider)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)).
 
-Effects rebuilt: <!--f:effects_rebuilt-->13<!--/f--> of <!--f:effects_listed-->13<!--/f--> listed here: the ten of the first milestone and three of Tier 1 of [the roadmap](roadmap.md). The other effects of the plugin are not rebuilt; their names are strings only ([names](../README.md#names)). A new effect follows the conventions of [Adding an effect](adding-an-effect.md).
+Effects rebuilt: <!--f:effects_rebuilt-->15<!--/f--> of <!--f:effects_listed-->15<!--/f--> listed here: the ten of the first milestone and five of Tier 1 of [the roadmap](roadmap.md). The other effects of the plugin are not rebuilt; their names are strings only ([names](../README.md#names)). A new effect follows the conventions of [Adding an effect](adding-an-effect.md).
 
 ## What rebuilt means
 
@@ -14,11 +14,13 @@ An effect counts as rebuilt when every one of its registered styles passes seven
 | `S_Blur` | Blur_Color_Autogen, Blur_Mono_Autogen | 7 | 52 | 52 |
 | `BlurMoCurves` | Transform_and_Blur_Autogen, Blur_Motion_Curves_No_Transform_Autogen | 41 | 69 | 69 |
 | `S_Diffuse` | Diffuse_Autogen | 31 | 54 | 54 |
+| `S_DissolveShake` | registered without a wrapper program | 38 | 304 | 304 |
 | `S_DistortRGB` | Distort_RGB_Autogen | 30 | 30 | 30 |
 | `S_DropShadow` | registered without a wrapper program | 24 | 26 | 26 |
 | `S_Flicker` | registered without a wrapper program | 24 | 24 | 24 |
 | `S_Glow` | registered without a wrapper program | 36 | 36 | 36 |
 | `S_HueSatBright` | Hue_Sat_Bright_Autogen | 130 | 196 | 196 |
+| `Shake` | Shake_Normal_Autogen, Shake_Twitchy_Autogen, Shake_Jumpy_Autogen | 68 | 2,056 | 2,056 |
 | `S_Sharpen` | Sharpen_Best_Quality_Autogen, Sharpen_Fast_Autogen | 43 | 114 | 114 |
 | `S_SwishPan` | registered without a wrapper program | 36 | 288 | 288 |
 | `S_TimeWarpRGB` | Time_Warp_RGB_Autogen | 22 | 22 | 22 |
@@ -26,7 +28,7 @@ An effect counts as rebuilt when every one of its registered styles passes seven
 | `S_WarpPerspective` | Warp_Perspective_Autogen | 19 | 256 | 256 |
 <!--/gen:effects_status-->
 
-*Verified comparisons* are the comparisons between the original's emulator runs and the native code that count toward the effect: <!--f:effects_counted_rows-->521<!--/f--> in all. *Recorded renders* are the outputs of the final binary, recorded as the expected result of each case: <!--f:effects_frozen_members-->1,337<!--/f--> in all. A few of them are controls, recorded and not counted; the rest are the *counted* recorded renders. *Re-rendered units* are the same cases rendered again with the binary built from this repository, with a second render for the cases that render twice: <!--f:effects_rerun_units-->1,387<!--/f--> units, every one byte identical to its recorded render by full SHA-256 in the three output files (`ae32`, `dest` and `src0`). `BlurMoCurves` is listed by the name of its host record; that string is not in the [name bank](glossary.md#name-bank)'s list of effect names.
+*Verified comparisons* are the comparisons between the original's emulator runs and the native code that count toward the effect: <!--f:effects_counted_rows-->627<!--/f--> in all. Four of them, two of `Shake` and two of `S_DissolveShake`, differ from the original (see those effects). *Recorded renders* are the outputs of the final binary, recorded as the expected result of each case: <!--f:effects_frozen_members-->3,697<!--/f--> in all. Some of them are controls, recorded and not counted; the rest are the *counted* recorded renders. *Re-rendered units* are the same cases rendered again with the binary built from this repository, with a second render for the cases that render twice: <!--f:effects_rerun_units-->3,747<!--/f--> units. Every unit of the first ten effects, `S_Flicker`, `S_Glow` and `S_SwishPan` is byte identical to its recorded render by full SHA-256 in the three output files (`ae32`, `dest` and `src0`), except 24 control units of `S_WarpPerspective`, which changed with the default-xy head form (see that effect). Every unit of `Shake` and `S_DissolveShake` is byte identical to its recorded render by full SHA-256 in `ae32` and `dest`, the two output files recorded for them, except 16 of `Shake`, which changed with the default-xy head form, and 16 of `S_DissolveShake`, which changed with the sine scale of the shake offset; 4 of those 32 are counted units, one for each of the four comparisons that differ from the original, and the other 28 are control units (see those effects). `BlurMoCurves` and `Shake` are listed by the names of their host effects; neither string is in the [name bank](glossary.md#name-bank)'s list of effect names.
 
 The *verified render path* of an effect is the host arrangement its verified comparisons used: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state, 32-bit float images and the effect's own host settings. The stages of `sapphire stage apply` run each style on that path (see [Adding a provider](stages.md#effects-provider)).
 
@@ -45,7 +47,7 @@ The parameter tables list each stage's parameters as `sapphire stage list --json
 
 Parameters whose names contain `mocha` belong to the mask controls of the original. They are offered because verified comparisons set them, but mask tracking data is not part of the rebuild ([Limits common to the effects](#limits-common-to-the-effects)).
 
-Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. On the stages of the first ten effects only Normal (`2`) of the opacity choices renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED), and `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items. `glow` and `swishpan` render all three answers: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)).
+Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. On the stages of the first ten effects only Normal (`2`) of the opacity choices renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED), and `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items. `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage render all three answers: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)).
 
 See [Driving the effect parameters](parameters-guide.md) for every stage parameter, how to write its value and the values verified against recorded renders.
 
@@ -150,6 +152,64 @@ target/release/sapphire stage apply diffuse_autogen --width 64 --height 32 --dep
 ```
 
 Parity: 31 verified comparisons, 54 recorded renders and 54 re-rendered units, all equal. One approximate reciprocal instruction is reached, inside a logarithm; its effect on the output is 0 ulp under the emulator's bound (MEASURED). 31 of 42 counted recorded renders match the stage's host arrangement.
+
+### `S_DissolveShake`
+
+A transition between two clips that dissolves from the first clip to the second while it shakes the picture. One progress value drives both parts, from 0 at the start of the transition to 1 at its end: the dissolve mixes the two clips by the progress, made steeper around the middle by `dissolve_speed`, and the shake grows from nothing at the start to its full size at the middle and falls back to nothing at the end. With `auto_trans` 1 the progress runs over the whole clip given to the stage, from its first frame to its last; with `auto_trans` 0 the progress is `dissolve_amt`. `transition_dir` swaps which clip leaves and which arrives. The shake is the Normal style of `Shake`, applied to the mixed picture, with the same amplitude, frequency, axis, phase, motion blur, wrap and channel parameters; its motion blur length is `mo_blur_length`.
+
+| style | stage |
+|---|---|
+| Dissolve_Shake | `stage apply dissolve_shake` |
+
+This effect has no wrapper program; the stage runs its registered program, Dissolve_Shake. It is a transition stage ([Transition stages](cli.md#transition-stages)): the second clip is `--layer To=PATH`, and `--frames N` gives the length of the transition, which spans the clip from its first frame to its last. The layer is optional; without it the first clip dissolves into transparent black. Where the dissolve shows only one of the two clips, before it starts or after it ends, the compiled plan reads only that clip, and the stage renders the frame without the other one ([Transition stages](stages.md#effects-provider)). The shake reads the frame time and the frame rate, so the stage also needs `--fps`; without it the run is refused with `FPS-UNGIVEN` (exit 3) and no frame is written. As a pipeline stage (`--stage @dissolve_shake`) it is refused with `FRAMES-REQUIRED`, because the pipeline passes no `--frames`. For `auto_trans`, `stage list` prints the registered default, 1, and `fx_run --describe-params Dissolve_Shake` prints the program text default, 0; an unset `auto_trans` takes the registered default (MEASURED: an unset run equals `auto_trans=1` and differs from `auto_trans=0`; [Parameter discovery](cli.md#parameter-discovery)).
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param transition_dir=V` | int | 1 |
+| `--param auto_trans=V` | int | 1 |
+| `--param dissolve_amt=V` | float | 1 |
+| `--param dissolve_speed=V` | float | 1 |
+| `--param amplitude=V` | float | 1 |
+| `--param frequency=V` | float | 1 |
+| `--param motion_blur=V` | checkbox | 1 |
+| `--param mo_blur_length=V` | float | 1 |
+| `--param seed=V` | float | 1 |
+| `--param wrap=V` | text | 2 |
+| `--param x_rand_amp=V` | float | 1 |
+| `--param x_rand_freq=V` | float | 1 |
+| `--param x_wave_amp=V` | float | 1 |
+| `--param x_wave_freq=V` | float | 1 |
+| `--param x_phase=V` | float | 1 |
+| `--param y_rand_amp=V` | float | 1 |
+| `--param y_rand_freq=V` | float | 1 |
+| `--param y_wave_amp=V` | float | 1 |
+| `--param y_wave_freq=V` | float | 1 |
+| `--param y_phase=V` | float | 1 |
+| `--param z_rand_amp=V` | float | 1 |
+| `--param z_rand_freq=V` | float | 1 |
+| `--param z_wave_amp=V` | float | 1 |
+| `--param z_wave_freq=V` | float | 1 |
+| `--param tilt_rand_amp=V` | float | 1 |
+| `--param tilt_rand_freq=V` | float | 1 |
+| `--param tilt_wave_amp=V` | float | 1 |
+| `--param tilt_wave_freq=V` | float | 1 |
+| `--param tilt_phase=V` | float | 1 |
+| `--param red_amplitude=V` | float | 1 |
+| `--param green_amplitude=V` | float | 1 |
+| `--param blue_amplitude=V` | float | 1 |
+| `--param blue_phase=V` | float | 1 |
+| `--param RGB_randomness=V` | float | 1 |
+| `--param RGB_frequency=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+
+`cset_opacity` takes all three answers on this stage: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)). The x, y and z amplitudes (`x_rand_amp`, `x_wave_amp`, `y_rand_amp`, `y_wave_amp`, `z_rand_amp` and `z_wave_amp`) take host values, which the runner converts with the frame width on both axes; the tilt amplitudes are record values ([Effects provider](stages.md#effects-provider)).
+
+```sh
+ffmpeg -f lavfi -i testsrc2=size=64x32:rate=25 -frames:v 3 -f rawvideo -pix_fmt gbrapf32le to.raw
+target/release/sapphire stage apply dissolve_shake --width 64 --height 32 --depth 32 --fps 24/1 --frames 3 --layer To=to.raw --param auto_trans=0 --param transition_dir=0 --param dissolve_amt=0.3700000047683716 --param amplitude=1.6999969482421875 --param frequency=5.5 --param x_phase=-0.350006103515625 --param seed=5.0 < in.raw > out.raw
+```
+
+Parity: 38 verified comparisons (19 at 64x32 and 19 at 50x7), 304 recorded renders and 304 re-rendered units. Each of the 38 counted parameter sets is rendered and recorded at the eight base phases 0, 4, ..., 28 of the default xy buffer, hence the 304 recorded renders. No approximate reciprocal instruction runs on the verified render path: in the code that renders the verified plans, the original holds only four, inside a logarithm that the mipmap enters only with a nonzero filter or on the GPU path, and every verified render uses filter 0 on the CPU (MEASURED by a static scan of the original's code; that the route reaches none of the four is INFERRED). Two of the verified comparisons differ from the original, one at each size, in every word of the output (8192 of 8192 at 64x32, 1400 of 1400 at 50x7). Their recorded renders were made with two faults: the vertical random amplitude was handed to the runner converted by the frame height, where the original and the runner convert every axis by the frame width, and the sine scale of the shake offset was pi, where the original's is 2 pi. This code has the original's sine scale, and with the amplitude converted by the width the same parameter sets give the original's output byte for byte (MEASURED after the original's output was known, so both stay counted as different). Two more parameter sets, one at each size, are not counted and are not among the recorded renders: their vertical wave amplitude was handed over converted by the frame height too, with the sine scale pi, so their compiled plans differ from the original's in four folded constants; their output is a constant image, which does not show either fault. The Opacity answers 1, 2 and 3 are each verified at 64x32 and 50x7, with input alpha other than 1; answer 3 is verified only without a second clip (an all-zero `To` layer), so its output with a second clip is INFERRED. At All_Opaque the source has no alpha; with a channel parameter away from its default the compile then drops the channel alpha copies and the final alpha assembly, as the original's compile does, which a verified render at 50x7 covers; at 64x32 no verified render covers it (INFERRED to behave the same, since the drop depends on element counts only). No verified render sets a channel parameter at Opacity answer 3: the verified channel renders use answers 1 and 2 and the verified answer 3 renders keep the channel parameters at their defaults, so the output of the channel shake at answer 3 is INFERRED. Each verified render is one frame of a transition of 240 frames at 24 frames a second, at frames 0 to 190, with the second clip absent or present; the time values of other clip lengths and rates are INFERRED. With `auto_trans` 1, after the dissolve ends the effect renders the second clip alone through the shake; that branch is verified only with no second clip (an all-zero `To` layer), so its output for other second clips is INFERRED. At 50x7 the output depends on the phase of the default xy buffer, an input of each run, while the stage uses phase 0 at every size (`--xy-base 0`). 9 verified renders were recorded at a phase other than 0; they are verified through `fx_run` at their recorded phase, and through the stage each is checked against the runner's render at phase 0 (MEASURED). The other 27 of the 36 verified renders that equal the original are byte identical to it through the stage (MEASURED), among them the 8 whose plan reads only one of the two clips ([Transition stages](stages.md#effects-provider)).
 
 ### `S_DistortRGB`
 
@@ -305,6 +365,75 @@ target/release/sapphire stage apply hue_sat_bright_autogen --width 64 --height 3
 
 Parity: 130 verified comparisons, 196 recorded renders and 196 re-rendered units, all equal. The hue rotation with preserved luma uses an approximate reciprocal instruction, so it may differ on real CPUs; the largest change measured stays within Intel's stated bound, 25,244 ulp. The source has three planes and the output alpha is taken from the source. A brightness outside the registered range is not verified. 118 of 130 counted recorded renders match the stage's host arrangement.
 
+### `Shake`
+
+Shakes the picture, as a camera does on an impact or in the hand. On every frame the image is moved in x and y, scaled about its centre (the depth axis z) and turned (tilt). The offset of each axis is the sum of a random part, a noise of the frame time, and a wave part, a sine of the frame time. `amplitude` scales every offset and `frequency` sets how fast they change; per axis, a random and a wave amplitude (`x_rand_amp`, `x_wave_amp` and the like), their frequencies and a phase shape the motion, and `phase` shifts the time of all axes. `z_dist` is the scale that the depth offset is added to. With `motion_blur` on, each frame is blurred along the move toward the offset of the next frame, over a length that `motion_blur_length` scales. `wrap` chooses, per axis, what fills the area the move uncovers: nothing, the tiled image or the reflected image. The channel parameters (`red_amplitude`, `green_amplitude` and `blue_amplitude`, the three channel phases, `RGB_randomness` and `RGB_frequency`) shake the red, green and blue channels apart, which splits the colours.
+
+The three styles are the three choices of the effect's style popup. Normal is the continuous shake above. Twitchy runs the shake ten times faster and holds it still between short twitches: a random value of the frame time, taken at `twitch_frequency`, switches the shake on where it is above `stillness`, and the switch is averaged over the frame and its two neighbours. Jumpy moves each offset in jumps between random positions instead of smoothly, and `drift` and `center_bias` shape the jumps.
+
+| style | stage |
+|---|---|
+| Shake_Normal_Autogen | `stage apply shake_normal_autogen` |
+| Shake_Twitchy_Autogen | `stage apply shake_twitchy_autogen` |
+| Shake_Jumpy_Autogen | `stage apply shake_jumpy_autogen` |
+
+Each style reads the frame time and the frame rate, so its stage needs `--fps`: frame f is rendered at time f / rate in seconds, and the motion blur and the twitch also read the time one frame later and one frame earlier ([Host values](cli.md#host-values)). Without `--fps` the run is refused with `FPS-UNGIVEN` (exit 3) and no frame is written. The effect's mask input is not connected: the stages fix the three parameters of that input, `mask_use`, `blur_mask` and `invert_mask`, at the values the original holds for an absent mask input ([Mask input](stages.md#effects-provider)).
+
+| parameter | type | lanes | `shake_normal_autogen` | `shake_twitchy_autogen` | `shake_jumpy_autogen` |
+|---|---|---|---|---|---|
+| `--param amplitude=V` | float | 1 | yes | yes | yes |
+| `--param frequency=V` | float | 1 | yes | yes | yes |
+| `--param phase=V` | float | 1 | yes | yes | yes |
+| `--param stillness=V` | float | 1 | | yes | |
+| `--param twitch_frequency=V` | float | 1 | | yes | |
+| `--param drift=V` | float | 1 | | | yes |
+| `--param center_bias=V` | float | 1 | | | yes |
+| `--param z_dist=V` | float | 1 | yes | yes | |
+| `--param motion_blur=V` | checkbox | 1 | yes | yes | yes |
+| `--param motion_blur_length=V` | float | 1 | yes | yes | yes |
+| `--param seed=V` | float | 1 | yes | yes | yes |
+| `--param wrap=V` | text | 2 | yes | yes | yes |
+| `--param x_rand_amp=V` | float | 1 | yes | yes | yes |
+| `--param x_wave_amp=V` | float | 1 | yes | yes | yes |
+| `--param x_phase=V` | float | 1 | yes | | |
+| `--param y_rand_amp=V` | float | 1 | yes | yes | yes |
+| `--param y_rand_freq=V` | float | 1 | yes | | |
+| `--param y_wave_amp=V` | float | 1 | yes | yes | yes |
+| `--param z_rand_amp=V` | float | 1 | | yes | yes |
+| `--param tilt_rand_amp=V` | float | 1 | yes | yes | |
+| `--param tilt_wave_amp=V` | float | 1 | yes | | |
+| `--param red_amplitude=V` | float | 1 | yes | yes | yes |
+| `--param green_amplitude=V` | float | 1 | yes | yes | yes |
+| `--param blue_amplitude=V` | float | 1 | yes | yes | yes |
+| `--param red_phase=V` | float | 1 | yes | yes | yes |
+| `--param green_phase=V` | float | 1 | yes | yes | yes |
+| `--param blue_phase=V` | float | 1 | yes | yes | yes |
+| `--param RGB_randomness=V` | float | 1 | yes | yes | yes |
+| `--param RGB_frequency=V` | float | 1 | yes | yes | yes |
+| `--param cset_opacity=V` | int | 1 | yes | yes | yes |
+
+`cset_opacity` takes all three answers on these stages: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)). The x, y and z amplitudes take host values, which the runner converts with the frame width on both axes; the tilt amplitudes are record values ([Effects provider](stages.md#effects-provider)).
+
+```sh
+target/release/sapphire stage apply shake_normal_autogen --width 64 --height 32 --depth 32 --fps 24/1 --param amplitude=1.6999969482421875 --param frequency=5.5 --param phase=-0.350006103515625 --param x_rand_amp=0.4499969482421875 --param y_rand_freq=2.5 --param z_dist=2.5 < in.raw > out.raw
+```
+
+Parity: 68 verified comparisons over the three styles (37 at 64x32 and 31 at 50x7), 2,056 recorded renders and 2,056 re-rendered units. 65 counted parameter sets are rendered and recorded at the eight base phases 0, 4, ..., 28 of the default xy buffer, and three more at 50x7, whose plans hold three default-xy writers, at the 512 combinations of the three writers' phases, hence the 2,056 recorded renders. No approximate reciprocal instruction runs on the verified render path: in the code that renders the verified plans, the original holds only four, inside a logarithm that the mipmap enters only with a nonzero filter or on the GPU path, and every verified render uses filter 0 on the CPU; the mask code of the styles, which holds more, has no node in any verified plan (MEASURED by a static scan of the original's code, the shake offset included; that the route reaches none of the four is INFERRED). The verified times are whole frames from 0 to 139 at 24 frames a second; other rates and times between frames run the same code and are INFERRED. The Opacity answers 1, 2 and 3 are each verified at 64x32 and 50x7, with input alpha other than 1.
+
+Two of the verified comparisons differ from the original: two Twitchy renders at 50x7 at still frames, in 178 and 302 of 1400 words. At such a frame the shake offset is exactly zero, so the compiled plan writes the default xy as a plane that a later exec block reads, and the original gives each row of that plane its own buffer phase. Their recorded renders were made with the runner's former rule, which wrote the default xy as one row buffer for every plan without a perspective node. With the head-form rule of this change the same commands give the original's output byte for byte (MEASURED after the original's output was known, so both stay counted as different). The two forms give the same output when the frame width is a multiple of 8, so the still-frame renders at 64x32 are equal either way. No verified render at a frame width that is not a multiple of 8 judges the plane form.
+
+The channel shake runs three default-xy writers, and the host places the buffer of each at its own phase. The nine channel renders recorded first at 50x7 placed them at different phases, while the runner's renders made for them before the original ran put all three at one phase, so they are not compared and are not among the recorded renders; the same commands with the recorded phases give the original's output in 9 of 9 (MEASURED after the original's output was known). Three more channel renders at 50x7, one per style, were recorded at all 512 combinations of the three phases before the original ran, and each equals the original at the combination its run used (MEASURED), so the channel shake is verified at 50x7 by those three. At 64x32 the phases do not change the output, and the channel renders there count.
+
+At Opacity All_Opaque (`cset_opacity` 1) the source has no alpha; with a channel parameter away from its default the compile then drops the three channel alpha copies and the final alpha assembly, as the original's compile does. No verified `Shake` render covers that case; the drop depends on element counts only (INFERRED). At Opacity answer 3 (`cset_opacity` 3) no verified `Shake` render sets a channel parameter away from its default: the verified channel renders use answer 2 and the verified answer 3 renders keep the channel parameters at their defaults, so the output of the channel shake at answer 3 is INFERRED.
+
+No verified render sets `z_wave_amp` of any style or `z_rand_amp` of Normal away from its default, so the stages do not offer them. Each style hands both to the same depth offset code, which verified renders reach with other values (`z_rand_amp` of Twitchy and Jumpy, and `z_wave_amp` through `S_DissolveShake`), so the output at other values of those four parameters is INFERRED.
+
+The original keeps the three parameters of the unconnected mask input at their text values at every frame size. On the direct `fx_run` route an unbound `blur_mask` is converted from host units instead; the node that reads it is not reached from the output, so the value changes no plan constant and no output (MEASURED on the verified renders). The stages fix all three at their text values.
+
+Where the table search for a position (the phase plus the seed's offset) ends past the last of the 1,024 rows, which happens only for a NaN or positive infinite position, a position of 2^31 or more, or a position less than 0.0004 below a multiple of 1024 of magnitude at most 4096, the original reads the 12 bytes that follow the table. No instruction of the original writes them and they read zero in a recorded Shake render (MEASURED), so the native reads a zero row there. The shake_shift fold of Shake's Jumpy route searches the same table and reads the same row.
+
+At 50x7 the output depends on the phases of the default xy buffers, an input of each run, while the stages use phase 0 for every buffer at every size (`--xy-base 0`). 9 verified renders were recorded at a phase other than 0, and the three channel renders at 50x7 with their three buffers not all at one phase; these 12 are verified through `fx_run` at their recorded phases, and through the stages each is checked against the runner's render at phase 0 (MEASURED). The other 54 of the 66 verified renders that equal the original are byte identical to it through the stages (17 of 22 Normal, 18 of 22 Twitchy and 19 of 22 Jumpy, MEASURED).
+
 ### `S_Sharpen`
 
 Sharpens the image. Best Quality separates the image into detail bands (tiny, small, medium and large), scales each band and sharpens along edges, leaving areas below the edge threshold alone. Fast uses a single sharpening width. In both, the amount can be set overall, for luma and chroma, and per channel.
@@ -359,7 +488,7 @@ A transition between two clips: the first clip moves out of the frame and the se
 |---|---|
 | the registered program, without a wrapper | `stage apply swishpan` |
 
-This effect has no wrapper program; the stage runs its registered program (`fx_run --describe-params SwishPan` prints its parameters; for `auto_trans` it prints the program text default, while an unset `auto_trans` takes the registered default that `stage list` prints, see [Parameter discovery](cli.md#parameter-discovery)). It is the transition stage of this build ([Transition stages](cli.md#transition-stages)): the second clip is `--layer To=PATH`, and `--frames N` gives the length of the transition, which spans the clip from its first frame to its last. The layer is optional; without it the effect runs with no second clip, as some verified renders did. As a pipeline stage (`--stage @swishpan`) it is refused with `FRAMES-REQUIRED`, because the pipeline passes no `--frames`.
+This effect has no wrapper program; the stage runs its registered program (`fx_run --describe-params SwishPan` prints its parameters; for `auto_trans` it prints the program text default, while an unset `auto_trans` takes the registered default that `stage list` prints, see [Parameter discovery](cli.md#parameter-discovery)). It is one of the two transition stages of this build, with the `S_DissolveShake` stage ([Transition stages](cli.md#transition-stages)): the second clip is `--layer To=PATH`, and `--frames N` gives the length of the transition, which spans the clip from its first frame to its last. The layer is optional; without it the effect runs with no second clip, as some verified renders did. As a pipeline stage (`--stage @swishpan`) it is refused with `FRAMES-REQUIRED`, because the pipeline passes no `--frames`.
 
 | parameter | type | lanes |
 |---|---|---|
@@ -462,7 +591,7 @@ Places the image on a plane seen in perspective. Swing, roll and latitude turn t
 target/release/sapphire stage apply warp_perspective_autogen --width 64 --height 32 --depth 32 --fps 25/1 --param z_dist=2.5 --param latitude=80 --param tele_lens_width=1.6000061 --param filter=1 < in.raw > out.raw
 ```
 
-Parity: 19 verified comparisons, 256 recorded renders and 256 re-rendered units, all equal in both renders. The perspective uses approximate reciprocals, so it may differ on real CPUs: by up to 6 ulp in its first output and 12,972 ulp in its second, where values near zero cancel. The verified sizes are 64x32 and 50x7. 10 of 224 counted recorded renders match the stage's host arrangement.
+Parity: 19 verified comparisons, 256 recorded renders and 256 re-rendered units. 232 units are byte identical in both renders, every counted one among them. The other 24 are control renders at 50x7 of three bindings whose plan writes the default xy inside the first exec block (Swing and Roll set, or wrap_above_horizon 1). Their recorded renders come from the former rule, which wrote the default xy as a per-row plane for every plan with a perspective node; the runner now writes it as one row buffer, as the original's recorded runs of these bindings show, and each changed unit's `ae32` equals the original's render or the counted recorded render of the same binding at the same buffer phases. The perspective uses approximate reciprocals, so it may differ on real CPUs: by up to 6 ulp in its first output and 12,972 ulp in its second, where values near zero cancel. The verified sizes are 64x32 and 50x7. 10 of 224 counted recorded renders match the stage's host arrangement.
 
 ## Build and run
 
@@ -489,8 +618,8 @@ fx_run PROGRAM --size WxH --out PREFIX [--synth SEED] [options]
 
 The effects need no external data. Nothing is read from the original plugin or from a copied file at run time: `fx_run` takes no table argument and reads only the input planes and the output path it is given.
 
-- **Effect graphs.** The programs of the sixteen styles are built by Rust constructor code in `fx_eval` (`programs_native`). That code is a tool-made translation of the plugin's program rows into Rust: a development tool produced it from the parsed program structure. It holds no program text and reads no table.
-- **Parameter and class facts.** The registered parameters, ranges, input indices, class flags and combination tables that the sixteen programs need are Rust definitions in the crate `effects_rtdata`. A definition is kept only if it is keyed by one of the 28 programs of the styles, by a class they name, or by a builtin they call. A lookup that has no row misses, as it did with the tables.
+- **Effect graphs.** The programs of the twenty styles are built by Rust constructor code in `fx_eval` (`programs_native`). That code is a tool-made translation of the plugin's program rows into Rust: a development tool produced it from the parsed program structure. It holds no program text and reads no table.
+- **Parameter and class facts.** The registered parameters, ranges, input indices, class flags and combination tables that the twenty styles need are Rust definitions in the crate `effects_rtdata`. A definition is kept only if it is keyed by one of the 35 programs of the styles, by a class they name, or by a builtin they call. A lookup that has no row misses, as it did with the tables.
 - **Sin and cos tables.** The sin and cos routines of the effects need four tables. None is stored; all are computed from their mathematical definition at first use, with a small fixed-point big number (320 bit, written for this repository, no crate):
 
 - The sincosf table has 64 entries: the correctly rounded (sin, cos) of k pi/32, exact 0 and 1 at the axes.
@@ -509,6 +638,12 @@ The `sin` of `S_Flicker` follows the 8 lane AVX2 and FMA sine routine of the ori
 
 - The hash table has 256 entries of 32 bits. Entry k is (y1 >> 2) + (y2 << 8) + (y3 << 18) modulo 2^32, where y1, y2 and y3 are three successive values of the generator x -> (4096 x + 150889) mod 714025, which starts at 0 and carries from one entry to the next.
 - The weight table has 4608 entries. Entry i is round(4096 w(s)) / 4096 with s = sqrt(i / 4608), where w(s) = 1 - 2 s^2 for s below 0.5 and 2 (1 - s)^2 otherwise, evaluated with the fused operations of the original's AVX2 and FMA route and rounded half away from zero.
+
+- **Shake tables.** The shake offset of `Shake` and `S_DissolveShake` reads a hash table, a weight table, the table of a random sawtooth and the tables of a sine routine. None is stored; all are computed from their definition at first use:
+
+- The hash table and the weight table have the definitions of the two noise tables of `S_Flicker` above, and are computed again in the crate `shake_shift`.
+- The random sawtooth table has 1,024 rows, each a hash value e_i, a weight a_i and the running sum c_i of the weights before it. With h(v) four rounds of v -> (v >> 8) + T[v mod 256] over the hash table T, e_0 = h(h(7070) + 7070) and e_i = h(e_(i-1) + 7070). Before normalisation a_i = (m_i x 2^-30)^2, with m_i the low 30 bits of e_i; each weight is then divided by the sum of all 1,024 weights times 2^-10, so the weights average 1. Every operation is in single precision, in row order. A row of zeros follows the last row; a search that ends past the table reads it (see `Shake`).
+- The sine routine of the shake offset reads 65 pairs and 15 chunks with the definitions of the pair region and the 15 chunks of 1/pi of the scalar sin and cos routine above, computed again in the crate `shake_shift`, and one constant, 1 - 2^-30.
 
 The atmosphere noise of `S_Glow` needs gradient tables that no documented formula reproduces. It is not rendered, and no table of it is stored.
 
@@ -530,7 +665,7 @@ Tests that compare the definitions or the computed tables with copies of the plu
 - Sapphire's own keyframed values between keys are INFERRED (each frame is a plain run at the value the keys give, MEASURED), and its device path is MEASURED on PoCL only.
 - Licence, activation, trial and machine identity code of the original is not rebuilt.
 - Cases outside an effect's verified comparisons, such as other sizes and parameter values, run the same code and are INFERRED.
-- `S_Flicker`, which reads the frame time, was verified with host times at whole frames of a 24 frames a second clock, and `S_SwishPan`, which reads the transition time, at transitions of 100 to 480 frames. The time values the stages give at other rates and lengths are INFERRED ([Host values](cli.md#host-values)).
+- `S_Flicker`, which reads the frame time, was verified with host times at whole frames of a 24 frames a second clock; `Shake` and `S_DissolveShake`, which read the frame time and the frame rate, at whole frames of a 24 frames a second clock as well; `S_SwishPan`, which reads the transition time, at transitions of 100 to 480 frames, and `S_DissolveShake` at transitions of 240 frames. The time values the stages give at other rates and lengths are INFERRED. At a rate whose reduced denominator is not 1 the frame rate and the time follow the original's arithmetic for a host with time scale num and local time step den, and equality with a host's values is INFERRED ([Host values](cli.md#host-values)).
 - The Atmosphere of `S_Glow` is not rendered: its noise needs gradient tables that no documented formula reproduces, so the glow stage has no `atmosphere_amp`, and `fx_run` refuses a Glow plan with `atmosphere_amp` other than 0 (`SIMPLEX-GRADIENT-TABLE-ABSENT`). The parity record lists no simplex_noise function.
 
 ## Evidence

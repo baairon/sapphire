@@ -264,7 +264,8 @@ pub struct KParams {
     /// / scalar head count of the original xy ramp (see `x_ramp`), an explicit per-run host input = (32 - (p & 31)) / 4 for the host's row pointer p (0 when p is 32 byte aligned); default 0 (HOST-ALLOC); -1 = the closed-form pixel-centre plane, an explicit non-host option
     pub xy_head: i32,
     /// S1: XY-HEAD-MODE. OneHead (the pre-WPE3 form: the head `xy_head` for every row) or PerRow (row r's head from
-    /// the row pointer phase0 + r * W * 4). fx_run derives it from the plan's xy shape (kernels2::xy_head_mode_of); the state A constructor keeps OneHead.
+    /// the row pointer phase0 + r * W * 4). The form of each default-xy writer comes from its placement in the plan (exec::head_form) and is carried by
+    /// the writer list; this field serves the images built outside that list and defaults to OneHead.
     pub xy_head_mode: XyHeadMode,
     /// WPH: base phase mod 32 of the perspective out2 / perspective_alpha out1 planes as per-run host inputs (-1 = not given), and the host cells
     /// [[rec]] (i32), (f64) of perspective_alpha (None = not given); state A tests may still read the WPG1_* env knobs

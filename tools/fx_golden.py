@@ -1,4 +1,4 @@
-"""Check that the sapphire stage route renders the 16 effect styles the same way on this machine as on the reference build.
+"""Check that the sapphire stage route renders the 20 effect styles the same way on this machine as on the reference build.
 
 Usage:
   python -I tools/fx_golden.py              render every case and compare with tools/fx_golden.tsv (exit 1 on any difference)
@@ -11,8 +11,9 @@ holds +inf, -inf, both default NaN patterns, huge and subnormal values and neigh
 renders the plain sizes with SAPPHIRE_PAR_MIN=0 and SAPPHIRE_THREADS=3, so row bands run at every size; it must equal the plain rows.
 
 The variant group (size suffix `+TAG`, rendered on the plain sizes) runs a stage with options that select a host variant or a second
-clip: `+o1` and `+o3` give the `cset_opacity` answers 1 and 3 of `glow` and `swishpan` (their `host_variants` entries in
-crates/neutral-handoff/data/fx_stages.tsv), and `+to` gives `swishpan` its `To` layer, a second clip from the seed plus one.
+clip: `+o1` and `+o3` give the `cset_opacity` answers 1 and 3 of `glow`, `swishpan`, the three Shake stages and `dissolve_shake` (their
+`host_variants` entries in crates/neutral-handoff/data/fx_stages.tsv), and `+to` gives `swishpan` and `dissolve_shake` their `To` layer,
+a second clip from the seed plus one.
 
 Each case runs one effect stage (`sapphire stage apply STAGE`, which renders in process with the stage's canonical
 host options from crates/neutral-handoff/data/fx_stages.tsv) on a synthetic clip of 3 frames at depth 32 and
@@ -45,6 +46,15 @@ VARIANTS = [
     ("swishpan", "o1", ["--param", "cset_opacity=1"], False),
     ("swishpan", "o3", ["--param", "cset_opacity=3"], False),
     ("swishpan", "to", [], True),
+    ("shake_normal_autogen", "o1", ["--param", "cset_opacity=1"], False),
+    ("shake_normal_autogen", "o3", ["--param", "cset_opacity=3"], False),
+    ("shake_twitchy_autogen", "o1", ["--param", "cset_opacity=1"], False),
+    ("shake_twitchy_autogen", "o3", ["--param", "cset_opacity=3"], False),
+    ("shake_jumpy_autogen", "o1", ["--param", "cset_opacity=1"], False),
+    ("shake_jumpy_autogen", "o3", ["--param", "cset_opacity=3"], False),
+    ("dissolve_shake", "o1", ["--param", "cset_opacity=1"], False),
+    ("dissolve_shake", "o3", ["--param", "cset_opacity=3"], False),
+    ("dissolve_shake", "to", [], True),
 ]
 
 

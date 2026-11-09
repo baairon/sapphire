@@ -77,10 +77,10 @@ parameters (kind, default, range) and the layers of every stage. `--describe` re
 the output geometry (contracts/describe.schema.json).
 
 The stages are `selftest-invert`, `ffmpeg-filter` (--param graph=G, expect=preserve|declared, unsafe=1 for
-filters that read files) and the 16 effect stages, which render in process: blur_color_autogen,
+filters that read files) and the 20 effect stages, which render in process: blur_color_autogen,
 blur_mono_autogen, transform_and_blur_autogen, blur_motion_curves_no_transform_autogen, diffuse_autogen,
 distort_rgb_autogen, drop_shadow, hue_sat_bright_autogen, sharpen_best_quality_autogen, sharpen_fast_autogen,
-time_warp_rgb_autogen, trails_autogen, warp_perspective_autogen, flicker, glow and swishpan. The effect stages accept keyframed
+time_warp_rgb_autogen, trails_autogen, warp_perspective_autogen, flicker, glow, swishpan, shake_normal_autogen, shake_twitchy_autogen, shake_jumpy_autogen and dissolve_shake. The effect stages accept keyframed
 values (--param ID=V@F;V@F, which needs --fps) and --layer ID=PATH for the layers `stage list` shows.
 
 --device picks where the effect stages compute: cpu (default), gpu (the first usable OpenCL device), gpu=N

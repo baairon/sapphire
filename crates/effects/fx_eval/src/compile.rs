@@ -224,7 +224,7 @@ pub struct CompileOptions {
     pub bound_input_mask: u32,
     /// turn the unbound-input exception (no clamp for a parameter whose record input is unbound) off (also: env DSW3_UNBOUND_OFF)
     pub unbound_exception_off: bool,
-    /// host mocha data present ([this] non-null); the native compiler errors when set (MOCHA-OFF)
+    /// host mocha data present (mocha_render's data object holds tracking data; with no host mocha data its pointer is null or its data field is zero, and both give the no-data fold); the native compiler errors when set (MOCHA-OFF)
     pub mocha_data_present: bool,
     /// HOST-CURVES (CV1-A1): an unkeyed host curve value is the parameter's own current cells, so
     /// `get_curve_val p ..` folds to the lanes of its first argument. Off: zeros (the state A harness read zeros).
@@ -620,7 +620,7 @@ pub struct NodeState {
 /// Compile a genotype under a parameter binding (with the original's collapses and folding).
 pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Result<CompiledProgram, CompileError> {
     if opt.mocha_data_present {
-        return Err(CompileError { msg: "MOCHA-DATA-PRESENT: host mocha data ([this] non-null) is outside the claimed context".into() });
+        return Err(CompileError { msg: "MOCHA-DATA-PRESENT: host mocha data (tracking data in mocha_render's data object) is outside the claimed context".into() });
     }
     if opt.presence_mask.is_some() {
         // INPUT-PRESENCE-MASK: one input, both readers derived (derive_presence), then the ordinary compile

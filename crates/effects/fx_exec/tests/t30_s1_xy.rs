@@ -1,14 +1,11 @@
 //! S1: per-row head of the original `variable 2` xy x writer, scoped by XY-HEAD-MODE.
 //! The first four tests are t26_wpe3_xy.rs (79 original x rows read from the emulator at 0xda745, run e_f1) with xy_ramp's PerRow
-//! form called by name; the rest test the OneHead form and the mode derivation from the plan.
-use fx_eval::{build_effect, Corpus};
-use fx_exec::kernels2::xy_head_mode_of;
+//! form called by name; the rest test the OneHead form. The product takes each writer's form from its placement in the plan: tests/t_xyh1_head_form.rs.
 use fx_exec::types::{row_head, x_ramp, xy_ramp, xy_ramp_mode, XyHeadMode};
 
 fn rows_text() -> &'static str {
     Box::leak(std::fs::read_to_string(effects_vecdir::path("fx_exec/data/wpe3_xy_rows.tsv")).unwrap_or_default().into_boxed_str())
 }
-fn pt() -> &'static str { effects_vecdir::path_str("record_extract/programs/programs.tsv") }
 
 fn hex32(s: &str) -> u32 {
     u32::from_str_radix(s, 16).unwrap()
@@ -112,23 +109,4 @@ fn one_head_repeats_row_zero_and_is_the_default_xy_ramp() {
     assert_eq!(xy_ramp_mode(64, 32, 0, XyHeadMode::PerRow).planes, xy_ramp(64, 32, 0).planes);
     // W * 4 not a multiple of 32: they differ on some row
     assert_ne!(xy_ramp_mode(50, 7, 0, XyHeadMode::PerRow).planes[0], xy_ramp(50, 7, 0).planes[0]);
-}
-
-#[test]
-fn head_mode_derived_from_the_plan_matches_the_ruled_scope() {
-    if !effects_vecdir::have_all(&["record_extract/programs/programs.tsv", "fx_exec/data/wpe3_xy_rows.tsv"]) {
-        return;
-    }
-    let t = std::fs::read_to_string(pt()).unwrap();
-    let c = Corpus::from_programs_tsv(&t);
-    let mode = |name: &str| {
-        let ei = c.find_effect(name, None).unwrap_or_else(|| panic!("effect {} not found", name));
-        xy_head_mode_of(&build_effect(&c, ei).unwrap())
-    };
-    for p in ["Warp_Perspective", "Warp_Perspective_Autogen"] {
-        assert_eq!(mode(p), XyHeadMode::PerRow, "{}", p);
-    }
-    for p in ["Transform_and_Blur", "Transform_and_Blur_Autogen", "Blur_Motion_Curves_No_Transform", "Blur_Motion_Curves_No_Transform_Autogen"] {
-        assert_eq!(mode(p), XyHeadMode::OneHead, "{}", p);
-    }
 }

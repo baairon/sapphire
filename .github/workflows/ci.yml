@@ -82,7 +82,7 @@ jobs:
       # fx_run, the renderer of the effect stages, builds on every runner.
       - run: cargo build --release -p fx_exec
 
-      # Each of the 16 effect styles renders a fixed synthetic clip at 64x32 and 50x7 through its stage, and the
+      # Each of the 20 effect styles renders a fixed synthetic clip at 64x32 and 50x7 through its stage, and the
       # SHA-256 of every output must equal tools/fx_golden.tsv (this repository's own Linux renders). A runner
       # that renders differently fails here and the message names the style.
       - run: python -I tools/fx_golden.py
@@ -174,7 +174,7 @@ jobs:
 
       - run: cargo build --release -p fx_exec
 
-      # Linux with PoCL: every allowlisted op passes the self-check against the CPU kernel, the seam tests run, and the 16
+      # Linux with PoCL: every allowlisted op passes the self-check against the CPU kernel, the seam tests run, and the 20
       # styles render through the device backend (SAPPHIRE_DEVICE=gpu) to the same hashes as tools/fx_golden.tsv.
       # SAPPHIRE_REQUIRE_DEVICE=1 turns a missing device into a failure, so an unusable PoCL install cannot pass as NOT RUN.
       # The device integration tests run one binary at a time on one thread: OpenCL platform discovery is not thread safe.

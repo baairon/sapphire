@@ -53,10 +53,11 @@ fn division_by_zero_and_fps() {
 
 #[test]
 fn shake_family() {
-    let r = bits(fold_lanes("shake_shift", &[s(0.0), s(0.0), s(0.0)], 1, None));
-    assert_eq!(r[0], 0xffc00000);
-    assert_eq!(bits(fold_lanes("random_sawtooth", &[s(3.0), s(0.0)], 1, None))[0], 0);
-    assert!(fold_lanes("random_sawtooth", &[s(3.0), s(0.5)], 1, None).is_none());
+    // fewer than twelve arguments are refused; the full constant-argument fold is in t_shake_shift_fold
+    assert!(fold_lanes("shake_shift", &[s(0.0), s(0.0), s(0.0)], 1, None).is_none());
+    let saw = |ph: f32| fold_lanes("random_sawtooth", &[s(3.0), s(ph), s(0.0), s(1.0), s(0.0), s(0.0), s(0.0)], 1, None).map(|r| r[0]);
+    assert!(saw(0.0).is_some() && saw(0.5).is_some());
+    assert!(fold_lanes("random_sawtooth", &[s(3.0), s(0.0)], 1, None).is_none());
     assert_eq!(fmt_g6(f32::from_bits(0xffc00000) as f64), "nan");
     assert_eq!(fmt_g6(f64::INFINITY), "inf");
 }
