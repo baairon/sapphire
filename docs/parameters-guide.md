@@ -1,13 +1,13 @@
 # Driving the effect parameters
 
-How to run each of the 16 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
+How to run each of the 20 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
 
 The stages themselves (requirements, host arrangement, exits, limits) are described in [Effects provider](stages.md#effects-provider). This page is about the parameters.
 
 ## Conventions on this page
 
 - **INFERRED** marks a description that rests on reading the effect graph (the native program constructors in `crates/effects/fx_eval/src/programs_native.rs` and the parameter definitions in `crates/effects/rtdata`), not on a measurement.
-- **MEASURED** marks a statement checked by running the code. "Verified at these values" lists the parameter values at which the stage output is byte identical to a recorded render of the original (MEASURED at depth 32, full SHA-256: by `crates/neutral-handoff/tests/fx_stage_parity.rs` for 382 recorded renders over the 13 stages of the first ten effects, and for `flicker`, `glow` and `swishpan` by rendering through `sapphire stage apply` their counted renders that match the stage's host arrangement, 24, 36 and 32; all byte identical). Values outside those lists run through the same code path and are INFERRED.
+- **MEASURED** marks a statement checked by running the code. "Verified at these values" lists the parameter values at which the stage output is byte identical to a recorded render of the original (MEASURED at depth 32, full SHA-256: by `crates/neutral-handoff/tests/fx_stage_parity.rs` for 382 recorded renders over the 13 stages of the first ten effects, and for `flicker`, `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage by rendering through `sapphire stage apply` their counted renders that match the stage's host arrangement, 24, 36, 32, 54 and 27; all byte identical). Values outside those lists run through the same code path and are INFERRED.
 - Every worked command below was run on this tree and ended with exit 0 (MEASURED, 64x32 `testsrc` clip, 3 frames, depth 32).
 
 ## Running a stage
@@ -49,7 +49,7 @@ The stage refuses a value outside the printed range with exit 3 before any frame
 Each offered parameter has one route, listed in `crates/neutral-handoff/data/fx_params.tsv` (third column) and in the stage sections below.
 
 - **`--set NAME=VALUE`, the record value.** The value goes to the effect graph unchanged, lane by lane. Positions and sizes given this way are in the graph's own normalized units, not pixels (INFERRED).
-- **`--host-param NAME=VALUE`, a host value with a unit conversion.** The value is what a host would show on its slider, in units tied to the frame width. `fx_run` converts it to the record value as `record = host x (2 / W) x s` in single precision, where `W` is the frame width in pixels and `s` is the parameter's registered normalize scale from the native definitions (MEASURED against the original for lane 0; the formula is in `crates/effects/fx_eval/src/units.rs`). The same host value therefore makes a proportionally smaller record value on a wider frame. The host value must lie on the 1/65536 grid where the host slider holds a 16.16 value: a value off the grid, such as `4.00001`, is exit 3 with `HOST-VALUE-OFF-GRID` on every `--host-param` parameter but `width` of `S_Glow`, `blur_mocha_mask` of `S_Diffuse` and `shift_host` of `S_DropShadow`, which take an off-grid value as given (MEASURED: exit 0). The `default` printed for a `--host-param` parameter is its record value, not a host value: an unset parameter renders at the host value the style registers, converted at the frame width, and the printed `default` passed as a host value gives another render (MEASURED on `width` of `S_Glow` and `blur_amount` of `S_SwishPan`). Leave the parameter unset to render its default. The two-lane form `X,Y` exists only for the `shift_host` parameter of the `S_DropShadow` stage: lane 0 converts as above and lane 1 is negated (the host's y axis points the other way).
+- **`--host-param NAME=VALUE`, a host value with a unit conversion.** The value is what a host would show on its slider, in units tied to the frame width. `fx_run` converts it to the record value as `record = host x (2 / W) x s` in single precision, where `W` is the frame width in pixels and `s` is the parameter's registered normalize scale from the native definitions (MEASURED against the original for lane 0; the formula is in `crates/effects/fx_eval/src/units.rs`). The same host value therefore makes a proportionally smaller record value on a wider frame. The host value must lie on the 1/65536 grid where the host slider holds a 16.16 value: a value off the grid, such as `4.00001`, is exit 3 with `HOST-VALUE-OFF-GRID` on every `--host-param` parameter but `width` of `S_Glow`, `blur_mocha_mask` of `S_Diffuse` and `shift_host` of `S_DropShadow`, which take an off-grid value as given (MEASURED: exit 0). The `default` printed for a `--host-param` parameter is its record value, not a host value: an unset parameter renders at the host value the style registers, converted at the frame width, and the printed `default` passed as a host value gives another render (MEASURED on `width` of `S_Glow` and `blur_amount` of `S_SwishPan`). Leave the parameter unset to render its default. The conversion uses the frame width for vertical values too: the y amplitudes of the `Shake` and `S_DissolveShake` stages divide by the width, not the height (MEASURED against the original at 64x32 and 50x7). The two-lane form `X,Y` exists only for the `shift_host` parameter of the `S_DropShadow` stage: lane 0 converts as above and lane 1 is negated (the host's y axis points the other way).
 - **`--cset DISPLAY=N`, a host popup answer.** Used for the opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`). `fx_run` derives the effect's opacity handling from the answer.
 - **`--host-curve-values PATH`.** Used only by `host_curve_values` of the two `BlurMoCurves` stages and of `swishpan`; see those sections.
 
@@ -61,9 +61,9 @@ Parameters that a stage fixes (the mask inputs, for example) are not offered and
 
 ### The opacity popup
 
-`cset_opacity` (display name `Opacity`) is the host popup that tells the effect how to treat the input alpha. Its items are All_Opaque, Normal and As_Premult, so it takes `1`, `2` or `3` (INFERRED from the program layouts). On the stages of the first ten effects only `2` (Normal) renders; `1` and `3` are refused by `fx_run` with exit 3 because the recorded host arrangement does not cover them (MEASURED on every such stage that offers it). On `glow` and `swishpan` all three answers render: the stage runs each answer with the host arrangement of its own recorded renders, from the `host_variants` column of [Effects provider](stages.md#effects-provider) (MEASURED). Leaving it unset is the same as `2` for a stage run (INFERRED). `time_warp_rgb_autogen` has `cset_input_opacity` (display name `Input Opacity`, same items and the same result: only `2` renders, MEASURED) and `cset_output_opacity` (display name `Output Opacity`, items All_Opaque and Copy_From_Input; `1` and `2` both render, MEASURED).
+`cset_opacity` (display name `Opacity`) is the host popup that tells the effect how to treat the input alpha. Its items are All_Opaque, Normal and As_Premult, so it takes `1`, `2` or `3` (INFERRED from the program layouts). On the stages of the first ten effects only `2` (Normal) renders; `1` and `3` are refused by `fx_run` with exit 3 because the recorded host arrangement does not cover them (MEASURED on every such stage that offers it). On `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage all three answers render: the stage runs each answer with the host arrangement of its own recorded renders, from the `host_variants` column of [Effects provider](stages.md#effects-provider) (MEASURED). Leaving it unset is the same as `2` for a stage run (INFERRED). `time_warp_rgb_autogen` has `cset_input_opacity` (display name `Input Opacity`, same items and the same result: only `2` renders, MEASURED) and `cset_output_opacity` (display name `Output Opacity`, items All_Opaque and Copy_From_Input; `1` and `2` both render, MEASURED).
 
-No recorded render of the first ten effects sets an opacity popup. The recorded renders of `glow` and `swishpan` set `cset_opacity` to `1`, `2` and `3`.
+No recorded render of the first ten effects sets an opacity popup. The recorded renders of `glow`, `swishpan`, `Shake` and `S_DissolveShake` set `cset_opacity` to `1`, `2` and `3`.
 
 ### The tracker mask group
 
@@ -136,6 +136,33 @@ One stage, `diffuse_autogen` (program `Diffuse_Autogen`). It displaces each pixe
 ```sh
 target/release/sapphire stage apply diffuse_autogen --width 64 --height 32 --depth 32 --frames 3 \
   --param diffuse_amount=8 --param rel_amount=1,0.5 --param wrap=2,2 --in clip.raw --out out.raw
+```
+
+## `S_DissolveShake`
+
+One stage, `stage apply dissolve_shake`, which runs the registered program itself (no wrapper). It is a transition: the input clip dissolves into a second clip while the picture shakes, most strongly at the middle of the transition (INFERRED). The second clip is `--layer To=PATH` (optional) and the length of the transition is `--frames N` ([Transition stages](cli.md#transition-stages)). The shake reads the frame time and the frame rate, so the stage also needs `--fps`; without it the run is refused with `FPS-UNGIVEN` (exit 3).
+
+- `auto_trans`, popup, `--set` record value. `1` runs the transition over the whole clip, from 0 on the first frame to 1 on the last; `0` takes the progress from `dissolve_amt` (INFERRED). Verified at `0` and `1`.
+- `dissolve_amt`, scalar, `--set`. The progress of the transition when `auto_trans` is 0, from 0 to 1 (INFERRED). Verified at `0.28999999165534973`, `0.3700000047683716`, `0.4099999964237213`, `0.4300000071525574`, `0.46000000834465027`, `0.47999998927116394`, `0.49000000953674316`, `0.5099999904632568`, `0.5199999809265137`, `0.550000011920929`, `0.5799999833106995` and `0.6200000047683716`.
+- `dissolve_speed`, scalar, `--set`. How steeply the dissolve crosses the middle of the transition (INFERRED). Verified at `1.5`.
+- `transition_dir`, popup, `--set` record value. `0` dissolves from the input clip to the second clip; `1` swaps the two (INFERRED). Verified at `0` and `1`.
+- `amplitude` and `frequency`, scalar, `--set`. The size of the shake at the middle of the transition and how fast it changes with the frame time (INFERRED). Verified at `0.3699951171875`, `1.25`, `1.6999969482421875`, `2.1999969482421875`, `2.399993896484375` and `3.3000030517578125` (`amplitude`); `4`, `5.5`, `6.5`, `7` and `12.5` (`frequency`).
+- `x_rand_amp`, `x_wave_amp`, `y_rand_amp`, `y_wave_amp`, `z_rand_amp` and `z_wave_amp`, scalar, `--host-param` (host units, converted with the frame width on both axes). The random and the wave part of the horizontal move, the vertical move and the depth offset, which scales the picture (INFERRED). Verified at `0.375` and `0.600006103515625` (`x_rand_amp`); `0.4499969482421875` (`x_wave_amp`); `0.1999969482421875` (`y_rand_amp`); `0.399993896484375` and `0.5500030517578125` (`y_wave_amp`); `0.0625` (`z_rand_amp`); `0.125` (`z_wave_amp`).
+- `x_rand_freq`, `x_wave_freq`, `y_rand_freq`, `y_wave_freq`, `z_rand_freq` and `z_wave_freq`, scalar, `--set`. The rates of those parts (INFERRED). Verified at `2.5` (`x_rand_freq`); `1.25` (`x_wave_freq`); `0.649993896484375` and `0.75` (`y_wave_freq`); `1.5` (`z_rand_freq`); `0.9499969482421875` (`z_wave_freq`). `y_rand_freq` is verified through `fx_run` only (below).
+- `x_phase`, `y_phase` and `tilt_phase`, scalar, `--set`. Shift the time of one axis, in seconds (INFERRED). Verified at `-0.350006103515625` and `0.3000030517578125` (`x_phase`); `-0.1999969482421875` (`y_phase`); `0.3000030517578125` (`tilt_phase`).
+- `tilt_rand_amp`, `tilt_wave_amp`, `tilt_rand_freq` and `tilt_wave_freq`, scalar, `--set`. The random and the wave part of the turn, in degrees, and their rates (INFERRED). Verified at `12` (`tilt_rand_amp`); `9` (`tilt_wave_amp`); `2` (`tilt_rand_freq`); `1.5` (`tilt_wave_freq`).
+- `motion_blur`, checkbox, `--set`, and `mo_blur_length`, scalar, `--set`. Blur each frame along its move toward the next frame, over that many frame moves (INFERRED). Verified at `0` (`motion_blur`); `1.75` and `3` (`mo_blur_length`).
+- `seed`, scalar, `--set`. Picks another random sequence (INFERRED). Verified at `3` and `5`.
+- `wrap`, two-lane popup, `--set` record value, one index per axis: `0` No, `1` Tile, `2` Reflect. What fills the area the move uncovers (INFERRED). Verified at `0,1`.
+- `red_amplitude`, `green_amplitude`, `blue_amplitude`, `blue_phase`, `RGB_randomness` and `RGB_frequency`, scalar, `--set`. Shake the colour channels apart (see `Shake` below; INFERRED). Verified at `0.5` (red), `2` (green), `1.399993896484375` (blue), `0.1999969482421875` (`blue_phase`), `0.399993896484375` (`RGB_randomness`) and `3` (`RGB_frequency`).
+- `cset_opacity`: see the opacity popup. All three answers render on this stage. Verified at `1` and `3`; the renders that leave it unset run the default answer.
+
+The verified transitions are 240 frames long (`--frames 240`), at the frames 0 to 190, at 64x32 and 50x7. Nine more counted renders at 50x7 were recorded at another phase of the default xy buffer and are verified through `fx_run` only, so the values that only they set are not listed here (MEASURED: every listed value is set by a counted render that is byte identical through the stage).
+
+```sh
+ffmpeg -loglevel error -f lavfi -i testsrc2=size=64x32:rate=24 -frames:v 3 -pix_fmt gbrapf32le -f rawvideo to.raw
+target/release/sapphire stage apply dissolve_shake --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --layer To=to.raw --param amplitude=1.25 --param frequency=7 --in clip.raw --out out.raw
 ```
 
 ## `S_DistortRGB`
@@ -239,6 +266,36 @@ One stage, `hue_sat_bright_autogen` (program `Hue_Sat_Bright_Autogen`). It rotat
 target/release/sapphire stage apply hue_sat_bright_autogen --width 64 --height 32 --depth 32 --frames 3 \
   --param hue_shift=-0.25 --param saturation=1.5 --param brightness=0.8 --param scale_colors=1,0.9,0.8 \
   --param preserve_luma=1 --in clip.raw --out out.raw
+```
+
+## `Shake`
+
+Three stages, `shake_normal_autogen`, `shake_twitchy_autogen` and `shake_jumpy_autogen`, one per style; each runs the style's wrapper program. On every frame the picture is moved, scaled and turned by offsets that change with the frame time (INFERRED). The time and the frame rate come from `--fps`, so the stages need it ([Time and transitions](guide.md#time-and-transitions)); without it the run is refused with `FPS-UNGIVEN` (exit 3). The mask input of the programs is not connected, its three parameters are fixed, and no mask parameter is offered. A parameter that only some of the styles offer names them.
+
+- `amplitude`, scalar, `--set`. Scales every offset (INFERRED). Verified at `0.600006103515625` and `1.6999969482421875` (Normal), `1.399993896484375` (Twitchy) and `1.3000030517578125` (Jumpy).
+- `frequency`, scalar, `--set`. How fast the offsets change with the frame time; Twitchy runs ten times this rate (INFERRED). Verified at `5.5` (Normal), `6` (Twitchy) and `3.5` (Jumpy).
+- `phase`, scalar, `--set`. Shifts the time of every axis, in seconds (INFERRED). Verified at `-0.350006103515625` (Normal), `-0.399993896484375` (Twitchy) and `-0.600006103515625` (Jumpy).
+- `x_rand_amp` and `x_wave_amp`, scalar, `--host-param` (host units, converted with the frame width). The random and the wave part of the horizontal move (INFERRED). Verified at `0.350006103515625` and `0.4499969482421875` (Normal), `0.350006103515625` and `0.5` (Twitchy), `0.350006103515625` and `0.399993896484375` (Jumpy) for `x_rand_amp`; `0.149993896484375` and `0.3000030517578125` (Normal), `0.3000030517578125` (Twitchy), `0.25` and `0.3000030517578125` (Jumpy) for `x_wave_amp`.
+- `y_rand_amp` (every style; no value of Normal is verified through the stage) and `y_wave_amp`, scalar, `--host-param` (host units, converted with the frame width as well). The vertical move (INFERRED). Verified at `0.350006103515625` (Twitchy) and `0.5` (Jumpy) for `y_rand_amp`; `0.25` and `0.3000030517578125` (Normal) and `0.25` (Twitchy and Jumpy) for `y_wave_amp`.
+- `z_rand_amp` (Twitchy and Jumpy), scalar, `--host-param`. The random part of the depth offset, which scales the picture (INFERRED). Verified at `0.149993896484375` (Twitchy) and `0.1999969482421875` (Jumpy).
+- `z_dist` (Normal and Twitchy), scalar, `--set`. The scale that the depth offset is added to (INFERRED). Verified at `2.5` (Normal) and `1.5` (Twitchy).
+- `x_phase` and `y_rand_freq` (Normal), scalar, `--set`. The time shift of the horizontal offset, in seconds, and the rate of the vertical random part (INFERRED). Verified at `-0.1999969482421875` and `2.5`.
+- `tilt_rand_amp` (Normal and Twitchy) and `tilt_wave_amp` (Normal), scalar, `--set`. The random and the wave part of the turn, in degrees (INFERRED). Verified at `4` (Normal) and `6` (Twitchy) for `tilt_rand_amp`; `7` for `tilt_wave_amp`.
+- `stillness` and `twitch_frequency` (Twitchy), scalar, `--set`. A random value of the frame time, taken at the twitch frequency, switches the shake on where it is above `stillness`, so a larger `stillness` holds the picture still for longer (INFERRED). Verified at `0.350006103515625` and `0.899993896484375` (`stillness`); `1.25` and `4.5` (`twitch_frequency`).
+- `drift` and `center_bias` (Jumpy), scalar, `--set`. Shape the jumps between positions (INFERRED). Verified at `0.100006103515625` and `0.649993896484375` (`drift`); `0.8000030517578125` and `2` (`center_bias`).
+- `motion_blur`, checkbox, `--set`, and `motion_blur_length`, scalar, `--set`. Blur each frame along its move toward the next frame, over that many frame moves (INFERRED). Verified at `1` and `3`.
+- `seed`, scalar, `--set`. Picks another random sequence (INFERRED). Verified at `13`.
+- `wrap`, two-lane popup, `--set` record value, one index per axis: `0` No, `1` Tile, `2` Reflect. What fills the area the move uncovers (INFERRED). Verified at `1,0`.
+- `red_amplitude`, `green_amplitude`, `blue_amplitude`, `red_phase`, `green_phase`, `blue_phase`, `RGB_randomness` and `RGB_frequency`, scalar, `--set`. Shake the red, green and blue channels apart: per channel a scale of the offsets and a time shift, and a random part that differs per channel at its own rate (INFERRED). Verified at `1.5`, `2` and `0.6999969482421875` (the three amplitudes), `-0.100006103515625`, `0.0800018310546875` and `0.1999969482421875` (the three phases), `0.399993896484375` and `0.899993896484375` (`RGB_randomness`) and `3` (`RGB_frequency`).
+- `cset_opacity`: see the opacity popup. All three answers render on these stages. Verified at `1` and `3`; the renders that leave it unset run the default answer.
+
+The verified times are whole frames of a 24 frames a second clock, from 0 to 47 (Normal), 53 (Twitchy) and 58 (Jumpy), at 64x32 and 50x7.
+
+```sh
+target/release/sapphire stage apply shake_twitchy_autogen --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param amplitude=1.4 --param stillness=0.35 --param twitch_frequency=4.5 --param x_rand_amp=0.5 --in clip.raw --out out.raw
+target/release/sapphire stage apply shake_jumpy_autogen --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param amplitude=1.3 --param drift=0.65 --param center_bias=0.8 --param frequency=3.5 --in clip.raw --out out.raw
 ```
 
 ## `S_Sharpen`
@@ -373,6 +430,6 @@ All of these end with exit 3 and an `unsupported` error naming the cause (MEASUR
 - the same program parameter given through both routes;
 - a keyed value on `trails_autogen`, a malformed key or two keys on one tick (a keyed value without `--fps` is exit 2);
 - a host curve sample that neither the given file nor the stage's identity curve can serve (`HOST-CURVE-SAMPLE-UNSERVED`);
-- on `swishpan`, a missing or unusable `--frames` or layer (`FRAMES-REQUIRED`, `FRAMES-TOO-SMALL` and the `LAYER-*` refusals of [Refusal labels](cli.md#refusal-labels)).
+- on `swishpan` and the `S_DissolveShake` stage, a missing or unusable `--frames` or layer (`FRAMES-REQUIRED`, `FRAMES-TOO-SMALL` and the `LAYER-*` refusals of [Refusal labels](cli.md#refusal-labels)).
 
-A run of `flicker` without `--fps` is refused with `HOST-VALUE-MISSING` (exit 3).
+A run of `flicker` without `--fps` is refused with `HOST-VALUE-MISSING` (exit 3), and a run of the three `Shake` stages or the `S_DissolveShake` stage without it with `FPS-UNGIVEN` (exit 3).

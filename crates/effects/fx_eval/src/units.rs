@@ -111,6 +111,32 @@ pub fn normalize_scale_record(host: f32, width: f32, ns: f32, flag40: bool) -> f
     }
 }
 
+/// The number of lanes the range registration of PROGRAM's parameter PARAM gives, None when the parameter has no range row.
+pub fn param_lanes(program: &str, param: &str) -> Option<usize> {
+    effects_rtdata::range_defs().find(|r| r.program == program && r.parameter == param).map(|r| r.lanes)
+}
+
+/// Lane 0 of a normalize_scale parameter bound by `--host-param NAME=HOST` with one host lane:
+/// normalize_scale_record(host, W, ns, false) with W the units width of the frame width, for every axis (x_, y_, z_ and tilt
+/// parameters alike). `uh` is the units width of the frame height and is read only by the mutant ns1_height_mut.
+/// A normalize_scale of 1 is judged for a one-lane parameter only (a two-lane parameter takes both host lanes);
+/// 2 and 4 are judged for lane 0; any other normalize_scale is refused with PARAM-UNITS-NOT-JUDGED.
+pub fn host_param_lane0(program: &str, param: &str, host: f32, ns: f32, uw: f32, uh: f32) -> Result<f32, String> {
+    if ns != 1.0 && ns != 2.0 && ns != 4.0 {
+        return Err(format!("PARAM-UNITS-NOT-JUDGED: {} has normalize_scale {} (the label covers 1, 2 and 4, lane 0)", param, ns));
+    }
+    if ns == 1.0 && param_lanes(program, param) != Some(1) {
+        return Err(format!(
+            "PARAM-UNITS-NOT-JUDGED: {} has normalize_scale 1 and {:?} registered lanes (one host lane is judged for a one-lane parameter; a two-lane parameter takes --host-param {}=X,Y)",
+            param,
+            param_lanes(program, param),
+            param
+        ));
+    }
+    let width = if cfg!(feature = "ns1_height_mut") && ns == 1.0 { uh } else { uw };
+    Ok(normalize_scale_record(host, width, ns, false))
+}
+
 /// The registered host value of a normalize_scale slider whose program text default is `text_default`, lane 0:
 /// f32(d / f32(f32(2 / 1920) x ns)), the reference width 1920 and every operation a single-precision one.
 pub fn registered_ns_host(text_default: f32, ns: f32) -> f32 {

@@ -186,3 +186,17 @@ fn tickmap_index_not_registered_refused() {
     assert!(fold("Transform_and_Blur", "rotate", 0.0, &[0.0], 1, &h, &mut d).is_none());
     assert!(d[0].starts_with("TICKMAP-HOST-FIELD-UNSOURCED (time_frames)"), "{:?}", d);
 }
+
+#[test]
+fn shake_twitchy_stillness_unbound_is_registered_16_16_bound_is_taken_as_given() {
+    if !effects_vecdir::have_all(&["record_extract/programs/programs.tsv", "fx_eval/data"]) {
+        return;
+    }
+    let c = corpus();
+    // the style row of Shake_Twitchy_Autogen names stillness as a host type 2 slider: 0.7 unbound is trunc(0.7 x 65536) / 65536
+    let p = params_of(&c, "Shake_Twitchy_Autogen", &[]);
+    assert_eq!(p["stillness"][0], 0x3f333300, "{:08x}", p["stillness"][0]);
+    // a bound value is taken as given
+    let p = params_of(&c, "Shake_Twitchy_Autogen", &[("stillness", 0.7)]);
+    assert_eq!(p["stillness"][0], 0x3f333333, "{:08x}", p["stillness"][0]);
+}

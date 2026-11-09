@@ -132,3 +132,24 @@ pub fn parse_cell(s: &str) -> Result<Option<u8>, String> {
     }
     u8::from_str_radix(t.trim_start_matches("0x"), 16).map(Some).map_err(|_| format!("not a hex byte or '-': {}", s))
 }
+
+/// A bound input that derives class 3 but is not an 'ae32' source has no image to convert. It is admitted only as an input the
+/// compiled plan does not read (the original allocates and converts one image per plan input, so an input the plan drops has no
+/// allocate command). The allocate count of the record is checked by the caller against the sourced class-3 inputs; this check
+/// runs after the plan is compiled and refuses by name when the plan does read the input.
+pub fn check_unread_inputs(style: &str, unread: &[String], plan_inputs: &[&str]) -> Result<(), String> {
+    for n in unread {
+        if plan_inputs.iter().any(|p| *p == n.as_str()) {
+            return Err(format!("INPUT-CLASS-NOT-PORTED ({} input {}: class 3 for an input that is not an 'ae32' source)", style, n));
+        }
+    }
+    Ok(())
+}
+
+/// The label of an admitted unread class-3 input.
+pub fn unread_label(style: &str, name: &str) -> String {
+    format!(
+        "label INPUT-CLASS-UNREAD-INPUT ({} input {}: class 3 by the rule, so the compile takes the input at elnum 3; the input is not an 'ae32' source and the compiled plan must not read it, so no image is allocated or converted for it; checked after compile)",
+        style, name
+    )
+}

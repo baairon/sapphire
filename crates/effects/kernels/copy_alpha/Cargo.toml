@@ -1,0 +1,11 @@
+[package]
+name = "copy_alpha"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the builtin class copy_alpha: colour channels from the first input, the alpha channel from the second (render entry, slot 52)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

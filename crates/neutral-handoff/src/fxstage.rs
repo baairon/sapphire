@@ -846,6 +846,11 @@ fn run_fx(
         None => "o".to_string(),
     };
     let mut args: Vec<String> = vec![p.program.clone(), "--size".into(), format!("{}x{}", w, h), "--out".into(), out_prefix, "--ae32-src".into(), format!("{}={}", p.src_name, src_path)];
+    // the sources a transition stage's plan may leave unread: its second clip, and its first one once the transition has completed
+    let mut droppable: Vec<String> = layers.iter().map(|l| l.0.clone()).collect();
+    if p.is_transition() {
+        droppable.push(p.src_name.clone());
+    }
     for (name, words) in layers {
         let lp = format!("layer_{}.u32", name);
         files.words.push((lp.clone(), std::sync::Arc::new(words)));
@@ -944,6 +949,15 @@ fn run_fx(
             (code, io) = exec(&args, &files);
             continue;
         }
+        // A clip the compiled plan does not read (Dissolve_Shake below its dissolve threshold drops To, and after the dissolve it drops
+        // From) is not an input of the plan: the run names it, and the frame is rendered again without that source.
+        if code == 1 {
+            if let Some(name) = unread_source(&droppable, &text) {
+                drop_source(&mut args, name);
+                (code, io) = exec(&args, &files);
+                continue;
+            }
+        }
         if code != 2 {
             break;
         }
@@ -988,6 +1002,28 @@ fn run_fx(
         outs.push(words);
     }
     Ok(outs)
+}
+
+/// The first of `candidates` that the log `text` of a refused run names as not an input of the compiled plan. The matched text is built by
+/// `fx_exec::srcindep::not_an_input`, the function that writes the refusal, so the retry follows the refusal.
+fn unread_source<'a>(candidates: &'a [String], text: &str) -> Option<&'a String> {
+    candidates.iter().find(|n| text.contains(&fx_exec::srcindep::not_an_input(n)))
+}
+
+/// Remove the `--ae32-src NAME=...` pair of a source the plan does not read. A recorded class-3 allocate command counts the sourced
+/// class-3 inputs, so its image count drops by one with the source.
+fn drop_source(args: &mut Vec<String>, name: &str) {
+    let key = format!("{}=", name);
+    if let Some(at) = args.windows(2).position(|w| w[0] == "--ae32-src" && w[1].starts_with(&key)) {
+        args.drain(at..at + 2);
+        if let Some(c) = args.iter().position(|a| a == "--class3-record") {
+            let mut f: Vec<String> = args[c + 1].split(',').map(|t| t.to_string()).collect();
+            if let Some(n) = f.get(1).and_then(|t| t.trim().parse::<u32>().ok()) {
+                f[1] = n.saturating_sub(1).to_string();
+                args[c + 1] = f.join(",");
+            }
+        }
+    }
 }
 
 /// A layer file: one frame (held in memory) or one frame per input frame (read from the file when its frame is asked for, so a
@@ -1218,11 +1254,15 @@ pub fn host_time(f: u64, num: u64, den: u64) -> Result<f32> {
     if num as u128 > HOST_SCALE_MAX || den as u128 > HOST_STEP_MAX || tick > HOST_STEP_MAX {
         return Err(time_range_error(num as u128, den as u128, f));
     }
-    let (t, s, n) = (tick as f32, den as f32, num as f32);
-    let elapsed = t / s;
-    let rate = n / s;
-    let d = if 1.0e-4f32 > rate { 30.0f32 } else { rate };
+    let elapsed = tick as f32 / den as f32;
+    let d = fx_exec::stored_frame_rate(host_rate(num, den));
     Ok(elapsed / d)
+}
+
+/// `get_frames_per_second` at the frame rate `num/den`: the host model has time scale `num` and local time step `den`,
+/// so the value handed to the fold is f32(num) / f32(den); the fold applies the context replacement of the getter.
+pub fn host_rate(num: u64, den: u64) -> f32 {
+    num as f32 / den as f32
 }
 
 /// `get_aspect_ratio` of a frame: f32(height) / f32(width), the host fields +0x54 (the ratio) times +0x34 (the unit factor, 1.0).
@@ -1230,7 +1270,7 @@ pub fn aspect_ratio(width: u32, height: u32) -> f32 {
     height as f32 / width as f32
 }
 
-/// The host values of frame `f`: `get_time` when the rate is known, and percent time and total frames when the
+/// The host values of frame `f`: `get_time` and `get_frames_per_second` when the rate is known, and percent time and total frames when the
 /// clip length is known (a transition stage also gets the frame's aspect ratio, `spec` being its size).
 fn time_values(total: Option<u64>, rate: Option<&crate::rate::Rate>, f: u64, spec: FrameSpec) -> Result<Vec<(String, f32)>> {
     let mut out = Vec::new();
@@ -1239,6 +1279,7 @@ fn time_values(total: Option<u64>, rate: Option<&crate::rate::Rate>, f: u64, spe
             return Err(time_range_error(r.num(), r.den(), f));
         }
         out.push(("get_time".to_string(), host_time(f, r.num() as u64, r.den() as u64)?));
+        out.push(("get_frames_per_second".to_string(), host_rate(r.num() as u64, r.den() as u64)));
     }
     if let Some(n) = total {
         out.push(("get_percent_time".to_string(), percent_time(f, n)));
@@ -1500,9 +1541,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tables_parse_for_sixteen_stages() {
+    fn tables_parse_for_twenty_stages() {
         let ps = profiles();
-        assert_eq!(ps.len(), 16);
+        assert_eq!(ps.len(), 20);
         let hsb = profile("hue_sat_bright_autogen").expect("hsb");
         assert_eq!(hsb.family, "S_HueSatBright");
         assert_eq!(hsb.kind, "temporal");
@@ -1510,9 +1551,17 @@ mod tests {
         assert!(hsb.params.iter().any(|q| q.id == "hue_shift"));
         assert_eq!(profile("trails_autogen").unwrap().spool, true);
         assert_eq!(profile("time_warp_rgb_autogen").unwrap().kind, "temporal");
-        // only the transition stage declares a layer: its second clip, optional
-        assert!(ps.iter().filter(|q| q.id != "swishpan").all(|q| q.layers.is_empty()));
+        // only the transition stages declare a layer: their second clip, optional
+        assert!(ps.iter().filter(|q| q.id != "swishpan" && q.id != "dissolve_shake").all(|q| q.layers.is_empty()));
         assert_eq!(profile("swishpan").unwrap().layers, vec![("To".to_string(), true)]);
+        assert_eq!(profile("dissolve_shake").unwrap().layers, vec![("To".to_string(), true)]);
+        // the three Shake styles fix the mask parameters of their unbound Mask input
+        for id in ["shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen"] {
+            let p = profile(id).unwrap();
+            assert_eq!(p.family, "S_Shake");
+            assert_eq!(p.fixed, vec![("--set".to_string(), "mask_use=0".to_string()), ("--set".to_string(), "blur_mask=0.05".to_string()), ("--set".to_string(), "invert_mask=0".to_string())]);
+        }
+        assert_eq!(profile("dissolve_shake").unwrap().family, "S_DissolveShake");
     }
 
     #[test]
@@ -1709,7 +1758,46 @@ mod tests {
         for f in [0u64, 7, 17] {
             assert_eq!(time_values(None, Some(&r), f, sp).unwrap()[0].1.to_bits(), (f as f32 / 24f32).to_bits());
         }
+        let rv = time_values(None, Some(&r), 0, sp).unwrap();
+        assert_eq!(rv[1].0, "get_frames_per_second");
+        assert_eq!(rv[1].1.to_bits(), 24f32.to_bits());
+        let r2 = crate::rate::Rate::parse("30000/1001").unwrap();
+        assert_eq!(time_values(None, Some(&r2), 0, sp).unwrap()[1].1.to_bits(), (30000f32 / 1001f32).to_bits());
         assert_eq!(host_time(7, 24, 1).unwrap(), 7f32 / 24f32);
+    }
+
+    #[test]
+    fn host_time_equals_the_getter_read_order_and_differs_from_one_division() {
+        // frames 0..=1000: get_time against the getter's read order F / rate with F = f32(f) and rate = f32(num) / f32(den), and against
+        // the single division f32(f * den) / f32(num). The read order gives no difference at any rate; the single division differs in
+        // 312, 69, 69 and 277 frames at the fractional rates and in none at a whole rate.
+        for (num, den, single_differs) in [(24u64, 1u64, 0usize), (30, 1, 0), (60, 1, 0), (2997, 1, 0), (24000, 1001, 312), (30000, 1001, 69), (60000, 1001, 69), (2997, 100, 277)] {
+            let rate = host_rate(num, den);
+            let (mut other_order, mut other_single) = (0usize, 0usize);
+            for f in 0..=1000u64 {
+                let got = host_time(f, num, den).unwrap().to_bits();
+                if got != (f as f32 / rate).to_bits() {
+                    other_order += 1;
+                }
+                if got != ((f * den) as f32 / num as f32).to_bits() {
+                    other_single += 1;
+                }
+            }
+            assert_eq!(other_order, 0, "{}/{} against F / rate", num, den);
+            assert_eq!(other_single, single_differs, "{}/{} against the single division", num, den);
+        }
+    }
+
+    #[test]
+    fn get_time_divides_by_the_stored_frame_rate() {
+        // the divisor of get_time is the stored frame rate of the rate getter's first step: a rate below 1.0e-4 is replaced by 30.0
+        for (num, den) in [(24u64, 1u64), (30000, 1001), (1, 100000), (1, 10000), (1, 9999)] {
+            let rate = host_rate(num, den);
+            let want = (((7 * den) as f32) / den as f32) / fx_exec::stored_frame_rate(rate);
+            assert_eq!(host_time(7, num, den).unwrap().to_bits(), want.to_bits(), "{}/{}", num, den);
+        }
+        assert_eq!(fx_exec::stored_frame_rate(host_rate(1, 100000)), 30.0);
+        assert_eq!(fx_exec::stored_frame_rate(host_rate(24, 1)), 24.0);
     }
 
     #[test]
@@ -1924,12 +2012,101 @@ mod tests {
             check_variants(p).unwrap();
             // only the stages whose recorded runs differ by opacity answer carry entries, keyed on cset_opacity at the answers 1 and 3
             let keyed: Vec<(&str, &str)> = p.variants.iter().map(|v| (v.param.as_str(), v.value.as_str())).collect();
-            if p.id == "glow" || p.id == "swishpan" {
+            if ["glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake"].contains(&p.id.as_str()) {
                 assert_eq!(keyed, [("cset_opacity", "1"), ("cset_opacity", "3")], "{}", p.id);
             } else {
                 assert!(keyed.is_empty(), "{}", p.id);
             }
         }
+    }
+
+    #[test]
+    fn a_layer_the_plan_does_not_read_is_dropped_with_its_class_3_image() {
+        let mut a: Vec<String> = ["P", "--ae32-src", "From=a.u32", "--ae32-src", "To=b.u32", "--class3-record", "0,2,3,02", "--x", "1"].iter().map(|s| s.to_string()).collect();
+        drop_source(&mut a, "To");
+        assert_eq!(a.join(" "), "P --ae32-src From=a.u32 --class3-record 0,1,3,02 --x 1");
+        // a source that is not there changes nothing
+        let before = a.clone();
+        drop_source(&mut a, "To");
+        assert_eq!(a, before);
+        // without a recorded allocate command only the source goes
+        let mut b: Vec<String> = ["P", "--ae32-src", "To=b.u32", "--y", "2"].iter().map(|s| s.to_string()).collect();
+        drop_source(&mut b, "To");
+        assert_eq!(b.join(" "), "P --y 2");
+    }
+
+    /// The text the retry looks for is the one `fx_exec::srcindep::not_an_input` writes, whole: a longer name does not match its prefix, a candidate
+    /// the log does not name does not match, and another refusal matches nothing.
+    #[test]
+    fn the_retry_matches_the_refusal_text_of_srcindep() {
+        let names: Vec<String> = ["To", "From"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(fx_exec::srcindep::not_an_input("To"), "'ae32' source To is not an input of the compiled plan");
+        assert_eq!(unread_source(&names, &fx_exec::srcindep::not_an_input("To")), Some(&names[0]));
+        assert_eq!(unread_source(&names, &fx_exec::srcindep::not_an_input("From")), Some(&names[1]));
+        let line = format!("ERR frame 3: {} (Dissolve_Shake)", fx_exec::srcindep::not_an_input("From"));
+        assert_eq!(unread_source(&names, &line), Some(&names[1]));
+        assert_eq!(unread_source(&names, &fx_exec::srcindep::not_an_input("Top")), None);
+        assert_eq!(unread_source(&names, "INPUT-CLASS-ALLOC-MISMATCH (Dissolve_Shake: planned 2 image(s), elnum 3; record 1 image(s), elnum 3)"), None);
+        assert_eq!(unread_source(&[], &fx_exec::srcindep::not_an_input("To")), None);
+    }
+
+    /// A clip the compiled plan does not read: fx_run refuses it with the text of `srcindep::not_an_input`, and the stage renders the frame again
+    /// without the clip, to the bytes of the frame rendered without it. The program is a one-source style that has no `To` input.
+    #[test]
+    fn an_unread_clip_is_refused_by_fx_run_and_dropped_by_the_stage() {
+        let spec = FrameSpec { width: 16, height: 8, depth: Depth::F32 };
+        let p = profile("blur_color_autogen").unwrap().clone();
+        let n = 16 * 8 * 4;
+        let src: Vec<u32> = (0..n).map(|i| (0.05f32 + (i % 31) as f32 / 40.0).to_bits()).collect();
+        let runner = Runner::new(fx_exec::fxrun::Device::Cpu);
+        // one Learned for both calls: the first one learns the derived do_postdiv, so the second one's first command is refused for the clip alone
+        let learned = Learned::default();
+        let plain = run_fx(&runner, &p, spec, 0, src.clone(), Vec::new(), &[], &p.host, Extra::default(), &learned).expect("the frame without the clip");
+        let with = run_fx(&runner, &p, spec, 0, src.clone(), vec![("To".to_string(), vec![0u32; n])], &[], &p.host, Extra::default(), &learned).expect("the clip is dropped");
+        assert_eq!(plain, with, "the frame rendered after the drop equals the frame rendered without the clip");
+        // the command the second call ran first still carries the clip: fx_run refuses it with the shared text
+        let (args, files) = LAST_RUN.with(|l| l.borrow().clone()).unwrap();
+        assert!(args.windows(2).any(|w| w[0] == "--ae32-src" && w[1] == "To=layer_To.u32"), "{:?}", args);
+        let mut io = StageIo::default();
+        for (k, v) in &files {
+            io.words.insert(k.clone(), v.clone());
+        }
+        let (code, io) = runner.run(args, io);
+        assert_eq!(code, 1, "{}", io.log);
+        assert!(io.log.contains(&fx_exec::srcindep::not_an_input("To")), "{}", io.log);
+        let names = vec!["To".to_string()];
+        assert_eq!(unread_source(&names, &io.log), Some(&names[0]));
+    }
+
+    /// Dissolve_Shake through the stage's own row on a 3 frame clip: every frame is rendered. The command run first hands the plan both clips: the
+    /// first frame's plan does not read the second clip (fx_run refuses it with the text for `To`), the middle frame's plan reads both, and the last
+    /// frame's plan, the transition being over, does not read the first clip (the text for `From`).
+    #[test]
+    fn a_transition_frame_is_rendered_without_the_clip_its_plan_does_not_read() {
+        let spec = FrameSpec { width: 16, height: 8, depth: Depth::F32 };
+        let p = profile("dissolve_shake").unwrap().clone();
+        let n = 16 * 8 * 4;
+        let clip = |seed: usize| -> Vec<u32> { (0..n).map(|i| (0.05f32 + ((i * 7 + seed) % 31) as f32 / 40.0).to_bits()).collect() };
+        let runner = Runner::new(fx_exec::fxrun::Device::Cpu);
+        let learned = Learned::default();
+        let rate = crate::rate::Rate::parse("24").unwrap();
+        let mut seen: Vec<(u64, i32, String)> = Vec::new();
+        // frame 0 twice: the first run learns the derived do_postdiv, so that the command of the second one is refused for a clip alone
+        for f in [0u64, 0, 1, 2] {
+            let extra = Extra { host_values: time_values(Some(3), Some(&rate), f, spec).unwrap(), ..Extra::default() };
+            let out = run_fx(&runner, &p, spec, f, clip(1), vec![("To".to_string(), clip(2))], &[], &host_at(&p, &[]), extra, &learned);
+            assert!(out.is_ok(), "frame {}: {:?}", f, out.err().map(|e| e.message));
+            let (args, files) = LAST_RUN.with(|l| l.borrow().clone()).unwrap();
+            let mut io = StageIo::default();
+            for (k, v) in &files {
+                io.words.insert(k.clone(), v.clone());
+            }
+            let (code, io) = runner.run(args, io);
+            let names: Vec<&str> = ["From", "To"].into_iter().filter(|nm| io.log.contains(&fx_exec::srcindep::not_an_input(nm))).collect();
+            seen.push((f, code, names.join("+")));
+        }
+        let want = vec![(0, 2, String::new()), (0, 1, "To".to_string()), (1, 0, String::new()), (2, 1, "From".to_string())];
+        assert_eq!(seen, want);
     }
 
     #[test]
@@ -2076,7 +2253,7 @@ mod tests {
                 seen += 1;
             }
         }
-        assert_eq!(seen, 14);
+        assert_eq!(seen, 18);
     }
 
     #[test]

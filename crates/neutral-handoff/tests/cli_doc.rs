@@ -25,6 +25,7 @@ const ROUTE_LABELS: &[&str] = &[
     "TICKMAP-POINT-HOST-INPUT-UNSOURCED",
     "TICKMAP-HOST-FIELD-UNSOURCED",
     "PARAM-UNITS-NOT-JUDGED",
+    "FPS-UNGIVEN",
 ];
 
 /// Hyphenated upper case words in string literals that are not refusal labels.

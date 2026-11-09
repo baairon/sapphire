@@ -11,22 +11,24 @@ The work that every effect shares, finished or in progress:
 - **CPU speed.** The effect stages render in process and the kernels use all cores. `blur_motion_curves_no_transform_autogen` went from 52 s to 1.1 s per 1080p frame (MEASURED, [Speed](guide.md#speed)).
 - **Keyframes.** Every effect stage but `trails_autogen` takes keyed values ([keyframes](parameters-guide.md#keyframed-values)). Values between keys are INFERRED.
 - **Device path.** OpenCL kernels for the heavy operations, byte identical to the CPU path, MEASURED on PoCL; speed on a real GPU is not yet measured ([device](guide.md#rendering-on-a-device)).
-- **Time and transitions.** The stages give each frame its time from `--fps`, and a transition stage takes a second clip and the length of the transition ([transition stages](cli.md#transition-stages)). `S_SwishPan` is the first transition.
-- **Opacity answers.** A stage can run each opacity answer with the host arrangement of that answer's own recorded renders ([effects provider](stages.md#effects-provider)); `S_Glow` and `S_SwishPan` render all three.
-- **Determinism across processors.** The golden hashes of `tools/fx_golden.py` are checked in CI on Linux, macOS and Windows, so the output bytes are held equal across processors; the effect crates avoid the platform math library for the same reason.
+- **Time and transitions.** The stages give each frame its time and the frame rate from `--fps`, and a transition stage takes a second clip and the length of the transition ([transition stages](cli.md#transition-stages)). `S_SwishPan` and `S_DissolveShake` are the transitions.
+- **Opacity answers.** A stage can run each opacity answer with the host arrangement of that answer's own recorded renders ([effects provider](stages.md#effects-provider)); `S_Glow`, `S_SwishPan`, `Shake` and `S_DissolveShake` render all three.
+- **Determinism across processors.** The golden hashes of `tools/fx_golden.py` are checked in CI on Linux, Windows and macOS on ARM, so the output bytes of those rows, which include infinities, both default NaN patterns and invalid operations, are held equal across processors; the effect crates avoid the platform math library for the same reason. Other input that holds infinite or overflowing values or NaN can still give NaN words whose sign or payload bits differ between x86_64 and ARM, while no number differs (MEASURED kernel by kernel under emulation, INFERRED for whole renders).
 
 ## Done
 
-Each of these matches the original bit for bit on every compared case ([what that covers](effects.md#what-rebuilt-means)). Per-effect status is in the table of [effects](effects.md).
+Each of these matches the original bit for bit on every compared case, apart from four counted comparisons of `Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner ([what that covers](effects.md#what-rebuilt-means)). Per-effect status is in the table of [effects](effects.md).
 
 - `S_Blur`
 - `BlurMoCurves`
 - `S_Diffuse`
+- `S_DissolveShake`
 - `S_DistortRGB`
 - `S_DropShadow`
 - `S_Flicker`
 - `S_Glow`
 - `S_HueSatBright`
+- `Shake`
 - `S_Sharpen`
 - `S_SwishPan`
 - `S_TimeWarpRGB`
@@ -35,17 +37,17 @@ Each of these matches the original bit for bit on every compared case ([what tha
 
 ## Tier 1: essential
 
-Ranks 1 to 8. The effects most edits reach for first. Six are done; the other two are next.
+Ranks 1 to 8. The effects most edits reach for first. All eight are done.
 
 | Rank | Effect | Use | Status |
 |---|---|---|---|
-| 1 | `Shake` | Impact shakes, hits and dramatic moments | planned |
+| 1 | `Shake` | Impact shakes, hits and dramatic moments | done |
 | 2 | `S_Glow` | Bright highlights and a cinematic glow | done |
 | 3 | `BlurMoCurves` | Smooth motion blur for fast, speed-ramped edits | done |
 | 4 | `S_DistortRGB` | RGB splits and chromatic distortion | done |
 | 5 | `S_Flicker` | Flashes and intensity in time with a beat | done |
 | 6 | `S_Sharpen` | Crisp, detailed footage | done |
-| 7 | `S_DissolveShake` | Shaky transitions between clips | planned |
+| 7 | `S_DissolveShake` | Shaky transitions between clips | done |
 | 8 | `S_SwishPan` | Fast directional transitions | done |
 
 ## Tier 2: very useful

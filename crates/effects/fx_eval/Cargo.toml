@@ -20,6 +20,8 @@ dx2_owncount_mut = []
 dx2v2_allroutes_mut = []
 dx2v2_norefuse_mut = []
 brd2_lane0_mut = []
+# the single-lane normalize_scale 1 host route reads the frame height in place of the width; must fail t_host_param_ns1
+ns1_height_mut = []
 # FLD3-FORM: wrong candidate forms and the classifier kept refusing; each must fail t_fld3_form
 fld3_form_kept_mut = []
 fld3_bcast_mut = []
@@ -50,6 +52,7 @@ pd_nominus_mut = []
 [dependencies]
 effects_rtdata = { path = "../rtdata" }
 libm_sincos = { path = "../kernels/libm_sincos" }
+shake_shift = { path = "../kernels/shake_shift" }
 tickmap = { path = "../kernels/tickmap" }
 warp_noise = { path = "../kernels/warp_noise" }
 

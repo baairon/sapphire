@@ -11,6 +11,7 @@ pub mod detmath;
 pub mod build;
 pub mod compile;
 pub mod fold;
+pub mod sawtooth;
 pub mod plan;
 pub mod cpuplan;
 pub mod layout;

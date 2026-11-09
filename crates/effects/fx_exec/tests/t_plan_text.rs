@@ -58,13 +58,14 @@ fn floats(n: usize, seed: usize) -> Vec<u8> {
     v
 }
 
-fn run(tag: &str, plan: Option<&str>) -> (Option<i32>, String, Vec<u8>, Vec<u8>) {
-    run_with(tag, plan, None, &[])
+fn run(test: &str, tag: &str, plan: Option<&str>) -> (Option<i32>, String, Vec<u8>, Vec<u8>) {
+    run_with(test, tag, plan, None, &[])
 }
 
-/// `run` with the host value named `omit` left out and `add` appended to the command line.
-fn run_with(tag: &str, plan: Option<&str>, omit: Option<&str>, add: &[&str]) -> (Option<i32>, String, Vec<u8>, Vec<u8>) {
-    let d = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("plantext_{}_{}", std::process::id(), tag));
+/// `run` with the host value named `omit` left out and `add` appended to the command line. Every test passes its own name, so no
+/// two tests of one process share a folder.
+fn run_with(test: &str, tag: &str, plan: Option<&str>, omit: Option<&str>, add: &[&str]) -> (Option<i32>, String, Vec<u8>, Vec<u8>) {
+    let d = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("plantext_{}_{}_{}", std::process::id(), test, tag));
     std::fs::create_dir_all(&d).unwrap();
     let from = d.join("from.bin");
     let to = d.join("to.bin");
@@ -106,10 +107,10 @@ fn plan_text_is_written_and_changes_no_output() {
     let d = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("plantext_file_{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
     let pf = d.join("plan.txt");
-    let (rc0, e0, w0, d0) = run("a", None);
+    let (rc0, e0, w0, d0) = run("written", "a", None);
     assert_eq!(rc0, Some(0), "{}", e0);
     assert!(!pf.exists());
-    let (rc1, e1, w1, d1) = run("b", Some(pf.to_str().unwrap()));
+    let (rc1, e1, w1, d1) = run("written", "b", Some(pf.to_str().unwrap()));
     assert_eq!(rc1, Some(0), "{}", e1);
     assert!(!w0.is_empty() && !d0.is_empty());
     assert_eq!(w0, w1);
@@ -122,7 +123,7 @@ fn plan_text_is_written_and_changes_no_output() {
 
 #[test]
 fn plan_text_unwritable_path_is_refused_by_name() {
-    let (rc, e, w, _) = run("c", Some("/nonexistent_dir_plan_text/plan.txt"));
+    let (rc, e, w, _) = run("unwritable", "c", Some("/nonexistent_dir_plan_text/plan.txt"));
     assert_eq!(rc, Some(2), "{}", e);
     assert!(e.contains("--plan-text: refused") && e.contains("/nonexistent_dir_plan_text/plan.txt"), "{}", e);
     assert!(w.is_empty());
@@ -137,7 +138,7 @@ fn refused_getters(who: &str) -> Vec<&'static str> {
         .iter()
         .copied()
         .filter(|g| {
-            let (rc, e, w, d) = run_with(&format!("miss_{}_{}", who, g), None, Some(g), &[]);
+            let (rc, e, w, d) = run_with(who, &format!("miss_{}", g), None, Some(g), &[]);
             if rc == Some(2) {
                 assert!(e.contains("HOST-VALUE-MISSING") && e.contains(g), "{}: {}", g, e);
                 assert!(w.is_empty() && d.is_empty());
@@ -162,14 +163,14 @@ fn plan_text_is_not_written_or_truncated_when_the_run_is_refused() {
     std::fs::create_dir_all(&d).unwrap();
     let pf = d.join("plan.txt");
     std::fs::write(&pf, "previous plan\n").unwrap();
-    let (rc, e, _, _) = run_with("d", Some(pf.to_str().unwrap()), Some(g), &[]);
+    let (rc, e, _, _) = run_with("keeps", "d", Some(pf.to_str().unwrap()), Some(g), &[]);
     assert_eq!(rc, Some(2), "{}", e);
     assert_eq!(std::fs::read_to_string(&pf).unwrap(), "previous plan\n");
     let fresh = d.join("fresh.txt");
-    let (rc, _, _, _) = run_with("e", Some(fresh.to_str().unwrap()), Some(g), &[]);
+    let (rc, _, _, _) = run_with("keeps", "e", Some(fresh.to_str().unwrap()), Some(g), &[]);
     assert_eq!(rc, Some(2));
     assert!(!fresh.exists());
-    let (rc, e, _, _) = run_with("f", Some(pf.to_str().unwrap()), None, &[]);
+    let (rc, e, _, _) = run_with("keeps", "f", Some(pf.to_str().unwrap()), None, &[]);
     assert_eq!(rc, Some(0), "{}", e);
     assert!(std::fs::read_to_string(&pf).unwrap().contains("NODE\tN0\t"));
     let leftovers: Vec<_> = std::fs::read_dir(&d).unwrap().map(|x| x.unwrap().file_name().to_string_lossy().into_owned()).filter(|n| n.contains(".tmp") || n.contains(".probe")).collect();
@@ -178,7 +179,7 @@ fn plan_text_is_not_written_or_truncated_when_the_run_is_refused() {
 
 #[test]
 fn a_repeated_host_value_is_refused_by_name() {
-    let (rc, e, w, _) = run_with("i", None, None, &["--host-value", "get_time=0x3f800000"]);
+    let (rc, e, w, _) = run_with("repeated", "i", None, None, &["--host-value", "get_time=0x3f800000"]);
     assert_eq!(rc, Some(2), "{}", e);
     assert!(e.contains("--host-value: refused") && e.contains("get_time is given twice"), "{}", e);
     assert!(w.is_empty());
@@ -187,14 +188,14 @@ fn a_repeated_host_value_is_refused_by_name() {
 #[test]
 fn a_non_finite_host_value_is_refused_by_name() {
     for v in ["nan", "NaN", "inf", "-inf", "infinity", "1e40", "0x7fc00000", "0xffc00000", "0x7f800000", "0xff800000"] {
-        let (rc, e, w, d) = run_with("nf", None, Some("get_time"), &["--host-value", &format!("get_time={}", v)]);
+        let (rc, e, w, d) = run_with("nonfinite", "nf", None, Some("get_time"), &["--host-value", &format!("get_time={}", v)]);
         assert_eq!(rc, Some(2), "{}: {}", v, e);
         assert!(e.contains("--host-value: refused") && e.contains("get_time is not finite"), "{}: {}", v, e);
         assert!(w.is_empty() && d.is_empty(), "{}", v);
     }
     // a finite value, also the largest f32 and a subnormal, is accepted
     for v in ["0x3f800000", "3.4028235e38", "1e-45", "-0.0", "0x00000001"] {
-        let (rc, e, _, _) = run_with("fin", None, Some("get_time"), &["--host-value", &format!("get_time={}", v)]);
+        let (rc, e, _, _) = run_with("nonfinite", "fin", None, Some("get_time"), &["--host-value", &format!("get_time={}", v)]);
         assert_eq!(rc, Some(0), "{}: {}", v, e);
     }
 }

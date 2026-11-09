@@ -173,14 +173,53 @@ pub static XY_LIST: std::sync::Mutex<Option<(Vec<(i32, bool)>, u32)>> = std::syn
 pub static PERSP_ROWBUF: std::sync::Mutex<std::collections::BTreeMap<usize, bool>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
 pub static XY_WRITERS: std::sync::Mutex<Vec<(Vec<(usize, usize)>, i32, crate::types::XyHeadMode, bool)>> = std::sync::Mutex::new(Vec::new());
 
-/// map the run's --xy-base-list onto the writers of the placement model (compile_placed). Head mode from the placement: a plane indexed by
-/// row is PerRow, a row buffer is OneHead. A preserve writer runs in render 1 only: its render 2 entry must be the render 1 base, marked
-/// reused. Mutants (env XWP2_MUT, test only): merge (one writer for every consumer), primset (head mode from the primitive set), noreuse (a preserve
-/// writer re-runs in render 2 at base 0).
+/// The head form of one default-xy writer from its placement in the plan: a writer allocated outside every exec block is a plane whose
+/// rows take their own address phase (PerRow); a writer allocated in the line list of the block that writes it is one row buffer (OneHead).
+/// The single decision of the form, used on the --xy-base-list route and on the --xy-base route alike.
+pub fn head_form(place: fx_eval::xyplace::Place) -> crate::types::XyHeadMode {
+    match place {
+        fx_eval::xyplace::Place::Plane => crate::types::XyHeadMode::PerRow,
+        fx_eval::xyplace::Place::RowBuffer => crate::types::XyHeadMode::OneHead,
+    }
+}
+
+/// Map the run's xy bases onto the writers of the placement model (compile_placed). With --xy-base-list the entries are the bases of the writers in
+/// execution order; with --xy-base B and no list the run is the list route at render 1 with B for every writer (a plan with no writer is left
+/// unchanged). Head form from the placement (head_form); the perspective out2 and perspective_alpha out1 destinations take their form from the same
+/// plan. A preserve writer runs in render 1 only: its render 2 entry must be the render 1 base, marked reused. Mutants (env, test only):
+/// XWP2_MUT=merge (one writer for every consumer), noreuse (a preserve writer re-runs in render 2 at base 0).
+/// The observe-only notes a compile keeps for the census labels of a run (if_neq_const decisions, eq_const scan counts, non-constant argument
+/// nodes, v3_to_v4_if4 folds) describe the compile of the plan the run executes. The compiles of the placement model on the base route leave them
+/// empty again, so the labels of a base route run read as before.
+fn drop_placement_notes() {
+    let _ = fx_eval::compile::ifneq_trace_take();
+    let _ = fx_eval::compile::eq_const_scan_take();
+    let _ = fx_eval::compile::ifneq_arg1_nonconst_take();
+    let _ = fx_eval::fold::v3_take();
+}
+
+fn clear_xy_writers() {
+    XY_WRITERS.lock().unwrap().clear();
+    PERSP_ROWBUF.lock().unwrap().clear();
+}
+
 fn xy_writers_for(program: &Genotype, binding: &Binding) -> Result<(), ExecError> {
-    let list = XY_LIST.lock().unwrap().clone();
-    let Some((list, render)) = list else { return Ok(()) };
+    let explicit = XY_LIST.lock().unwrap().clone();
+    let (list, render, uniform) = match explicit {
+        Some((l, r)) => (l, r, false),
+        None if binding.kp.xy_base >= 0 => (Vec::new(), 1u32, true),
+        None => {
+            clear_xy_writers();
+            return Ok(());
+        }
+    };
     let (_, ws) = fx_eval::xyplace::compile_placed(program, &combo_table(), &binding.compile_options()).map_err(|e| ExecError::BadPlan(format!("compile_placed: {}", e)))?;
+    if uniform && ws.is_empty() {
+        drop_placement_notes();
+        clear_xy_writers();
+        return Ok(());
+    }
+    let list = if uniform { vec![(binding.kp.xy_base, false); ws.len()] } else { list };
     if ws.len() != list.len() {
         return Err(ExecError::BadPlan(format!("XY-BASE-LIST-MISMATCH (the placement model has {} default-xy writers, --xy-base-list gives {})", ws.len(), list.len())));
     }
@@ -191,14 +230,7 @@ fn xy_writers_for(program: &Genotype, binding: &Binding) -> Result<(), ExecError
             return Err(ExecError::BadPlan(format!("XY-BASE-PRESERVE-REUSE-REQUIRED (writer ref{} is inside a preserve group: render 2 reuses its render 1 image, so its entry is the render 1 base marked r1)", w.node)));
         }
         let base = if m == "noreuse" && render == 2 && w.preserve { 0 } else { base };
-        let mode = if m == "primset" {
-            binding.kp.xy_head_mode
-        } else {
-            match w.place {
-                fx_eval::xyplace::Place::Plane => crate::types::XyHeadMode::PerRow,
-                fx_eval::xyplace::Place::RowBuffer => crate::types::XyHeadMode::OneHead,
-            }
-        };
+        let mode = head_form(w.place);
         out.push((w.consumers.clone(), base, mode, w.preserve));
     }
     if m == "merge" && !out.is_empty() {
@@ -207,9 +239,12 @@ fn xy_writers_for(program: &Genotype, binding: &Binding) -> Result<(), ExecError
         out = vec![(all, b, md, false)];
     }
     *XY_WRITERS.lock().unwrap() = out;
-    // (part 2): the perspective out2 / perspective_alpha out1 destinations take their row phase form from the same plan (primset mutant: plane)
-    let pp: BTreeMap<usize, bool> = if m == "primset" { BTreeMap::new() } else { fx_eval::xyplace::persp_places(program, &combo_table(), &binding.compile_options()).map_err(|e| ExecError::BadPlan(format!("persp_places: {}", e)))?.into_iter().collect() };
+    // the perspective out2 / perspective_alpha out1 destinations take their row phase form from the same plan
+    let pp: BTreeMap<usize, bool> = fx_eval::xyplace::persp_places(program, &combo_table(), &binding.compile_options()).map_err(|e| ExecError::BadPlan(format!("persp_places: {}", e)))?.into_iter().collect();
     *PERSP_ROWBUF.lock().unwrap() = pp;
+    if uniform {
+        drop_placement_notes();
+    }
     Ok(())
 }
 
@@ -225,6 +260,10 @@ pub fn compile_for(program: &Genotype, binding: &Binding) -> Result<CompiledProg
     // with no host value refuses instead of folding zeros. State A callers (frame_index_required false) keep NV3-A7's zeros.
     if binding.frame_index_required && !binding.host.contains_key("get_frame_number") && program.nodes.iter().any(|g| g.name == "get_frame_number") {
         return Err(ExecError::BadPlan("compile: FRAME-INDEX-REQUIRED (ctx: the program reads get_frame_number and the run gives no F)".into()));
+    }
+    // the frame rate is a per-run host value on the verified render path; the folded default of the minimal context is not used there
+    if binding.frame_index_required && !binding.host.contains_key("get_frames_per_second") && program.nodes.iter().any(|g| g.name == "get_frames_per_second") {
+        return Err(ExecError::BadPlan("compile: FPS-UNGIVEN (the program reads get_frames_per_second and the run gives no rate; pass --host-value get_frames_per_second=RATE)".into()));
     }
     let cp = compile(program, &combo_table(), &binding.compile_options()).map_err(|e| ExecError::BadPlan(format!("compile: {}", e)))?;
     if w2 {

@@ -38,6 +38,9 @@ pub mod history;
 pub mod opacity_conv;
 pub mod mode_select;
 pub mod srcindep;
+
+/// The stored frame rate shared by the rate getter and the stage's `get_time` divisor (defined with the fold).
+pub use fx_eval::fold::stored_frame_rate;
 pub mod kernels;
 /// OPS_SCALAR_PAIRS census rows, the OPS-ARITH-SCALAR-SCALAR-UNJUDGED tripwire, program-text node paths
 pub mod ops_census;

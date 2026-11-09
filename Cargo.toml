@@ -34,7 +34,7 @@ default-members = [
     "crates/neutral-ffmpeg",
     "crates/neutral-handoff",
     # The effect crates whose tests need no stored vectors and no data taken from the original, pass on x86_64 and (under qemu) on
-    # aarch64, and call no platform libm function: 52 of the 68 effect crates. The others (fx_eval, fx_exec and the crates whose tests
+    # aarch64, and call no platform libm function: 61 of the 77 effect crates. The others (fx_eval, fx_exec and the crates whose tests
     # read stored test data) stay out, like the lift crates; docs/effects.md gives their test command.
     "crates/effects/fx_common",
     "crates/effects/kernels/add_rgb",
@@ -52,6 +52,7 @@ default-members = [
     "crates/effects/kernels/comp_premult",
     "crates/effects/kernels/comp_rgba",
     "crates/effects/kernels/convert_pair",
+    "crates/effects/kernels/copy_alpha",
     "crates/effects/kernels/copy_planes",
     "crates/effects/kernels/dissolve",
     "crates/effects/kernels/format14_read",
@@ -85,6 +86,7 @@ default-members = [
     "crates/effects/kernels/overlay_super",
     "crates/effects/kernels/screen",
     "crates/effects/kernels/screen_super",
+    "crates/effects/kernels/shake_shift",
     "crates/effects/kernels/static2",
     "crates/effects/kernels/tickmap",
     "crates/effects/kernels/v3_to_v4_if4",

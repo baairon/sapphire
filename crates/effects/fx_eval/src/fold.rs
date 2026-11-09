@@ -98,6 +98,17 @@ pub fn copy_alpha_negative(a: &[ArgView2]) -> bool {
     arg(a, 1).map(|x| x.is_const && x.lanes[0] < 0.0).unwrap_or(false)
 }
 
+/// The mode word of a copy_alpha node, shared by its kernel and its collapse test: the combo tag, except that a 2 channel output
+/// fed by a 4 channel second operand takes mode 4 (the alpha channel then addresses the last channel of the second operand).
+/// `second_count` is the second operand's element count (channels of an image, lanes of a constant).
+pub fn copy_alpha_mode(tag: i32, second_count: i32) -> i32 {
+    if tag == 2 && second_count == 4 {
+        4
+    } else {
+        tag
+    }
+}
+
 /// The identity collapses of the non-conditional classes (slot 38). `out_el` is the node's own element
 /// count ([this], the combo tag).
 pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<usize> {
@@ -277,6 +288,24 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
         // screen_super_if_needed a b: b zero -> a (the class is its own: it collapses, it is not `screen_super`)
         "screen_super_if_needed" => z(a, 1).then_some(0),
         "copy" => Some(0),
+        // READ (slot 38 at 0x55d820): copy_alpha reads its mode word and keeps the node when it is 2 or 4, else forwards argument 0.
+        // INFERRED beyond the recorded outcome (operands [1, 3], tag 1): the word the original stores is the kernel's mode, `copy_alpha_mode`
+        // of the tag and the second operand's element count.
+        "copy_alpha" => match (out_el, a.get(1).and_then(|x| x.elnum)) {
+            (Some(tag), Some(second)) => {
+                let mode = copy_alpha_mode(tag, second);
+                (mode != 2 && mode != 4).then_some(0)
+            }
+            _ => None,
+        },
+        // READ (slot 38 at 0x562a30): v3_to_v4_if4_a reads its count word; 3 forwards argument 0, and tag 1 with count 1 forwards argument 1.
+        // INFERRED beyond the recorded outcome (operands [3, 1, 3], tag 3): the count word is argument 2's element count, as `v3_count` reads it
+        // for v3_to_v4_if4.
+        "v3_to_v4_if4_a" => match (v3_count(a), out_el) {
+            (Some(3), _) => Some(0),
+            (Some(1), Some(1)) => Some(1),
+            _ => None,
+        },
         // alpha_from_rgb_max rgb amount output: with 3 channels in and 3 out the builtin copies the three colour channels and
         // writes no fourth, so it is the identity. With 4 out it derives the alpha plane from the maximum, so it never folds.
         "alpha_from_rgb_max" => (a.first().and_then(|x| x.elnum) == Some(3) && out_el == Some(3)).then_some(0),
@@ -396,7 +425,7 @@ pub fn can_fold_el(class: &str, a: &[ArgView2], out_el: Option<i32>) -> bool {
         "coerce_up" | "coerce_to" | "coerce_up_a1" => a.first().map(|x| x.is_const).unwrap_or(false),
         "v3_to_v4_if4" => a.len() >= 2 && a[0].is_const && a[1].is_const,
         // READ: mocha_render slot 30 returns 1 when [this] is null, or [[this] field] is null, or the scale lane [this] or [this] is
-        // zero, else 0. INFERRED: [this] is the mocha data of the project, which the minimal host context never supplies (HOST-MOCHA-ABSENT), so the node folds for any
+        // zero, else 0. MEASURED in a Glow compile with no host mocha data: the pointer is non-null and its field is zero, so the second test gives 1 (HOST-MOCHA-ABSENT), so the node folds for any
         // mocha_project value; the earlier rule (project zero) is the special case. Probed with p1 and p2 (mocha_project non-zero).
         "mocha_render" => !a.is_empty() && !off("mocha_fold"),
         "get_alpha" => a.first().map(|x| matches!(x.elnum, Some(1) | Some(3)) || x.is_const).unwrap_or(false),
@@ -491,6 +520,31 @@ pub fn v3_note(id: usize, a: &[ArgView2], out_el: i32, res: &[u32; 4]) {
 /// The folds noted since the last take, reset.
 pub fn v3_take() -> Vec<(usize, usize, usize, Vec<u32>, [u32; 4], &'static str, Vec<u32>)> {
     V3_FOLDS.with(|v| std::mem::take(&mut *v.borrow_mut()))
+}
+
+/// The value of one shake_shift node at constant arguments (None when fewer than twelve arguments are bound or the weight table has no zero entry).
+pub fn shake_shift_value(a: &[ArgView2]) -> Option<f32> {
+    use shake_shift::body::{shake_shift_body, Config, Frame, Globals, Params, TAB_LEN};
+    if a.len() < 12 {
+        return None;
+    }
+    static W: std::sync::OnceLock<(Vec<f32>, f32)> = std::sync::OnceLock::new();
+    let (weights, scale) = W.get_or_init(|| {
+        let t = shake_shift::weights::build_avx();
+        let scale = t.cutoff.map_or(f32::NAN, shake_shift::weights::scale_from_cutoff);
+        (t.float, scale)
+    });
+    if scale.is_nan() {
+        return None;
+    }
+    let x = |k: usize| a[k].lanes[0];
+    let p = Params { p4c: x(0), p7c: x(1), pac: x(2), pdc: x(3), p10c: x(4), p13c: x(5), p16c: x(6), p19c: x(7), p1cc: x(8), p1fc: x(9), p22c: x(10), p25c: x(11) };
+    // the entry past the table holds zero in the original
+    let mut g = Globals { guard: 0, tab: vec![[0; 3]; TAB_LEN], tail: [0; 3], weights: weights.clone(), scale: *scale };
+    let mut sv = shake_shift::RefServices::new();
+    let mut fr = Frame::new();
+    // a table index outside the modelled range is a refusal to fold, not a failure of the compile
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| shake_shift_body(&p, &Config::default(), &mut g, &mut sv, &mut fr))).ok()
 }
 
 fn noise_tables() -> &'static warp_noise::Tables {
@@ -665,6 +719,9 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                 for i in 0..n.min(h.len()) {
                     out[i] = h[i];
                 }
+                if class == "get_frames_per_second" && n >= 1 && !h.is_empty() {
+                    out[0] = frame_rate_value(h[0]);
+                }
             } else if class == "get_frames_per_second" {
                 out[0] = 30.0;
             }
@@ -765,22 +822,26 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                 let k = (cv as i64).rem_euclid(m as i64) as usize;
                 out[0] = x.lanes[k];
             }
-            // random_sawtooth seed phase: 0 at phase 0 (the minimal host context has time 0; MEASURED in the Shake_Normal dumps, 24 folded lanes); other phases stay unfolded (UNKNOWN)
+            // random_sawtooth: the body of the AVX2/FMA path run per phase lane (crate::sawtooth); the seed is argument 0, the phase argument 1, the five scalars arguments 2 to 6
             "random_sawtooth" => {
-                let ph = a.get(1)?;
-                // integer phase rule (RULE-INFERRED, DigitalDamage nf1 and nf2): the sawtooth is 0 at every INTEGER phase, not only at phase 0 (blink_brights uses phase (0 - 1.5) * 10 = -15 and the original folds it to 0, as it does the 9 others; non-integer phases stay unfolded, UNKNOWN)
-                if !(0..ph.n.clamp(1, 4)).all(|i| ph.lanes[i].is_finite() && ph.lanes[i] == ph.lanes[i].floor()) {
+                if a.len() < 7 {
                     return None;
                 }
+                let seed = crate::sawtooth::seed_of(a[0].lanes[0]);
+                let p = |k: usize| a[k].lanes[0];
+                for i in 0..n {
+                    out[i] = crate::sawtooth::random_sawtooth_body(seed, lane(&a[1], i), p(2), p(3), p(4), p(5), p(6));
+                }
             }
-            // every shake_shift lane of the original is NaN 0xffc00000 at the minimal host context (146 folded nodes in Shake_Normal a and b, MEASURED); WHY (missing time/fps/duration vs the body) is UNKNOWN, so this is FITTED to the minimal context
             "slow_in_out" => {
                 let (t, si, so, fl) = (a.first()?, a.get(1)?, a.get(2)?, a.get(3)?);
                 out[0] = slow_in_out(t.lanes[0], si.lanes[0], so.lanes[0], fl.lanes[0].to_bits() != 0);
             }
+            // shake_shift at constant arguments: the ported render body with the weight table, scale and hash table built by the crate; the twelve scalar arguments are in the order of the body's parameter slots
             "shake_shift" => {
+                let v = shake_shift_value(a)?;
                 for i in 0..n {
-                    out[i] = f32::from_bits(0xffc0_0000);
+                    out[i] = v;
                 }
             }
             // warp_noise (one lane) and warp_noise3 (three lanes) at a constant position, frequency, octave count and seed: the ported noise bodies with the computed tables
@@ -1030,4 +1091,23 @@ mod in4a_tests {
 /// ablation switches (kill checks only): env SHE4_OFF is a comma list of rule names (eas, clone, mocha_fold, blur_fold, comp_premult).
 pub fn off(name: &str) -> bool {
     std::env::var("SHE4_OFF").map(|v| v.split(',').any(|x| x == name)).unwrap_or(false)
+}
+
+/// Frame rate as the host context stores it and the getter returns it: a rate below the f32 threshold is replaced by
+/// the default rate when the context is written, and the getter replaces a stored value not above the f64 threshold by
+/// the default rate again. The unordered (NaN) compares fall through to the value itself. The global switch that
+/// would force the default rate is taken as clear (HOST-FPS-SWITCH-CLEAR).
+pub const FPS_DEFAULT: f32 = 30.0;
+const FPS_STORE_THRESHOLD: f32 = f32::from_bits(0x38d1_b717);
+const FPS_GET_THRESHOLD: f64 = f64::from_bits(0x3f1a_36e2_eb1c_432d);
+
+/// The frame rate the host context stores: a rate below the f32 threshold is replaced by the default rate. The compare is
+/// threshold > rate, so an unordered (NaN) rate is kept. Both the rate getter and the stage's `get_time` divisor read it.
+pub fn stored_frame_rate(rate: f32) -> f32 {
+    if FPS_STORE_THRESHOLD > rate { FPS_DEFAULT } else { rate }
+}
+
+pub fn frame_rate_value(rate: f32) -> f32 {
+    let stored = stored_frame_rate(rate);
+    if FPS_GET_THRESHOLD >= stored as f64 { FPS_DEFAULT } else { stored }
 }

@@ -13,7 +13,7 @@ use plane_service as ps;
 pub const WIRED: &[&str] = &[
     "make_mipmap", "blur_warp", "warp_rel", "static2", "monochrome", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "rotate", "max_element",
     "min_element", "blur", "dissolve", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "v3_to_v4", "sharpen", "monochrome_a",
-    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "grad", "perspective", "perspective_alpha", "warp", "postdivide", "glow", "alpha_from_rgb_max", "append", "v3_to_v4_if4_a", "get_alpha",
+    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "copy_alpha", "grad", "perspective", "perspective_alpha", "warp", "postdivide", "glow", "alpha_from_rgb_max", "append", "v3_to_v4_if4_a", "get_alpha",
 ];
 
 /// Result of one run-primitive: a plain planar image or the ripmap object of make_mipmap.
@@ -47,24 +47,6 @@ pub fn geom_of(kp: &KParams, w: usize, h: usize) -> Geom {
 
 /// The default `xy` plane when the caller binds none (NV9B-A4): an explicit geometry keeps the `xy_grid` of it; otherwise Dump
 /// binds the pixel-centre identity plane and Nv9Old the `xy_grid` of the full-frame geometry (NV9-GEOM-OLD).
-/// S1 (XY-HEAD-MODE): the head mode derived from the plan's xy shape. PerRow when the program's xy variable reaches a
-/// perspective or perspective_alpha primitive (those take the xy plane whole, so the plan allocates an x plane indexed by row: record);
-/// OneHead otherwise (the xy rows stream through element ops into one x row buffer: part 2's record). The derivation from the primitive set
-/// is a reading of "the plan's xy allocation shape".
-pub fn xy_head_mode_of(g: &fx_eval::build::Genotype) -> crate::types::XyHeadMode {
-    let by_row = g.nodes.iter().any(|n| {
-        n.kind == fx_eval::build::NodeKind::Function && {
-            let p = n.name.strip_suffix("_if_needed").unwrap_or(&n.name);
-            p == "perspective" || p == "perspective_alpha"
-        }
-    });
-    if by_row {
-        crate::types::XyHeadMode::PerRow
-    } else {
-        crate::types::XyHeadMode::OneHead
-    }
-}
-
 pub fn default_xy(kp: &KParams, w: usize, h: usize) -> Image {
     if kp.xy_base >= 0 {
         // row 0 head = (32 - base) / 4 mod 8; rows follow base + row * W * 4
@@ -801,6 +783,34 @@ fn copy_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecE
     Ok(Image { n, planes: out })
 }
 
+/// `copy_alpha` (slot 52; crate `copy_alpha`): output channels 0 to tag-2 are channels of argument 0, the last output channel is channel
+/// tag-1 of argument 1 when the combo has 2 or 4 channels; any other tag copies all channels from argument 0. The operator's mode word
+/// is `fx_eval::fold::copy_alpha_mode` (the combo tag, except that a 2 channel output fed by a 4 channel second operand takes its alpha from that
+/// operand's channel 3: the mode word is then 4 and the alpha channel index mode-1 addresses the last channel of the second operand); the compile's
+/// collapse test reads the same function. A constant operand
+/// fills its lanes; the pool of a scalar fill is idle outside a pool worker.
+fn copy_alpha_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 2, "copy_alpha")?;
+    let nout = tag.clamp(0, 4) as usize;
+    let planes: Vec<Vec<&[f32]>> = args.iter().map(|a| a.planes()).collect();
+    let lanes: Vec<Vec<u32>> = args.iter().map(|a| a.bits()[..a.count().clamp(0, 4) as usize].to_vec()).collect();
+    let src = |i: usize| -> copy_alpha::Source {
+        if args[i].is_const() {
+            copy_alpha::Source::Scalar { values: &lanes[i], is_int: false, last: args[i].count() - 1 }
+        } else {
+            copy_alpha::Source::Planes { planes: &planes[i], last: args[i].count() - 1 }
+        }
+    };
+    let mut out: Vec<Vec<f32>> = vec![vec![0.0; n]; nout];
+    {
+        let mut refs: Vec<&mut [f32]> = out.iter_mut().map(|v| v.as_mut_slice()).collect();
+        let mode = fx_eval::fold::copy_alpha_mode(tag, args[1].count());
+        let p = copy_alpha::Params { mode, nchan: tag, n, pool_idle: !kp.in_pool };
+        copy_alpha::copy_alpha(&p, &src(0), &src(1), &mut refs).map_err(|e| kerr("copy_alpha", e))?;
+    }
+    Ok(Image { n, planes: out })
+}
+
 fn rotate_k(args: &[Arg], n: usize) -> Result<Image, ExecError> {
     need(args, 3, "rotate")?;
     let (vp, cp, ap);
@@ -1332,6 +1342,7 @@ pub fn run_wired(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, us
         "masked_blur" => Out::Img(masked_blur_k(args, tag, w, h, kp)?),
         "comp_premult" => Out::Img(comp_premult_k(args, tag, n)?),
         "copy" => Out::Img(copy_k(args, tag, n, kp)?),
+        "copy_alpha" => Out::Img(copy_alpha_k(args, tag, n, kp)?),
         "grad" => Out::Img(grad_k(args, tag, w, h, kp)?),
         "v3_to_v4" => Out::Img(v3_to_v4_k(args, tag, n, kp)?),
         "sharpen" => Out::Img(sharpen_k(args, tag, w, h, kp)?),

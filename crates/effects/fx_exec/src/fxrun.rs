@@ -546,13 +546,13 @@ fn run_locked(a0: &[String]) -> i32 {
                 i += 1;
             }
             "--host-value" => {
-                // NAME=VALUE: an explicit host scalar for get_percent_time, get_total_frames, get_aspect_ratio or get_time (decimal, or 0x hex f32 bits)
+                // NAME=VALUE: an explicit host scalar for get_percent_time, get_total_frames, get_aspect_ratio, get_time or get_frames_per_second (decimal, or 0x hex f32 bits)
                 let ok = val.split_once('=').and_then(|(n, v)| {
                     let x = match v.strip_prefix("0x") {
                         Some(h) => u32::from_str_radix(h, 16).ok().map(f32::from_bits),
                         None => v.parse::<f32>().ok(),
                     };
-                    if matches!(n, "get_percent_time" | "get_total_frames" | "get_aspect_ratio" | "get_time") { x.map(|x| (n.to_string(), x)) } else { None }
+                    if matches!(n, "get_percent_time" | "get_total_frames" | "get_aspect_ratio" | "get_time" | "get_frames_per_second") { x.map(|x| (n.to_string(), x)) } else { None }
                 });
                 match ok {
                     Some((n, x)) => {
@@ -568,7 +568,7 @@ fn run_locked(a0: &[String]) -> i32 {
                         b.host.insert(n, vec![x]);
                     }
                     None => {
-                        crate::fxrun::elog!("--host-value takes get_percent_time|get_total_frames|get_aspect_ratio|get_time=VALUE");
+                        crate::fxrun::elog!("--host-value takes get_percent_time|get_total_frames|get_aspect_ratio|get_time|get_frames_per_second=VALUE");
                         return 2;
                     }
                 }
@@ -993,6 +993,7 @@ fn run_locked(a0: &[String]) -> i32 {
         }
     }
     // the 'ae32' interface. Validated here: every input present, no option of another route, no environment switch.
+    let mut class3_unread: Vec<String> = Vec::new();
     let mut ae32: Option<Ae32Ready> = if ae.active() {
         let given: Vec<(&str, &str)> = (0..rest.len())
             .filter(|&j| rest[j].starts_with("--"))
@@ -1039,8 +1040,6 @@ fn run_locked(a0: &[String]) -> i32 {
             return 1;
         }
     };
-    // S1: XY-HEAD-MODE derived from the plan's xy shape (kernels2::xy_head_mode_of; PerRow for Warp_Perspective plans)
-    b.kp.xy_head_mode = crate::kernels2::xy_head_mode_of(&g);
     // --xy-base-list B[r1],B[r1],... one entry per default-xy writer of the placement model in execution order (base phase in bytes,
     // 0 to 31; r1 = a preserve writer's render 1 image reused), --xy-render 1|2 (default 1). The run's own record gives the bases (XY-BASE-FED-AT-REPREDICT).
     let xy_list_text: Option<String> = { let v: Vec<String> = a.to_vec(); v.iter().position(|x| x == "--xy-base-list").and_then(|p| v.get(p + 1).cloned()) };
@@ -1297,11 +1296,11 @@ fn run_locked(a0: &[String]) -> i32 {
             copier: r.route.dest.as_ref().and_then(|d| d.copier_source),
         };
         let mut class3_inputs: Vec<String> = Vec::new();
-        match mode_byte_derived(&g, &r.arm, ae32_ready_a, r.late.as_ref(), r.modein, r.host_inplace.unwrap_or(0) == 1, r.wh, rec_mode, &bound_in, r.class_cells, &r.class_record, &g3in, &mut class3_inputs) {
+        match mode_byte_derived(&g, &r.arm, ae32_ready_a, r.late.as_ref(), r.modein, r.host_inplace.unwrap_or(0) == 1, r.wh, rec_mode, &bound_in, r.class_cells, &r.class_record, &g3in, &mut class3_inputs, &mut class3_unread) {
             Ok(ls) => {
                 r.labels.extend(ls);
                 //: a class-3 input is compiled as an input node of elnum 3
-                for n in &class3_inputs {
+                for n in class3_inputs.iter().chain(class3_unread.iter()) {
                     b.input_elnum.insert(n.clone(), 3);
                 }
             }
@@ -1438,7 +1437,7 @@ fn run_locked(a0: &[String]) -> i32 {
         Ok(c) => c,
         Err(e) => {
             crate::fxrun::elog!("{}", e);
-            return 1;
+            return compile_failure_code(&e);
         }
     };
     if plan_text_path.is_some() {
@@ -1447,6 +1446,11 @@ fn run_locked(a0: &[String]) -> i32 {
     // a host getter that stayed an unfolded node on the executed route has no value to read
     if let Some((idx, getter)) = host_getter_on_route(&cp.nodes, cp.root) {
         crate::fxrun::elog!("HOST-VALUE-MISSING ({}: plan node {} calls {} and no --host-value {}=VALUE was given)", prog, idx, getter, getter);
+        return 2;
+    }
+    // a shake_shift node that the fold left in the plan has no run-time kernel
+    if op_on_route(&cp.nodes, cp.root, "shake_shift") {
+        crate::fxrun::elog!("SHAKE-SHIFT-UNFOLDED ({}: a shake_shift node on the executed route was not folded to a constant, and the renderer has no run-time kernel for it)", prog);
         return 2;
     }
     // a plan that runs simplex_noise is not rendered: the gradient tables of that noise have no documented formula
@@ -1557,7 +1561,12 @@ fn run_locked(a0: &[String]) -> i32 {
         if let Some(l) = &xy_list_lab {
             r.labels.push(l.clone());
         }
-        r.labels.push(format!("label XY-HEAD-MODE ({}: {:?}; OneHead for programs whose plan writes one x row buffer, PerRow for programs whose plan allocates an x plane indexed by row: MEASURED by part 2 hooks; derived from the plan's perspective primitives)", prog, b.kp.xy_head_mode));
+        let forms: Vec<String> = crate::exec::XY_WRITERS.lock().unwrap_or_else(|e| e.into_inner()).iter().map(|w| format!("{:?}", w.2)).collect();
+        if forms.is_empty() {
+            r.labels.push(format!("label XY-HEAD-MODE ({}: none; derived from the placement of the default-xy writers in the plan: this run applies no head form, it gives no xy base or its plan has no default-xy writer)", prog));
+        } else {
+            r.labels.push(format!("label XY-HEAD-MODE ({}: {}; derived from the placement of the default-xy writers in the plan: one form per writer in execution order, PerRow for a writer allocated outside every exec block (a plane whose rows take their own address phase), OneHead for a writer allocated in the line list of its block (one row buffer))", prog, forms.join(", ")));
+        }
     }
     // (PROGRAM-FLAG-READ): [prog] bit 4 derived from the class table (report only on this tree; no compile input reads it)
     if let Some(r) = ae32.as_mut() {
@@ -1581,6 +1590,14 @@ fn run_locked(a0: &[String]) -> i32 {
     if seed_missing && cp.nodes.iter().any(|nd| nd.name.contains("static2")) {
         crate::fxrun::elog!("the plan runs static2: --host-frame (with the count W x H) is required; LEGACY-SEED-W (--legacy-seed-w) is the named option for the state A seed [ctx] = W");
         return 2;
+    }
+    {
+        // class-3 inputs without a source image are admitted only when the plan does not read them
+        let plan_inputs: Vec<&str> = cp.nodes.iter().filter(|n| n.kind == "input").map(|n| n.name.as_str()).collect();
+        if let Err(e) = crate::input_class::check_unread_inputs(&prog, &class3_unread, &plan_inputs) {
+            crate::fxrun::elog!("{}", e);
+            return 2;
+        }
     }
     let mut images = BTreeMap::new();
     for nd in &cp.nodes {
@@ -1901,6 +1918,14 @@ pub fn plan_print(cp: &fx_eval::compile::CompiledProgram) -> String {
         ));
     }
     s
+}
+
+/// The status of a failed compile: 2 (a refusal) for a run that reads the frame rate and is given none (FPS-UNGIVEN), else 1.
+fn compile_failure_code(e: &crate::ExecError) -> i32 {
+    match e {
+        crate::ExecError::BadPlan(m) if m.starts_with("compile: FPS-UNGIVEN") => 2,
+        _ => 1,
+    }
 }
 
 /// The status of a failed execution: 2 (a refusal) when the failure is the missing device that `SAPPHIRE_REQUIRE_DEVICE=1` demands,
@@ -2302,7 +2327,7 @@ impl Ae32Args {
         }
         b.do_postdiv = Some(dpd);
         // PARAM-UNITS: every normalize_scale parameter of the program is bound by its host value (converted here, lane 0,
-        // ns 2 or 4) or by --set as its record value (PARAM-BY-RECORD); never both, never neither
+        // ns 1, 2 or 4) or by --set as its record value (PARAM-BY-RECORD); never both, never neither
         let (fx_run_cell_b, fx_run_cell_a) = self.ratio.unwrap();
         let uw = fx_eval::units::units_width(w as i32, fx_run_cell_b, fx_run_cell_a);
         let nsrows: Vec<(String, f32)> = fx_eval::units::ns_rows_of(&prog);
@@ -2337,9 +2362,8 @@ impl Ae32Args {
                 labels.push(format!("param {} host 0x{:08x},0x{:08x} as bound ns {} width {} compiled {:.9},{:.9} (0x{:08x},0x{:08x}) PARAM-UNITS-TWO-LANE", n, x.to_bits(), y.to_bits(), ns, uw, r0, r1, r0.to_bits(), r1.to_bits()));
                 continue;
             }
-            if ns != 2.0 && ns != 4.0 {
-                return Err(format!("PARAM-UNITS-NOT-JUDGED: {} has normalize_scale {} (the label covers 2 and 4, lane 0)", n, ns));
-            }
+            let uh = fx_eval::units::units_width(h as i32, fx_run_cell_b, fx_run_cell_a);
+            let rec = fx_eval::units::host_param_lane0(prog, n, *x, ns, uw, uh)?;
             if let Some(k) = fx_eval::units::host_value_off_grid(prog, n, *x) {
                 return Err(format!("HOST-VALUE-OFF-GRID ({} {}: --host-param {} is {} / 65536 with k not an integer; a host type 2 slider's checkout is a 16.16 value)", prog, n, x, k));
             }
@@ -2347,7 +2371,6 @@ impl Ae32Args {
                 return Err(format!("{} given both as --host-param and --set", n));
             }
             // the host value as the runner bound it (never re-snapped)
-            let rec = fx_eval::units::normalize_scale_record(*x, uw, ns, false);
             b.overrides.insert(n.clone(), vec![rec]);
             labels.push(format!("param {} host 0x{:08x} as bound ns {} width {} compiled {:.9} (0x{:08x}) PARAM-UNITS", n, x.to_bits(), ns, uw, rec, rec.to_bits()));
         }
@@ -2702,6 +2725,7 @@ fn mode_byte_derived(
     class_record: &[(String, u8)],
     g3: &G3In,
     class3_out: &mut Vec<String>,
+    class3_unread: &mut Vec<String>,
 ) -> Result<Vec<String>, String> {
     use crate::owner_loop::{ctx_init, later_stage, setup_arm, LateInputs, ParamView};
     let mut labels = Vec::new();
@@ -2808,6 +2832,11 @@ fn mode_byte_derived(
         for (k, n, c) in &derived {
             match *c {
                 CLASS_IMPLEMENTED => {}
+                3 if !g3.sources.iter().any(|s| s.0 == *n) => {
+                    // a class-3 input without a source image: admitted only if the compiled plan does not read it (checked after compile)
+                    labels.push(crate::input_class::unread_label(&g.name, n));
+                    class3_unread.push(n.clone());
+                }
                 3 => {
                     labels.extend(class3_admit(&g.name, *k, n, g3_in_a, m, g3)?);
                     class3_out.push(n.clone());
@@ -2815,8 +2844,8 @@ fn mode_byte_derived(
                 other => return Err(format!("INPUT-CLASS-NOT-PORTED ({} input {}: derived class {}; consumers of a non-uniform class not ported)", g.name, n, other)),
             }
         }
-        if !class3_out.is_empty() {
-            let (_, ri, re, _) = g3.class3_rec.unwrap();
+        if !class3_out.is_empty() || !class3_unread.is_empty() {
+            let (_, ri, re, _) = g3.class3_rec.ok_or_else(|| format!("INPUT-CLASS-CELL-UNRECORDED ({}: the class-3 record (builder hits, allocate command, [prog]; --class3-record))", g.name))?;
             let (pi, pe) = (class3_out.len() as u32, convert_pair::class3_planes() as u32);
             if (pi, pe) != (ri, re) {
                 return Err(format!("INPUT-CLASS-ALLOC-MISMATCH ({}: planned allocate command {} image(s), elnum {}; record {} image(s), elnum {})", g.name, pi, pe, ri, re));
@@ -4053,6 +4082,22 @@ mod xy_route_tests {
     fn a_perspective_primitive_counts() {
         let nodes = vec![node(0, "input", "Source", "", &[]), node(1, "func", "_p", "perspective_if_needed", &[0])];
         assert_eq!(xy_reader_on_route(&nodes, 1), Some(1));
+    }
+
+    #[test]
+    fn a_shake_shift_node_that_stays_in_the_plan_is_found_only_when_it_runs() {
+        let mut nodes = vec![node(0, "input", "Source", "", &[]), node(1, "func", "_s", "shake_shift", &[0, 0, 0]), node(2, "func", "_out", "mul", &[1, 1])];
+        assert!(op_on_route(&nodes, 2, "shake_shift"));
+        nodes[1].folded = true;
+        assert!(!op_on_route(&nodes, 2, "shake_shift"));
+    }
+
+    #[test]
+    fn a_compile_failure_is_exit_1_except_the_frame_rate_refusal() {
+        use crate::ExecError;
+        assert_eq!(compile_failure_code(&ExecError::BadPlan("compile: FPS-UNGIVEN (the program reads get_frames_per_second and the run gives no rate)".into())), 2);
+        assert_eq!(compile_failure_code(&ExecError::BadPlan("compile: FRAME-INDEX-REQUIRED (ctx)".into())), 1);
+        assert_eq!(compile_failure_code(&ExecError::Shape("x".into())), 1);
     }
 
     #[test]
