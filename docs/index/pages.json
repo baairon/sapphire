@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 35574,
+  "bytes": 38916,
   "generated": false
  },
  {
@@ -31,7 +31,7 @@
   "path": "crates/neutral-world/README.md",
   "title": "neutral-world",
   "line": "The Rust side of the world harness: a deterministic pseudo-random model of everything the dump lacks (data sections, heap, imports, callees), the `Env` trait every lifted function is written agains...",
-  "bytes": 2564,
+  "bytes": 2561,
   "generated": false
  },
  {
@@ -80,7 +80,7 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Fifteen of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 64300,
+  "bytes": 64504,
   "generated": false
  },
  {
@@ -275,8 +275,8 @@
  {
   "path": "docs/glossary.md",
   "title": "Glossary",
-  "line": "The technical terms of the parity record, one entry each.",
-  "bytes": 5780,
+  "line": "The technical terms of the function record, with the emulator that judges both parts and the effects' parity record, one entry each.",
+  "bytes": 7548,
   "generated": false
  },
  {
@@ -296,15 +296,15 @@
  {
   "path": "docs/harness.md",
   "title": "Harness",
-  "line": "How a Rust port is compared with the build it replaces.",
-  "bytes": 11043,
+  "line": "How a Rust port is compared with the original code it ports.",
+  "bytes": 11071,
   "generated": false
  },
  {
   "path": "docs/lifting.md",
   "title": "Lift crates",
-  "line": "How the Rust in the `lift-*` crates was produced from the [dump](glossary.md#dump), how the crates are laid out, and the x86 rules the ports reproduce.",
-  "bytes": 7758,
+  "line": "The `lift-*` crates hold the function record: a reverse-engineering reference of one small code section of a separate code image, the [dump](glossary.md#dump).",
+  "bytes": 9013,
   "generated": false
  },
  {
@@ -318,7 +318,7 @@
   "path": "docs/names.md",
   "title": "Names",
   "line": "Every function, class, [stub](glossary.md#stub), effect and parameter name comes from the [name bank](glossary.md#name-bank).",
-  "bytes": 8432,
+  "bytes": 9334,
   "generated": false
  },
  {
@@ -331,15 +331,15 @@
  {
   "path": "docs/parity.md",
   "title": "Parity",
-  "line": "How many functions of the [dump](glossary.md#dump) match the build they replace, and under which standard.",
-  "bytes": 10700,
+  "line": "This page gives the parity figures of the [function record](glossary.md#function-record), a reverse-engineering reference of one small code section of a separate code image, the [dump](glossary.md#...",
+  "bytes": 11406,
   "generated": false
  },
  {
   "path": "docs/reproduce.md",
   "title": "Reproduce",
   "line": "What reruns from this repository alone, what needs the archive `sapphire_archive.zip`, and how the parity evidence is re-created from it.",
-  "bytes": 3516,
+  "bytes": 3721,
   "generated": false
  },
  {

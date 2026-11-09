@@ -25,7 +25,7 @@ All <!--f:fn_total-->2,702<!--/f--> function ids of the bank agree with `docs/da
 | component | 49 | 0 | 0 | 12 | 8 | 0 | 69 |
 <!--/gen:origins-->
 
-Per the bank, <!--f:origin_bundled-->1,983<!--/f--> of the <!--f:fn_total-->2,702<!--/f--> functions are bundled library code, <!--f:origin_std-->514<!--/f--> std, <!--f:origin_undetermined-->136<!--/f--> undetermined and <!--f:origin_component-->69<!--/f--> component. The largest class, `CNTV2Card`, has <!--f:cntv2card_fns-->906<!--/f--> functions.
+Per the bank, <!--f:origin_bundled-->1,983<!--/f--> of the <!--f:fn_total-->2,702<!--/f--> functions are bundled library code, <!--f:origin_std-->514<!--/f--> std, <!--f:origin_undetermined-->136<!--/f--> undetermined and <!--f:origin_component-->69<!--/f--> component. The largest class, `CNTV2Card`, has <!--f:cntv2card_fns-->906<!--/f--> functions. By their names, the bundled library functions are mostly the AJA video hardware SDK (`CNTV2Card` and the other `CNTV2` classes, `RegisterExpert`, `CRP188`), together with the two subclasses of `EM_VideoOutput`, `AJA_Video_Output` and `Blackmagic_Video_Output`. The component functions are, by their class names, the section's own display and video output classes: `EM_XIImage_Internal`, `EM_Display_Internal`, `EM_VideoOutput`, `EMsupportFormat` and `EM_Display_DeviceEnumerator`. The undetermined functions include pixel format line converters such as `ConvertLine_v210_to_2vuy`, device API loaders such as `InitDeckLinkAPI()`, global destructors and socket helpers.
 
 <!--gen:name_kinds-->
 | kind | functions |
@@ -54,7 +54,7 @@ The <!--f:stubs_total-->458<!--/f--> import stubs are named by their target and 
 
 ## Effects and parameters
 
-The bank holds the <!--f:effects_total-->272<!--/f--> effect names and the <!--f:params_total-->1,040<!--/f--> parameter candidates as strings with their file offsets, for example `S_Aurora`, `S_AutoPaint` and `S_BandPass`. No effect is mapped to functions, classes, parameters or behaviour, and no candidate is bound to an effect or function; a candidate is not a confirmed parameter.
+The bank holds the <!--f:effects_total-->272<!--/f--> effect names and the <!--f:params_total-->1,040<!--/f--> parameter candidates as strings with their file offsets, for example `S_Aurora`, `S_AutoPaint` and `S_BandPass`. Every row of both tables has the `section` `__TEXT:__cstring`, so the strings come from a C string section, by their names the plugin file's, not from the dump, which holds no strings ([lift crates: the input](lifting.md#the-input)). No effect is mapped to functions, classes, parameters or behaviour, and no candidate is bound to an effect or function; a candidate is not a confirmed parameter.
 
 | List | Page |
 |---|---|
