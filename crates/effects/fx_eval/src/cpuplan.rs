@@ -838,9 +838,9 @@ pub fn ds_dup_rid(cp: &CompiledProgram) -> usize {
 /// the tail, and that node is the body root. The tail runs after the command, in its own linewise command, on a fresh image (the recorded
 /// plans of every exec-downsampled Blur Motion Curves and Transform and Blur row, see the E1 plan_text of f_BR3T_50x7 and the eight others).
 /// Returns (tail nodes in execution order, computed and unfolded only; body root node). Empty tail unless the factor is above 1, and also
-/// empty when the chain does not end in a computed node. Env DS3_MUT=inbody (mutant) restores the old plan and executor order.
+/// empty when the chain does not end in a computed node.
 pub fn ds_tail_split(cp: &CompiledProgram) -> (Vec<usize>, Option<usize>) {
-    if ds_factor(cp) <= 1 || std::env::var("DS3_MUT").map_or(false, |v| v == "inbody") {
+    if ds_factor(cp) <= 1 {
         return (Vec::new(), None);
     }
     let comp = |i: usize| (cp.nodes[i].kind == "func" || cp.nodes[i].kind == "auto") && !cp.nodes[i].b160 && !cp.nodes[i].folded;

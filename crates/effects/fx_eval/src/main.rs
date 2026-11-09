@@ -452,7 +452,7 @@ fn xyplan(programs: &str, combos: &str, name: &str, sets: &str) -> i32 {
     };
     let Some(ei) = c.find_effect(name, None) else { return 1 };
     let Ok(g) = build_cli(&c, ei, name) else { return 1 };
-    let hd = std::env::var("XWP2_HD").ok().and_then(|v| u32::from_str_radix(v.trim_start_matches("0x"), 16).ok()).unwrap_or(0x7f8);
+    let hd = 0x7f8u32;
     let opt = fx_eval::CompileOptions { overrides: parse_sets(sets), paramset: if sets.is_empty() { "default".into() } else { sets.into() }, minimal_context: true, host_curves_unkeyed: std::env::var("NV3B_HC").is_ok(), ctx_has_data: hd, ..Default::default() };
     match fx_eval::xyplace::compile_placed(&g, &ct, &opt) {
         Ok((cp, ws)) => {

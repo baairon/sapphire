@@ -186,8 +186,8 @@ pub fn head_form(place: fx_eval::xyplace::Place) -> crate::types::XyHeadMode {
 /// Map the run's xy bases onto the writers of the placement model (compile_placed). With --xy-base-list the entries are the bases of the writers in
 /// execution order; with --xy-base B and no list the run is the list route at render 1 with B for every writer (a plan with no writer is left
 /// unchanged). Head form from the placement (head_form); the perspective out2 and perspective_alpha out1 destinations take their form from the same
-/// plan. A preserve writer runs in render 1 only: its render 2 entry must be the render 1 base, marked reused. Mutants (env, test only):
-/// XWP2_MUT=merge (one writer for every consumer), noreuse (a preserve writer re-runs in render 2 at base 0).
+/// plan. A preserve writer runs in render 1 only: its render 2 entry must be the render 1 base, marked reused. Each writer keeps its own consumer
+/// list and its own base.
 /// The observe-only notes a compile keeps for the census labels of a run (if_neq_const decisions, eq_const scan counts, non-constant argument
 /// nodes, v3_to_v4_if4 folds) describe the compile of the plan the run executes. The compiles of the placement model on the base route leave them
 /// empty again, so the labels of a base route run read as before.
@@ -223,20 +223,13 @@ fn xy_writers_for(program: &Genotype, binding: &Binding) -> Result<(), ExecError
     if ws.len() != list.len() {
         return Err(ExecError::BadPlan(format!("XY-BASE-LIST-MISMATCH (the placement model has {} default-xy writers, --xy-base-list gives {})", ws.len(), list.len())));
     }
-    let m = std::env::var("XWP2_MUT").unwrap_or_default();
     let mut out = Vec::new();
     for (w, &(base, reused)) in ws.iter().zip(list.iter()) {
-        if render == 2 && w.preserve && !reused && m != "noreuse" {
+        if render == 2 && w.preserve && !reused {
             return Err(ExecError::BadPlan(format!("XY-BASE-PRESERVE-REUSE-REQUIRED (writer ref{} is inside a preserve group: render 2 reuses its render 1 image, so its entry is the render 1 base marked r1)", w.node)));
         }
-        let base = if m == "noreuse" && render == 2 && w.preserve { 0 } else { base };
         let mode = head_form(w.place);
         out.push((w.consumers.clone(), base, mode, w.preserve));
-    }
-    if m == "merge" && !out.is_empty() {
-        let all: Vec<(usize, usize)> = out.iter().flat_map(|o| o.0.clone()).collect();
-        let (b, md) = (out[0].1, out[0].2);
-        out = vec![(all, b, md, false)];
     }
     *XY_WRITERS.lock().unwrap() = out;
     // the perspective out2 / perspective_alpha out1 destinations take their row phase form from the same plan
