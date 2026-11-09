@@ -5,6 +5,8 @@
 //! The plane services (fill, copy, scale, add) are PLANE-SERVICE MODELS judged against the real code in the emulator.
 //! The pass wrappers sit on the flag != 0 arms and are NOT ported (refused with FlagNotPorted).
 //! HOST inputs (explicit): the plane count (vcall `[[this]]`), the partition service (the port runs each job on the whole range), the this fields.
+use fx_common::nanop::{fma132, NanOps};
+use fx_common::x86::nx_mul;
 
 use edge_aware_sharpen_weights as j2;
 pub mod judge_keys;
@@ -112,6 +114,65 @@ impl<'a> Host for Hn<'a> {
     fn scratch_free(&mut self, _handle: u64, _g0: u64, _g1: u64) {}
 }
 
+/// `base / dv`: the step scale, the numerator first when both are NaN.
+fn step_scale(base: f32, dv: f32) -> f32 {
+    base.fdiv(dv)
+}
+
+/// The mix factor of a pass: `vfmsub213ss` on the pass parameter, then `vfmadd132ss` with the channel gain (priority: the first result,
+/// the addend constant, the gain).
+fn mix_factor(arr_it: f32, gain: f32) -> f32 {
+    fma132(arr_it.mul_add(MIX_C, -MIX_C), MIX_C, gain)
+}
+
+/// One block of the plane add with the NaN rule, destination first.
+#[cold]
+#[inline(never)]
+fn add_block_rule(d: &mut [f32], s: &[f32]) {
+    for (x, &y) in d.iter_mut().zip(s) {
+        *x = x.fadd(y);
+    }
+}
+
+/// `mem[dst + i] = mem[dst + i] + mem[src + i]` for `i < n`: the plane add service, destination first. A plain add is bit exact unless a
+/// sum is NaN (an operand is NaN, or the operands are opposite infinities), so each block of sums is formed in registers first, checked,
+/// and stored once; only a block that holds a NaN sum is redone with the NaN rule from the untouched operands.
+fn add_plane(mem: &mut [f32], dst: usize, src: usize, n: usize) {
+    const BLOCK: usize = 16;
+    if dst + n <= src || src + n <= dst {
+        let (d, s): (&mut [f32], &[f32]) = if dst < src {
+            let (lo, hi) = mem.split_at_mut(src);
+            (&mut lo[dst..dst + n], &hi[..n])
+        } else {
+            let (lo, hi) = mem.split_at_mut(dst);
+            (&mut hi[..n], &lo[src..src + n])
+        };
+        let mut dc = d.chunks_exact_mut(BLOCK);
+        let mut sc = s.chunks_exact(BLOCK);
+        for (db, sb) in (&mut dc).zip(&mut sc) {
+            let mut v = [0.0f32; BLOCK];
+            let mut nan = 0u32;
+            for i in 0..BLOCK {
+                let t = db[i] + sb[i];
+                v[i] = t;
+                nan |= (t != t) as u32;
+            }
+            if nan != 0 {
+                add_block_rule(db, sb);
+            } else {
+                db.copy_from_slice(&v);
+            }
+        }
+        add_block_rule(dc.into_remainder(), sc.remainder());
+    } else {
+        for i in 0..n {
+            let (x, y) = (mem[dst + i], mem[src + i]);
+            let v = x + y;
+            mem[dst + i] = if v != v { x.fadd(y) } else { v };
+        }
+    }
+}
+
 /// Slot 52, flag 0 route. `mem` holds all planes; returns the call record.
 pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Result<Calls, DErr> {
     if flag != 0 {
@@ -132,7 +193,7 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
     let iters = cvtt32(th.iters);
     let sigma0 = if th.sig_byte { th.sigma0 } else { 0.0f32 };
     let width_f = cx.cw as f32;
-    let mut base = (0.125f32 * th.scale) * width_f; // [rbp]
+    let mut base = nx_mul(0.125f32 * th.scale, width_f); // [rbp]
     let dv = (n as f32) * th.output_a; // [rbp]
     // zero fill of each output plane (esi == 0)
     for &o in ids.out.iter().take(nu) {
@@ -156,7 +217,7 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
             return Err(DErr::Iter(iters));
         }
         for it in 0..iters as usize {
-            let s2 = base / dv;
+            let s2 = step_scale(base, dv);
             // ---- pre-pass: weight planes a (wa) and t (wt)
             {
                 let take = |m: &Vec<f32>, id: usize| m[id..id + wh].to_vec();
@@ -215,18 +276,11 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
                 for x in mem[pc[ch]..pc[ch] + wh].iter_mut() {
                     *x = x.mul_add(-1.0, 0.0);
                 }
-                for i in 0..wh {
-                    let v = mem[pc[ch] + i] + mem[pa[ch] + i];
-                    mem[pc[ch] + i] = v;
-                }
-                let m = th.arr[it].mul_add(MIX_C, -MIX_C).mul_add(th.arr[7 + ch], MIX_C);
+                add_plane(mem, pc[ch], pa[ch], wh);
+                let m = mix_factor(th.arr[it], th.arr[7 + ch]);
                 calls.pools.push(judge_keys::POOL_D);
                 j3::job_3(m, 0, wh as i32, &mut mem[pc[ch]..pc[ch] + wh]).map_err(|e| DErr::Job(format!("{:?}", e)))?;
-                let o = ids.out[ch];
-                for i in 0..wh {
-                    let v = mem[o + i] + mem[pc[ch] + i];
-                    mem[o + i] = v;
-                }
+                add_plane(mem, ids.out[ch], pc[ch], wh);
                 if pa[ch] == in_ids[ch] {
                     pa[ch] = pb[ch];
                     pb[ch] = pd[ch];
@@ -239,11 +293,75 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
     }
     // tail: out += A
     for ch in 0..nu {
-        let o = ids.out[ch];
-        for i in 0..wh {
-            let v = mem[o + i] + mem[pa[ch] + i];
-            mem[o + i] = v;
-        }
+        add_plane(mem, ids.out[ch], pa[ch], wh);
     }
     Ok(calls)
+}
+
+#[cfg(test)]
+mod add_plane_tests {
+    use super::*;
+
+    fn reference(mem: &mut [f32], dst: usize, src: usize, n: usize) {
+        for i in 0..n {
+            let (x, y) = (mem[dst + i], mem[src + i]);
+            mem[dst + i] = x.fadd(y);
+        }
+    }
+
+    #[test]
+    fn add_plane_equals_the_per_element_rule() {
+        let pool = [
+            0.5f32,
+            -2.0,
+            0.0,
+            -0.0,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::from_bits(0x7f80_0001),
+            f32::from_bits(0xffc0_0004),
+            f32::from_bits(0x7fc0_0000),
+            1e-40,
+        ];
+        let mut seed = 0x1234_5678_9abc_def1u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for round in 0..400usize {
+            let n = if round % 4 == 3 { [1023usize, 1024, 1025, 3000][(round / 4) % 4] } else { [1usize, 7, 15, 16, 17, 31, 33][round % 7] };
+            let (dst, src) = if round % 3 == 0 { (n + 5, 0) } else if round % 3 == 1 { (0, n + 3) } else { (0, n / 2) };
+            let len = 2 * n + 16;
+            let density = 1 + (round % 5) as u64 * 40;
+            let a: Vec<f32> = (0..len)
+                .map(|_| {
+                    let r = next();
+                    if r % density == 0 { pool[(r >> 8) as usize % pool.len()] } else { ((r >> 16) % 2001) as f32 / 100.0 - 10.0 }
+                })
+                .collect();
+            let (mut x, mut y) = (a.clone(), a.clone());
+            add_plane(&mut x, dst, src, n);
+            reference(&mut y, dst, src, n);
+            for i in 0..len {
+                assert_eq!(x[i].to_bits(), y[i].to_bits(), "round {} i {}", round, i);
+            }
+        }
+    }
+
+    #[test]
+    fn step_scale_and_mix_factor_pick_the_first_nan_operand() {
+        let (a, b) = (f32::from_bits(0x7f80_0001), f32::from_bits(0xff80_0002));
+        assert_eq!(step_scale(a, b).to_bits(), 0x7fc0_0001);
+        assert_eq!(step_scale(b, a).to_bits(), 0xffc0_0002);
+        assert_eq!(step_scale(1.0, b).to_bits(), 0xffc0_0002);
+        assert_eq!(step_scale(0.0, 0.0).to_bits(), 0xffc0_0000);
+        assert_eq!(mix_factor(a, b).to_bits(), 0x7fc0_0001);
+        assert_eq!(mix_factor(b, a).to_bits(), 0xffc0_0002);
+        assert_eq!(mix_factor(1.0, b).to_bits(), 0xffc0_0002);
+        assert_eq!(mix_factor(a, 1.0).to_bits(), 0x7fc0_0001);
+        assert_eq!(mix_factor(f32::INFINITY, 0.0).to_bits(), 0xffc0_0000);
+        assert_eq!(mix_factor(0.5, 0.25), (0.5f32.mul_add(MIX_C, -MIX_C)).mul_add(0.25, MIX_C));
+    }
 }

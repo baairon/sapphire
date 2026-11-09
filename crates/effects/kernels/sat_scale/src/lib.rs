@@ -66,18 +66,20 @@ pub enum SatError {
     MissingMask,
 }
 
+use fx_common::x86::{nx_fma, nx_fma64, nx_mul, nx_mul64, nx_sub};
+
 /// luma of the constant colour: (cg*B, fma cb*C, fma cr*A), rounded to f32.
 pub fn luma_const(c: [f32; 3]) -> f32 {
-    let t = (c[1] as f64) * LUMA_B;
-    let t = (c[2] as f64).mul_add(LUMA_C, t);
-    (c[0] as f64).mul_add(LUMA_A, t) as f32
+    let t = nx_mul64(c[1] as f64, LUMA_B);
+    let t = nx_fma64(c[2] as f64, LUMA_C, t);
+    nx_fma64(c[0] as f64, LUMA_A, t) as f32
 }
 
 /// luma of a pixel: (B*pg, fma pr*A, fma pb*C), rounded to f32.
 pub fn luma_px(r: f32, g: f32, b: f32) -> f32 {
-    let t = LUMA_B * (g as f64);
-    let t = (r as f64).mul_add(LUMA_A, t);
-    (b as f64).mul_add(LUMA_C, t) as f32
+    let t = nx_mul64(LUMA_B, g as f64);
+    let t = nx_fma64(r as f64, LUMA_A, t);
+    nx_fma64(b as f64, LUMA_C, t) as f32
 }
 
 fn check_len(a: &[f32], n: usize) -> Result<(), SatError> {
@@ -89,8 +91,8 @@ fn const_px(c: [f32; 3], l: f32, s: f32) -> [f32; 3] {
     if s == 0.0 {
         return [l, l, l];
     }
-    let t = (-s).mul_add(l, l);
-    [s.mul_add(c[0], t), s.mul_add(c[1], t), s.mul_add(c[2], t)]
+    let t = nx_fma(-s, l, l);
+    [nx_fma(s, c[0], t), nx_fma(s, c[1], t), nx_fma(s, c[2], t)]
 }
 
 /// The pixel arithmetic of S2..S4 for `n` pixels (n <= 0 writes nothing).
@@ -129,7 +131,7 @@ pub fn pixels(p: &Params, n: i32, inp: &Inputs, outs: &mut [&mut [f32]; 3]) -> R
     }
     if p.scalar_scale {
         let s = p.scale;
-        let w1 = ONE - s; // 
+        let w1 = nx_sub(ONE, s); // 
         for i in 0..n {
             let (r, g, b) = (src[0][i], src[1][i], src[2][i]);
             let l = luma_px(r, g, b);
@@ -138,10 +140,10 @@ pub fn pixels(p: &Params, n: i32, inp: &Inputs, outs: &mut [&mut [f32]; 3]) -> R
                 outs[1][i] = l;
                 outs[2][i] = l;
             } else {
-                let w = w1 * l; // 
-                outs[0][i] = s.mul_add(r, w);
-                outs[1][i] = s.mul_add(g, w);
-                outs[2][i] = b.mul_add(s, w);
+                let w = nx_mul(w1, l); // 
+                outs[0][i] = nx_fma(s, r, w);
+                outs[1][i] = nx_fma(s, g, w);
+                outs[2][i] = nx_fma(b, s, w);
             }
         }
     } else {
@@ -156,10 +158,10 @@ pub fn pixels(p: &Params, n: i32, inp: &Inputs, outs: &mut [&mut [f32]; 3]) -> R
                 outs[1][i] = l;
                 outs[2][i] = l;
             } else {
-                let t = (-l).mul_add(s, l); // 
-                outs[0][i] = s.mul_add(r, t);
-                outs[1][i] = s.mul_add(g, t);
-                outs[2][i] = b.mul_add(s, t);
+                let t = nx_fma(-l, s, l); // 
+                outs[0][i] = nx_fma(s, r, t);
+                outs[1][i] = nx_fma(s, g, t);
+                outs[2][i] = nx_fma(b, s, t);
             }
         }
     }

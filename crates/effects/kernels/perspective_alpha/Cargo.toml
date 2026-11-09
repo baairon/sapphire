@@ -10,7 +10,5 @@ description = "Port of perspective_alpha slot 52 AVX2 body; the sincosf callee i
 path = "src/lib.rs"
 
 [dependencies]
-libm_sincos = { path = "../libm_sincos" }
-
-[dev-dependencies]
 fx_common = { path = "../../fx_common" }
+libm_sincos = { path = "../libm_sincos" }

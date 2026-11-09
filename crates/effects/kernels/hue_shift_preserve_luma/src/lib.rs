@@ -177,6 +177,8 @@ pub enum HpError {
     MissingMask,
 }
 
+use fx_common::x86::{nx_add, nx_div, nx_fma, nx_mul, nx_sub};
+
 fn fmin(a: f32, b: f32) -> f32 {
     if a < b { a } else { b }
 }
@@ -194,7 +196,7 @@ fn negf(x: f32) -> f32 {
 /// vrcpps modelled as exact 1/x (APPROX-MODEL) plus the code's Newton step
 /// r1 = (r + r) - ((x * r) * r) (separate roundings: vaddps, vmulps, vmulps, vsubps).
 fn newton(x: f32) -> f32 {
-    let mut r = 1.0f32 / x;
+    let mut r = nx_div(1.0f32, x);
     let e = PERT.with(|p| p.get());
     if e != 0.0 {
         r *= 1.0 + e;
@@ -202,7 +204,7 @@ fn newton(x: f32) -> f32 {
     if mu(5) {
         return r;
     }
-    (r + r) - ((x * r) * r)
+    nx_sub(nx_add(r, r), nx_mul(nx_mul(x, r), r))
 }
 
 /// clamped luma of a colour with the given weights: (rt + gt) + bt, a term only when the component is > 0
@@ -215,10 +217,10 @@ fn luma(c: [f32; 3], wr: f32, wg: f32, wb: f32) -> f32 {
 fn luma_gated(c: [f32; 3], wr: f32, wg: f32, wb: f32, red: bool) -> f32 {
     let (wr, wb) = if mu(1) { (wb, wr) } else { (wr, wb) };
     let pos = |x: f32| x > 0.0 || mu(21);
-    let rt = if red || mu(21) { wr * c[0] } else { 0.0 };
-    let gt = if pos(c[1]) { wg * c[1] } else { 0.0 };
-    let bt = if pos(c[2]) { wb * c[2] } else { 0.0 };
-    (rt + gt) + bt
+    let rt = if red || mu(21) { nx_mul(wr, c[0]) } else { 0.0 };
+    let gt = if pos(c[1]) { nx_mul(wg, c[1]) } else { 0.0 };
+    let bt = if pos(c[2]) { nx_mul(wb, c[2]) } else { 0.0 };
+    nx_add(nx_add(rt, gt), bt)
 }
 
 /// The red-mask path of variant A (MEASURED listing): mask = (r > 0) ? all ones : 0 in a full ymm register
@@ -261,10 +263,10 @@ fn red_kept(k: &VCells, wide: bool, operand: [u32; 8]) -> bool {
 
 /// sector select shared by both flavours: returns (R, G, B) from V, C, f, 1 - f computed by the caller
 fn sector(i: i32, three: i32, one_i: i32, four: i32, v: f32, cc: f32, f: f32, one: f32) -> [f32; 3] {
-    let om = one - f;
-    let a1 = if mu(6) { v - om * cc } else { (-om).mul_add(cc, v) };
-    let a2 = v - cc;
-    let a3 = (-f).mul_add(cc, v);
+    let om = nx_sub(one, f);
+    let a1 = if mu(6) { nx_sub(v, nx_mul(om, cc)) } else { nx_fma(-om, cc, v) };
+    let a2 = nx_sub(v, cc);
+    let a3 = nx_fma(-f, cc, v);
     if three > i {
         if i == 0 {
             [v, a1, a2]
@@ -290,43 +292,43 @@ fn scalar_pixel(c: [f32; 3], shift: f32) -> [f32; 3] {
     let mx = fmax(fmax(r, g), b);
     let flip = if mu(7) { negf(mn) >= mx } else { negf(mn) > mx };
     let (v, hi, lo, rr, gg, bb) = if flip { (mn, negf(mn), negf(mx), negf(r), negf(g), negf(b)) } else { (mx, mx, mn, r, g, b) };
-    let delta = hi - lo;
+    let delta = nx_sub(hi, lo);
     let mut out = [v, v, v];
     let grey = (hi == 0.0 && !mu(15)) || {
-        let s = delta / hi;
+        let s = nx_div(delta, hi);
         s == 0.0
     };
     if !grey {
-        let s0 = delta / hi;
+        let s0 = nx_div(delta, hi);
         let h = if rr == hi {
-            let q = (gg - bb) / delta;
-            if 0.0 > q && !mu(2) || (mu(2) && 0.0 >= q) { q + SIX } else { q }
+            let q = nx_div(nx_sub(gg, bb), delta);
+            if 0.0 > q && !mu(2) || (mu(2) && 0.0 >= q) { nx_add(q, SIX) } else { q }
         } else if gg == hi {
-            (if mu(16) { 4.0 } else { 2.0 }) + (bb - rr) / delta
+            nx_add(if mu(16) { 4.0 } else { 2.0 }, nx_div(nx_sub(bb, rr), delta))
         } else {
-            4.0 + (rr - gg) / delta
+            nx_add(4.0, nx_div(nx_sub(rr, gg), delta))
         };
-        let x = if mu(3) { h * SIXTH + shift } else { h.mul_add(SIXTH, shift) };
+        let x = if mu(3) { nx_add(nx_mul(h, SIXTH), shift) } else { nx_fma(h, SIXTH, shift) };
         let sneg = 0.0 > s0 && !mu(12);
         let s = if sneg { negf(s0) } else { s0 };
         let frac = if sneg {
-            let y = x + 0.5;
-            y - y.floor()
+            let y = nx_add(x, 0.5);
+            nx_sub(y, y.floor())
         } else {
-            x - x.floor()
+            nx_sub(x, x.floor())
         };
-        let t6 = SIX * frac;
+        let t6 = nx_mul(SIX, frac);
         // vcomiss t6, 6.0 / jb: below or unordered (NaN) keeps t6
         let t = if (!(t6 >= SIX) && !mu(11)) || (mu(11) && !(t6 > SIX)) { t6 } else { 0.0 };
         let i = cvtt(t);
-        let f = t - (i as f32);
-        let cc = v * s;
+        let f = nx_sub(t, i as f32);
+        let cc = nx_mul(v, s);
         out = sector(i, 3, 1, 4, v, cc, f, 1.0);
     }
     let lnew = luma(out, W_R, W_G, W_B);
     if lold != lnew && ((lnew > 0.0 && !mu(8)) || (mu(8) && lnew >= 0.0)) {
-        let sc = lold / lnew;
-        out = [out[0] * sc, out[1] * sc, out[2] * sc];
+        let sc = nx_div(lold, lnew);
+        out = [nx_mul(out[0], sc), nx_mul(out[1], sc), nx_mul(out[2], sc)];
     }
     out
 }
@@ -343,40 +345,40 @@ fn vec_pixel(k: &VCells, wide: bool, c: [f32; 3], shift: f32, force: Option<[u32
     let mx = fmax(fmax(r, g), b);
     let flip = if mu(7) { negf(mn) >= mx } else { negf(mn) > mx };
     let (v, hi, lo, rr, gg, bb) = if flip { (mn, negf(mn), negf(mx), negf(r), negf(g), negf(b)) } else { (mx, mx, mn, r, g, b) };
-    let delta = hi - lo;
-    let s0 = if hi != 0.0 { delta * newton(hi) } else { 0.0 };
+    let delta = nx_sub(hi, lo);
+    let s0 = if hi != 0.0 { nx_mul(delta, newton(hi)) } else { 0.0 };
     let active = !(s0 == 0.0);
     let mut out = [v, v, v];
     if active {
         let nd = newton(delta);
         let h = if rr == hi {
-            let q = (gg - bb) * nd;
-            if (q < 0.0 && !mu(19)) || (mu(19) && q <= 0.0) { q + k.six } else { q }
+            let q = nx_mul(nx_sub(gg, bb), nd);
+            if (q < 0.0 && !mu(19)) || (mu(19) && q <= 0.0) { nx_add(q, k.six) } else { q }
         } else if gg == hi {
-            (bb - rr) * nd + k.two
+            nx_add(nx_mul(nx_sub(bb, rr), nd), k.two)
         } else {
-            (rr - gg) * nd + (if mu(17) { k.two } else { k.four })
+            nx_add(nx_mul(nx_sub(rr, gg), nd), if mu(17) { k.two } else { k.four })
         };
-        let x = if mu(4) { h.mul_add(k.sixth, shift) } else { h * k.sixth + shift };
+        let x = if mu(4) { nx_fma(h, k.sixth, shift) } else { nx_add(nx_mul(h, k.sixth), shift) };
         let sneg = s0 < 0.0 && !mu(12);
         let s = if sneg { negf(s0) } else { s0 };
         let frac = if sneg {
-            let y = k.half + x;
-            y - y.floor()
+            let y = nx_add(k.half, x);
+            nx_sub(y, y.floor())
         } else {
-            x - x.floor()
+            nx_sub(x, x.floor())
         };
-        let t6 = k.six * frac;
+        let t6 = nx_mul(k.six, frac);
         let t = if t6 >= k.six { 0.0 } else { t6 };
         let i = cvtt(t);
-        let f = t - (i as f32);
-        let cc = v * s;
+        let f = nx_sub(t, i as f32);
+        let cc = nx_mul(v, s);
         out = sector(i, k.three_i, k.one_i, k.four_i, v, cc, f, k.one);
     }
     let lnew = luma(out, k.w_r, k.half, k.w_b);
     if lold != lnew && lnew > 0.0 {
-        let sc = if mu(13) { lold / lnew } else { lold * newton(lnew) };
-        out = [out[0] * sc, out[1] * sc, out[2] * sc];
+        let sc = if mu(13) { nx_div(lold, lnew) } else { nx_mul(lold, newton(lnew)) };
+        out = [nx_mul(out[0], sc), nx_mul(out[1], sc), nx_mul(out[2], sc)];
     }
     out
 }

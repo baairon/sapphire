@@ -405,7 +405,7 @@ __kernel void mb_premul_f32(__global const float* m, __global const float* s, __
     } else {
         c = mb_min_x86(0x1p+0f, mv);
     }
-    t[i] = c * s[i];
+    t[i] = nf_mul(c, s[i]);
 }
 
 __kernel void mb_combine_f32(__global const float* m, __global const float* bb, __global const float* ww,
@@ -426,7 +426,7 @@ __kernel void mb_combine_f32(__global const float* m, __global const float* bb, 
             b = b / mb_min_x86(wv, 0x1p+0f);
         }
         float m1 = mb_min_x86(mv, 0x1p+0f);
-        r = fma(b - sv, m1, sv);
+        r = nf_fma231(sv, nf_sub(b, sv), m1);
     }
     out[i] = r;
 }
@@ -498,10 +498,10 @@ __kernel void sharpen_combine_f32(__global const float* x, __global float* out, 
         float bv = out[i];
         float r;
         if (g == 0x1p+0f) {
-            r = fma(xv, 0x1p+1f, -bv);
+            r = nf_fms213(xv, 0x1p+1f, bv);
         } else {
-            float d = xv - bv;
-            r = fma(d, g, xv);
+            float d = nf_sub(xv, bv);
+            r = nf_fma231(xv, d, g);
         }
         out[i] = r;
     } else if (alias != 0) {
@@ -532,6 +532,12 @@ __kernel void static2_f32(__global const uint* tab, __global float* o0, __global
 /// tanh-like transform. The driver (iterations, plane bookkeeping, radii) runs on the host with the CPU functions.
 pub const NEIGHBOURHOOD_ESH: &str = r#"
 /* MIRRORS_MUL_ADD: edge_aware_sharpen_jobs::job_2, edge_aware_sharpen_jobs::exp_tanh_elem, edge_aware_sharpen_box_filter::filter3, edge_aware_sharpen_render::slot52 */
+/* vfmadd213ss d, s2, s3: d * s2 + s3, one rounding; NaN priority d, s2, s3. */
+float nf_fma213(float d, float s2, float s3) {
+    float r = fma(d, s2, s3);
+    return (r == r) ? r : nf_pick3(d, s2, s3);
+}
+
 float esh_minss(float a, float b) {
     return (a < b) ? a : b;
 }
@@ -555,17 +561,17 @@ float esh_g_t(float m, float k, float cb, float kcb) {
     if (md > 0x1.ffffffff24190p-1) {
         return k;
     }
-    return k * esh_minss(0x1p+0f / m, cb);
+    return nf_mul(k, esh_minss(0x1p+0f / m, cb));
 }
 
 float esh_l1(__global const float* c0, __global const float* c1, __global const float* c2, int nch, size_t i, size_t j) {
     float acc = 0x0p+0f;
-    acc += fabs(c0[i] - c0[j]);
+    acc = nf_add(acc, fabs(nf_sub(c0[i], c0[j])));
     if (nch > 1) {
-        acc += fabs(c1[i] - c1[j]);
+        acc = nf_add(acc, fabs(nf_sub(c1[i], c1[j])));
     }
     if (nch > 2) {
-        acc += fabs(c2[i] - c2[j]);
+        acc = nf_add(acc, fabs(nf_sub(c2[i], c2[j])));
     }
     return acc;
 }
@@ -592,8 +598,10 @@ __kernel void esh_weights_f32(__global const float* c0, __global const float* c1
             float g0 = c11;
             if (mode_b != 0) {
                 g0 = esh_g_t(esh_minss(cur[prev], cur[base]), k, cb, kcb);
+                wt[line] = nf_fma231(g0, s0, e);
+            } else {
+                wt[line] = nf_fma213(s0, e, g0);
             }
-            wt[line] = fma(s0, e, g0);
         }
         return;
     }
@@ -602,7 +610,11 @@ __kernel void esh_weights_f32(__global const float* c0, __global const float* c1
     if (mode_b != 0) {
         hh = esh_h_a(esh_minss(cur[base + j - 1], cur[base + j]), ca);
     }
-    wa[gid] = fma(sa, d, hh);
+    if (mode_b != 0) {
+        wa[gid] = nf_fma231(hh, sa, d);
+    } else {
+        wa[gid] = nf_fma213(sa, d, hh);
+    }
     if (line == 0) {
         wt[j * (size_t)s] = 0x1p+0f;
     } else {
@@ -612,7 +624,11 @@ __kernel void esh_weights_f32(__global const float* c0, __global const float* c1
         if (mode_b != 0) {
             gg = esh_g_t(esh_minss(cur[prev + j], cur[base + j]), k, cb, kcb);
         }
-        wt[j * (size_t)s + line] = fma(sv, e, gg);
+        if (mode_b != 0) {
+            wt[j * (size_t)s + line] = nf_fma231(gg, sv, e);
+        } else {
+            wt[j * (size_t)s + line] = nf_fma213(sv, e, gg);
+        }
     }
 }
 
@@ -628,7 +644,7 @@ __kernel void esh_cumsum_x_f32(__global const float* a, __global float* p0, uint
         if (j >= (int)w) {
             break;
         }
-        acc += a[base + (size_t)j];
+        acc = nf_add(acc, a[base + (size_t)j]);
         p0[base + (size_t)j] = acc;
     }
 }
@@ -645,7 +661,7 @@ __kernel void esh_cumsum_y_f32(__global const float* t, __global float* p1, uint
         if (j >= (int)s) {
             break;
         }
-        acc += t[base + (size_t)j];
+        acc = nf_add(acc, t[base + (size_t)j]);
         p1[base + (size_t)j] = acc;
     }
 }
@@ -678,7 +694,7 @@ void esh_filter3(__global const float* a, size_t ast, __global float* out, size_
                 break;
             }
             cnt = cnt - 1;
-            sum = sum - a[(size_t)lo * ast];
+            sum = nf_sub(sum, a[(size_t)lo * ast]);
             lo = lo + 1;
         }
         int hh = hi;
@@ -690,7 +706,7 @@ void esh_filter3(__global const float* a, size_t ast, __global float* out, size_
                 break;
             }
             cnt = cnt + 1;
-            sum = sum + a[(size_t)hh * ast];
+            sum = nf_add(sum, a[(size_t)hh * ast]);
             hh = hh + 1;
         }
         hi = hh;
@@ -702,22 +718,22 @@ void esh_filter3(__global const float* a, size_t ast, __global float* out, size_
                 int c8 = cnt;
                 float t = g - rm1;
                 if (t > b[(size_t)lo * bst]) {
-                    s8 = sum - a[(size_t)lo * ast];
+                    s8 = nf_sub(sum, a[(size_t)lo * ast]);
                     c8 = cnt - 1;
                 }
                 float t2 = b[(size_t)(hh - 1) * bst];
                 float u = rm1 + g;
                 if (t2 > u) {
                     c8 = c8 - 1;
-                    s8 = s8 - a[(size_t)(hh - 1) * ast];
+                    s8 = nf_sub(s8, a[(size_t)(hh - 1) * ast]);
                 }
                 if (c8 > 0) {
                     v = s8 / (float)c8;
                 }
             }
             float mean = sum / (float)cnt;
-            float dd = mean - v;
-            v9 = fma(dd, p2, v);
+            float dd = nf_sub(mean, v);
+            v9 = nf_fma231(v, dd, p2);
         } else {
             v9 = sum / (float)cnt;
         }
@@ -779,9 +795,9 @@ __kernel void esh_level_f32(__global const float* bb, __global const float* aa, 
         return;
     }
     float c = fma(bb[i], -0x1p+0f, 0x0p+0f);
-    c = c + aa[i];
+    c = nf_add(c, aa[i]);
     c = esh_tanh_elem(s0, c);
-    out[i] = out[i] + c;
+    out[i] = nf_add(out[i], c);
 }
 
 /* out += a (the tail of the driver). */
@@ -790,7 +806,7 @@ __kernel void esh_add_f32(__global const float* aa, __global float* out, uint n)
     if (i >= n) {
         return;
     }
-    out[i] = out[i] + aa[i];
+    out[i] = nf_add(out[i], aa[i]);
 }
 "#;
 

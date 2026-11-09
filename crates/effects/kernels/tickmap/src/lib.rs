@@ -400,18 +400,20 @@ pub struct UnitIn {
     pub d5: f64,
 }
 
+use fx_common::x86::{nx_add, nx_div, nx_mul, nx_sub};
+
 /// Unit conversion a listed site at subtype nibble 5 (jump table index 4, arm a listed site, MEASURED table):
 /// r = v * ((K / x1) * rec_unit_value); lane 1 only: r = r * ((t5 * x3) / (-t4)).
 pub fn unit_nibble5(v: f32, lane: usize, u: &UnitIn) -> f32 {
     let t4 = n5_term(u.d4);
     let t5 = n5_term(u.d5);
-    let scale = (k::N5_K / u.x1) * u.rec_unit_value;
-    let r = v * scale;
+    let scale = nx_mul(nx_div(k::N5_K, u.x1), u.rec_unit_value);
+    let r = nx_mul(v, scale);
     if lane != k::N5_LANE {
         r
     } else {
         let den = f32::from_bits(t4.to_bits() ^ k::NEG_MASK);
-        r * ((t5 * u.x3) / den)
+        nx_mul(r, nx_div(nx_mul(t5, u.x3), den))
     }
 }
 
@@ -419,14 +421,14 @@ pub fn unit_nibble5(v: f32, lane: usize, u: &UnitIn) -> f32 {
 /// s = K / x1; lane != 1: (v - x1 * 0.5) * s; lane 1, flags bit 1: -(((v + x2 * 0.5) * s) * x3);
 /// lane 1, flags bit 1 clear: ((v - x2 * 0.5) * s) * x3.  x1 and x2 are the two sizes as f32, x3 = a host field.
 pub fn unit_nibble4(v: f32, lane: usize, flags: u32, x1: f32, x2: f32, x3: f32) -> f32 {
-    let s = k::N5_K / x1;
+    let s = nx_div(k::N5_K, x1);
     if lane != k::N4_LANE {
-        (v - x1 * k::N4_HALF) * s
+        nx_mul(nx_sub(v, nx_mul(x1, k::N4_HALF)), s)
     } else if flags & k::N4_FLAG_NEG != 0 {
-        let r = ((v + x2 * k::N4_HALF) * s) * x3;
+        let r = nx_mul(nx_mul(nx_add(v, nx_mul(x2, k::N4_HALF)), s), x3);
         f32::from_bits(r.to_bits() ^ k::NEG_MASK)
     } else {
-        ((v - x2 * k::N4_HALF) * s) * x3
+        nx_mul(nx_mul(nx_sub(v, nx_mul(x2, k::N4_HALF)), s), x3)
     }
 }
 

@@ -5,12 +5,14 @@
 //! divide by 100.0 (cell) after it.: lane 1 and ns 1 by conv_record, judged on
 //! 18,880 emulator cases (test t24); the popup rule by popup_record. The 'ae32' route still converts lane 0 only (normalize_scale_record).
 
+use fx_common::x86::{nx_add, nx_div, nx_div64, nx_mul, nx_mul64};
+
 /// W of the conversion: f32((f64) ctx_unit_width x ([[ctx]] / [[ctx]])), the product in double and
 /// one rounding to single, as transcription of reads it and its rig measured (18,880 of 18,880 emulator cases). The earlier
 /// form (the ratio rounded to f32 first, then an f32 product) differs from the rig on 262 of the 18,880 cases (ratio other than 1.0); at
 /// ratio 1.0, the only ratio of every claim run, both forms are equal (MEASURED by test t24).
 pub fn units_width(ctx_unit_width: i32, fx_run_cell_b: f64, fx_run_cell_a: f64) -> f32 {
-    ((ctx_unit_width as f32) as f64 * (fx_run_cell_b / fx_run_cell_a)) as f32
+    nx_mul64((ctx_unit_width as f32) as f64, nx_div64(fx_run_cell_b, fx_run_cell_a)) as f32
 }
 
 /// The ratio arm of: Plain is the arm that keeps the lane-1 operands at 1.0 ([ctx] != 0 and owner flag 0x10 clear;
@@ -57,30 +59,30 @@ pub fn conv_record(c: &ConvIn) -> Option<f32> {
     let width = units_width(c.w, c.conv_in_a, c.d_cell_b);
     let (a, b) = match c.arm {
         RatioArm::Plain => (1.0f32, 1.0f32),
-        RatioArm::Ratio => ((c.d_cell_c / c.conv_in_a) as f32, (c.d_cell_b / c.conv_in_a) as f32),
+        RatioArm::Ratio => (nx_div64(c.d_cell_c, c.conv_in_a) as f32, nx_div64(c.d_cell_b, c.conv_in_a) as f32),
     };
     let mut x = c.host;
     match c.ptype {
         1 => {}
-        2 => x = cvtt(x + 0.5f32) as f32,
+        2 => x = cvtt(nx_add(x, 0.5f32)) as f32,
         _ => return None,
     }
     match c.kind & 0xf {
         0 => {}
         5 => {
             let clamp = |v: f32| if (0.0001f64 < v as f64) || v.is_nan() { v } else { 1.0f32 };
-            let k = (2.0f32 / width) * c.ns;
-            x *= k;
+            let k = nx_mul(nx_div(2.0f32, width), c.ns);
+            x = nx_mul(x, k);
             if c.lane == 1 {
-                let num = c.conv_in_b * clamp(a);
+                let num = nx_mul(c.conv_in_b, clamp(a));
                 let den = -clamp(b);
-                x *= num / den;
+                x = nx_mul(x, nx_div(num, den));
             }
         }
         _ => return None,
     }
     if c.flags & 0x40 != 0 {
-        x /= 100.0f32;
+        x = nx_div(x, 100.0f32);
     }
     Some(x)
 }
@@ -101,11 +103,11 @@ pub fn snap_16_16(host: f64) -> f32 {
 
 /// record = host x ((2 / W) x ns), f32 throughout; / 100 when the record flag 0x40 is set.
 pub fn normalize_scale_record(host: f32, width: f32, ns: f32, flag40: bool) -> f32 {
-    let t = 2.0f32 / width;
-    let k = t * ns;
-    let r = host * k;
+    let t = nx_div(2.0f32, width);
+    let k = nx_mul(t, ns);
+    let r = nx_mul(host, k);
     if flag40 {
-        r / 100.0f32
+        nx_div(r, 100.0f32)
     } else {
         r
     }
@@ -141,8 +143,8 @@ pub fn host_param_lane0(program: &str, param: &str, host: f32, ns: f32, uw: f32,
 /// f32(d / f32(f32(2 / 1920) x ns)), the reference width 1920 and every operation a single-precision one.
 pub fn registered_ns_host(text_default: f32, ns: f32) -> f32 {
     let t = 2.0f32 / 1920.0f32;
-    let k = t * ns;
-    text_default / k
+    let k = nx_mul(t, ns);
+    nx_div(text_default, k)
 }
 
 /// The registered 16.16 word of a normalize_scale slider: the registered host value widened to f64, multiplied by 65536

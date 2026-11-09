@@ -12,23 +12,26 @@ const K_HALF: u64 = 0x3fe0_0000_0000_0000; //
 const K_DBLMIN: u64 = 0x0010_0000_0000_0000; // 
 const K_2P1023: u64 = 0x7fe0_0000_0000_0000; // 
 
+use fx_common::x86::{nx_add64, nx_div64, nx_mul64, nx_sub64};
+
 fn f(b: u64) -> f64 {
     f64::from_bits(b)
 }
 fn bt(x: f64) -> u64 {
     x.to_bits()
 }
+// double precision operations with the NaN result of x86 on every processor
 fn mul(a: u64, b: u64) -> u64 {
-    bt(f(a) * f(b))
+    bt(nx_mul64(f(a), f(b)))
 }
 fn sub(a: u64, b: u64) -> u64 {
-    bt(f(a) - f(b))
+    bt(nx_sub64(f(a), f(b)))
 }
 fn add(a: u64, b: u64) -> u64 {
-    bt(f(a) + f(b))
+    bt(nx_add64(f(a), f(b)))
 }
 fn div(a: u64, b: u64) -> u64 {
-    bt(f(a) / f(b))
+    bt(nx_div64(f(a), f(b)))
 }
 fn psllq(x: u64, c: u64) -> u64 {
     if c > 63 { 0 } else { x << c }

@@ -73,6 +73,20 @@ pub fn fma231(d: f32, s2: f32, s3: f32) -> f32 {
     if r.is_nan() { pick3(d, s2, s3) } else { r }
 }
 
+/// `vfmadd213ss d, s2, s3`: d * s2 + s3 with one rounding. NaN priority d, s2, s3.
+#[inline(always)]
+pub fn fma213(d: f32, s2: f32, s3: f32) -> f32 {
+    let r = d.mul_add(s2, s3);
+    if r.is_nan() { pick3(d, s2, s3) } else { r }
+}
+
+/// `vfmadd132ss d, s2, s3`: d * s3 + s2 with one rounding. NaN priority d, s2, s3 (the multiplicand, the addend, the multiplier).
+#[inline(always)]
+pub fn fma132(d: f32, s2: f32, s3: f32) -> f32 {
+    let r = d.mul_add(s3, s2);
+    if r.is_nan() { pick3(d, s2, s3) } else { r }
+}
+
 /// True when any element is a NaN. A branch free reduction the compiler can vectorize.
 #[inline]
 pub fn has_nan(s: &[f32]) -> bool {
@@ -81,7 +95,7 @@ pub fn has_nan(s: &[f32]) -> bool {
 
 /// A NaN result that no operand supplied is the default NaN; every other value is unchanged.
 #[inline(always)]
-fn canon(r: f32) -> f32 {
+pub fn canon(r: f32) -> f32 {
     if r != r { f32::from_bits(0xffc0_0000) } else { r }
 }
 
@@ -167,6 +181,38 @@ mod tests {
         assert_eq!(fma231(1.0, a, c).to_bits(), 0x7fc0_0001);
         assert_eq!(fma231(c, a, 1.0).to_bits(), 0x7fc0_0002);
         assert_eq!(fma231(1.0, f32::INFINITY, 0.0).to_bits(), 0xffc0_0000);
+    }
+
+    #[test]
+    fn subtracted_nan_is_returned_quieted_and_not_negated() {
+        let (x, q, s) = (b(0x7fc0_0001), b(0x7fc0_0002), b(0x7f80_0003));
+        // d wins over the subtracted operand
+        assert_eq!(fms213(x, 2.0, q).to_bits(), 0x7fc0_0001);
+        // only the subtracted operand is NaN: its own sign and payload, quieted
+        assert_eq!(fms213(1.0, 2.0, q).to_bits(), 0x7fc0_0002);
+        assert_eq!(fms213(1.0, 2.0, s).to_bits(), 0x7fc0_0003);
+        assert_eq!(fms213(1.0, 2.0, b(0xffc0_0002)).to_bits(), 0xffc0_0002);
+        assert_eq!(fms213(1.0, 2.0, b(0xff80_0004)).to_bits(), 0xffc0_0004);
+        // second source before the subtracted operand
+        assert_eq!(fms213(1.0, x, q).to_bits(), 0x7fc0_0001);
+        // fresh NaN
+        assert_eq!(fms213(f32::INFINITY, 2.0, f32::INFINITY).to_bits(), 0xffc0_0000);
+        assert_eq!(fms213(1.5, 2.0, 0.5).to_bits(), 2.5f32.to_bits());
+    }
+
+    #[test]
+    fn fused_213_and_132_priority() {
+        let (x, y, z) = (b(0x7f80_0001), b(0xff80_0002), b(0x7fc0_0003));
+        assert_eq!(fma213(x, y, z).to_bits(), 0x7fc0_0001);
+        assert_eq!(fma213(1.0, y, z).to_bits(), 0xffc0_0002);
+        assert_eq!(fma213(1.0, 2.0, z).to_bits(), 0x7fc0_0003);
+        assert_eq!(fma213(1.5, 2.0, 0.5).to_bits(), 3.5f32.to_bits());
+        assert_eq!(fma213(f32::INFINITY, 0.0, 1.0).to_bits(), 0xffc0_0000);
+        assert_eq!(fma132(x, y, z).to_bits(), 0x7fc0_0001);
+        assert_eq!(fma132(1.0, y, z).to_bits(), 0xffc0_0002);
+        assert_eq!(fma132(1.0, 2.0, z).to_bits(), 0x7fc0_0003);
+        assert_eq!(fma132(1.5, 2.0, 4.0).to_bits(), 1.5f32.mul_add(4.0, 2.0).to_bits());
+        assert_eq!(fma132(f32::INFINITY, 1.0, 0.0).to_bits(), 0xffc0_0000);
     }
 
     #[test]

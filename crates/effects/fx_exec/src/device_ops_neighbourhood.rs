@@ -14,6 +14,7 @@ use blur_coef::{DriverParams, Plan};
 use fx_device::cl::{Arg as ClArg, Buffer};
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
+use fx_common::nanop::NanOps;
 use std::sync::Arc;
 
 pub const BLUR: DeviceOp = DeviceOp { class: "blur", accepts: blur_accepts, run: blur_run, corpus: blur_corpus };
@@ -615,7 +616,7 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
     arr[..7].copy_from_slice(&sigmoid);
     arr[7..10].copy_from_slice(&rel_chan);
     let width_f = cw as f32;
-    let mut base = (0.125f32 * tiny) * width_f;
+    let mut base = fx_common::x86::nx_mul(0.125f32 * tiny, width_f);
     let dv = (nu as f32) * edge_threshold;
     let kcell = c.kp.host_aspect;
 
@@ -650,24 +651,24 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
     let (wu, hu) = (w as u32, h as u32);
     let nn = n as u32;
     for it in 0..iters.max(0) as usize {
-        let s2 = base / dv;
+        let s2 = base.fdiv(dv);
         // weight planes
         let ca = j3::c_a(base);
         let cb = j3::c_a(base);
-        let kcb = kcell * cb;
+        let kcb = kcell.fmul(cb);
         let (mut c10, mut c11) = (0.0f32, 0.0f32);
         if sig_byte {
             c10 = ca;
             let bd = sigma0 as f64;
             if j3::LOW > bd {
-                c11 = kcell * cb;
+                c11 = kcell.fmul(cb);
             } else if bd > j3::HIGH {
                 c10 = j3::ONE;
                 c11 = kcell;
             } else {
                 let x = j3::ONE / sigma0;
                 c10 = j3::minss(x, c10);
-                c11 = kcell * j3::minss(x, cb);
+                c11 = kcell.fmul(j3::minss(x, cb));
             }
         }
         s.launch(
@@ -728,7 +729,7 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
                     s.queue.copy(buf(sp), buf(pb[ch]))?;
                 }
             }
-            let m = arr[it].mul_add(edge_aware_sharpen_render::MIX_C, -edge_aware_sharpen_render::MIX_C).mul_add(arr[7 + ch], edge_aware_sharpen_render::MIX_C);
+            let m = fx_common::nanop::fma132(arr[it].mul_add(edge_aware_sharpen_render::MIX_C, -edge_aware_sharpen_render::MIX_C), edge_aware_sharpen_render::MIX_C, arr[7 + ch]);
             s.launch("esh_level_f32", n, &[buf(pb[ch]).arg(), buf(pa[ch]).arg(), out.plane(ch).arg(), ClArg::U32(nn), ClArg::F32(m)])?;
             if pa[ch] == in_ids[ch] {
                 pa[ch] = pb[ch];
@@ -881,6 +882,96 @@ pub fn blur_nan_pair_cases() -> Vec<SelfCase> {
     out
 }
 
+/// NaN words of both signs, signalling and quiet, with different payloads (none is the bare 0x7fc00000 that the sharpen kernel maps
+/// to the default NaN), and the finite or infinite values that sit between them.
+const PAIR_NANS: [u32; 6] = [0x7f80_0001, 0xffc0_0000, 0x7fc0_0002, 0xff80_0003, 0x7fa0_0000, 0xffff_ffff];
+const PAIR_SPECIAL: [u32; 6] = [0x7f80_0000, 0xff80_0000, 0x0000_0000, 0x8000_0000, 0x3f80_0000, 0x7f7f_ffff];
+
+/// A plane in which every `density`-th sample (density 1: a random half) is a NaN, some are specials and the rest lie in [lo, hi).
+fn pair_plane(n: usize, seed: u64, density: usize, lo: f32, hi: f32) -> Vec<f32> {
+    let mut s = 0x2545_f491_4f6c_dd1du64 ^ seed.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    (0..n)
+        .map(|i| {
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let r = (s >> 33) as usize;
+            if i % density == 0 && density > 1 || density == 1 && r % 2 == 0 {
+                f32::from_bits(PAIR_NANS[r % PAIR_NANS.len()])
+            } else if r % 11 == 0 {
+                f32::from_bits(PAIR_SPECIAL[(r >> 4) % PAIR_SPECIAL.len()])
+            } else {
+                ((s >> 40) as f32 / (1u64 << 24) as f32) * (hi - lo) + lo
+            }
+        })
+        .collect()
+}
+
+/// masked_blur with NaN in the mask and in the source, so the premultiply sees two NaN operands and the combine sees a NaN source with a
+/// NaN difference. The device result must equal the CPU bit for bit, payloads included.
+pub fn masked_blur_nan_pair_cases() -> Vec<SelfCase> {
+    let sets: [(f32, f32, f32, f32); 4] = [(0.0, 0.0, 2.0, 0.0), (0.5, 0.5, 2.0, 0.0), (1.3, 0.2, 1.0, 1.0), (3.0, 2.0, 0.0, 1.0)];
+    let mut out = Vec::new();
+    for &(w, h) in &[(5usize, 7usize), (16, 16), (45, 23), (130, 3)] {
+        let n = w * h;
+        for (si, p) in sets.iter().enumerate() {
+            for density in [3usize, 7, 1] {
+                for tag in [1usize, 3] {
+                    let seed = (w * 131 + h * 7 + si * 3 + density) as u64;
+                    let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 17 * c as u64, density, -0.25, 1.25)).collect() };
+                    let mask = Image { n, planes: vec![pair_plane(n, seed ^ 0x55, density + 1, -0.1, 1.2)] };
+                    let mut kp = KParams::standin();
+                    kp.blur_render_scale = 0;
+                    out.push(SelfCase {
+                        name: format!("{w}x{h} nan pairs set {si} density {density} tag {tag}"),
+                        dims: (w, h),
+                        tag: tag as i32,
+                        args: vec![src, mask],
+                        consts: vec![cst(2, &[p.0, p.1]), cst(3, &[p.2]), cst(4, &[p.3])],
+                        kp: Some(kp),
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// sharpen with NaN samples, gain exactly 1.0 (the fused unit path), other gains and a NaN gain, so the fused step sees two NaN operands
+/// in every pair of (source, difference, gain). The device result must equal the CPU bit for bit, payloads included.
+pub fn sharpen_nan_pair_cases() -> Vec<SelfCase> {
+    let nan_gain = f32::from_bits(0x7fc0_0005);
+    let sets: [(f32, [f32; 4], bool); 5] = [
+        (0.4, [1.0, 1.0, 1.0, 1.0], false),
+        (0.4, [2.0, 0.5, 1.0, 1.0], true),
+        (1.0, [nan_gain, 1.0, 3.0, 1.0], false),
+        (2.5, [1.0, nan_gain, 1.0, 1.0], true),
+        (0.112, [1.5, 1.0, nan_gain, 1.0], false),
+    ];
+    let mut out = Vec::new();
+    for &(w, h) in &[(5usize, 7usize), (16, 16), (45, 23), (130, 3)] {
+        let n = w * h;
+        for (si, p) in sets.iter().enumerate() {
+            for density in [3usize, 7, 1] {
+                for tag in [1usize, 3] {
+                    let seed = (w * 131 + h * 7 + si * 3 + density) as u64;
+                    let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 17 * c as u64, density, -0.25, 1.25)).collect() };
+                    let mut kp = KParams::standin();
+                    kp.sharpen_count = Some(n);
+                    kp.sharpen_alias = p.2;
+                    out.push(SelfCase {
+                        name: format!("{w}x{h} nan pairs set {si} density {density} tag {tag}"),
+                        dims: (w, h),
+                        tag: tag as i32,
+                        args: vec![src],
+                        consts: vec![cst(1, &p.1), cst(2, &[p.0])],
+                        kp: Some(kp),
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
 fn masked_blur_corpus() -> Vec<SelfCase> {
     let sets: [(f32, f32, f32, f32, i32); 5] = [(0.5, 0.5, 2.0, 0.0, 0), (0.3, 0.8, 0.0, 1.0, 0), (1.3, 0.2, 1.0, 1.0, 0), (0.0, 0.0, 2.0, 0.0, 0), (8.0, 6.0, 2.0, 1.0, 400)];
     let mut out = Vec::new();
@@ -917,6 +1008,7 @@ fn masked_blur_corpus() -> Vec<SelfCase> {
             kp: Some(KParams::standin()),
         });
     }
+    out.extend(masked_blur_nan_pair_cases());
     out
 }
 
@@ -1006,6 +1098,7 @@ fn sharpen_corpus() -> Vec<SelfCase> {
         kp.sharpen_count = Some(w * h);
         out.push(SelfCase { name: format!("{w}x{h} constant source"), dims: (w, h), tag: 3, args: vec![], consts: vec![cst(0, &[0.5, 0.25, 0.75]), cst(1, &[2.0, 2.0, 2.0, 2.0]), cst(2, &[0.4])], kp: Some(kp) });
     }
+    out.extend(sharpen_nan_pair_cases());
     out
 }
 

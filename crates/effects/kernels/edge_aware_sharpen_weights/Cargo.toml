@@ -9,5 +9,8 @@ description = "Std-only port of pool job (AVX2 body, edge_aware_sharpen / domain
 [lib]
 path = "src/lib.rs"
 
+[dependencies]
+fx_common = { path = "../../fx_common" }
+
 [dev-dependencies]
 effects_vecdir = { path = "../../vecdir" }

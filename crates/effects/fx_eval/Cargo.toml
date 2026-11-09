@@ -50,6 +50,7 @@ pd_text_mut = []
 pd_nominus_mut = []
 
 [dependencies]
+fx_common = { path = "../fx_common" }
 effects_rtdata = { path = "../rtdata" }
 libm_sincos = { path = "../kernels/libm_sincos" }
 shake_shift = { path = "../kernels/shake_shift" }

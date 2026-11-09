@@ -10,5 +10,6 @@ description = "Native port of class rotate (vtable), slot 53, AVX2 body; callee 
 path = "src/lib.rs"
 
 [dependencies]
+fx_common = { path = "../../fx_common" }
 libm_sincos = { path = "../libm_sincos" }
 
