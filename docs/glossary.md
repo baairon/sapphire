@@ -1,14 +1,18 @@
 # Glossary
 
-The technical terms of the parity record, one entry each. Pages link a term here on its first use.
+The technical terms of the function record, with the emulator that judges both parts and the effects' parity record, one entry each. Pages link a term here on its first use.
 
 ## Dump
 
-The raw x86-64 code section of a build of the plugin, the code that the Rust ports replace. No byte of it is in this repository ([lift crates: the input](lifting.md#the-input)).
+One raw x86-64 code section of a separate code image of a build of the plugin: per the class names of the [name bank](#name-bank), video output code for AJA and Blackmagic hardware (the section itself holds no names). It is the code of the [function record](#function-record), which the Rust ports reproduce. No byte of it is in this repository ([lift crates: the input](lifting.md#the-input)).
+
+## Function record
+
+The `lift-*` crates with the tables and evidence behind them: for each function of the [dump](#dump), its exact name, its call edges, a Rust [port](#port) and the evidence that the port matches the original. It is a reverse-engineering reference of that code; the effects use none of it ([how the two parts relate](../README.md#effects-and-stages)).
 
 ## Port
 
-The Rust function that replaces one function of the dump, under the id `f_XXXXXXXX` (the 8 hex digits of its offset in the dump).
+The Rust function that reproduces one function of the dump, under the id `f_XXXXXXXX` (the 8 hex digits of its offset in the dump).
 
 ## Missing reference
 
@@ -26,9 +30,17 @@ An import stub: a short entry outside the dump through which the code calls a li
 
 The tables under `docs/data/` that name every function, stub, local class, effect and parameter candidate by offset (`names.tsv`, `stub_names.tsv`, `classes_names.tsv`, `effect_names.tsv`, `param_candidates.tsv`). The bank is the source of truth for names; code symbols stay `f_XXXXXXXX` ([names](names.md)).
 
+## Emulator
+
+The program that runs the original x86-64 code in place of a processor and judges every port and every rebuilt effect against it. The function record's oracle and world generator run its functions in Unicorn ([harness](harness.md), [reproduce: what needs the archive](reproduce.md#what-needs-the-archive)). The effects' kernel and whole-render comparisons also run the original in Unicorn, with an engine for the original's AVX, AVX2 and FMA (VEX) instructions that follows Intel's specification (SDM), not silicon ([effects: limits](effects.md#limits-common-to-the-effects)).
+
+## Parity record
+
+The record behind the <!--f:effects_rebuilt-->15<!--/f--> rebuilt effects, separate from the [function record](#function-record): the verified comparisons of each effect with the original plugin running in the [emulator](#emulator), and the recorded renders, the outputs of the final binary kept as the expected result of each case ([effects: what rebuilt means](effects.md#what-rebuilt-means)). It is kept outside the repository; `docs/data/effects_status.tsv` holds its counts.
+
 ## Oracle vector
 
-One recorded case of a self-contained function of the dump, run in the emulator: its arguments, its returns and its final buffers ([harness: oracle](harness.md#oracle)).
+One recorded case of a self-contained function of the dump, run in the [emulator](#emulator): its arguments, its returns and its final buffers ([harness: oracle](harness.md#oracle)).
 
 ## World
 

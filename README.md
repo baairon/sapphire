@@ -2,7 +2,7 @@
 
 An independent open source reimplementation of Sapphire behaviour, function by function. It is not affiliated with or endorsed by any other company, product or library.
 
-sapphire rebuilds the plugin's functions and fifteen of its video effects in Rust, and runs the effects on video through ffmpeg. The `sapphire` command decodes a clip with ffmpeg, passes its frames through one or more effect stages (and, if wanted, twixtor's `vfx`), encodes the result and checks it before writing the output. Each port is compared with the original on every compared input, and the parity record in [docs/parity.md](docs/parity.md) says exactly what is covered.
+sapphire has two parts with different jobs. The **effects** are <!--f:effects_rebuilt-->15<!--/f--> of the plugin's video effects, rebuilt in Rust: `fx_run` renders one effect from its input planes, and the `sapphire` command decodes a clip with ffmpeg, passes its frames through one or more effect stages (and, if wanted, twixtor's `vfx`), encodes the result and checks it before writing the output. The **function record** is a reverse-engineering reference of one small code section of a separate code image of a build of the plugin, by its function names mostly bundled video hardware library code and std: for each of its <!--f:fn_total-->2,702<!--/f--> functions it holds the exact name, the call edges, a Rust port and the evidence that the port matches the original on every compared input, and [docs/parity.md](docs/parity.md) says exactly what is covered. The effects are rebuilt separately and do not call the function record ([Effects and stages](#effects-and-stages)).
 
 ## Status
 
@@ -10,7 +10,7 @@ sapphire rebuilds the plugin's functions and fifteen of its video effects in Rus
 - **Speed.** The CPU path renders one 1920x1080 frame of the slowest stage, `blur_motion_curves_no_transform_autogen`, in about 1.1 s where the earlier one process per frame route took about 52 s (MEASURED; [Speed](docs/guide.md#speed)).
 - **Keyframes.** Every effect stage accepts keyed parameter values (`VALUE@FRAME;VALUE@FRAME`) except `trails_autogen`; each frame is a plain run at the value the keys give for it (MEASURED), and the values between keys are INFERRED ([guide](docs/guide.md#running-a-stage-on-a-clip)).
 - **Device path.** `--device gpu|gpu=N|auto` and `SAPPHIRE_DEVICE` run the kernels through OpenCL, byte identical to the CPU path. It is MEASURED on PoCL, an OpenCL runtime on the CPU, only; speed on a real GPU is INFERRED ([guide](docs/guide.md#rendering-on-a-device)).
-- **Functions.** <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f--> functions reach [strict parity](docs/glossary.md#strict) ([Parity](#parity)).
+- **Function record.** A reverse-engineering reference of one small code section of a separate code image; by their bank names its functions are mostly the bundled AJA video hardware SDK and std, plus display and video output classes of its own ([Names](#names)), and no effect uses them. <!--f:strict_fns-->2,702<!--/f--> of <!--f:fn_total-->2,702<!--/f--> functions reach [strict parity](docs/glossary.md#strict) ([Parity](#parity)).
 - **Usage.** [docs/guide.md](docs/guide.md) shows how to run the effects on a video; the [Command-line reference](docs/cli.md) lists every flag, environment variable, exit code and refusal.
 
 ## Contents
@@ -64,7 +64,7 @@ target/release/sapphire stage list
 target/release/sapphire clip.mp4 --depth 32 --stage "@hue_sat_bright_autogen hue_shift=0.25" -o clip_hue.mp4
 ```
 
-The last command decodes `clip.mp4`, shifts its hue with the `S_HueSatBright` stage, encodes `clip_hue.mp4` and verifies it. Depth 32 is the render path the parity record covers. Stage ids, parameters, chaining and twixtor are in the [guide](docs/guide.md).
+The last command decodes `clip.mp4`, shifts its hue with the `S_HueSatBright` stage, encodes `clip_hue.mp4` and verifies it. Depth 32 is the render path the [parity record](docs/glossary.md#parity-record) covers. Stage ids, parameters, chaining and twixtor are in the [guide](docs/guide.md).
 
 ## Documentation
 
@@ -75,10 +75,10 @@ The last command decodes `clip.mp4`, shifts its hue with the `S_HueSatBright` st
 - [docs/stages.md](docs/stages.md): the stage manifest and apply command, how a new provider joins, and the effects provider.
 - [docs/roadmap.md](docs/roadmap.md): the planned effects, ranked in four tiers for YouTube edits, and the fifteen done.
 - [docs/adding-an-effect.md](docs/adding-an-effect.md): how to add the next effects.
-- [docs/glossary.md](docs/glossary.md): the technical terms of the parity record.
-- [docs/parity.md](docs/parity.md): what parity means, the tiers, strict and strictest, the caveats.
+- [docs/glossary.md](docs/glossary.md): the technical terms of the function record.
+- [docs/parity.md](docs/parity.md): what parity means for the function record, the tiers, strict and strictest, the caveats.
 - [docs/harness.md](docs/harness.md): the oracle, worlds, the `Env` trait, vector sets, comparison and replay.
-- [docs/lifting.md](docs/lifting.md): mechanical lift and hand port, the crate layout, the x86 rules the ports reproduce.
+- [docs/lifting.md](docs/lifting.md): what the function record documents, mechanical lift and hand port, the crate layout, the x86 rules the ports reproduce.
 - [docs/evidence.md](docs/evidence.md): the evidence classes and the record behind each function's status.
 - [docs/assumptions.md](docs/assumptions.md): every assumption the parity figures rest on.
 - [docs/missing-data.md](docs/missing-data.md): references the dump does not contain, and their placeholders.
@@ -95,9 +95,11 @@ For scripts, the quickest answers are: `python -I tools/fn_info.py ID|NAME|OFFSE
 
 ## Parity
 
-1:1 parity with the build it replaces comes before speed, convenience and a cleaner design: when they conflict, parity wins.
+The figures in this section are those of the function record: the <!--f:fn_total-->2,702<!--/f--> functions of the [dump](docs/glossary.md#dump), one small code section of a separate code image; by their bank names they are mostly bundled video hardware library code and std, plus display and video output classes of its own ([Names](#names)). The <!--f:effects_rebuilt-->15<!--/f--> effects are checked separately ([what rebuilt means](docs/effects.md#what-rebuilt-means)).
 
-- **Output.** A port gives what the function it replaces gives on every compared input: bit for bit on oracle vectors ([tier P1](docs/glossary.md#p1)), and the same returns, memory writes and calls in every [compared world](docs/glossary.md#compared-world) ([tier P2v](docs/glossary.md#p2v)) ([tiers](docs/parity.md#tiers)).
+1:1 parity with the original code comes before speed, convenience and a cleaner design: when they conflict, parity wins.
+
+- **Output.** A port gives what its original function gives on every compared input: bit for bit on oracle vectors ([tier P1](docs/glossary.md#p1)), and the same returns, memory writes and calls in every [compared world](docs/glossary.md#compared-world) ([tier P2v](docs/glossary.md#p2v)) ([tiers](docs/parity.md#tiers)).
 - **Interface.** Each port keeps its function's offset in its symbol, `f_XXXXXXXX`, and the name bank gives that function's exact name.
 - **No near misses.** A port that differs on any compared input is in no parity figure ([unproven](docs/parity.md#unproven)).
 - **Measured, not assumed.** Each function and its port run on the same generated inputs and every result is compared ([harness](docs/harness.md)); what the figures rest on is in [assumptions](docs/assumptions.md).
@@ -118,6 +120,10 @@ Known port divergences outside the harness model are listed in [parity](docs/par
 Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn_total-->2,702<!--/f--> functions, most of them bundled library code.
 
 ## Effects and stages
+
+The two parts of the repository share a method and its tools, but their crates share no code: each part judges Rust code against the original running in the Unicorn [emulator](docs/glossary.md#emulator). The <!--f:effects_rebuilt-->15<!--/f--> effects are rebuilt from the plugin's effect programs and the builtin classes they call ([what rebuilt means](docs/effects.md#what-rebuilt-means)); the effect crates cite the listing of a separate code section of a build of the plugin, much larger than the one the function record covers, and none cites the record's section. Per the name bank, the function record's section holds bundled library code, std, component code (by its class names, display and video output classes) and functions of undetermined origin, and the bank maps no effect to any of them ([Names](#names)).
+
+The effects' tools build on the function record's. Their kernel comparisons run in a harness that uses the register and error tables of the record's oracle (`archive:tools/oracle.py`); the disassembly listing that the effect crates cite was made by the record's indexing tool (`archive:tools/index_dump.py`); and an adapted copy of the record's lifter has lifted and compared functions of the larger section, none of which is in this repository. The effect crates use no code of the function record: their x86 rules are their own (`crates/effects/fx_common/src/x86.rs` and `crates/effects/fx_common/src/nanop.rs`), and no effect crate and no command depends on a lift crate, `neutral-world` or `neutral-parity` ([Crate map](#crate-map)).
 
 The fifteen native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned effects, ranked in four tiers, are in [docs/roadmap.md](docs/roadmap.md). A stage is a program that passes raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
 
@@ -159,7 +165,7 @@ The name bank is the source of truth for every name; the code keeps its `f_XXXXX
 
 **Effect names.** The <!--f:effects_total-->272<!--/f--> effect names are strings only: none is mapped to functions, classes, parameters or behaviour, and the fifteen effects of [docs/effects.md](docs/effects.md) are rebuilt separately as native code. They are listed verbatim in [docs/generated/effects.md](docs/generated/effects.md), the parameter candidates in `docs/generated/parameters.md`; a candidate is not a confirmed parameter.
 
-**Origin.** The bank classes <!--f:origin_bundled-->1,983<!--/f--> functions as bundled library code (the class `CNTV2Card` alone has <!--f:cntv2card_fns-->906<!--/f-->), <!--f:origin_std-->514<!--/f--> as std, <!--f:origin_undetermined-->136<!--/f--> as undetermined and <!--f:origin_component-->69<!--/f--> as component.
+**Origin.** The bank classes <!--f:origin_bundled-->1,983<!--/f--> functions as bundled library code (the class `CNTV2Card` alone has <!--f:cntv2card_fns-->906<!--/f-->), <!--f:origin_std-->514<!--/f--> as std, <!--f:origin_undetermined-->136<!--/f--> as undetermined and <!--f:origin_component-->69<!--/f--> as component, by their class names the section's own display and video output classes ([names: origin](docs/names.md#origin)).
 
 **Confirmation.** Each function name has one level in `docs/data/name_confirmation.tsv`:
 
@@ -180,11 +186,11 @@ Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, 
 
 | Member | Builds | Owns | Key modules (`src/`) | Tests (`#[test]` lines, scan) |
 |---|---|---|---|---|
-| `crates/neutral-world` | library | The Rust side of the world harness: the seeded model of everything outside the dump, the `Env` trait every lifted function is written against, world replay and comparison | `lib.rs` (`Env`, `World`, `check`, `Report`) | <!--f:tests_scan_neutral_world-->17<!--/f-->; `tests/synthetic.rs`, `tests/pin.rs` |
-| `crates/neutral-parity` | library | Replay of oracle vectors against ported functions | `lib.rs` (`parse`, `check`, `Report`) | <!--f:tests_scan_neutral_parity-->4<!--/f--> |
+| `crates/neutral-world` | library | The Rust side of the world harness of the function record: the seeded model of everything outside the dump, the `Env` trait every lifted function is written against, world replay and comparison. Only the lift crates depend on it; no effect crate and no command does | `lib.rs` (`Env`, `World`, `check`, `Report`) | <!--f:tests_scan_neutral_world-->17<!--/f-->; `tests/synthetic.rs`, `tests/pin.rs` |
+| `crates/neutral-parity` | library | Replay of oracle vectors against the ported functions of the function record. Only the tests of the lift crates depend on it; no effect crate and no command does | `lib.rs` (`parse`, `check`, `Report`) | <!--f:tests_scan_neutral_parity-->4<!--/f--> |
 | `crates/neutral-ffmpeg` | library | ffmpeg and ffprobe as child processes: decoder, encoder, filter graph, probe, pixel format table | `decoder.rs`, `encoder.rs`, `filter.rs`, `probe.rs`, `pixfmt.rs` with `pixfmt_table.rs`, `locate.rs`, `process.rs` | <!--f:tests_scan_neutral_ffmpeg-->130<!--/f-->; `tests/*_live.rs` need ffmpeg |
 | `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->265<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
-| `crates/lift-a`, `crates/lift-b`, `crates/lift-1` to `crates/lift-8` | library | The ported functions. The <!--f:lift_crates-->10<!--/f--> lift crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions of the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once; the per-crate detail is in [lifting](docs/lifting.md#crate-layout) | `p1/`, `p2v/`, `missing.rs` (placeholders), `dup.rs`, `x86rt.rs` (`lift_rt.rs` in `lift-a`); `liftcheck/` in `lift-a` (feature `liftcheck`) | per crate in `docs/generated/crates.md`; `#[ignore]` without the stored vector sets |
+| `crates/lift-a`, `crates/lift-b`, `crates/lift-1` to `crates/lift-8` | library | The function record: the ported functions of its code section, a reverse-engineering reference that no effect crate and no command depends on. The <!--f:lift_crates-->10<!--/f--> lift crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions of the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once; the per-crate detail is in [lifting](docs/lifting.md#crate-layout) | `p1/`, `p2v/`, `missing.rs` (placeholders), `dup.rs`, `x86rt.rs` (`lift_rt.rs` in `lift-a`); `liftcheck/` in `lift-a` (feature `liftcheck`) | per crate in `docs/generated/crates.md`; `#[ignore]` without the stored vector sets |
 
 The effect crates are under `crates/effects` (the evaluator `fx_eval`, the executor and `fx_run` in `fx_exec`, the kernel crates they call in `crates/effects/kernels`, and the test helpers `effects_vecdir` and `effects_rtdata`); they are workspace members, and the ones whose tests need no stored data are default members ([effects](docs/effects.md)).
 

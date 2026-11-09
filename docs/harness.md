@@ -1,6 +1,6 @@
 # Harness
 
-How a Rust port is compared with the build it replaces. That build runs in the Unicorn emulator under the archived Python oracle and world generator; the Rust side is `crates/neutral-parity` (P1 vectors) and `crates/neutral-world` (world vectors), which parse the vector files, run the port on the same inputs and compare. The [tiers](glossary.md#tier) this produces are in [parity](parity.md), and the terms are defined in the [glossary](glossary.md).
+How a Rust port is compared with the original code it ports. That code runs in the Unicorn [emulator](glossary.md#emulator) under the archived Python oracle and world generator; the Rust side is `crates/neutral-parity` (P1 vectors) and `crates/neutral-world` (world vectors), which parse the vector files, run the port on the same inputs and compare. The [tiers](glossary.md#tier) this produces are in [parity](parity.md), and the terms are defined in the [glossary](glossary.md).
 
 ## Terms
 

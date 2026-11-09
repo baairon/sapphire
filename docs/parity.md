@@ -1,17 +1,19 @@
 # Parity
 
-How many functions of the [dump](glossary.md#dump) match the build they replace, and under which standard. The comparison itself is in [harness](harness.md); every term is defined in the [glossary](glossary.md).
+This page gives the parity figures of the [function record](glossary.md#function-record), a reverse-engineering reference of one small code section of a separate code image, the [dump](glossary.md#dump): by their bank names its <!--f:fn_total-->2,702<!--/f--> functions are mostly the bundled AJA video hardware SDK and std, plus display and video output classes of its own ([names: origin](names.md#origin)). The record serves anyone studying how that code behaves. The <!--f:effects_rebuilt-->15<!--/f--> [effects](effects.md) are rebuilt separately, do not call the function record and are checked in their own way ([what rebuilt means](effects.md#what-rebuilt-means)).
+
+How many functions of the dump have a Rust port that matches the original function, and under which standard. The comparison itself is in [harness](harness.md); every term is defined in the [glossary](glossary.md).
 
 ## Terms
 
 | Term | Meaning |
 |---|---|
-| [P1](glossary.md#p1) | tier of a self-contained function whose port equals the function it replaces bit for bit on its oracle vectors |
-| [P2v](glossary.md#p2v) | tier of a function that is not self-contained, compared with the function it replaces in worlds; status `done` means it passed the world check, `partial` that it did not |
+| [P1](glossary.md#p1) | tier of a self-contained function whose port equals the original function bit for bit on its oracle vectors |
+| [P2v](glossary.md#p2v) | tier of a function that is not self-contained, whose port is compared with the original function in worlds; status `done` means it passed the world check, `partial` that it did not |
 | [P2](glossary.md#p2) | tier of a port with the exact control flow and arithmetic whose missing references are placeholders; not compared, so not parity |
 | [P2-std](glossary.md#p2-std) | tier of a recognised libc++ container, string or smart pointer instantiation mapped to the Rust std type |
 | [P3](glossary.md#p3) | tier of a function that needs data that cannot be guessed |
-| [oracle vector](glossary.md#oracle-vector) | one recorded case of the function a port replaces: arguments, returns and final buffers |
+| [oracle vector](glossary.md#oracle-vector) | one recorded case of the original function of a port: arguments, returns and final buffers |
 | [world](glossary.md#world) | a seeded model of everything the dump lacks, in which the function and its port both run |
 | [missing reference](glossary.md#missing-reference) | data, an import or a constant the code uses that is not in the dump |
 | [placeholder](glossary.md#placeholder) | the stand-in a port uses for a missing reference: an `Env` access by its `rel_to_end` (`data_va`, `stub_va`) |
@@ -62,7 +64,7 @@ The standard was revised on 2026-11-05: the harness model gained the two rules H
 
 ## Evidence classes
 
-The code is the dump: the raw x86-64 code section of a build of the plugin. The `evidence` column of `docs/data/FUNCTION_MAP.tsv` gives each row's class ([evidence](evidence.md#evidence-classes)):
+The code is the dump: one raw x86-64 code section, the code of the function record. The `evidence` column of `docs/data/FUNCTION_MAP.tsv` gives each row's class ([evidence](evidence.md#evidence-classes)):
 
 <!--gen:evidence-->
 | evidence | meaning | functions | bytes | share of code |
@@ -79,7 +81,7 @@ The code is the dump: the raw x86-64 code section of a build of the plugin. The 
 
 ## Anyworld rows
 
-The <!--f:ev_anyworld_fns-->0<!--/f--> `anyworld` rows and the <!--f:ev_assumed_fns-->1<!--/f--> `assumed` row ([evidence](evidence.md#the-last-seven-rows)) are the difference between strict parity and strictest. The ports of the `anyworld` rows matched the functions they replace in every compared world; what remains open is whether every branch outcome was exercised in those worlds. For the `assumed` rows every outcome is seen or explained, given their precondition labels.
+The <!--f:ev_anyworld_fns-->0<!--/f--> `anyworld` rows and the <!--f:ev_assumed_fns-->1<!--/f--> `assumed` row ([evidence](evidence.md#the-last-seven-rows)) are the difference between strict parity and strictest. The ports of the `anyworld` rows matched their original functions in every compared world; what remains open is whether every branch outcome was exercised in those worlds. For the `assumed` rows every outcome is seen or explained, given their precondition labels.
 
 <!--gen:anyworld-->
 | bank name | id | offset | bytes | audit verdict |
@@ -101,7 +103,7 @@ The other stack-resident worlds of `f_0002405b` and `f_00024a39` (2,551 and 7,64
 
 ## Unproven
 
-<!--f:unproven_fns-->0<!--/f--> functions are unproven: each of the <!--f:fn_total-->2,702<!--/f--> matched the build it replaces in every compared world. Seven were unproven until a closing round matched them in new world sets and an independent audit re-checked them ([evidence: the last seven rows](evidence.md#the-last-seven-rows)); their rows record the labels they rest on. A function that stopped matching would return here and count in no parity figure.
+<!--f:unproven_fns-->0<!--/f--> functions are unproven: the port of each of the <!--f:fn_total-->2,702<!--/f--> matched its original function in every compared world. Seven were unproven until a closing round matched them in new world sets and an independent audit re-checked them ([evidence: the last seven rows](evidence.md#the-last-seven-rows)); their rows record the labels they rest on. A function that stopped matching would return here and count in no parity figure.
 
 ## Caveats
 

@@ -1,14 +1,16 @@
 # Lift crates
 
+The `lift-*` crates hold the function record: a reverse-engineering reference of one small code section of a separate code image, the [dump](glossary.md#dump). By their bank names its functions are mostly the bundled AJA video hardware SDK and std, plus display and video output classes of its own ([names: origin](names.md#origin)). For each function the record gives its exact C++ and mangled names ([names](names.md)), its call edges and data references ([the input](#the-input)), a Rust port written from its machine code (the lifted modules of the `x86rt.rs` crates carry each machine instruction above its Rust as a comment), and the evidence that the port matches the original on every compared input under the [harness model](glossary.md#harness-model) ([parity](parity.md)). It is for anyone studying how that code behaves, and a worked example of the parity method. The <!--f:effects_rebuilt-->15<!--/f--> [effects](effects.md) are rebuilt separately and do not call it ([how the two parts relate](../README.md#effects-and-stages)).
+
 How the Rust in the `lift-*` crates was produced from the [dump](glossary.md#dump), how the crates are laid out, and the x86 rules the ports reproduce. What reached parity is in [parity](parity.md).
 
 ## The input
 
 | Property | Value |
 |---|---|
-| Dump | the raw x86-64 code section of a build of the plugin: <!--f:code_bytes-->964,659<!--/f--> bytes, <!--f:fn_total-->2,702<!--/f--> functions |
+| Dump | one raw x86-64 code section of a separate code image of a build of the plugin: <!--f:code_bytes-->964,659<!--/f--> bytes, <!--f:fn_total-->2,702<!--/f--> functions, the code of the function record |
 | Content | code with its jump tables embedded; no symbols, strings, constant tables, vtables, import names or headers ([missing data](missing-data.md)) |
-| Origin | per the name bank, <!--f:origin_bundled-->1,983<!--/f--> functions are bundled library code, <!--f:origin_std-->514<!--/f--> std, <!--f:origin_undetermined-->136<!--/f--> undetermined and <!--f:origin_component-->69<!--/f--> component code ([names: origin](names.md#origin)) |
+| Origin | per the name bank, <!--f:origin_bundled-->1,983<!--/f--> functions are bundled library code, <!--f:origin_std-->514<!--/f--> std, <!--f:origin_undetermined-->136<!--/f--> undetermined and <!--f:origin_component-->69<!--/f--> component code, by their class names the section's own display and video output classes ([names: origin](names.md#origin)) |
 | Location | archived with the other dumps and the full disassembly listing; size and SHA-256 in `docs/data/PROVENANCE_sizes.tsv`; no byte of it is in this repository |
 | Index | function boundaries, callers, callees, stub calls and data references: `docs/data/index_functions.jsonl`, `docs/data/index_edges.tsv` |
 
@@ -24,7 +26,7 @@ How the Rust in the `lift-*` crates was produced from the [dump](glossary.md#dum
 
 | Output | Content |
 |---|---|
-| `crates/lift-N/src/p2v/<module>.rs` | one `pub fn f_XXXXXXXX` per function, each instruction of the machine code above its Rust as a comment (for example `// aa711 mov rbp,rsp`) |
+| `crates/lift-N/src/p2v/<module>.rs` | one `pub fn f_XXXXXXXX` per function; in the `x86rt.rs` crates each instruction of the machine code is above its Rust as a comment (for example `// aa711 mov rbp,rsp`), and the modules of `lift-a` carry no such comments |
 | world spec `f_XXXXXXXX.world.json` | argument generators, call arities, no-return stubs (archived) |
 | `crates/lift-N/tests/world_<module>.rs` (`tests/world.rs` in `lift-a`) | one `#[ignore]` test per function, replaying its stored vectors |
 
