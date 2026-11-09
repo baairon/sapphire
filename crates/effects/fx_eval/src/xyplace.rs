@@ -240,8 +240,5 @@ pub fn compile_placed(g: &Genotype, ct: &ComboTable, opt: &CompileOptions) -> Re
         }
         out.push(XyWriter { node: nd.idx, gid: nd.gid, place, preserve, consumers });
     }
-    if has_dup && std::env::var("XWP2_MUT").map_or(false, |v| v == "dsone") {
-        out.truncate(1);
-    }
     Ok((cp, out))
 }
