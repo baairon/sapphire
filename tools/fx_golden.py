@@ -12,8 +12,11 @@ renders the plain sizes with SAPPHIRE_PAR_MIN=0 and SAPPHIRE_THREADS=3, so row b
 
 The variant group (size suffix `+TAG`, rendered on the plain sizes) runs a stage with options that select a host variant or a second
 clip: `+o1` and `+o3` give the `cset_opacity` answers 1 and 3 of `glow`, `swishpan`, the three Shake stages and `dissolve_shake` (their
-`host_variants` entries in crates/neutral-handoff/data/fx_stages.tsv), and `+to` gives `swishpan` and `dissolve_shake` their `To` layer,
-a second clip from the seed plus one.
+`host_variants` entries in crates/neutral-handoff/data/fx_stages.tsv), `+to` gives `swishpan` and `dissolve_shake` their `To` layer,
+a second clip from the seed plus one, `+c4` and `+c5` render `glow` at Combine 4 and 5 (`combine` 3 and 4), and `+ch` renders
+`shake_normal_autogen` and `dissolve_shake` with channel amplitude or phase parameters bound (the routes that assemble planes per
+channel), and `+hs` and `+pl` render `hue_sat_bright_autogen` with colour parameters set (hue, saturation, brightness and offset
+darks; hue with preserved luma), whose plan at the default parameters folds to the source frame.
 
 Each case runs one effect stage (`sapphire stage apply STAGE`, which renders in process with the stage's canonical
 host options from crates/neutral-handoff/data/fx_stages.tsv) on a synthetic clip of 3 frames at depth 32 and
@@ -43,18 +46,24 @@ EXE = ".exe" if os.name == "nt" else ""
 VARIANTS = [
     ("glow", "o1", ["--param", "cset_opacity=1"], False),
     ("glow", "o3", ["--param", "cset_opacity=3"], False),
+    ("glow", "c4", ["--param", "combine=3"], False),
+    ("glow", "c5", ["--param", "combine=4"], False),
     ("swishpan", "o1", ["--param", "cset_opacity=1"], False),
     ("swishpan", "o3", ["--param", "cset_opacity=3"], False),
     ("swishpan", "to", [], True),
     ("shake_normal_autogen", "o1", ["--param", "cset_opacity=1"], False),
     ("shake_normal_autogen", "o3", ["--param", "cset_opacity=3"], False),
+    ("shake_normal_autogen", "ch", ["--param", "red_amplitude=1.5", "--param", "green_phase=0.0800018310546875", "--param", "blue_amplitude=0.6999969482421875"], False),
     ("shake_twitchy_autogen", "o1", ["--param", "cset_opacity=1"], False),
     ("shake_twitchy_autogen", "o3", ["--param", "cset_opacity=3"], False),
     ("shake_jumpy_autogen", "o1", ["--param", "cset_opacity=1"], False),
     ("shake_jumpy_autogen", "o3", ["--param", "cset_opacity=3"], False),
     ("dissolve_shake", "o1", ["--param", "cset_opacity=1"], False),
     ("dissolve_shake", "o3", ["--param", "cset_opacity=3"], False),
+    ("dissolve_shake", "ch", ["--param", "auto_trans=0", "--param", "transition_dir=0", "--param", "dissolve_amt=0.5099999904632568", "--param", "red_amplitude=0.5"], False),
     ("dissolve_shake", "to", [], True),
+    ("hue_sat_bright_autogen", "hs", ["--param", "hue_shift=0.25", "--param", "saturation=1.5", "--param", "brightness=0.75", "--param", "offset_darks=0.125"], False),
+    ("hue_sat_bright_autogen", "pl", ["--param", "preserve_luma=1", "--param", "hue_shift=0.25"], False),
 ]
 
 

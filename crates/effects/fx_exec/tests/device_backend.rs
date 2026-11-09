@@ -65,10 +65,14 @@ fn device_backend_declines_with_the_right_reason() {
         fx_exec::Arg::Img(i) => assert_eq!(i.planes[0].iter().map(|x| x.to_bits()).collect::<Vec<_>>(), want),
         _ => panic!("not an image"),
     }
-    // a NaN in the output reruns on the CPU
+    // a NaN in the output of an op that is not NaN exact reruns on the CPU; a NaN-exact op (a word copy) keeps it on the device
     let mut nan = synth(1, 12, 2);
     nan.planes[0][5] = f32::NAN;
-    assert_eq!(b.try_run(&call("copy", 1), &[Val::Img(Rc::new(nan))]).err(), Some(Fallback::NanOutput));
+    let nan = Rc::new(nan);
+    assert!(!fx_exec::device_ops::NAN_EXACT.contains(&"one_minus"));
+    assert_eq!(b.try_run(&call("one_minus", 1), &[Val::Img(nan.clone())]).err(), Some(Fallback::NanOutput));
+    assert!(b.nan_exact().contains(&"copy"), "{:?}", b.nan_exact());
+    assert!(matches!(b.try_run(&call("copy", 1), &[Val::Img(nan)]), Ok(Val::Dev(_))));
     // an allowlist that leaves an op out: the op has a kernel but is not admitted
     let mut only_copy = DeviceBackend::with_allowlist(device().unwrap(), &["copy"]);
     assert_eq!(only_copy.try_run(&call("one_minus", 3), &[img]).err(), Some(Fallback::NotAllowlisted));

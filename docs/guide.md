@@ -101,7 +101,20 @@ The OpenCL library is opened at run time, so a machine without one still builds 
 - **Probe.** The device must offer double precision floats, correctly rounded single precision divide and square root, denormals and round to nearest, the full OpenCL profile and OpenCL C 1.2. A device that fails is refused with the reasons; `gpu` and `gpu=N` then render on the CPU with a notice (below) and `auto` does so silently. Apple Silicon GPUs have no double precision, so the probe refuses them and a Mac renders on the CPU.
 - **Self-check.** Before an operation runs on the device, its kernel is run on a set of adversarial inputs (subnormals, negative zero, infinities, NaN, exact ties, odd frame sizes) and compared bit for bit with the CPU kernel. An operation that differs is not used on the device.
 
-The device output is the same bytes as the CPU output. An operation without a device kernel, one the kernel declines for a given shape or value, and any node whose output holds a NaN all run on the CPU for that node, so a partly supported plan still renders. `SAPPHIRE_DEVICE_REPORT=1` prints how many nodes of each operation ran on the device and how many fell back, with the reason.
+The device output is the same bytes as the CPU output. A node the kernel declines for a given shape or value, and a node whose output holds a NaN that the device may not keep (below), run on the CPU for that node, so a partly supported plan still renders. `SAPPHIRE_DEVICE_REPORT=1` prints how many nodes of each operation ran on the device and how many fell back, with the reason.
+
+**Coverage.** Every operation that the plans of the twenty stages dispatch has a device kernel: the `CPU_ONLY` table of `crates/effects/fx_exec/src/device_ops.rs` is empty. MEASURED on PoCL on a 12 core server: all 140 golden rows and the 210 counted recorded renders of `S_Flicker`, `S_Glow`, `S_SwishPan`, `Shake` and `S_DissolveShake` give device output equal to the CPU output by full SHA-256, and every node of 129 golden rows and of all 210 counted renders runs on the device (`fallback: none`). The other 11 golden rows are special rows (size `40x12s`: infinities, NaN and subnormal values): 10 rerun NaN outputs on the CPU (below) and `distort_rgb_autogen` refuses its special row on both paths with `F2(Oob)`. At its default parameters the plan of `hue_sat_bright_autogen` folds to the source frame and holds no node, so it reports `device: none`; with a colour parameter set (the variant rows `+hs` and `+pl`) its nodes run on the device.
+
+**NaN outputs.** The CPU kernels keep the x86 NaN rules: which NaN of two survives, its payload and its sign. A node whose device output holds a NaN keeps that output only when its operation is NaN exact on the device in use; otherwise the node is rerun on the CPU and the CPU's words are used. An operation is NaN exact when both hold:
+
+- it is on the `NAN_EXACT` list of `device_ops.rs`: its kernel computes every NaN by explicit tests in the CPU's operand order (a quieted operand, or the fresh NaN 0xffc00000), so the hardware's own NaN propagation never reaches an output word;
+- its self-check on the device in use, which adds NaN of both signs and several payloads to every operand, reports equal NaN payloads and signs.
+
+The list has 31 operations in two classes. `NAN_EXACT_WRITTEN` (26) holds the operations whose NaN words follow from the CPU source on any compiler: word copies and fills, compares and selects (`max`, `min`), the first operand of a subtraction or a division (`-`, `/`, `diff`), `postdivide` and `alpha_from_rgb_max`. `NAN_EXACT_COMPILED` (5: `+`, `*`, `screen_super`, `dissolve`, `make_mipmap`) holds the operations whose NaN words are those of the compiled CPU instruction (a commutative operation whose operands the compiler may swap, a `mul_add` through the platform `fmaf`, a fresh NaN of a plain operation); their kernels copy the pick of the build the self-check compares with. The admission is therefore per device and per build: MEASURED on PoCL on that server with this build, where all 31 report equal payloads; INFERRED on every other device and build, where the self-check is the guard.
+
+The other operations keep the CPU rerun of NaN outputs: `blur`, `masked_blur`, `sharpen`, `edge_aware_sharpen` and `glow` (built on the blur passes) have no NaN-exact kernel yet; `blur_warp` reaches the CPU's two-NaN picks through the compiled instruction at each site of five kernel bodies, among them a fresh NaN meeting its own negation, which its kernel does not copy (first differing word: CPU 0x7fc00000, device 0xffc00000); `warp` and `warp_rel` sample with the hardware NaN rule, as the CPU sampler does, and have no NaN-exact kernel; `screen`, `overlay_super` and the remaining operations are not on the list. On the golden rows only the special rows reach this rerun: `blur_color_autogen`, `blur_mono_autogen` (blur), `sharpen_fast_autogen` (sharpen), `sharpen_best_quality_autogen` (edge_aware_sharpen), `glow` (glow), `swishpan` (blur, warp), `warp_perspective_autogen` (warp), `transform_and_blur_autogen`, `blur_motion_curves_no_transform_autogen` and the `S_DissolveShake` stage (blur_warp). Each of these rows is byte identical to the CPU through the rerun (MEASURED).
+
+**On another device.** A GPU follows the same two guards: the self-check refuses any operation whose kernel differs from the CPU on the corpus, and a NaN output of an operation that the device did not admit as NaN exact is rerun on the CPU. A device whose NaN propagation or rounding differs from the CPU's therefore costs reruns or CPU nodes, not bytes, within what the corpus covers. Bit identity on a real GPU beyond the corpus, the number of operations a given GPU admits and its speed are INFERRED: nothing here was measured on a GPU.
 
 **Using a device from the pipeline.** `sapphire INPUT --stage @ID` has no `--device` flag. It runs each effect stage as a `sapphire stage apply` child process that inherits the environment, so `SAPPHIRE_DEVICE` picks the device:
 
@@ -122,11 +135,11 @@ SAPPHIRE_DEVICE=gpu SAPPHIRE_DEVICE_REPORT=1 target/release/sapphire clip.mp4 --
 SAPPHIRE_DEVICE_REPORT=1 target/release/sapphire stage apply blur_color_autogen --device gpu --width 160 --height 96 --depth 32 --fps 24 < clip.f32 > dev.f32
 ```
 
-The first line names the device and the result of its self-check. After each frame a line follows with the running count of nodes per operation on the device and of the fallbacks, for example `device: blur 2, postdivide 2; fallback: none`. A stage whose operations have no device kernel, such as `hue_sat_bright_autogen`, reports `device: none`.
+The first line names the device and the result of its self-check. After each frame a line follows with the running count of nodes per operation on the device and of the fallbacks, for example `device: blur 2, postdivide 2; fallback: none`. A fallback names the operation, its count and the reason, for example `device: postdivide 3; fallback: blur 3 (nan_output 3)` on the special golden row of `blur_color_autogen`. A plan that holds no node reports `device: none`, for example `hue_sat_bright_autogen` at its default parameters, whose plan folds to the source frame.
 
 **Requiring a device.** `SAPPHIRE_REQUIRE_DEVICE=1` turns a missing device into an error: a `--device` other than `cpu` that installs no device refuses the run instead of rendering on the CPU: `sapphire stage apply` prints a `device: DEVICE-REQUIRED-UNAVAILABLE ...` line and exits with code 3 (`fx_run` exits with code 2). Use it in checks and CI, where a silent fallback would let a device test pass without a device.
 
-**Caches.** The self-check costs about 9 s the first time a device and driver are used. The passes are then kept in the user cache folder (`$XDG_CACHE_HOME/sapphire` or `~/.cache/sapphire` on Linux, `~/Library/Caches/sapphire` on macOS, `%LOCALAPPDATA%\sapphire` on Windows), and a later process skips them (0.07 s). The entry is keyed on the build (a digest of the running executable, which holds the CPU kernels, the device glue and the corpus), the device name, the driver version, the digest of the kernel sources, the build options and the digest of the loaded program binary. A new build, a new driver, a changed kernel or a replaced program binary makes the entry unreadable and the checks run again. Compiled OpenCL programs are cached in `opencl-programs` under the same folder. Deleting the folder is always safe: both caches are rebuilt on the next run. `SAPPHIRE_DEVICE_CHECK_CACHE=0` turns the self-check cache off and `SAPPHIRE_CACHE_DIR` moves the folder.
+**Caches.** The self-check costs about a minute on PoCL the first time a build meets a device and driver (MEASURED on a 12 core server: 63 s for 24 frames of 160x96 of `blur_color_autogen` with an empty cache folder, 62 s with the compiled programs cached and the self-check cache off). Only passes are kept, in the user cache folder (`$XDG_CACHE_HOME/sapphire` or `~/.cache/sapphire` on Linux, `~/Library/Caches/sapphire` on macOS, `%LOCALAPPDATA%\sapphire` on Windows), and a later process skips them: the same run then takes 0.38 s, against 0.15 s on the CPU. A failed check is never kept, so it runs again in every process. The entry is keyed on the build (a digest of the running executable, which holds the CPU kernels, the device glue and the corpus), the device name, the driver version, the digest of the kernel sources, the build options and the digest of the loaded program binary. A new build, a new driver, a changed kernel or a replaced program binary makes the entry unreadable and the checks run again. Compiled OpenCL programs are cached in `opencl-programs` under the same folder. Deleting the folder is always safe: both caches are rebuilt on the next run. `SAPPHIRE_DEVICE_CHECK_CACHE=0` turns the self-check cache off and `SAPPHIRE_CACHE_DIR` moves the folder.
 
 **Platform notes.**
 
@@ -226,27 +239,34 @@ See [Driving the effect parameters](parameters-guide.md) for every stage paramet
 
 ## Speed
 
-Wall time of one 1920x1080 frame through `sapphire stage apply`, MEASURED on a 12 core server under some shared load (two runs per cell, in seconds, `before` and `after` on the same machine):
+Wall time of one 1920x1080 frame through `sapphire stage apply`, MEASURED on a 12 core server under shared load (one-minute load average 5.3 to 9.2; two runs per cell after one warm-up run, in seconds, on the same machine; the two `after` columns in one session with CPU and device runs interleaved, the `before` column in an earlier session at another load). `swishpan` and the `S_DissolveShake` stage render a 3 frame clip (`--frames 3`), and their cells are its wall time divided by 3. The seven stages added after the previous build have no `before` cell (`-`):
 
 | stage | before the in-process route (s) | after, CPU (s) | after, PoCL device (s) |
 |---|---|---|---|
-| `blur_color_autogen` | 1.27 / 1.22 | 0.72 / 0.76 | 0.74 / 0.73 |
-| `blur_mono_autogen` | 1.02 / 1.01 | 0.64 / 0.66 | 0.71 / 0.69 |
-| `transform_and_blur_autogen` | 11.26 / 11.87 | 1.01 / 1.17 | 0.72 / 0.74 |
-| `blur_motion_curves_no_transform_autogen` | 52.84 / 51.09 | 1.08 / 1.14 | 0.74 / 0.72 |
-| `diffuse_autogen` | 3.02 / 2.90 | 1.90 / 2.34 | 0.72 / 0.69 |
-| `distort_rgb_autogen` | 8.48 / 7.57 | 1.73 / 1.87 | 2.14 / 1.95 |
-| `stage apply drop_shadow` | 1.84 / 1.74 | 1.52 / 1.73 | 0.72 / 0.71 |
-| `hue_sat_bright_autogen` | 0.84 / 0.84 | 0.47 / 0.51 | 0.54 / 0.59 |
-| `sharpen_best_quality_autogen` | 2.79 / 2.71 | 2.40 / 2.38 | 0.86 / 0.88 |
-| `sharpen_fast_autogen` | 1.18 / 1.10 | 0.66 / 0.73 | 0.64 / 0.69 |
-| `time_warp_rgb_autogen` | 1.44 / 1.31 | 0.78 / 0.73 | 0.88 / 0.81 |
-| `trails_autogen` | 1.26 / 1.16 | 0.85 / 0.75 | 0.85 / 0.88 |
-| `warp_perspective_autogen` | 3.87 / 3.49 | 1.37 / 1.31 | 1.44 / 1.46 |
+| `blur_color_autogen` | 1.27 / 1.22 | 0.63 / 0.73 | 0.79 / 0.73 |
+| `blur_mono_autogen` | 1.02 / 1.01 | 0.59 / 0.57 | 0.64 / 0.70 |
+| `transform_and_blur_autogen` | 11.26 / 11.87 | 1.03 / 1.01 | 0.73 / 0.69 |
+| `blur_motion_curves_no_transform_autogen` | 52.84 / 51.09 | 1.09 / 1.10 | 0.74 / 0.73 |
+| `diffuse_autogen` | 3.02 / 2.90 | 2.13 / 1.90 | 0.71 / 0.62 |
+| `distort_rgb_autogen` | 8.48 / 7.57 | 4.80 / 4.45 | 1.02 / 1.00 |
+| `stage apply drop_shadow` | 1.84 / 1.74 | 1.63 / 1.50 | 0.63 / 0.64 |
+| `hue_sat_bright_autogen` | 0.84 / 0.84 | 0.41 / 0.44 | 0.50 / 0.50 |
+| `sharpen_best_quality_autogen` | 2.79 / 2.71 | 3.45 / 3.38 | 1.19 / 1.14 |
+| `sharpen_fast_autogen` | 1.18 / 1.10 | 0.73 / 0.73 | 0.68 / 0.66 |
+| `time_warp_rgb_autogen` | 1.44 / 1.31 | 0.74 / 0.79 | 0.89 / 0.80 |
+| `trails_autogen` | 1.26 / 1.16 | 0.86 / 0.82 | 0.94 / 0.93 |
+| `warp_perspective_autogen` | 3.87 / 3.49 | 1.41 / 1.39 | 0.93 / 0.93 |
+| `flicker` | - | 0.49 / 0.45 | 0.54 / 0.57 |
+| `glow` | - | 0.92 / 0.92 | 0.78 / 0.80 |
+| `swishpan` | - | 2.32 / 2.55 | 1.16 / 0.90 |
+| `shake_normal_autogen` | - | 1.62 / 2.04 | 0.68 / 0.66 |
+| `shake_twitchy_autogen` | - | 1.78 / 1.80 | 0.92 / 0.92 |
+| `shake_jumpy_autogen` | - | 2.03 / 2.17 | 0.67 / 0.76 |
+| `stage apply dissolve_shake` | - | 1.26 / 1.23 | 0.53 / 0.52 |
 
 - `before the in-process route` is the previous build: one `fx_run` process per frame and a full ripmap plane copy per row in the warp kernels.
-- `after, CPU` is the default `--device cpu`, with the warp copies removed, the render in process and the parallel-safe kernels on all cores (`SAPPHIRE_THREADS=1` runs them on one).
-- `after, PoCL device` runs with the device path on PoCL, an OpenCL runtime on the same CPU. It shows that the device path is byte identical and what the path costs on this machine; it is CPU OpenCL and is never GPU speed. Speedups on a real GPU are INFERRED until one is measured.
+- `after, CPU` is the default `--device cpu`, with the warp copies removed, the render in process and the parallel-safe kernels on all cores (`SAPPHIRE_THREADS=1` runs them on one). The CPU cells use the default thread count (all 12 cores) and are sensitive to machine load. `distort_rgb_autogen` shows it most: at a one-minute load of 6 to 9 this build and the earlier in-process builds all measure 4.4 to 4.9 s for its frame, most of it system time in the threaded path, and 1.7 to 2.0 s with `SAPPHIRE_THREADS=1`, so its CPU cell is a contention figure and not a slower kernel. `sharpen_best_quality_autogen`'s `after, CPU` cell lies above its `before` cell for the same reason: the build before this table, timed interleaved with it under the same load, measures 2.5 to 3.6 s against 2.8 to 3.3 s, with equal output bytes.
+- `after, PoCL device` runs with the device path on PoCL, an OpenCL runtime on the same CPU, with `SAPPHIRE_REQUIRE_DEVICE=1`. Every run gave the CPU's output bytes and `fallback: none`. It shows that the device path is byte identical and what the path costs on this machine; it is CPU OpenCL and is never GPU speed. Speedups on a real GPU are INFERRED until one is measured.
 
 Most of the remaining time of the light stages is moving the frame in and out of the process, not the effect. Start with a short, small clip.
 

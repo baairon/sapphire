@@ -38,7 +38,7 @@
   "path": "docs/adding-an-effect.md",
   "title": "Adding an effect",
   "line": "The conventions every new effect follows, and the parity proof it shows before it is added.",
-  "bytes": 13803,
+  "bytes": 14914,
   "generated": false
  },
  {
@@ -52,7 +52,7 @@
   "path": "docs/cli.md",
   "title": "Command-line reference",
   "line": "This page is the exact interface of the `sapphire` executable and of `fx_run --describe-params`, for a program or an AI agent that drives them.",
-  "bytes": 66475,
+  "bytes": 68825,
   "generated": false
  },
  {
@@ -80,7 +80,7 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Fifteen of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 64504,
+  "bytes": 70356,
   "generated": false
  },
  {
@@ -283,7 +283,7 @@
   "path": "docs/guide.md",
   "title": "Using the effects",
   "line": "This page shows how to run the fifteen native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match.",
-  "bytes": 23901,
+  "bytes": 30129,
   "generated": false
  },
  {
@@ -353,7 +353,7 @@
   "path": "docs/stages.md",
   "title": "Adding a provider",
   "line": "A provider is a program that offers stages over raw frames; twixtor's `vfx` and `sapphire` are two.",
-  "bytes": 42218,
+  "bytes": 44028,
   "generated": false
  }
 ]

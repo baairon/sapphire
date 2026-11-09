@@ -112,6 +112,11 @@ pub const SOURCES: &[Source] = &[
     Source { name: "kernels_neighbourhood::NEIGHBOURHOOD_SHARPEN", text: crate::kernels_neighbourhood::NEIGHBOURHOOD_SHARPEN, mirrors_mul_add: true },
     Source { name: "kernels_neighbourhood::NEIGHBOURHOOD_STATIC2", text: crate::kernels_neighbourhood::NEIGHBOURHOOD_STATIC2, mirrors_mul_add: false },
     Source { name: "kernels_neighbourhood::NEIGHBOURHOOD_ESH", text: crate::kernels_neighbourhood::NEIGHBOURHOOD_ESH, mirrors_mul_add: true },
+    Source { name: "kernels_glow_ops::GLOW_OPS_PW", text: crate::kernels_glow_ops::GLOW_OPS_PW, mirrors_mul_add: false },
+    Source { name: "kernels_glow_ops::GLOW_OPS_FMA", text: crate::kernels_glow_ops::GLOW_OPS_FMA, mirrors_mul_add: true },
+    Source { name: "kernels_glow::GLOW_BRIGHT", text: crate::kernels_glow::GLOW_BRIGHT, mirrors_mul_add: false },
+    Source { name: "kernels_footprint::FOOTPRINT_PREFILL", text: crate::kernels_footprint::FOOTPRINT_PREFILL, mirrors_mul_add: true },
+    Source { name: "kernels_footprint::FOOTPRINT_WARP", text: crate::kernels_footprint::FOOTPRINT_WARP, mirrors_mul_add: true },
 ];
 
 /// The parts that make up the one device program (every kernel above, after the prelude).
@@ -135,6 +140,11 @@ pub const PROGRAM_PARTS: &[&str] = &[
     crate::kernels_neighbourhood::NEIGHBOURHOOD_SHARPEN,
     crate::kernels_neighbourhood::NEIGHBOURHOOD_STATIC2,
     crate::kernels_neighbourhood::NEIGHBOURHOOD_ESH,
+    crate::kernels_glow_ops::GLOW_OPS_PW,
+    crate::kernels_glow_ops::GLOW_OPS_FMA,
+    crate::kernels_glow::GLOW_BRIGHT,
+    crate::kernels_footprint::FOOTPRINT_PREFILL,
+    crate::kernels_footprint::FOOTPRINT_WARP,
 ];
 
 /// One program text: the prelude, then `parts` in order.

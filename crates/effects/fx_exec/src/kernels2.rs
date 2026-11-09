@@ -209,6 +209,36 @@ fn blur_warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resu
     Ok(Image { n, planes: out })
 }
 
+/// The slot 33 geometry record of `warp` and `warp_rel` (gate 0) for a `w` by `h` frame, defined only at host aspect 1.0.
+pub(crate) fn slot33_rec(w: usize, h: usize) -> warp_log_gradient::Rec33 {
+    let (assumption_f, assumption_g, assumption_h) = (-0.5f32, w as f32 - 0.5, (h as f32 - w as f32) / 2.0 - 0.5);
+    let geom33_a = assumption_h + w as f32;
+    warp_log_gradient::Rec33 { gate: 0, w: w as i32, h: h as i32, assumption_f: assumption_f.to_bits(), assumption_g: assumption_g.to_bits(), assumption_h: assumption_h.to_bits(), geom33_a: geom33_a.to_bits() }
+}
+
+/// The per row record of the `warp` driver for row `y` of a `w` wide frame.
+pub(crate) fn warp_row_rec(g: &Geom, w: usize, y: usize) -> warp_render::WarpRec {
+    warp_render::WarpRec { count: w as i32, aspect_block_d: g.aspect, assumption_e: g.assumption_e, idx: (y * w) as i32, assumption_c: g.roi_x, assumption_d: g.roi_y, assumption_f: g.left, assumption_g: g.right, assumption_h: g.assumption_h }
+}
+
+/// The per row frame of the `warp_rel` driver for row `y` of a `w` wide frame with `c` channels.
+pub(crate) fn warp_rel_row(g: &Geom, w: usize, y: usize, c: usize) -> warp_rel::Frame {
+    let obj = warp_rel::Obj {
+        count: w as i32,
+        aspect_block_d: g.aspect,
+        sub_x: 0,
+        sub_y: 0,
+        port_obj_a: y as i32 + g.roi_y,
+        port_obj_b: g.roi_x,
+        assumption_c: g.roi_x,
+        assumption_d: g.roi_y,
+        assumption_f: g.left,
+        assumption_g: g.right,
+        fill: vec![0.0; c],
+    };
+    warp_rel::Frame { obj, idx: (y * w) as i32 }
+}
+
 /// warp_rel: slot 53 (wrapper over F2) once per row, flag 0; the footprint path takes c1/c2 from slot 33 (warp_log_gradient crate).
 fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Image, ExecError> {
     need(args, 4, "warp_rel")?;
@@ -238,8 +268,7 @@ fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resul
         let mut c1b = vec![warp_log_gradient::SENT; n];
         let mut c2b = vec![warp_log_gradient::SENT; n];
         let prim33 = warp_log_gradient::Prim33 { n: cvt_i32(flag_arg), cc: 0 };
-        let (assumption_f, assumption_g, assumption_h) = (-0.5f32, w as f32 - 0.5, (h as f32 - w as f32) / 2.0 - 0.5); let geom33_a = assumption_h + w as f32; if kp.host_aspect != 1.0 { return Err(unsupported("warp_rel", "slot 33 geometry cells ctx measured only at host aspect 1.0")); } // A10: the measured cells replace the withdrawn stand-in
-        let rec33 = warp_log_gradient::Rec33 { gate: 0, w: w as i32, h: h as i32, assumption_f: assumption_f.to_bits(), assumption_g: assumption_g.to_bits(), assumption_h: assumption_h.to_bits(), geom33_a: geom33_a.to_bits() };
+        let rec33 = slot33_rec(w, h); if kp.host_aspect != 1.0 { return Err(unsupported("warp_rel", "slot 33 geometry cells ctx measured only at host aspect 1.0")); } // A10: the measured cells replace the withdrawn stand-in
         let mut pool = warp_log_gradient::Pool::default();
         let th = warp_log_gradient::Threads { nthr: 1, nthr2: 1, tid: 0 };
         let mut ev = Vec::new();
@@ -274,20 +303,7 @@ fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resul
         let mut wimg = warp_rel::Image { f1: mk_f1(), w: w_i, h: h_i, d_cell_d: nl_i, d_cell_e: np_i, host: warp_rel::Host::Mode0 };
         let mut band: Vec<Vec<f32>> = vec![vec![0.0; (hi - lo) * w]; c];
         for y in lo..hi {
-            let obj = warp_rel::Obj {
-                count: w as i32,
-                aspect_block_d: g.aspect,
-                sub_x: 0,
-                sub_y: 0,
-                port_obj_a: y as i32 + g.roi_y,
-                port_obj_b: g.roi_x,
-                assumption_c: g.roi_x,
-                assumption_d: g.roi_y,
-                assumption_f: g.left,
-                assumption_g: g.right,
-                fill: vec![0.0; c],
-            };
-            let fr = warp_rel::Frame { obj, idx: (y * w) as i32 };
+            let fr = warp_rel_row(&g, w, y, c);
             let mut row: Vec<Vec<f32>> = vec![vec![0.0; w]; c];
             warp_rel::render(&prim, &fr, &mut wimg, &lat, &mut row).map_err(|e| kerr("warp_rel", e))?;
             for k in 0..c {
@@ -1099,8 +1115,7 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
         let mut c1b = vec![warp_log_gradient::SENT; n];
         let mut c2b = vec![warp_log_gradient::SENT; n];
         let prim33 = warp_log_gradient::Prim33 { n: cvt_i32(filter), cc: 0 };
-        let (assumption_f, assumption_g, assumption_h) = (-0.5f32, w as f32 - 0.5, (h as f32 - w as f32) / 2.0 - 0.5); let geom33_a = assumption_h + w as f32; if kp.host_aspect != 1.0 { return Err(unsupported("warp", "slot 33 geometry cells ctx measured only at host aspect 1.0")); } // A10: the measured cells replace the withdrawn stand-in
-        let rec33 = warp_log_gradient::Rec33 { gate: 0, w: w as i32, h: h as i32, assumption_f: assumption_f.to_bits(), assumption_g: assumption_g.to_bits(), assumption_h: assumption_h.to_bits(), geom33_a: geom33_a.to_bits() };
+        let rec33 = slot33_rec(w, h); if kp.host_aspect != 1.0 { return Err(unsupported("warp", "slot 33 geometry cells ctx measured only at host aspect 1.0")); } // A10: the measured cells replace the withdrawn stand-in
         let mut pool = warp_log_gradient::Pool::default(); // captured state: g_cell_b = 0, serial callback
         let th = warp_log_gradient::Threads { nthr: 1, nthr2: 1, tid: 0 };
         let mut ev = Vec::new();
@@ -1139,7 +1154,7 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
         let mut img = mk_img();
         let mut band: Vec<Vec<f32>> = vec![vec![0.0; (hi - lo) * w]; c];
         for y in lo..hi {
-            let rec = warp_render::WarpRec { count: w as i32, aspect_block_d: g.aspect, assumption_e: g.assumption_e, idx: (y * w) as i32, assumption_c: g.roi_x, assumption_d: g.roi_y, assumption_f: g.left, assumption_g: g.right, assumption_h: g.assumption_h };
+            let rec = warp_row_rec(&g, w, y);
             let mut row: Vec<Vec<f32>> = vec![vec![0.0; w]; c];
             warp_render::slot53_warp(&prim, &rec, None, &mut img, &lat, &mut row).map_err(|e| kerr("warp", e))?;
             for k in 0..c {
@@ -1154,7 +1169,7 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
 thread_local! {
     ///: the host alpha planes of the 'ae32' sources by source index (the 1-plane source conversion of the
     /// run's own host words), set by execute_ae32 for one run and cleared after it; None on every other route.
-    static COPY_ALPHA_PLANES: std::cell::RefCell<Option<Vec<Vec<f32>>>> = std::cell::RefCell::new(None);
+    pub(crate) static COPY_ALPHA_PLANES: std::cell::RefCell<Option<Vec<Vec<f32>>>> = std::cell::RefCell::new(None);
 }
 
 /// set (Some) or clear (None) the per-run host alpha planes of the copy-alpha arm.

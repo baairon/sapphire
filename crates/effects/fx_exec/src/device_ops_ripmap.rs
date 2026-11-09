@@ -4,6 +4,12 @@
 //! frame that puts the node outside the kernel's contract returns `DevError::Unsupported` and the executor runs the CPU kernel
 //! (which then reports its own error where it has one). The self-check runs every corpus case on the device and through
 //! `kernels::run_any` and compares every output bit.
+//!
+//! make_mipmap is NaN exact: its 2:1 sums compute every NaN by explicit tests in the CPU's operand order (`mm_fadd`), and the
+//! pad and base passes copy words. blur_warp is not: its CPU bodies take the two-NaN pick of each plain sum, product and
+//! `mul_add` from the compiled instruction, which differs per site and per body (and includes a fresh NaN meeting its own
+//! negation), so a NaN output of blur_warp reruns on the CPU. Its NaN cases still run in the self-check, where every finite
+//! word must be equal and NaN words only report their payloads.
 
 use crate::backend::NodeCall;
 use crate::device_ops::{ArgShape, DevArg, DeviceOp};
@@ -417,6 +423,46 @@ fn src_image(r: &mut Rng, ch: usize, n: usize, dirty: bool) -> Image {
     Image { n, planes }
 }
 
+/// A source whose words come from the NaN pool (NaN of both signs, quiet and signalling, several payloads, both infinities,
+/// both zeros, subnormals) on `num` of `den` samples and from [-0.5, 1.5) elsewhere, so that NaN meets NaN, a finite value
+/// and an infinity in every operand position of the 2:1 sums and of the sampler's taps.
+fn nan_src(r: &mut Rng, ch: usize, n: usize, num: u64, den: u64) -> Image {
+    let pool = &crate::device_ops_pointwise::NAN_POOL;
+    let planes = (0..ch).map(|_| (0..n).map(|_| if r.below(den) < num { f32::from_bits(pool[r.next_u32() as usize % pool.len()]) } else { span(r, -0.5, 1.5) }).collect()).collect();
+    Image { n, planes }
+}
+
+/// The NaN cases of make_mipmap: dense pool sources on frames whose 2:1 sums pair every pool word with every other at level 1
+/// (46 x 46 holds 1058 horizontal and 1058 vertical pairs per channel), every wrap pair and both filters.
+fn mm_nan_cases() -> Vec<KbCase> {
+    let mut r = Rng::new(0x5eed_00c1);
+    let mut out = Vec::new();
+    let frames: [(usize, usize); 6] = [(46, 46), (23, 1), (1, 23), (7, 5), (45, 23), (2, 2)];
+    let wraps: [(i32, i32); 5] = [(0, 0), (1, 1), (2, 2), (1, 2), (2, 0)];
+    let pads: [[f32; 4]; 3] = [[0.25, -0.5, 2.0, 1.0], [0.0, 0.0, 0.0, 0.0], [f32::from_bits(0x7fc0_0123), f32::from_bits(0xff80_0001), -0.0, f32::INFINITY]];
+    let mut k = 0usize;
+    for &(w, h) in &frames {
+        for ch in 1..=4usize {
+            for &(wx, wy) in &wraps {
+                k += 1;
+                let filter = [1.0f32, 0.0, 1.0][k % 3];
+                let mut kp = KParams::standin();
+                kp.pad_pixel = pads[k % pads.len()];
+                let (num, den) = [(1, 1), (1, 2), (1, 5)][k % 3];
+                let src = nan_src(&mut r, ch, w * h, num, den);
+                let args = vec![Kb::Img(src), cst(&[wx as f32, wy as f32]), cst(&[filter])];
+                out.push(KbCase { name: format!("make_mipmap nan {w}x{h} ch{ch} wrap({wx},{wy}) filter{filter} density {num}/{den}"), dims: (w, h), tag: ch as i32, args, kp, strict: true });
+            }
+        }
+    }
+    // constant NaN sources (the broadcast image) of every lane count
+    for ch in 1..=4usize {
+        let lanes: Vec<f32> = [0x7f80_0001u32, 0xffc0_beef, 0x7fc0_0000, 0xff80_0000][..ch].iter().map(|b| f32::from_bits(*b)).collect();
+        out.push(KbCase { name: format!("make_mipmap nan constant ch{ch}"), dims: (5, 3), tag: ch as i32, args: vec![cst(&lanes), cst(&[1.0, 2.0]), cst(&[1.0])], kp: KParams::standin(), strict: true });
+    }
+    out
+}
+
 const MM_FRAMES: &[(usize, usize)] = &[(1, 1), (2, 1), (1, 3), (3, 5), (7, 2), (5, 8), (16, 9), (33, 2), (45, 23), (129, 3)];
 const BW_FRAMES: &[(usize, usize)] = &[(1, 1), (2, 1), (1, 3), (3, 5), (7, 2), (16, 9), (33, 2), (45, 23)];
 
@@ -528,10 +574,56 @@ fn bw_cases() -> Vec<KbCase> {
     out
 }
 
+/// The NaN cases of blur_warp: ripmaps built from dense pool sources (NaN against NaN, infinities against each other, so the
+/// tap differences and products make fresh NaN), sampled along short, long and zero length segments in every channel count,
+/// wrap mode and accumulation flag.
+fn bw_nan_cases() -> Vec<KbCase> {
+    let mut r = Rng::new(0x5eed_00c2);
+    let mut out = Vec::new();
+    let frames: [(usize, usize); 4] = [(16, 9), (45, 23), (7, 2), (3, 5)];
+    let modes: [(i32, i32); 5] = [(0, 0), (1, 1), (2, 2), (1, 2), (2, 0)];
+    let mut k = 0usize;
+    for &(w, h) in &frames {
+        let n = w * h;
+        for ch in 1..=4usize {
+            for &(mx, my) in &modes {
+                for kind in 0..4 {
+                    k += 1;
+                    let mut kp = KParams::standin();
+                    kp.geom = geom_variant(k, w);
+                    kp.pad_pixel = [0.25, -0.5, 2.0, 1.0];
+                    let (num, den) = [(1, 1), (1, 3), (1, 12)][k % 3];
+                    let src = nan_src(&mut r, ch, n, num, den);
+                    let Some(mip) = mip_of(&src, ch, (mx, my), (w, h), &kp) else { continue };
+                    let range = if kind == 2 { 3.0 } else { 1.3 };
+                    let p1 = Image { n, planes: vec![plane_of(&mut r, n, &mut |r| span(r, -range, range)), plane_of(&mut r, n, &mut |r| span(r, -range, range))] };
+                    let mut p2 = Image { n, planes: vec![plane_of(&mut r, n, &mut |r| span(r, -range, range)), plane_of(&mut r, n, &mut |r| span(r, -range, range))] };
+                    if kind == 3 {
+                        for i in 0..n {
+                            if r.below(2) == 0 {
+                                p2.planes[0][i] = p1.planes[0][i];
+                                p2.planes[1][i] = p1.planes[1][i];
+                            }
+                        }
+                    }
+                    let (e1, e2) = if kind == 1 { (cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)]), cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)])) } else { (Kb::Img(p1), Kb::Img(p2)) };
+                    let ramps: [(f32, f32); 4] = [(1.0, 1.0), (0.5, 1.0), (0.0, 1.0), (2.0, 0.25)];
+                    let (a0, a1) = ramps[k % ramps.len()];
+                    let flag = [1.0f32, 0.0, 2.0][k % 3];
+                    let scale = [1.0f32, 0.5, 2.0][(k / 3) % 3];
+                    let args = vec![Kb::Mip(Box::new(mip)), e1, e2, cst(&[a0, a1]), cst(&[scale]), cst(&[mx as f32, my as f32]), cst(&[flag]), cst(&[0.0])];
+                    out.push(KbCase { name: format!("blur_warp nan {w}x{h} ch{ch} mode({mx},{my}) kind{kind} flag{flag} ramp({a0},{a1}) scale{scale} density {num}/{den}"), dims: (w, h), tag: ch as i32, args, kp, strict: false });
+                }
+            }
+        }
+    }
+    out
+}
+
 pub fn cases(class: &str) -> Vec<KbCase> {
     match class {
-        "make_mipmap" => mm_cases(),
-        "blur_warp" => bw_cases(),
+        "make_mipmap" => mm_cases().into_iter().chain(mm_nan_cases()).collect(),
+        "blur_warp" => bw_cases().into_iter().chain(bw_nan_cases()).collect(),
         _ => Vec::new(),
     }
 }

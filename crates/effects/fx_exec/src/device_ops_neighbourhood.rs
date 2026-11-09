@@ -32,13 +32,13 @@ fn unsup<T>(why: &str) -> Result<T, DevError> {
 
 /// A plane operand: the resident image, or a constant operand laid out as the CPU's `Image::from_const` does (one plane per lane in use,
 /// at least one, every sample the lane's bits).
-enum Operand<'a> {
+pub(crate) enum Operand<'a> {
     Resident(&'a DevImage),
     Filled(DevImage),
 }
 
 impl Operand<'_> {
-    fn get(&self) -> &DevImage {
+    pub(crate) fn get(&self) -> &DevImage {
         match self {
             Operand::Resident(i) => i,
             Operand::Filled(i) => i,
@@ -46,7 +46,7 @@ impl Operand<'_> {
     }
 }
 
-fn img<'a>(s: &Arc<Session>, a: &'a DevArg, n: usize) -> Result<Operand<'a>, DevError> {
+pub(crate) fn img<'a>(s: &Arc<Session>, a: &'a DevArg, n: usize) -> Result<Operand<'a>, DevError> {
     match a {
         DevArg::Img(i) => Ok(Operand::Resident(i)),
         DevArg::Const { n: ln, lanes } => {
@@ -61,7 +61,7 @@ fn img<'a>(s: &Arc<Session>, a: &'a DevArg, n: usize) -> Result<Operand<'a>, Dev
 }
 
 /// Channels of a plane operand as the CPU's `image_or_const` gives them (a ripmap is not one).
-fn plane_channels(s: &ArgShape) -> Option<usize> {
+pub(crate) fn plane_channels(s: &ArgShape) -> Option<usize> {
     match s {
         ArgShape::Img { channels } => Some(*channels),
         ArgShape::Const { n } => Some((*n).max(1)),
@@ -70,25 +70,25 @@ fn plane_channels(s: &ArgShape) -> Option<usize> {
 }
 
 /// Lane `i` (clamped to 3 like the CPU's `const_lane`) of a constant operand.
-fn lane(a: &DevArg, i: usize) -> Result<f32, DevError> {
+pub(crate) fn lane(a: &DevArg, i: usize) -> Result<f32, DevError> {
     match a {
         DevArg::Const { lanes, .. } => Ok(f32::from_bits(lanes[i.min(3)])),
         DevArg::Img(_) | DevArg::Mip(_) | DevArg::DevMip(_) => unsup("an image where a constant is read"),
     }
 }
 
-fn const_n(a: &DevArg) -> usize {
+pub(crate) fn const_n(a: &DevArg) -> usize {
     match a {
         DevArg::Const { n, .. } => *n,
         DevArg::Img(_) | DevArg::Mip(_) | DevArg::DevMip(_) => 0,
     }
 }
 
-fn is_const(s: &ArgShape) -> bool {
+pub(crate) fn is_const(s: &ArgShape) -> bool {
     matches!(s, ArgShape::Const { .. })
 }
 
-fn frame_ok(c: &NodeCall) -> Result<(), &'static str> {
+pub(crate) fn frame_ok(c: &NodeCall) -> Result<(), &'static str> {
     if c.n == 0 || c.dims.0 == 0 || c.dims.1 == 0 || c.dims.0.checked_mul(c.dims.1) != Some(c.n) {
         return Err("the frame size does not match the sample count");
     }
@@ -102,16 +102,16 @@ fn frame_ok(c: &NodeCall) -> Result<(), &'static str> {
 // blur core on the device
 
 #[derive(Clone, Copy)]
-struct BlurJob {
-    w: usize,
-    h: usize,
-    sx: f32,
-    sy: f32,
-    gain: f32,
-    edge: i32,
-    passes: i32,
-    subpixel: bool,
-    aspect: Option<f32>,
+pub(crate) struct BlurJob {
+    pub(crate) w: usize,
+    pub(crate) h: usize,
+    pub(crate) sx: f32,
+    pub(crate) sy: f32,
+    pub(crate) gain: f32,
+    pub(crate) edge: i32,
+    pub(crate) passes: i32,
+    pub(crate) subpixel: bool,
+    pub(crate) aspect: Option<f32>,
 }
 
 /// The scratch alignment replay of the CPU's vertical pass (`blur_rows_y::pass_y`): for every column and pass, the byte phase of the
@@ -157,7 +157,7 @@ fn scale_or_copy_dev(s: &Arc<Session>, src: Option<&Buffer<f32>>, dst: &Buffer<f
 }
 
 /// `blur_core` on one plane: `dst` receives the blur of `src`. `scr` is a three plane scratch image of the frame size.
-fn blur_dev(s: &Arc<Session>, scr: &DevImage, src: &Buffer<f32>, dst: &Buffer<f32>, j: &BlurJob) -> Result<(), DevError> {
+pub(crate) fn blur_dev(s: &Arc<Session>, scr: &DevImage, src: &Buffer<f32>, dst: &Buffer<f32>, j: &BlurJob) -> Result<(), DevError> {
     let n = j.w * j.h;
     if j.w == 0 || j.h == 0 || n > i32::MAX as usize {
         return unsup("empty or oversized frame");
@@ -258,7 +258,7 @@ fn blur_dev(s: &Arc<Session>, scr: &DevImage, src: &Buffer<f32>, dst: &Buffer<f3
     Ok(())
 }
 
-fn render_scale(kp: &KParams, w: usize) -> i32 {
+pub(crate) fn render_scale(kp: &KParams, w: usize) -> i32 {
     if kp.blur_render_scale > 0 {
         kp.blur_render_scale
     } else {
@@ -266,7 +266,7 @@ fn render_scale(kp: &KParams, w: usize) -> i32 {
     }
 }
 
-fn edge_of(v: i32) -> Result<i32, DevError> {
+pub(crate) fn edge_of(v: i32) -> Result<i32, DevError> {
     match v {
         0 | 1 => Ok(v),
         _ => unsup("edge mode other than 0 and 1 (the CPU reports an error)"),
@@ -751,12 +751,12 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
 /// Frame shapes of the neighbourhood corpora: the common ones plus frames wide and tall enough for 64 sample windows.
 const DIMS_NEIGHBOURHOOD: &[(usize, usize)] = &[(1, 1), (2, 1), (1, 3), (3, 5), (7, 1), (31, 1), (33, 2), (16, 16), (257, 1), (45, 23), (300, 4), (5, 300), (129, 3)];
 
-fn lanes4(v: &[f32]) -> [u32; 4] {
+pub(crate) fn lanes4(v: &[f32]) -> [u32; 4] {
     let last = *v.last().unwrap_or(&0.0);
     core::array::from_fn(|i| v.get(i).copied().unwrap_or(last).to_bits())
 }
 
-fn cst(pos: usize, v: &[f32]) -> (usize, usize, [u32; 4]) {
+pub(crate) fn cst(pos: usize, v: &[f32]) -> (usize, usize, [u32; 4]) {
     (pos, v.len(), lanes4(v))
 }
 
@@ -780,7 +780,7 @@ fn image_of(ch: usize, n: usize, seed: usize, plain: bool) -> Image {
     Image { n, planes: (0..ch).map(|p| plane_values(n, seed * 5 + p, plain)).collect() }
 }
 
-fn kp_blur(edge: i32, rs: i32) -> KParams {
+pub(crate) fn kp_blur(edge: i32, rs: i32) -> KParams {
     let mut kp = KParams::standin();
     kp.blur_edge = edge;
     kp.blur_render_scale = rs;

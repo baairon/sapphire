@@ -6,6 +6,10 @@
 //!   CPU kernel bit for bit; a parity change to a CPU kernel removes the op from this list in the same change unless
 //!   the kernel is ported too. At backend build time each allowlisted op is also self-checked against the CPU kernel on
 //!   the adversarial corpus, and a mismatch keeps it off the device.
+//! * [`NAN_EXACT`]: allowlisted ops whose kernels compute every NaN by explicit tests in the CPU's operand order. The
+//!   executor keeps a NaN output of such an op on the device only when its self-check on this device reported equal NaN
+//!   payloads and signs (`NanPayloads::Same`); any other op, or a NaN-exact op whose payloads differ, reruns a node whose
+//!   output holds a NaN on the CPU.
 //! * [`CPU_ONLY`]: every other op of the executor's dispatch with the reason it has no kernel yet. The test
 //!   `every_op_has_a_device_kernel_or_a_cpu_only_entry` fails when an op of `kernels::SUPPORTED` or `kernels2::WIRED`
 //!   is in neither table, so a new effect cannot add an op without either a device kernel or a written reason.
@@ -125,22 +129,59 @@ pub static DEVICE_OPS: &[DeviceOp] = &[
     crate::device_ops_neighbourhood::SHARPEN,
     crate::device_ops_neighbourhood::EDGE_AWARE_SHARPEN,
     crate::device_ops_neighbourhood::STATIC2,
+    // plane assembly ops (device_ops_plane.rs)
+    crate::device_ops_plane::COPY_ALPHA,
+    crate::device_ops_plane::GET_ALPHA,
+    crate::device_ops_plane::V3_TO_V4_IF4_A,
+    crate::device_ops_plane::APPEND,
+    // screen, overlay_super and alpha_from_rgb_max (device_ops_glow_ops.rs)
+    crate::device_ops_glow_ops::SCREEN,
+    crate::device_ops_glow_ops::OVERLAY_SUPER,
+    crate::device_ops_glow_ops::ALPHA_FROM_RGB_MAX,
+    // glow: bright pass, then the neighbourhood blur passes (device_ops_glow.rs)
+    crate::device_ops_glow::GLOW,
 ];
 
 /// Ops allowed to run on a device.
-pub const ALLOWLIST: &[&str] = &["copy", "one_minus", "warp_rel", "warp", "rotate", "perspective", "perspective_alpha", "blur", "masked_blur", "grad", "sharpen", "edge_aware_sharpen", "static2", "+", "-", "*", "/", "max", "min", "diff", "abs", "negate", "if+", "if>", "clamp", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "max_element", "min_element", "screen_super", "interp", "dissolve", "comp_premult", "comp_rgba", "postdivide", "round", "scale_rgb", "add_rgb", "sat_scale", "hue_shift", "hue_shift_preserve_luma", "monochrome", "monochrome_a", "make_mipmap", "blur_warp"];
+pub const ALLOWLIST: &[&str] = &["copy", "one_minus", "warp_rel", "warp", "rotate", "perspective", "perspective_alpha", "blur", "masked_blur", "grad", "sharpen", "edge_aware_sharpen", "static2", "+", "-", "*", "/", "max", "min", "diff", "abs", "negate", "if+", "if>", "clamp", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "max_element", "min_element", "screen_super", "interp", "dissolve", "comp_premult", "comp_rgba", "postdivide", "round", "scale_rgb", "add_rgb", "sat_scale", "hue_shift", "hue_shift_preserve_luma", "monochrome", "monochrome_a", "make_mipmap", "blur_warp", "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append", "screen", "overlay_super", "alpha_from_rgb_max", "glow"];
+
+/// Allowlisted ops whose device output may hold a NaN: every NaN their kernels write comes from an `isnan` test and a select in
+/// the CPU's operand order (the first NaN operand quieted by OR 0x00400000, a fresh NaN written as 0xffc00000, a min or max
+/// select giving the second operand), or from a 32 bit word copy or fill. Admitted as NaN exact only when the self-check on the
+/// device in use, which adds the NaN cases of `device_ops_pointwise::nan_twins` for these ops, reports `NanPayloads::Same`.
+pub const NAN_EXACT: &[&str] = &[
+    "copy", "+", "-", "*", "/", "max", "min", "diff", "screen_super", "dissolve", "postdivide", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to",
+    "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of",
+    "make_mipmap", "alpha_from_rgb_max", "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append",
+];
+
+/// The [`NAN_EXACT`] ops whose NaN words follow from the CPU source on every compiler: a two-NaN pick written as `nanop`, an
+/// explicit compare and select, a 32 bit word copy or fill, or the first operand of a subtraction or a division. Their self-check
+/// reports `NanPayloads::Same` on every build whose CPU follows the source.
+pub const NAN_EXACT_WRITTEN: &[&str] = &[
+    "copy", "-", "/", "max", "min", "diff", "postdivide", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha",
+    "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "alpha_from_rgb_max",
+    "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append",
+];
+
+/// The [`NAN_EXACT`] ops whose NaN words are those of the compiled CPU instruction: a commutative `+` or `*` (the compiler may
+/// swap the operands), a `mul_add` through the platform `fmaf`, a fresh NaN of a plain operation, or an op built on one. Their
+/// device kernels copy the pick of the build the self-check compares with; on a build with another pick the self-check reports
+/// `NanPayloads::Differ` and their NaN outputs rerun on the CPU.
+pub const NAN_EXACT_COMPILED: &[&str] = &["+", "*", "screen_super", "dissolve", "make_mipmap"];
+
+/// Whether an admitted op keeps its NaN outputs on the device: it is on [`NAN_EXACT`] and its self-check on the device in use
+/// reported equal NaN payloads (`nan_same`).
+pub fn keeps_nan_outputs(class: &str, nan_same: bool) -> bool {
+    nan_same && NAN_EXACT.contains(&class)
+}
+
+/// The most NaN cases a NaN-exact op's self-check adds.
+pub const NAN_TWIN_CAP: usize = 600;
 
 /// Ops with no device kernel, each with the reason. The list shrinks as kernels land. `get_frame`, `get_prev_dest` and
 /// `save_prev_dest` are host data movement (`kernels::HOST_CLASSES`) and are not kernel ops.
 pub const CPU_ONLY: &[(&str, &str)] = &[
-    ("copy_alpha", "plane copies and constant fills are memory bound and the pooled zero clear is a host store route; no device kernel yet"),
-    ("v3_to_v4_if4_a", "plane assembly through the host plane service, no arithmetic"),
-    ("get_alpha", "plane assembly through the host plane service, no arithmetic"),
-    ("glow", "separable blur with data-dependent bright pass, no device kernel yet"),
-    ("append", "plane assembly through the host plane service (copies and broadcasts), no device kernel"),
-    ("alpha_from_rgb_max", "element-wise copy and maximum on 4 planes, bandwidth bound; no device kernel yet"),
-    ("overlay_super", "conditional fused multiply-add branch per element, no device kernel yet"),
-    ("screen", "fixed 1.0 and (1+a)-a extension kernels are not covered by the screen_super device kernel, no device kernel yet"),
 ];
 
 fn copy_calls_are_identity(tag: i32) -> bool {
@@ -234,7 +275,9 @@ fn case_const(i: &Image) -> Option<(usize, [u32; 4])> {
 }
 
 /// Runs the op on the device and on the CPU kernel for every corpus case and compares the bits. A device output
-/// with a NaN is allowed only where the CPU output has a NaN too (the executor reruns such a node on the CPU).
+/// with a NaN is allowed only where the CPU output has a NaN too; NaN words with other bits are reported in the tally
+/// (`NanPayloads::Differ`), and then the executor reruns a node of this op whose output holds a NaN on the CPU. An op on
+/// [`NAN_EXACT`] is also run on its NaN cases (`device_ops_pointwise::nan_twins`).
 pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String> {
     if warp::handles(op.class) {
         return warp::selfcheck(session, op);
@@ -243,7 +286,21 @@ pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String>
         return ripmap::selfcheck(session, op);
     }
     let mut tally = Tally { outputs: 0, nan_payloads: NanPayloads::Same };
-    for case in (op.corpus)() {
+    let corpus = (op.corpus)();
+    let twins = if NAN_EXACT.contains(&op.class) { crate::device_ops_pointwise::nan_twins(&corpus, NAN_TWIN_CAP) } else { Vec::new() };
+    for case in &corpus {
+        check_case(session, op, case, false, &mut tally)?;
+    }
+    for case in &twins {
+        check_case(session, op, case, true, &mut tally)?;
+    }
+    Ok(tally)
+}
+
+/// One self-check case. A NaN case (`twin`) that `accepts`, the CPU kernel or the device launch refuses is skipped (a derived
+/// shape outside the op's coverage, for example a constant mode word set to a NaN); any bit difference is still a mismatch.
+fn check_case(session: &Arc<Session>, op: &DeviceOp, case: &SelfCase, twin: bool, tally: &mut Tally) -> Result<(), String> {
+    {
         let kp = case.kp.unwrap_or_else(KParams::standin);
         let n = case.dims.0 * case.dims.1;
         let call = NodeCall { idx: 0, class: op.class, tag: case.tag, n, dims: case.dims, kp: &kp };
@@ -267,8 +324,12 @@ pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String>
             Err((cn, _)) => ArgShape::Const { n: *cn },
         }).collect();
         if let Err(why) = (op.accepts)(&call, &shapes) {
+            if twin {
+                return Ok(());
+            }
             return Err(format!("{} {}: the corpus case is refused by accepts: {why}", op.class, case.name));
         }
+        let _host = crate::device_ops_pointwise::selfcheck_host_planes(op.class, &case.name);
         let cpu_args: Vec<Arg> = order.iter().map(|o| match o {
             Ok(i) => Arg::Img(i),
             Err((cn, lanes)) => Arg::Const { n: *cn, lanes: *lanes },
@@ -276,6 +337,7 @@ pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String>
         let want = match kernels::run_any(op.class, case.tag, &cpu_args, n, case.dims, &kp) {
             Ok(crate::kernels2::Out::Img(i)) => i,
             Ok(_) => return Err(format!("{} {}: the CPU kernel returned a ripmap", op.class, case.name)),
+            Err(_) if twin => return Ok(()),
             Err(e) => return Err(format!("{} {}: the CPU kernel failed: {e}", op.class, case.name)),
         };
         let uploads: Result<Vec<DevImage>, DevError> = case
@@ -290,7 +352,11 @@ pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String>
             Ok(_) => DevArg::Img(up.next().expect("one upload per image")),
             Err((cn, lanes)) => DevArg::Const { n: *cn, lanes: *lanes },
         }).collect();
-        let got = (op.run)(session, &call, &dargs).and_then(|d| d.download()).map_err(|e| format!("{} {}: {e}", op.class, case.name))?;
+        let got = match (op.run)(session, &call, &dargs).and_then(|d| d.download()) {
+            Ok(g) => g,
+            Err(DevError::Unsupported(_)) if twin => return Ok(()),
+            Err(e) => return Err(format!("{} {}: {e}", op.class, case.name)),
+        };
         if got.len() != want.planes.len() {
             return Err(format!("{} {}: {} planes on the device, {} on the CPU", op.class, case.name, got.len(), want.planes.len()));
         }
@@ -307,7 +373,7 @@ pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String>
             }
         }
     }
-    Ok(tally)
+    Ok(())
 }
 
 /// The kernel ops of the executor's dispatch: every class `kernels::SUPPORTED` and `kernels2::WIRED` serve.
@@ -354,6 +420,16 @@ mod tests {
         for a in ALLOWLIST {
             assert!(DEVICE_OPS.iter().any(|d| d.class == *a), "allowlisted `{a}` has no kernel");
         }
+        for x in NAN_EXACT {
+            assert!(ALLOWLIST.contains(x), "NaN-exact `{x}` is not allowlisted");
+            assert_eq!(NAN_EXACT.iter().filter(|y| *y == x).count(), 1, "`{x}` listed twice in NAN_EXACT");
+            let classes = NAN_EXACT_WRITTEN.iter().chain(NAN_EXACT_COMPILED).filter(|y| *y == x).count();
+            assert_eq!(classes, 1, "NaN-exact `{x}` must be in exactly one of NAN_EXACT_WRITTEN and NAN_EXACT_COMPILED");
+        }
+        for x in NAN_EXACT_WRITTEN.iter().chain(NAN_EXACT_COMPILED) {
+            assert!(NAN_EXACT.contains(x), "`{x}` is classed but not on NAN_EXACT");
+        }
+        assert!(keeps_nan_outputs("-", true) && !keeps_nan_outputs("-", false) && !keeps_nan_outputs("glow", true));
     }
 
     #[test]

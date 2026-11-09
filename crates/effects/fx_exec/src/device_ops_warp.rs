@@ -77,10 +77,6 @@ fn is_const(s: &ArgShape) -> bool {
 
 // ---- warp_rel and warp --------------------------------------------------------------------------------------------
 
-/// The footprint path needs the slot 33 prefill (the x86 NaN-model AVX2 body plus the double finish)
-/// and the F1 multi-level lattice lookup. Neither is ported exactly yet, so the path runs on the CPU.
-const FOOTPRINT_REASON: &str = "footprint path (needs the slot 33 prefill and the F1 multi-level lattice lookup, not yet ported exactly) runs on the CPU";
-
 fn warp_accepts_common(c: &NodeCall, shapes: &[ArgShape]) -> Result<(), &'static str> {
     expect_args(shapes, 4)?;
     if !(1..=4).contains(&c.tag) {
@@ -169,17 +165,16 @@ fn warp_launch(rel: bool, s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Re
         DevArg::Img(d) if d.channels() == 2 && d.n == c.n => (false, 0.0, 0.0, Some(d)),
         _ => return Err(unsup("coordinate operand must be a constant or a 2 channel image of the frame size")),
     };
-    if rel {
-        if footprint_taken(flag, const_coords) {
-            return Err(unsup(FOOTPRINT_REASON));
-        }
-    } else {
-        if !(0..=2).contains(&mx) || !(0..=2).contains(&my) {
-            return Err(unsup("wrap mode outside the registered range"));
-        }
-        if flag != 0.0 && !const_coords {
-            return Err(unsup(FOOTPRINT_REASON));
-        }
+    if !rel && (!(0..=2).contains(&mx) || !(0..=2).contains(&my)) {
+        return Err(unsup("wrap mode outside the registered range"));
+    }
+    // The CPU takes the slot 33 route when warp's filter lane is nonzero (float compare) or warp_rel's flag truncates to nonzero,
+    // with image coordinates. With the flag byte 0 (warp, 0 < |filter| < 1) the driver takes the normal path everywhere.
+    let footprint = if rel { footprint_taken(flag, const_coords) } else { flag != 0.0 && !const_coords };
+    let mut prefill = None;
+    if footprint {
+        let d = coords.ok_or_else(|| unsup("footprint path without image coordinates"))?;
+        prefill = crate::device_ops_footprint::slot33_run(s, w, h, flag, c.kp.host_aspect, d.plane(0), d.plane(1))?.c;
     }
     let (plane_len, wt0, ht0) = mipref.plane0_shape().ok_or_else(|| unsup("ripmap without level 0"))?;
     if plane_len == 0 || plane_len >= i32::MAX as usize || w >= (1 << 24) || h >= (1 << 24) {
@@ -189,6 +184,12 @@ fn warp_launch(rel: bool, s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Re
         return Err(unsup("ripmap level 0 outside the kernel's index range"));
     }
     let g: Geom = geom_of(c.kp, w, h);
+    if let (Some(pre), Some(d)) = (&prefill, coords) {
+        let lat = crate::device_ops_footprint::fp_lattice(s, &mipref)?;
+        let out = DevImage::alloc(s, ch, c.n)?;
+        crate::device_ops_footprint::fp_warp_launch(s, rel, w, h, ch, &lat, d, pre, mx, my, &g, &out)?;
+        return Ok(out);
+    }
     let uploaded = match &mipref {
         MipRef::Host(m) => {
             let plane_f: Vec<f32> = m.ripmap.planes[m.ripmap.idx(0, 0)].iter().map(|b| f32::from_bits(*b)).collect();
@@ -590,7 +591,11 @@ fn geom_variant(k: usize, w: usize) -> Option<Geom> {
 }
 
 fn mip_of(src: &Image, ch: usize, wrap: (i32, i32), dims: (usize, usize), kp: &KParams) -> Option<MipImage> {
-    let args = [K2Arg::Img(src.clone()), cst(&[wrap.0 as f32, wrap.1 as f32]), cst(&[0.0])];
+    mip_filter(src, ch, wrap, dims, kp, 0.0)
+}
+
+fn mip_filter(src: &Image, ch: usize, wrap: (i32, i32), dims: (usize, usize), kp: &KParams, filter: f32) -> Option<MipImage> {
+    let args = [K2Arg::Img(src.clone()), cst(&[wrap.0 as f32, wrap.1 as f32]), cst(&[filter])];
     match call_cpu("make_mipmap", ch as i32, &args, dims, kp) {
         Ok(Out::Mip(m)) => Some(m),
         _ => None,
@@ -633,10 +638,97 @@ fn warp_cases(rel: bool) -> Vec<K2Case> {
                             })
                         }
                     };
-                    // argument 3: the filter / footprint flag; nonzero is taken only with image coordinates (then the device declines)
+                    // argument 3: the filter / footprint flag; nonzero is taken only with image coordinates (the footprint cases below)
                     let flag = if kind == 1 && k % 2 == 0 { 2.0 } else { 0.0 };
                     let args = vec![K2Arg::Mip(Box::new(mip)), coords, cst(&[mx as f32, my as f32]), cst(&[flag])];
                     out.push(K2Case { name: format!("{class} {w}x{h} ch{ch} mode({mx},{my}) wrap{wrap:?} kind{kind}"), dims: (w, h), tag: ch as i32, args, kp, strict: kind < 2 && mx <= 2 && my <= 2 });
+                }
+            }
+        }
+    }
+    out.extend(footprint_cases(rel));
+    out
+}
+
+/// Frames of the footprint cases: two column frames, single rows, odd sizes, frames whose ripmap levels end at one pixel, and
+/// width 1 frames (the slot 33 prefill refuses them).
+const FRAMES_FP: &[(usize, usize)] = &[(2, 1), (2, 3), (3, 5), (7, 2), (16, 9), (33, 2), (45, 23), (64, 11), (64, 32), (50, 7), (1, 3), (1, 1)];
+
+/// Filter lanes of the footprint cases: 1 (sum variant on both planes), 2 (min on c1), 3 (min on both), -1, NaN (the prim word is
+/// i32::MIN), 0.5 (warp: slot 33 without the flag, so the normal path; warp_rel: the path is not taken), 7.
+const FILTERS_FP: &[f32] = &[1.0, 2.0, 3.0, -1.0, f32::NAN, 0.5, 7.0];
+
+/// A coordinate plane of the footprint cases. kind 0: smooth ramp of a random slope (fractional c, both a > b and b > a);
+/// 1: steep steps (c above the level count, clamp_dir active); 2: coordinates far outside the frame (clamp_pair active);
+/// 3: flat (zero gradient, c = 0, normal path everywhere); 4: ramp with adversarial specials (NaN of both signs, infinities,
+/// signed zeros, subnormals); 5: mixed: flat rows and ramp rows.
+fn fp_plane(r: &mut Rng, kind: usize, axis: usize, w: usize, h: usize) -> Vec<f32> {
+    let n = w * h;
+    let sl = span(r, -3.0, 3.0);
+    let off = span(r, -1.0, 1.0);
+    let sp = adversarial_f32(30, r.next_u64());
+    let mut v = Vec::with_capacity(n);
+    for i in 0..n {
+        let (x, y) = ((i % w) as f32, (i / w) as f32);
+        let t = if axis == 0 { x } else { y };
+        let u = if axis == 0 { y } else { x };
+        let val = match kind {
+            0 => off + sl * (t + 0.37 * u) / 16.0 + 0.01 * span(r, -1.0, 1.0),
+            1 => off + (if (t as usize / 3) % 2 == 0 { 0.0 } else { sl * 40.0 }) + span(r, -0.1, 0.1),
+            2 => off * 50.0 + sl * 30.0 * t,
+            3 => off,
+            4 => {
+                if r.below(5) == 0 {
+                    sp[r.next_u32() as usize % sp.len()]
+                } else {
+                    off + sl * t / 8.0
+                }
+            }
+            _ => {
+                if (i / w) % 2 == 0 {
+                    off
+                } else {
+                    off + sl * (t + u) / 4.0
+                }
+            }
+        };
+        v.push(val);
+    }
+    v
+}
+
+/// Footprint cases: image coordinates with a nonzero filter lane over a multi level ripmap (make_mipmap with filter 1), every
+/// wrap mode, 1 to 4 channels; strict where the frame is at least 2 wide at host aspect 1.0 (the CPU runs it unless a tap
+/// leaves the lattice, which both sides then refuse). A single level ripmap (filter 0) and host aspect 0.75 are declined cases.
+fn footprint_cases(rel: bool) -> Vec<K2Case> {
+    let class = if rel { "warp_rel" } else { "warp" };
+    let mut r = Rng::new(if rel { 0x5eed_f001 } else { 0x5eed_f002 });
+    let mut out = Vec::new();
+    let modes: &[(i32, i32)] = if rel { &[(0, 0), (1, 1), (2, 2), (1, 2), (2, 0), (3, 3)] } else { &[(0, 0), (1, 1), (2, 2), (1, 2), (2, 0)] };
+    let mut k = 0usize;
+    for &(w, h) in FRAMES_FP {
+        let n = w * h;
+        for ch in 1..=4usize {
+            for &(mx, my) in modes {
+                for kind in 0..6usize {
+                    k += 1;
+                    let mut kp = KParams::standin();
+                    kp.geom = geom_variant(k, w);
+                    kp.pad_pixel = [0.25, -0.5, 2.0, 1.0];
+                    let aspect_off = k % 23 == 0;
+                    if aspect_off {
+                        kp.host_aspect = 0.75;
+                    }
+                    let mip_filter_lane = if k % 19 == 0 { 0.0 } else { 1.0 };
+                    let wrap = if k % 5 == 0 { ((k % 3) as i32, ((k / 3) % 3) as i32) } else { (mx.clamp(0, 2), my.clamp(0, 2)) };
+                    let src = src_image(&mut r, ch, n, kind == 4 && k % 2 == 0);
+                    let Some(mip) = mip_filter(&src, ch, wrap, (w, h), &kp, mip_filter_lane) else { continue };
+                    let ka = if kind == 5 { (k / 7) % 5 } else { kind };
+                    let coords = K2Arg::Img(Image { n, planes: vec![fp_plane(&mut r, kind, 0, w, h), fp_plane(&mut r, ka, 1, w, h)] });
+                    let filter = FILTERS_FP[k % FILTERS_FP.len()];
+                    let args = vec![K2Arg::Mip(Box::new(mip)), coords, cst(&[mx as f32, my as f32]), cst(&[filter])];
+                    let strict = w >= 2 && !aspect_off && mip_filter_lane != 0.0;
+                    out.push(K2Case { name: format!("{class} footprint {w}x{h} ch{ch} mode({mx},{my}) wrap{wrap:?} kind{kind} filter{filter} aspect{}", kp.host_aspect), dims: (w, h), tag: ch as i32, args, kp, strict });
                 }
             }
         }
@@ -886,5 +978,13 @@ pub fn selfcheck_cov(session: &Arc<Session>, op: &DeviceOp) -> Result<(Tally, Co
 }
 
 pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String> {
+    if op.class == "warp" || op.class == "warp_rel" {
+        // the footprint path runs the slot 33 prefill: its own checks gate both classes
+        use crate::device_ops_footprint::{driver_selfcheck, ops_selfcheck, prefill_selfcheck, route_selfcheck};
+        prefill_selfcheck(session).map_err(|m| format!("{}: footprint prefill: {m}", op.class))?;
+        ops_selfcheck(session).map_err(|m| format!("{}: footprint prefill helpers: {m}", op.class))?;
+        route_selfcheck(session).map_err(|m| format!("{}: footprint route: {m}", op.class))?;
+        driver_selfcheck(session, op.class == "warp_rel").map_err(|m| format!("{}: footprint driver: {m}", op.class))?;
+    }
     selfcheck_cov(session, op).map(|r| r.0)
 }

@@ -45,7 +45,7 @@ pub fn assumptions() -> Vec<Assumption> {
 
 /// Scale factor k of the pass, or None when the body returns without touching memory.
 /// Listing 674033..6740a9 (and 674077..6740a9). n = 1: th0 only. n = 3: th0..th2.
-fn scale(t: &[f32; 3], nplanes: usize) -> Option<f32> {
+pub fn scale(t: &[f32; 3], nplanes: usize) -> Option<f32> {
     let m;
     if nplanes == 1 {
         if t[0] == 0.0 {

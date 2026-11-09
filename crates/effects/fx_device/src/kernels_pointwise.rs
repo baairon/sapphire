@@ -6,6 +6,14 @@
 //! counts, exactly as the CPU kernel resolves them, and reach the kernel as a plane pointer or a constant word. `fma()`
 //! appears only in sources registered as mirroring a CPU `mul_add` (marker `MIRRORS_MUL_ADD:`).
 //! Constants are passed as 32 bit words and reinterpreted, so NaN payloads and signed zeros arrive unchanged.
+//!
+//! NaN rule: the `nanx_` helpers compute an add, subtract, multiply, divide or fused multiply add and, when the result is a
+//! NaN, replace it by the NaN the CPU kernel gives: the first NaN operand in the CPU's operand order, quieted by OR
+//! 0x00400000, or the default NaN 0xffc00000 when no operand is a NaN (an invalid operation). The CPU's operand order is
+//! the order of the compiled instruction: an add or multiply with a constant operand takes the plane value first, and a
+//! fused multiply add `fma(a, b, c)` takes `b`, then `a`, then `c`. So the hardware's own NaN propagation never reaches an
+//! output word of a kernel that uses them; the min and max selects return an operand word as it is. The self-check compares
+//! these NaN words with the CPU kernel on every device, so a CPU or device with another order keeps its NaN outputs on the CPU.
 
 /// Fill, binary arithmetic with the extension channel, unary bit ops, compare select, median ladders, reductions.
 pub const POINTWISE_PW: &str = r#"
@@ -17,23 +25,54 @@ __kernel void pointwise_fill_f32(__global uint* dst, uint bits, uint n) {
     dst[i] = bits;
 }
 
+/* the NaN of an SSE scalar operation on x and y: the first NaN operand, quieted, else the default NaN */
+float nanx_pick2(float x, float y) {
+    if (isnan(x)) {
+        return as_float(as_uint(x) | 0x00400000u);
+    }
+    if (isnan(y)) {
+        return as_float(as_uint(y) | 0x00400000u);
+    }
+    return as_float(0xffc00000u);
+}
+
+float nanx_add(float x, float y) {
+    float r = x + y;
+    return isnan(r) ? nanx_pick2(x, y) : r;
+}
+
+float nanx_sub(float x, float y) {
+    float r = x - y;
+    return isnan(r) ? nanx_pick2(x, y) : r;
+}
+
+float nanx_mul(float x, float y) {
+    float r = x * y;
+    return isnan(r) ? nanx_pick2(x, y) : r;
+}
+
+float nanx_div(float x, float y) {
+    float r = x / y;
+    return isnan(r) ? nanx_pick2(x, y) : r;
+}
+
 float pointwise_div(float x, float y) {
     if (y == 0x0p+0f) {
-        return 0x1.e848p+19f * x;
+        return nanx_mul(0x1.e848p+19f, x);
     }
-    return x / y;
+    return nanx_div(x, y);
 }
 
 /* op: 0 add, 1 sub, 2 mul, 3 div (zero rule), 4 max, 5 min (x86 select), 6 diff (|x - y| by sign mask) */
 float pointwise_bin_f(uint op, float x, float y) {
     if (op == 0u) {
-        return x + y;
+        return nanx_add(x, y);
     }
     if (op == 1u) {
-        return x - y;
+        return nanx_sub(x, y);
     }
     if (op == 2u) {
-        return x * y;
+        return nanx_mul(x, y);
     }
     if (op == 3u) {
         return pointwise_div(x, y);
@@ -44,10 +83,11 @@ float pointwise_bin_f(uint op, float x, float y) {
     if (op == 5u) {
         return (x < y) ? x : y;
     }
-    return as_float(as_uint(x - y) & 0x7fffffffu);
+    return as_float(as_uint(nanx_sub(x, y)) & 0x7fffffffu);
 }
 
-/* mode 0: both planes, 1: a is the constant ca, 2: b is the constant cb (add and mul reload it as the first operand) */
+/* mode 0: both planes, 1: a is the constant ca, 2: b is the constant cb; add and mul (commutative, so only the NaN pick
+   depends on it) take the plane value as the first operand when the other is a constant */
 __kernel void pointwise_bin_f32(__global const float* pa, __global const float* pb, __global float* out, uint n, uint op, uint mode, uint ca, uint cb) {
     size_t i = get_global_id(0);
     if (i >= n) {
@@ -55,14 +95,13 @@ __kernel void pointwise_bin_f32(__global const float* pa, __global const float* 
     }
     float r;
     if (mode == 1u) {
-        r = pointwise_bin_f(op, as_float(ca), pb[i]);
-    } else if (mode == 2u) {
-        float x = pa[i];
         if (op == 0u || op == 2u) {
-            r = pointwise_bin_f(op, as_float(cb), x);
+            r = pointwise_bin_f(op, pb[i], as_float(ca));
         } else {
-            r = pointwise_bin_f(op, x, as_float(cb));
+            r = pointwise_bin_f(op, as_float(ca), pb[i]);
         }
+    } else if (mode == 2u) {
+        r = pointwise_bin_f(op, pa[i], as_float(cb));
     } else {
         r = pointwise_bin_f(op, pa[i], pb[i]);
     }
@@ -79,9 +118,9 @@ __kernel void pointwise_ext_f32(__global const float* src, __global float* out, 
     float one = 0x1p+0f;
     float r;
     if (op == 0u) {
-        r = one + x;
+        r = nanx_add(one, x);
     } else if (op == 1u) {
-        r = (side != 0u) ? (one - x) : (x - one);
+        r = (side != 0u) ? nanx_sub(one, x) : nanx_sub(x, one);
     } else if (op == 2u) {
         r = x;
     } else if (op == 3u) {
@@ -89,7 +128,7 @@ __kernel void pointwise_ext_f32(__global const float* src, __global float* out, 
             if (x == 0x0p+0f) {
                 r = as_float(0x49742400u);
             } else {
-                r = one / x;
+                r = nanx_div(one, x);
             }
         } else {
             r = x;
@@ -99,7 +138,7 @@ __kernel void pointwise_ext_f32(__global const float* src, __global float* out, 
     } else if (op == 5u) {
         r = (side != 0u) ? ((one < x) ? one : x) : ((x < one) ? x : one);
     } else {
-        float v = (side != 0u) ? (one - x) : (x - one);
+        float v = (side != 0u) ? nanx_sub(one, x) : nanx_sub(x, one);
         r = as_float(as_uint(v) & 0x7fffffffu);
     }
     out[i] = r;
@@ -448,10 +487,10 @@ __kernel void pointwise_postdiv_f32(__global const float* pk, __global const flo
         r = 0x0p+0f;
     } else if (lt_one) {
         if (mode == 0u) {
-            r = x / a;
+            r = nanx_div(x, a);
         } else {
-            float inv = 0x1p+0f / a;
-            r = x * inv;
+            float inv = nanx_div(0x1p+0f, a);
+            r = nanx_mul(x, inv);
         }
     } else {
         r = x;
@@ -468,6 +507,26 @@ pub const POINTWISE_FMA: &str = r#"
    sat_scale::pixels, hue_shift::pixel, hue_shift_preserve_luma::sector, monochrome::luma, scale_rgb::snap */
 typedef struct { float x; float y; float z; } pointwise_f3;
 
+/* the first NaN of three operands in the given order, quieted, else the default NaN */
+float nanx_pick3(float a, float b, float c) {
+    if (isnan(a)) {
+        return as_float(as_uint(a) | 0x00400000u);
+    }
+    if (isnan(b)) {
+        return as_float(as_uint(b) | 0x00400000u);
+    }
+    if (isnan(c)) {
+        return as_float(as_uint(c) | 0x00400000u);
+    }
+    return as_float(0xffc00000u);
+}
+
+/* fma(a, b, c); a NaN result is the first NaN of b, a, c (the order of the CPU's mul_add), quieted, else the default NaN */
+float nanx_fma(float a, float b, float c) {
+    float r = fma(a, b, c);
+    return isnan(r) ? nanx_pick3(b, a, c) : r;
+}
+
 /* interp: fma(b - a, t, a); slot masks bit0 a, bit1 b, bit2 t are constants (words) */
 __kernel void pointwise_interp_f32(__global const float* pa, __global const float* pb, __global const float* pt, __global float* out,
                             uint n, uint cm, uint wa, uint wb, uint wt) {
@@ -482,8 +541,8 @@ __kernel void pointwise_interp_f32(__global const float* pa, __global const floa
 }
 
 float pointwise_screen(float a, float b) {
-    float om = 0x1p+0f - a;
-    float t = fma(om, b, a);
+    float om = nanx_sub(0x1p+0f, a);
+    float t = nanx_fma(om, b, a);
     float inner = (b > t) ? b : t;
     return (a > inner) ? a : inner;
 }
@@ -516,7 +575,7 @@ __kernel void pointwise_screen_ext_f32(__global const float* src, __global float
         float m = (x > one) ? x : one;
         r = (one > m) ? one : m;
     } else {
-        float y = (one + x) - x;
+        float y = nanx_sub(nanx_add(one, x), x);
         float inner = (one > y) ? one : y;
         r = (x > inner) ? x : inner;
     }
@@ -606,7 +665,7 @@ __kernel void pointwise_dissolve_f32(__global const float* pa, __global const fl
     } else if (t >= 0x1p+0f) {
         r = b;
     } else {
-        r = fma(t, b - a, a);
+        r = nanx_fma(t, nanx_sub(b, a), a);
     }
     out[i] = r;
 }

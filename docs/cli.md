@@ -300,7 +300,9 @@ WPG1_PBASE=1 target/release/sapphire stage apply blur_color_autogen --width 160 
 | `gpu=N` | device number N of the probe order |
 | `auto` | the first usable GPU-type device, else the CPU (a CPU runtime does not count, so `auto` renders on the CPU on a machine that has only PoCL) |
 
-A device is used only after the probe and a self-check; a node or a run that the device cannot serve exactly runs on the CPU, and the bytes are the same either way. The first run of a build on a device pays the self-check (MEASURED 12.4 s for 24 frames of 160x96, against 0.14 s on the CPU); later processes read it from the cache. Whether a device was used is confirmed with `SAPPHIRE_DEVICE_REPORT=1`: the first `device: ` line names the device, and each later line counts the nodes run on it, for example `device: blur 2, postdivide 2; fallback: none`. A stage with no device kernel reports `device: none`.
+A device is used only after the probe and a self-check; a node or a run that the device cannot serve exactly runs on the CPU, and the bytes are the same either way. The first run of a build on a device pays the self-check of every allowlisted operation (MEASURED on PoCL on a 12 core server: 63 s for 24 frames of 160x96 of `blur_color_autogen` with an empty cache folder, 62 s of it the self-check, against 0.15 s on the CPU); later processes read the passes from the cache and the same run takes 0.38 s. Whether a device was used is confirmed with `SAPPHIRE_DEVICE_REPORT=1`: the first `device: ` line names the device, and each later line counts the nodes run on it, for example `device: blur 2, postdivide 2; fallback: none`.
+
+The report line after each frame is `device: OP N, OP N, ...; fallback: F`. The first list counts the nodes that ran on the device per operation, from the start of the run. `F` is `none` when every node ran on the device; otherwise it lists each operation with the nodes that ran on the CPU and the reasons in brackets, for example `fallback: blur 3 (nan_output 3)`. The reasons are `nan_output` (the device output held a NaN and the operation is not NaN exact on this device, so the node was rerun on the CPU), `unsupported` (the kernel declines the tag, operand shape or parameter), `not_allowlisted` (the operation is off the allowlist or its self-check failed on this device), `no_kernel` (an operation with a `CPU_ONLY` entry; the table is empty), `memory` (the device budget would be exceeded) and `opencl_error` (the driver reported an error). Every operation of the twenty stages has a device kernel, so on PoCL the line ends `fallback: none` for every stage on ordinary input (MEASURED, 129 of the 140 golden rows and all 210 counted recorded renders). On input with NaN the NaN outputs of every operation off the `NAN_EXACT` list are rerun and counted as `nan_output`, among them `blur`, `masked_blur`, `sharpen`, `edge_aware_sharpen`, `glow`, `blur_warp`, `warp`, `warp_rel`, `screen` and `overlay_super`; the bytes stay the CPU's ([Rendering on a device](guide.md#rendering-on-a-device)). At its default parameters `hue_sat_bright_autogen` reports `device: none`: its plan folds to the source frame and holds no node. With a colour parameter set its nodes run on the device.
 
 ```sh
 SAPPHIRE_DEVICE_REPORT=1 target/release/sapphire stage apply blur_color_autogen --width 160 --height 96 --depth 32 --fps 24 --device gpu --in clip.f32 --out dev.f32
@@ -453,25 +455,32 @@ The python line prints `0.8333282470703125`, the value to pass at a preview widt
 
 ## Recipe: render time of a clip
 
-Time is frames times seconds a frame at 1080p, scaled by pixels. The table is MEASURED on a 12 core server under some load (two runs per stage, from [Speed](guide.md#speed)): seconds for one 1920x1080 frame through `sapphire stage apply` on the CPU, and with `--device gpu` on PoCL (an OpenCL runtime on the same CPU, not GPU speed).
+Time is frames times seconds a frame at 1080p, scaled by pixels. The table is MEASURED on a 12 core server under shared load (two runs per stage, from [Speed](guide.md#speed)): seconds for one 1920x1080 frame through `sapphire stage apply` on the CPU, and with `--device gpu` on PoCL (an OpenCL runtime on the same CPU, not GPU speed). `swishpan` and the `S_DissolveShake` stage are timed on a 3 frame clip, per frame. The CPU column uses all cores and depends on the machine's load: `distort_rgb_autogen` takes 4.4 to 4.9 s at a one-minute load of 6 to 9 and 1.7 to 2.0 s with `SAPPHIRE_THREADS=1` ([Speed](guide.md#speed)).
 
 | Stage | CPU (s) | PoCL (s) |
 |---|---|---|
-| `blur_color_autogen` | 0.72 / 0.76 | 0.74 / 0.73 |
-| `blur_mono_autogen` | 0.64 / 0.66 | 0.71 / 0.69 |
-| `transform_and_blur_autogen` | 1.01 / 1.17 | 0.72 / 0.74 |
-| `blur_motion_curves_no_transform_autogen` | 1.08 / 1.14 | 0.74 / 0.72 |
-| `diffuse_autogen` | 1.90 / 2.34 | 0.72 / 0.69 |
-| `distort_rgb_autogen` | 1.73 / 1.87 | 2.14 / 1.95 |
-| `stage apply drop_shadow` | 1.52 / 1.73 | 0.72 / 0.71 |
-| `hue_sat_bright_autogen` | 0.47 / 0.51 | 0.54 / 0.59 |
-| `sharpen_best_quality_autogen` | 2.40 / 2.38 | 0.86 / 0.88 |
-| `sharpen_fast_autogen` | 0.66 / 0.73 | 0.64 / 0.69 |
-| `time_warp_rgb_autogen` | 0.78 / 0.73 | 0.88 / 0.81 |
-| `trails_autogen` | 0.85 / 0.75 | 0.85 / 0.88 |
-| `warp_perspective_autogen` | 1.37 / 1.31 | 1.44 / 1.46 |
+| `blur_color_autogen` | 0.63 / 0.73 | 0.79 / 0.73 |
+| `blur_mono_autogen` | 0.59 / 0.57 | 0.64 / 0.70 |
+| `transform_and_blur_autogen` | 1.03 / 1.01 | 0.73 / 0.69 |
+| `blur_motion_curves_no_transform_autogen` | 1.09 / 1.10 | 0.74 / 0.73 |
+| `diffuse_autogen` | 2.13 / 1.90 | 0.71 / 0.62 |
+| `distort_rgb_autogen` | 4.80 / 4.45 | 1.02 / 1.00 |
+| `stage apply drop_shadow` | 1.63 / 1.50 | 0.63 / 0.64 |
+| `hue_sat_bright_autogen` | 0.41 / 0.44 | 0.50 / 0.50 |
+| `sharpen_best_quality_autogen` | 3.45 / 3.38 | 1.19 / 1.14 |
+| `sharpen_fast_autogen` | 0.73 / 0.73 | 0.68 / 0.66 |
+| `time_warp_rgb_autogen` | 0.74 / 0.79 | 0.89 / 0.80 |
+| `trails_autogen` | 0.86 / 0.82 | 0.94 / 0.93 |
+| `warp_perspective_autogen` | 1.41 / 1.39 | 0.93 / 0.93 |
+| `flicker` | 0.49 / 0.45 | 0.54 / 0.57 |
+| `glow` | 0.92 / 0.92 | 0.78 / 0.80 |
+| `swishpan` | 2.32 / 2.55 | 1.16 / 0.90 |
+| `shake_normal_autogen` | 1.62 / 2.04 | 0.68 / 0.66 |
+| `shake_twitchy_autogen` | 1.78 / 1.80 | 0.92 / 0.92 |
+| `shake_jumpy_autogen` | 2.03 / 2.17 | 0.67 / 0.76 |
+| `stage apply dissolve_shake` | 1.26 / 1.23 | 0.53 / 0.52 |
 
-Estimate `frames x seconds x (width x height / 2073600)`. A 10 second 1080p clip at 24 frames a second through `blur_color_autogen` is 240 frames x 0.76 s, about 3 minutes. The scaling by pixels is INFERRED; it was checked at one point: 24 frames of 160x96 predict 0.13 s for `blur_color_autogen` and 0.09 s for `hue_sat_bright_autogen`, and the measured walls were 0.14 s and 0.08 s. A pipeline adds the ffmpeg decode and encode, which run alongside the stage. The device adds the one-time self-check on its first use (see above). `trails_autogen` also holds the clip in memory (see [Stage kinds](#stage-kinds-spool-and-keyframes)): about 33 bytes a pixel for every frame, so budget memory for long 1080p clips before the time. Start with a short, small clip.
+Estimate `frames x seconds x (width x height / 2073600)`. A 10 second 1080p clip at 24 frames a second through `blur_color_autogen` is 240 frames x 0.73 s, about 3 minutes. The scaling by pixels is INFERRED; it was checked at one point: 24 frames of 160x96 predict 0.13 s for `blur_color_autogen` and 0.08 s for `hue_sat_bright_autogen`, and the measured walls were 0.14 s and 0.08 s. A pipeline adds the ffmpeg decode and encode, which run alongside the stage. The device adds the one-time self-check on its first use (see above). `trails_autogen` also holds the clip in memory (see [Stage kinds](#stage-kinds-spool-and-keyframes)): about 33 bytes a pixel for every frame, so budget memory for long 1080p clips before the time. Start with a short, small clip.
 
 ```sh
 /usr/bin/time -f "wall=%e s maxrss=%M KB" target/release/sapphire stage apply blur_color_autogen --width 160 --height 96 --depth 32 --fps 24 --in clip.f32 --out time1.f32

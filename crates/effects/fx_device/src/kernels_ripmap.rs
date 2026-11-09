@@ -133,8 +133,51 @@ __kernel void ripmap_mm_padrows(__global uint* rip, uint off, int h, int c, uint
     rip[off + dst_row * stride + k] = v;
 }
 
+/* make_mipmap's sum of two words with every NaN computed by explicit tests, as `make_mipmap::fadd` writes it: two NaN give
+   the quiet one when exactly one is signalling, else the first operand; one NaN gives that NaN; each quieted by OR 0x00400000.
+   A NaN made by the sum itself (inf + -inf) is written as 0xffc00000. */
+int mm_isnan(uint v) {
+    return (v & 0x7f800000u) == 0x7f800000u && (v & 0x007fffffu) != 0u;
+}
+
+uint mm_fadd(uint a, uint b) {
+    int na = mm_isnan(a);
+    int nb = mm_isnan(b);
+    if (na && nb) {
+        int sa = (a & 0x00400000u) == 0u;
+        int sb = (b & 0x00400000u) == 0u;
+        if (sa && !sb) {
+            return b;
+        }
+        if (!sa && sb) {
+            return a;
+        }
+        return a | 0x00400000u;
+    }
+    if (na) {
+        return a | 0x00400000u;
+    }
+    if (nb) {
+        return b | 0x00400000u;
+    }
+    float s = as_float(a) + as_float(b);
+    if (isnan(s)) {
+        return 0xffc00000u;
+    }
+    return as_uint(s);
+}
+
+/* make_mipmap::avg: the sum, a NaN sum quieted, else 0.5 times the sum */
+uint mm_avg(uint a, uint b) {
+    uint s = mm_fadd(a, b);
+    if (mm_isnan(s)) {
+        return s | 0x00400000u;
+    }
+    return as_uint(0x1p-1f * as_float(s));
+}
+
 /* kernel_a: horizontal 2:1 of level l from level l-1 (row level 0), one work item per output sample of the level.
-   dst = 0.5 * (b + a) with a the even source pixel and b the odd one (avg(b, a): the sum is taken as b + a). */
+   dst = avg(b, a) with a the even source pixel and b the odd one. */
 __kernel void ripmap_mm_hor(__global uint* rip, uint soff, uint sstride, uint doff, uint dstride, int wl, int h0, int c) {
     uint gid = (uint)get_global_id(0);
     uint per_row = (uint)wl * (uint)c;
@@ -146,13 +189,12 @@ __kernel void ripmap_mm_hor(__global uint* rip, uint soff, uint sstride, uint do
     uint rem = gid % per_row;
     uint x = rem / (uint)c;
     uint ch = rem % (uint)c;
-    float a = as_float(rip[soff + (1u + y) * sstride + (1u + 2u * x) * (uint)c + ch]);
-    float b = as_float(rip[soff + (1u + y) * sstride + (2u + 2u * x) * (uint)c + ch]);
-    float s = b + a;
-    rip[doff + (1u + y) * dstride + (1u + x) * (uint)c + ch] = as_uint(0x1p-1f * s);
+    uint a = rip[soff + (1u + y) * sstride + (1u + 2u * x) * (uint)c + ch];
+    uint b = rip[soff + (1u + y) * sstride + (2u + 2u * x) * (uint)c + ch];
+    rip[doff + (1u + y) * dstride + (1u + x) * (uint)c + ch] = mm_avg(b, a);
 }
 
-/* kernel_b: vertical 2:1 of plane (l, j) from plane (l, j-1), one work item per output sample. */
+/* kernel_b: vertical 2:1 of plane (l, j) from plane (l, j-1), one work item per output sample: avg(b, a) with a the upper row. */
 __kernel void ripmap_mm_ver(__global uint* rip, uint soff, uint doff, uint stride, int wl, int hj, int c) {
     uint gid = (uint)get_global_id(0);
     uint per_row = (uint)wl * (uint)c;
@@ -162,10 +204,9 @@ __kernel void ripmap_mm_ver(__global uint* rip, uint soff, uint doff, uint strid
     }
     uint y = gid / per_row;
     uint k = (1u * (gid % per_row)) + (uint)c;
-    float a = as_float(rip[soff + (1u + 2u * y) * stride + k]);
-    float b = as_float(rip[soff + (2u + 2u * y) * stride + k]);
-    float s = b + a;
-    rip[doff + (1u + y) * stride + k] = as_uint(0x1p-1f * s);
+    uint a = rip[soff + (1u + 2u * y) * stride + k];
+    uint b = rip[soff + (2u + 2u * y) * stride + k];
+    rip[doff + (1u + y) * stride + k] = mm_avg(b, a);
 }
 "#;
 
