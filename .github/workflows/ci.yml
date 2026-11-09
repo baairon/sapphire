@@ -100,6 +100,12 @@ jobs:
         run: |
           cargo test --release -p fx_eval -p fx_exec -p edge_aware_sharpen_weights -p edge_aware_sharpen_jobs -p edge_aware_sharpen_blur_core -p edge_aware_sharpen_box_filter -p edge_aware_sharpen_render -p edge_aware_sharpen -p sharpen -p warp_render -p make_mipmap -p rotate2d -p interp -p effects_rtdata -p effects_vecdir
 
+      # The one arm64 runner: the sawtooth NaN pin of fx_eval is the only place where the x86 default NaN is told from the arm one
+      # without stored data, so it runs here as well (the step above is Linux only).
+      - name: Run the sawtooth NaN test (macOS)
+        if: runner.os == 'macOS'
+        run: cargo test --release -p fx_eval --test t_random_sawtooth_nan
+
       # The Python tools need no packages beyond the standard library to
       # compile, so a syntax slip anywhere in them fails here.
       - run: python -m compileall -q tools
