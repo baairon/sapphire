@@ -282,25 +282,34 @@ The `S_DissolveShake` stage is registered as well. Its plan does not always read
 | The `get_frames_per_second` value | at 24/1 and 2997/1 equal to the rate in the recorded Shake and Dissolve_Shake renders, whose host passes a local time step of 1 (MEASURED); at a rate whose denominator is not 1 it follows the original's f32 arithmetic for a host with time scale num and local time step den, and equality with a host's value is INFERRED, because the time scale and local time step a host passes at such a rate are not recorded |
 | Depths 8 and 16 | new conversion, not verified |
 
-**Limits.** The stages render in process, one runner thread per clip, and the parallel-safe kernels use all cores (`SAPPHIRE_THREADS=1` for one). MEASURED wall time of one 1920x1080 frame through `sapphire stage apply` on a 12 core server under some shared load, two runs per cell, in seconds:
+**Limits.** The stages render in process, one runner thread per clip, and the parallel-safe kernels use all cores (`SAPPHIRE_THREADS=1` for one). MEASURED wall time of one 1920x1080 frame through `sapphire stage apply` on a 12 core server under shared load (one-minute load average 5.3 to 9.2), two runs per cell after one warm-up run, in seconds. The frame holds random finite values in [0, 1). `swishpan` and the `S_DissolveShake` stage need a clip of at least 3 frames: their cells are the wall time of a 3 frame clip (`--frames 3`) divided by 3. The two `after` columns were measured in one session, CPU and device runs interleaved. The `before` column is the previous build, measured in an earlier session at another load, and was not measured for the seven stages added after it (`-`):
 
 | stage | before the in-process route (s) | after, CPU (s) | after, PoCL device (s) |
 |---|---|---|---|
-| `blur_color_autogen` | 1.27 / 1.22 | 0.72 / 0.76 | 0.74 / 0.73 |
-| `blur_mono_autogen` | 1.02 / 1.01 | 0.64 / 0.66 | 0.71 / 0.69 |
-| `transform_and_blur_autogen` | 11.26 / 11.87 | 1.01 / 1.17 | 0.72 / 0.74 |
-| `blur_motion_curves_no_transform_autogen` | 52.84 / 51.09 | 1.08 / 1.14 | 0.74 / 0.72 |
-| `diffuse_autogen` | 3.02 / 2.90 | 1.90 / 2.34 | 0.72 / 0.69 |
-| `distort_rgb_autogen` | 8.48 / 7.57 | 1.73 / 1.87 | 2.14 / 1.95 |
-| `stage apply drop_shadow` | 1.84 / 1.74 | 1.52 / 1.73 | 0.72 / 0.71 |
-| `hue_sat_bright_autogen` | 0.84 / 0.84 | 0.47 / 0.51 | 0.54 / 0.59 |
-| `sharpen_best_quality_autogen` | 2.79 / 2.71 | 2.40 / 2.38 | 0.86 / 0.88 |
-| `sharpen_fast_autogen` | 1.18 / 1.10 | 0.66 / 0.73 | 0.64 / 0.69 |
-| `time_warp_rgb_autogen` | 1.44 / 1.31 | 0.78 / 0.73 | 0.88 / 0.81 |
-| `trails_autogen` | 1.26 / 1.16 | 0.85 / 0.75 | 0.85 / 0.88 |
-| `warp_perspective_autogen` | 3.87 / 3.49 | 1.37 / 1.31 | 1.44 / 1.46 |
+| `blur_color_autogen` | 1.27 / 1.22 | 0.63 / 0.73 | 0.79 / 0.73 |
+| `blur_mono_autogen` | 1.02 / 1.01 | 0.59 / 0.57 | 0.64 / 0.70 |
+| `transform_and_blur_autogen` | 11.26 / 11.87 | 1.03 / 1.01 | 0.73 / 0.69 |
+| `blur_motion_curves_no_transform_autogen` | 52.84 / 51.09 | 1.09 / 1.10 | 0.74 / 0.73 |
+| `diffuse_autogen` | 3.02 / 2.90 | 2.13 / 1.90 | 0.71 / 0.62 |
+| `distort_rgb_autogen` | 8.48 / 7.57 | 4.80 / 4.45 | 1.02 / 1.00 |
+| `stage apply drop_shadow` | 1.84 / 1.74 | 1.63 / 1.50 | 0.63 / 0.64 |
+| `hue_sat_bright_autogen` | 0.84 / 0.84 | 0.41 / 0.44 | 0.50 / 0.50 |
+| `sharpen_best_quality_autogen` | 2.79 / 2.71 | 3.45 / 3.38 | 1.19 / 1.14 |
+| `sharpen_fast_autogen` | 1.18 / 1.10 | 0.73 / 0.73 | 0.68 / 0.66 |
+| `time_warp_rgb_autogen` | 1.44 / 1.31 | 0.74 / 0.79 | 0.89 / 0.80 |
+| `trails_autogen` | 1.26 / 1.16 | 0.86 / 0.82 | 0.94 / 0.93 |
+| `warp_perspective_autogen` | 3.87 / 3.49 | 1.41 / 1.39 | 0.93 / 0.93 |
+| `flicker` | - | 0.49 / 0.45 | 0.54 / 0.57 |
+| `glow` | - | 0.92 / 0.92 | 0.78 / 0.80 |
+| `swishpan` | - | 2.32 / 2.55 | 1.16 / 0.90 |
+| `shake_normal_autogen` | - | 1.62 / 2.04 | 0.68 / 0.66 |
+| `shake_twitchy_autogen` | - | 1.78 / 1.80 | 0.92 / 0.92 |
+| `shake_jumpy_autogen` | - | 2.03 / 2.17 | 0.67 / 0.76 |
+| `stage apply dissolve_shake` | - | 1.26 / 1.23 | 0.53 / 0.52 |
 
-The default path (`--device cpu`) is byte identical to the former one process per frame route on the parity record. The `PoCL device` column is `--device gpu` on PoCL, an OpenCL runtime on the CPU; it is not GPU speed, which is INFERRED until measured on a GPU. See [Rendering on a device](guide.md#rendering-on-a-device).
+The CPU cells use the default thread count (all 12 cores) and are sensitive to machine load. `distort_rgb_autogen` shows it most: at a one-minute load of 6 to 9 this build and the earlier in-process builds all measure 4.4 to 4.9 s for its frame, most of it system time in the threaded path, and 1.7 to 2.0 s with `SAPPHIRE_THREADS=1`, so its CPU cell is a contention figure and not a slower kernel. `sharpen_best_quality_autogen`'s `after, CPU` cell lies above its `before` cell for the same reason: the build before this table, timed interleaved with it under the same load, measures 2.5 to 3.6 s against 2.8 to 3.3 s, with equal output bytes.
+
+The default path (`--device cpu`) is byte identical to the former one process per frame route on the parity record. The `PoCL device` column is `--device gpu` on PoCL, an OpenCL runtime on the CPU, with `SAPPHIRE_REQUIRE_DEVICE=1`: in every run the output equals the CPU output by SHA-256 and the report line ends `fallback: none` (`hue_sat_bright_autogen` reports `device: none`: at its default parameters, which the timing uses, its plan folds to the source frame and holds no node). It is not GPU speed, which is INFERRED until measured on a GPU. See [Rendering on a device](guide.md#rendering-on-a-device).
 
 Recorded renders that do not match the stage's host arrangement (a different host arrangement, a fractional frame, a `--prev` file given outside the history chain) count in the parity record and are not verified through the stage.
 

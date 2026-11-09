@@ -5,7 +5,9 @@
 //! and version, the driver version, a format number, the FNV-1a digest of the full device program text, the build
 //! options, the digest of the program binary the session loaded or built, and the build identity (the digest of the
 //! running executable, which holds the CPU kernels, the device glue and the corpus the passes were measured against).
-//! The rest of the file lists the tags (`base`, or an op class) that passed. A changed kernel, a new driver, a
+//! The rest of the file lists the tags (`base`, or an op class) that passed, one per line. A tag followed by ` nan_same` also
+//! reported equal NaN payloads and signs to the CPU on every NaN output of its corpus; a tag without it counts as a pass whose
+//! NaN payloads were not shown equal (an entry written before the field existed reads the same way). A changed kernel, a new driver, a
 //! replaced program binary or a rebuilt executable changes the key, so the old file is unreadable and every check
 //! runs again. When the executable or the loaded binary is unknown the cache is neither read nor written. Only passes are
 //! recorded; a failed check is never cached. The file is written to a unique temporary name and renamed into place.
@@ -118,6 +120,17 @@ fn read_tags_for(info: &DeviceInfo, id: Ident) -> Vec<String> {
     }
 }
 
+/// The field written after a tag whose self-check showed equal NaN payloads.
+const NAN_SAME: &str = "nan_same";
+
+/// A cache line split into its tag and whether it carries the NaN payload field.
+fn parse_line(line: &str) -> (&str, bool) {
+    match line.split_once(' ') {
+        Some((tag, rest)) => (tag, rest.split(' ').any(|f| f == NAN_SAME)),
+        None => (line, false),
+    }
+}
+
 /// True when `tag` passed on this device, driver and program text in an earlier run.
 pub fn passed(info: &DeviceInfo, tag: &str) -> bool {
     if !enabled() {
@@ -127,25 +140,50 @@ pub fn passed(info: &DeviceInfo, tag: &str) -> bool {
 }
 
 fn passed_for(info: &DeviceInfo, id: Ident, tag: &str) -> bool {
-    read_tags_for(info, id).iter().any(|t| t == tag)
+    nan_same_for(info, id, tag).is_some()
+}
+
+/// `Some(nan_same)` when `tag` passed on this device in an earlier run: `nan_same` is true only when that pass recorded equal
+/// NaN payloads (an entry without the field gives false). `None` when no pass is recorded.
+pub fn passed_nan(info: &DeviceInfo, tag: &str) -> Option<bool> {
+    if !enabled() {
+        return None;
+    }
+    ident(info).and_then(|id| nan_same_for(info, id, tag))
+}
+
+fn nan_same_for(info: &DeviceInfo, id: Ident, tag: &str) -> Option<bool> {
+    read_tags_for(info, id).iter().map(|l| parse_line(l)).find(|(t, _)| *t == tag).map(|(_, same)| same)
 }
 
 /// Records that `tag` passed (merged with what the file already holds; written atomically). Errors are ignored.
 pub fn record_pass(info: &DeviceInfo, tag: &str) {
+    record_result(info, tag, false);
+}
+
+/// Records that `tag` passed and whether its NaN payloads were equal to the CPU's. Errors are ignored.
+pub fn record_result(info: &DeviceInfo, tag: &str, nan_same: bool) {
     if !enabled() {
         return;
     }
     if let Some(id) = ident(info) {
-        record_pass_for(info, id, tag);
+        record_result_for(info, id, tag, nan_same);
     }
 }
 
+#[cfg(test)]
 fn record_pass_for(info: &DeviceInfo, id: Ident, tag: &str) {
+    record_result_for(info, id, tag, false);
+}
+
+fn record_result_for(info: &DeviceInfo, id: Ident, tag: &str, nan_same: bool) {
     let mut tags = read_tags_for(info, id);
-    if tags.iter().any(|t| t == tag) {
+    let line = if nan_same { format!("{tag} {NAN_SAME}") } else { tag.to_string() };
+    if tags.iter().any(|t| *t == line) {
         return;
     }
-    tags.push(tag.to_string());
+    tags.retain(|t| parse_line(t).0 != tag);
+    tags.push(line);
     tags.sort();
     let mut body = key_text_for(info, id);
     body.push('\n');
@@ -220,6 +258,32 @@ mod tests {
         record_pass_for(&a, i, "copy");
         assert!(passed_for(&a, i, "base") && passed_for(&a, i, "copy") && !passed_for(&a, i, "one_minus"));
         assert!(!passed_for(&info("2.0"), i, "base"), "a new driver version invalidates the entry");
+    }
+
+    #[test]
+    fn the_nan_payload_field_is_recorded_and_an_entry_without_it_is_not_nan_exact() {
+        let cache = CacheDir::new("nan");
+        let dir = cache.dir.clone();
+        let a = info("3.0");
+        let i = id(5, 6);
+        assert_eq!(nan_same_for(&a, i, "+"), None);
+        record_pass_for(&a, i, "+");
+        assert_eq!(nan_same_for(&a, i, "+"), Some(false), "an entry without the field is a pass that is not NaN exact");
+        record_result_for(&a, i, "+", true);
+        record_result_for(&a, i, "copy", false);
+        assert_eq!(nan_same_for(&a, i, "+"), Some(true));
+        assert_eq!(nan_same_for(&a, i, "copy"), Some(false));
+        assert!(passed_for(&a, i, "+") && passed_for(&a, i, "copy"));
+        record_result_for(&a, i, "+", false);
+        assert_eq!(nan_same_for(&a, i, "+"), Some(false), "a later result replaces the line");
+        assert_eq!(read_tags_for(&a, i).iter().filter(|l| parse_line(l).0 == "+").count(), 1);
+        // a file written in the earlier form (tags only) reads as passes without the field
+        let mut body = key_text_for(&a, i);
+        body.push_str("\nbase\nmax\n");
+        std::fs::write(path_for(&a, i), body).unwrap();
+        assert_eq!(nan_same_for(&a, i, "max"), Some(false));
+        assert!(passed_for(&a, i, "base"));
+        let _ = dir;
     }
 
     #[test]

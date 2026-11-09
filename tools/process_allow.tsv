@@ -11,3 +11,5 @@ crates/effects/rtdata/src/styles/flicker.rs	Wave R Phase	the host display name o
 crates/effects/rtdata/src/styles/flicker.rs	Wave G Phase	the host display name of the Flicker parameter wave_g_phase (a colour channel phase), recorded text
 crates/effects/rtdata/src/styles/flicker.rs	Wave B Phase	the host display name of the Flicker parameter wave_b_phase (a colour channel phase), recorded text
 crates/effects/kernels/v3_to_v4_if4_a/Cargo.toml	v3_to_v4_if4_a	the plan class name v3_to_v4_if4_a, which the crate implements
+crates/effects/fx_device/src/kernels_footprint.rs	fp33_	the prefix of the OpenCL helpers and kernels of the slot 33 prefill (warp_log_gradient::slot33_warp); OpenCL names are not Rust identifiers
+crates/effects/fx_exec/src/device_ops_footprint.rs	fp33_	the OpenCL helper and kernel names of the slot 33 prefill, quoted in the source mutants and kernel launches

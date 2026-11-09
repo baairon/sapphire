@@ -11,14 +11,17 @@
 //!   when the backend was built;
 //! * the op's own `accepts` test holds for this combination tag, operand shapes and parameters;
 //! * the device did not report an error and the memory budget held;
-//! * the float output holds no NaN (checked on the device, so the output stays resident). A NaN is never taken from the
-//!   device because devices write other NaN payloads than the CPU.
+//! * the float output holds no NaN (checked on the device, so the output stays resident), because devices may write other
+//!   NaN payloads than the CPU. The exception is an op on `device_ops::NAN_EXACT` whose self-check on this device reported
+//!   equal NaN payloads and signs (`NanPayloads::Same`): its kernels write every NaN by explicit tests, so its NaN output is
+//!   kept on the device. A NaN-exact op whose payloads differ on the device in use keeps the CPU rerun.
 //!
 //! A backend is installed per thread ([`install`]); the selection function for callers is
 //! [`for_device`] (from `fx_device::select`) and `fx_device::select` itself.
 
 use crate::device_ops::{self, DevArg, DeviceOp};
 use crate::types::{Arg, DevVal, ExecError, Image, KParams, Val};
+use fx_device::selfcheck::NanPayloads;
 use fx_device::{Backend as DeviceHandle, DevError, DevImage, DeviceCtx};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -141,6 +144,8 @@ pub struct DeviceBackend {
     ctx: Arc<DeviceCtx>,
     /// classes admitted: allowlisted and self-checked
     admitted: BTreeMap<&'static str, &'static DeviceOp>,
+    /// admitted classes whose NaN outputs stay on the device: on `NAN_EXACT` and self-checked with equal NaN payloads
+    nan_exact: BTreeSet<&'static str>,
     /// uploads memoised by the host image's address (the Rc is kept so the address stays valid)
     uploads: HashMap<*const Image, (Rc<Image>, Rc<DevVal>)>,
     report: Report,
@@ -153,33 +158,55 @@ impl DeviceBackend {
     }
 
     /// Only the named classes (a subset of the table), each self-checked. A name with no kernel is ignored.
+    /// An op on `NAN_EXACT` keeps its NaN outputs on the device only when its self-check (run now, or recorded in the self-check
+    /// cache with the NaN payload field) reported equal NaN payloads.
     pub fn with_allowlist(ctx: Arc<DeviceCtx>, allow: &[&str]) -> DeviceBackend {
+        DeviceBackend::admit(ctx, allow, true)
+    }
+
+    /// The admission of [`with_allowlist`](Self::with_allowlist); `use_cache` false runs every self-check and records nothing
+    /// (a session built from another program text than the one the cache key names).
+    fn admit(ctx: Arc<DeviceCtx>, allow: &[&str], use_cache: bool) -> DeviceBackend {
         let mut admitted = BTreeMap::new();
+        let mut nan_exact = BTreeSet::new();
         let mut report = Report::default();
         let allow: BTreeSet<&str> = allow.iter().copied().collect();
         for op in device_ops::DEVICE_OPS {
             if !allow.contains(op.class) {
                 continue;
             }
-            if fx_device::checkcache::passed(&ctx.info, op.class) {
-                admitted.insert(op.class, op);
-                continue;
-            }
-            match device_ops::selfcheck(&ctx.session, op) {
-                Ok(_) => {
-                    fx_device::checkcache::record_pass(&ctx.info, op.class);
-                    admitted.insert(op.class, op);
-                }
-                Err(m) => {
-                    report.refused.insert(op.class.to_string(), m);
-                }
+            let cached = if use_cache { fx_device::checkcache::passed_nan(&ctx.info, op.class) } else { None };
+            let nan_same = match cached {
+                Some(same) => same,
+                None => match device_ops::selfcheck(&ctx.session, op) {
+                    Ok(t) => {
+                        let same = t.nan_payloads == NanPayloads::Same;
+                        if use_cache {
+                            fx_device::checkcache::record_result(&ctx.info, op.class, same);
+                        }
+                        same
+                    }
+                    Err(m) => {
+                        report.refused.insert(op.class.to_string(), m);
+                        continue;
+                    }
+                },
+            };
+            admitted.insert(op.class, op);
+            if device_ops::keeps_nan_outputs(op.class, nan_same) {
+                nan_exact.insert(op.class);
             }
         }
-        DeviceBackend { ctx, admitted, uploads: HashMap::new(), report }
+        DeviceBackend { ctx, admitted, nan_exact, uploads: HashMap::new(), report }
     }
 
     pub fn admitted(&self) -> Vec<&'static str> {
         self.admitted.keys().copied().collect()
+    }
+
+    /// The admitted ops whose NaN outputs stay on the device (on `NAN_EXACT`, self-checked with equal NaN payloads).
+    pub fn nan_exact(&self) -> Vec<&'static str> {
+        self.nan_exact.iter().copied().collect()
     }
 
     fn resident(&mut self, v: &Val) -> Result<Rc<DevVal>, Fallback> {
@@ -271,7 +298,7 @@ impl DeviceBackend {
             })
             .collect();
         let out = (op.run)(&self.ctx.session, call, &dargs).map_err(map_err)?;
-        if out.has_nan().map_err(map_err)? {
+        if !self.nan_exact.contains(call.class) && out.has_nan().map_err(map_err)? {
             return Err(Fallback::NanOutput);
         }
         if call.class == "make_mipmap" {
@@ -466,5 +493,217 @@ mod notice_tests {
         }
         assert_eq!(logged(DeviceKind::Auto, &DeviceHandle::Cpu), "");
         assert_eq!(logged(DeviceKind::Cpu, &DeviceHandle::Cpu), "");
+    }
+}
+
+/// NaN-exact ops on a real device (prints NOT RUN without one): every op on `device_ops::NAN_EXACT` is byte exact on its corpus
+/// and its NaN cases, every op on `NAN_EXACT_WRITTEN` reports equal NaN payloads (an op on `NAN_EXACT_COMPILED` prints its result),
+/// a NaN output of such an op stays on the device with the CPU's bits, and an op whose self-check finds other NaN payloads (a
+/// kernel with another NaN rule) still reruns a NaN output on the CPU.
+#[cfg(test)]
+mod device_nan_exact_tests {
+    use super::*;
+    use crate::device_ops::{NAN_EXACT_COMPILED, NAN_EXACT_WRITTEN, NAN_TWIN_CAP};
+    use crate::types::Image;
+    use fx_device::selfcheck::Tally;
+    use fx_device::{Backend as Handle, DeviceKind, Session};
+
+    fn device() -> Option<Arc<DeviceCtx>> {
+        match fx_device::select(DeviceKind::Gpu) {
+            Handle::Device(d) => Some(d),
+            other => {
+                not_run(&format!("no usable OpenCL device ({})", other.describe()));
+                None
+            }
+        }
+    }
+
+    /// A test that needs a device and found none: it prints NOT RUN, or fails when `SAPPHIRE_REQUIRE_DEVICE=1`.
+    fn not_run(why: &str) {
+        if std::env::var("SAPPHIRE_REQUIRE_DEVICE").as_deref() == Ok("1") {
+            panic!("device required but unavailable: {why}");
+        }
+        println!("NOT RUN: {why}");
+    }
+
+    fn op(class: &str) -> &'static device_ops::DeviceOp {
+        device_ops::DEVICE_OPS.iter().find(|o| o.class == class).expect("a NaN-exact op has a kernel")
+    }
+
+    /// Self-checks one NaN-exact op with its NaN cases and prints the result. A refusal (a bit difference outside NaN words) is an
+    /// error for every op; the admission rule is checked on the measured payloads.
+    fn nan_exact_selfcheck(ctx: &DeviceCtx, class: &str) -> Result<Tally, String> {
+        let o = op(class);
+        let corpus = (o.corpus)();
+        let twins = crate::device_ops_pointwise::nan_twins(&corpus, NAN_TWIN_CAP);
+        let nan_in = twins.iter().flat_map(|c| c.args.iter()).flat_map(|i| i.planes.iter()).flatten().filter(|v| v.is_nan()).count();
+        let t = device_ops::selfcheck(&ctx.session, o).map_err(|m| format!("{class}: refused: {m}"))?;
+        println!("NANEXACT {class:18} cases {} + {} NaN cases, NaN input words {nan_in}: {t}", corpus.len(), twins.len());
+        let same = t.nan_payloads == NanPayloads::Same;
+        assert_eq!(device_ops::keeps_nan_outputs(class, same), same, "{class}: the admission must follow the self-check");
+        Ok(t)
+    }
+
+    /// Ops whose NaN pick is written in the CPU source: byte equality and equal NaN payloads on every device build.
+    #[test]
+    fn written_nan_exact_ops_report_equal_nan_payloads_on_the_device() {
+        let Some(ctx) = device() else { return };
+        let mut bad = Vec::new();
+        for class in NAN_EXACT_WRITTEN {
+            match nan_exact_selfcheck(&ctx, class) {
+                Ok(t) if t.nan_payloads != NanPayloads::Same => bad.push(format!("{class}: {t}")),
+                Ok(_) => {}
+                Err(m) => bad.push(m),
+            }
+        }
+        assert!(bad.is_empty(), "{bad:#?}");
+    }
+
+    /// Ops whose NaN pick is the compiled CPU instruction's: byte equality is asserted; the NaN payload result is information
+    /// only (another compiler or host may pick otherwise, and then the op keeps the CPU rerun of NaN outputs).
+    #[test]
+    fn compiled_nan_exact_ops_are_byte_exact_and_print_their_nan_payloads() {
+        let Some(ctx) = device() else { return };
+        let mut bad = Vec::new();
+        for class in NAN_EXACT_COMPILED {
+            match nan_exact_selfcheck(&ctx, class) {
+                Ok(t) => println!("COMPILED-PICK {class:12} nan payloads {}", if t.nan_payloads == NanPayloads::Same { "same" } else { "differ (NaN outputs rerun on the CPU)" }),
+                Err(m) => bad.push(m),
+            }
+        }
+        assert!(bad.is_empty(), "{bad:#?}");
+    }
+
+    fn nan_image() -> Image {
+        // a NaN pair (0x7fc00001 + 0xffc0beef), a signalling NaN with a finite value, inf - inf and plain values
+        let a: Vec<f32> = [0x7fc0_0001u32, 0x7f80_0001, 0x7f80_0000, 0x3f80_0000, 0x0000_0000].iter().map(|b| f32::from_bits(*b)).collect();
+        let b: Vec<f32> = [0xffc0_beefu32, 0x4000_0000, 0x7f80_0000, 0x4000_0000, 0x8000_0000].iter().map(|b| f32::from_bits(*b)).collect();
+        Image { n: 5, planes: vec![a, b] }
+    }
+
+    /// Runs `-` (plane 0 minus plane 1 of the image, as two one channel operands) through the backend.
+    fn run_sub(b: &mut DeviceBackend) -> (Result<Val, Fallback>, Vec<f32>) {
+        let im = nan_image();
+        let a = Rc::new(Image { n: 5, planes: vec![im.planes[0].clone()] });
+        let c = Rc::new(Image { n: 5, planes: vec![im.planes[1].clone()] });
+        let kp = KParams::standin();
+        let call = NodeCall { idx: 0, class: "-", tag: 1, n: 5, dims: (5, 1), kp: &kp };
+        let want = match crate::kernels::run_any("-", 1, &[Arg::Img(&a), Arg::Img(&c)], 5, (5, 1), &kp).unwrap() {
+            crate::kernels2::Out::Img(i) => i.planes[0].clone(),
+            _ => unreachable!(),
+        };
+        (b.try_run(&call, &[Val::Img(a), Val::Img(c)]), want)
+    }
+
+    #[test]
+    fn a_nan_output_of_a_nan_exact_op_stays_on_the_device_with_the_cpu_bits() {
+        let Some(ctx) = device() else { return };
+        let mut b = DeviceBackend::with_allowlist(ctx, &["-"]);
+        assert_eq!(b.admitted(), vec!["-"]);
+        assert_eq!(b.nan_exact(), vec!["-"], "the self-check of `-` must report equal NaN payloads");
+        let (got, want) = run_sub(&mut b);
+        assert!(want.iter().any(|v| v.is_nan()), "the case must produce NaN on the CPU");
+        let Ok(Val::Dev(d)) = got else { panic!("expected a device result, got {got:?}") };
+        d.materialize().unwrap();
+        let host = Val::Dev(d);
+        let words: Vec<u32> = host.as_arg().planes()[0].iter().map(|v| v.to_bits()).collect();
+        assert_eq!(words, want.iter().map(|v| v.to_bits()).collect::<Vec<_>>());
+        assert_eq!(b.report().fallback.get("-"), None);
+    }
+
+    /// The NaN pick helper with the operand order swapped: finite results are unchanged, NaN pairs give the second operand.
+    fn swapped_pick_program() -> String {
+        let src = fx_device::kernels::device_program();
+        let from = "    if (isnan(x)) {\n        return as_float(as_uint(x) | 0x00400000u);\n    }\n    if (isnan(y)) {\n        return as_float(as_uint(y) | 0x00400000u);\n    }";
+        let to = "    if (isnan(y)) {\n        return as_float(as_uint(y) | 0x00400000u);\n    }\n    if (isnan(x)) {\n        return as_float(as_uint(x) | 0x00400000u);\n    }";
+        assert_eq!(src.matches(from).count(), 1, "the pick helper text");
+        src.replacen(from, to, 1)
+    }
+
+    fn mutant_ctx(ctx: &DeviceCtx, source: &str) -> Arc<DeviceCtx> {
+        let (dev, info) = fx_device::probe::open(ctx.info.index).unwrap();
+        let s = Session::open_source(&dev, &info, source, fx_device::kernels::BUILD_OPTIONS).unwrap();
+        Arc::new(DeviceCtx { session: Arc::new(s), info, base: Tally::empty(), base_cached: false })
+    }
+
+    #[test]
+    fn a_nan_exact_op_whose_payloads_differ_still_reruns_on_the_cpu() {
+        let Some(ctx) = device() else { return };
+        let m = mutant_ctx(&ctx, &swapped_pick_program());
+        let t = device_ops::selfcheck(&m.session, op("-")).expect("finite results are unchanged, so the op is still admitted");
+        assert!(matches!(t.nan_payloads, NanPayloads::Differ(_)), "the swapped pick must show in the NaN payloads: {t}");
+        // the mutant program is not the one the cache key names, so the admission runs without the cache
+        let mut b = DeviceBackend::admit(m, &["-"], false);
+        assert_eq!(b.admitted(), vec!["-"]);
+        assert!(b.nan_exact().is_empty(), "an op with other NaN payloads is not NaN exact on this device");
+        let (got, _) = run_sub(&mut b);
+        assert_eq!(got.err(), Some(Fallback::NanOutput));
+        assert_eq!(b.report().fallback.get("-").and_then(|m| m.get("nan_output")), Some(&1));
+    }
+
+    /// Single edits of the NaN-exact OpenCL source, each with the ops whose self-check must refuse it (a mismatch, or other NaN
+    /// payloads, which keeps the op off the NaN-exact set).
+    const MUTANTS: &[(&str, &str, &str, &[&str])] = &[
+        ("pick2 operand order", "    if (isnan(x)) {\n        return as_float(as_uint(x) | 0x00400000u);\n    }\n    if (isnan(y)) {\n        return as_float(as_uint(y) | 0x00400000u);\n    }", "    if (isnan(y)) {\n        return as_float(as_uint(y) | 0x00400000u);\n    }\n    if (isnan(x)) {\n        return as_float(as_uint(x) | 0x00400000u);\n    }", &["+", "-", "*", "/", "diff"]),
+        ("pick2 quiet bit constant", "    if (isnan(x)) {\n        return as_float(as_uint(x) | 0x00400000u);", "    if (isnan(x)) {\n        return as_float(as_uint(x) | 0x00200000u);", &["+", "-", "*", "/", "diff", "postdivide"]),
+        ("pick2 default NaN sign", "        return as_float(as_uint(y) | 0x00400000u);\n    }\n    return as_float(0xffc00000u);", "        return as_float(as_uint(y) | 0x00400000u);\n    }\n    return as_float(0x7fc00000u);", &["+", "-", "*", "/"]),
+        ("pick3 operand order", "    if (isnan(a)) {\n        return as_float(as_uint(a) | 0x00400000u);\n    }\n    if (isnan(b)) {", "    if (isnan(b)) {\n        return as_float(as_uint(b) | 0x00400000u);\n    }\n    if (isnan(a)) {", &["screen_super", "dissolve"]),
+        ("sub pick operand swap", "    float r = x - y;\n    return isnan(r) ? nanx_pick2(x, y) : r;", "    float r = x - y;\n    return isnan(r) ? nanx_pick2(y, x) : r;", &["-", "diff", "dissolve"]),
+        ("dissolve difference operand swap", "nanx_fma(t, nanx_sub(b, a), a)", "nanx_fma(t, nanx_sub(a, b), a)", &["dissolve"]),
+        ("fma pick order", "    return isnan(r) ? nanx_pick3(b, a, c) : r;", "    return isnan(r) ? nanx_pick3(a, b, c) : r;", &["screen_super", "dissolve"]),
+        ("fma replaced by an unfused multiply and add", "    float r = fma(a, b, c);\n    return isnan(r)", "    float r = a * b + c;\n    return isnan(r)", &["screen_super", "dissolve"]),
+        ("add with a constant: constant first", "            r = pointwise_bin_f(op, pb[i], as_float(ca));", "            r = pointwise_bin_f(op, as_float(ca), pb[i]);", &["+", "*"]),
+        ("postdivide compare direction", "    bool lt_eps = 0x1p-13f > a;", "    bool lt_eps = 0x1p-13f >= a;", &["postdivide"]),
+        ("postdivide reciprocal select arm", "            r = nanx_mul(x, inv);", "            r = nanx_div(x, a);", &["postdivide"]),
+        ("postdivide copy arm quiets a signalling NaN", "    } else {\n        r = x;\n    }\n    out[i] = r;", "    } else {\n        r = as_float(as_uint(x) | 0x00400000u);\n    }\n    out[i] = r;", &["postdivide"]),
+        ("diff sign mask constant", "    return as_float(as_uint(nanx_sub(x, y)) & 0x7fffffffu);", "    return as_float(as_uint(nanx_sub(x, y)) & 0xffffffffu);", &["diff"]),
+        ("screen extension subtrahend", "        float y = nanx_sub(nanx_add(one, x), x);", "        float y = nanx_sub(nanx_add(one, x), one);", &["screen_super"]),
+        ("ripmap sum pair pick operand", "        return a | 0x00400000u;\n    }\n    if (na) {", "        return b | 0x00400000u;\n    }\n    if (na) {", &["make_mipmap"]),
+        ("ripmap sum signalling select arm", "        if (sa && !sb) {\n            return b;", "        if (sa && !sb) {\n            return a | 0x00400000u;", &["make_mipmap"]),
+        ("ripmap sum signalling compare direction", "    int sa = (a & 0x00400000u) == 0u;", "    int sa = (a & 0x00400000u) != 0u;", &["make_mipmap"]),
+        ("ripmap sum default NaN sign", "    if (isnan(s)) {\n        return 0xffc00000u;", "    if (isnan(s)) {\n        return 0x7fc00000u;", &["make_mipmap"]),
+        ("ripmap NaN test mantissa mask", "    return (v & 0x7f800000u) == 0x7f800000u && (v & 0x007fffffu) != 0u;", "    return (v & 0x7f800000u) == 0x7f800000u && (v & 0x003fffffu) != 0u;", &["make_mipmap"]),
+        ("ripmap horizontal sum order", "(1u + x) * (uint)c + ch] = mm_avg(b, a);", "(1u + x) * (uint)c + ch] = mm_avg(a, b);", &["make_mipmap"]),
+        ("ripmap vertical sum order", "    rip[doff + (1u + y) * stride + k] = mm_avg(b, a);", "    rip[doff + (1u + y) * stride + k] = mm_avg(a, b);", &["make_mipmap"]),
+        ("ripmap average constant", "    return as_uint(0x1p-1f * as_float(s));", "    return as_uint(0x1p-2f * as_float(s));", &["make_mipmap"]),
+    ];
+
+    /// The mutation check of the NaN-exact kernels: every mutant is its own program build and must be refused by the self-check of
+    /// at least one of its ops (run directly, without the self-check cache). Run with `-- --ignored` (each build takes a while on PoCL).
+    #[test]
+    #[ignore]
+    fn nan_exact_source_mutants_are_refused() {
+        let Some(ctx) = device() else { return };
+        let base = fx_device::kernels::device_program();
+        let mut prev = fx_device::progcache::fnv(base.as_bytes());
+        let mut survivors = Vec::new();
+        for (name, from, to, ops) in MUTANTS {
+            assert_eq!(base.matches(from).count(), 1, "mutant `{name}`: the edited text must occur once");
+            let src = base.replacen(from, to, 1);
+            let digest = fx_device::progcache::fnv(src.as_bytes());
+            assert!(digest != fx_device::progcache::fnv(base.as_bytes()) && digest != prev, "mutant `{name}` equals the base or the previous mutant");
+            prev = digest;
+            let m = mutant_ctx(&ctx, &src);
+            let mut verdicts = Vec::new();
+            let mut killed = false;
+            for class in *ops {
+                match device_ops::selfcheck(&m.session, op(class)) {
+                    Err(e) => {
+                        killed = true;
+                        verdicts.push(format!("{class}: mismatch ({})", e.chars().take(160).collect::<String>()));
+                    }
+                    Ok(t) if t.nan_payloads != NanPayloads::Same => {
+                        killed = true;
+                        verdicts.push(format!("{class}: NaN payloads differ"));
+                    }
+                    Ok(_) => verdicts.push(format!("{class}: equal")),
+                }
+            }
+            println!("MUTANT {name} program {digest:016x}: {} | {}", if killed { "KILLED" } else { "SURVIVED" }, verdicts.join("; "));
+            if !killed {
+                survivors.push(*name);
+            }
+        }
+        assert!(survivors.is_empty(), "surviving mutants: {survivors:?}");
     }
 }

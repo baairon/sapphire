@@ -12,8 +12,9 @@
 //! 64 steps.
 //!
 //! NaN payloads: IEEE 754 fixes which operations give NaN but not the payload. The check requires NaN in exactly
-//! the places the CPU has one and reports payload differences apart ([`NanPayloads`]); the executor never takes a
-//! float output that holds a NaN from the device, so a payload difference is never visible.
+//! the places the CPU has one and reports payload differences apart ([`NanPayloads`]); the executor takes a float
+//! output that holds a NaN from the device only for an op whose kernels are written NaN exact and whose check reported
+//! equal payloads on that device, so a payload difference is never visible.
 
 use crate::cl::{Arg, Buffer};
 use crate::image::Session;

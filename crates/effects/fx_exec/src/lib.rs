@@ -15,10 +15,18 @@ pub mod device_ops;
 pub mod device_ops_pointwise;
 /// device ops of the sampling and warp family
 pub mod device_ops_warp;
+/// the warp footprint prefill on the device (slot 33 log2 of gradient maps)
+pub mod device_ops_footprint;
 /// device ops of the ripmap family (make_mipmap, blur_warp)
 pub mod device_ops_ripmap;
 /// device ops of blur, masked_blur, grad, sharpen, edge_aware_sharpen and static2
 pub mod device_ops_neighbourhood;
+/// device ops of plane assembly (copy_alpha, get_alpha, v3_to_v4_if4_a, append)
+pub mod device_ops_plane;
+/// device ops of screen, overlay_super and alpha_from_rgb_max
+pub mod device_ops_glow_ops;
+/// device ops of glow (bright pass, then the neighbourhood blur passes)
+pub mod device_ops_glow;
 pub mod fxrun;
 pub mod cmds;
 pub mod nanrule;

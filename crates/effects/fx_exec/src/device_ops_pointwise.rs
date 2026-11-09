@@ -9,6 +9,8 @@ use crate::types::{Image, KParams};
 use fx_device::cl::Arg as ClArg;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 type Acc = fn(&NodeCall, &[ArgShape]) -> Result<(), &'static str>;
@@ -31,7 +33,7 @@ fn count_of(s: &ArgShape) -> Result<(usize, bool), &'static str> {
     }
 }
 
-fn shapes_of(args: &[DevArg]) -> Vec<ArgShape> {
+pub(crate) fn shapes_of(args: &[DevArg]) -> Vec<ArgShape> {
     args.iter()
         .map(|a| match a {
             DevArg::Img(i) => ArgShape::Img { channels: i.channels() },
@@ -428,7 +430,7 @@ pub enum Src {
 }
 
 /// The plane service's fill value for `n` samples: a pooled fill of 512 or more samples turns a zero (either sign) into +0.0.
-fn service_fill_bits(value: u32, n: usize, in_pool: bool) -> u32 {
+pub(crate) fn service_fill_bits(value: u32, n: usize, in_pool: bool) -> u32 {
     if !in_pool && n >= 0x200 && f32::from_bits(value) == 0.0 {
         0
     } else {
@@ -436,7 +438,7 @@ fn service_fill_bits(value: u32, n: usize, in_pool: bool) -> u32 {
     }
 }
 
-fn route_check(shapes: &[ArgShape], recipe: &[(usize, Src)]) -> Result<(), &'static str> {
+pub(crate) fn route_check(shapes: &[ArgShape], recipe: &[(usize, Src)]) -> Result<(), &'static str> {
     for (_, src) in recipe {
         if let Src::Chan { arg, chan } = *src {
             let sh = shapes.get(arg).ok_or("operand missing")?;
@@ -460,7 +462,7 @@ fn route_check(shapes: &[ArgShape], recipe: &[(usize, Src)]) -> Result<(), &'sta
     Ok(())
 }
 
-fn route_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], recipe: &[(usize, Src)], tag: usize, direct_const_fill: bool) -> Result<DevImage, DevError> {
+pub(crate) fn route_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], recipe: &[(usize, Src)], tag: usize, direct_const_fill: bool) -> Result<DevImage, DevError> {
     check_len(c, args)?;
     let n = n_u32(c)?;
     let shapes = shapes_of(args);
@@ -1174,8 +1176,11 @@ fn postdiv_accepts(c: &NodeCall, args: &[ArgShape]) -> Result<(), &'static str> 
     if !matches!(args[1], ArgShape::Const { .. }) {
         return Err("copy_alpha is not a constant");
     }
-    if e == 1 || e == 3 {
-        return Err("the compiler folds postdivide on one and three channels");
+    if e == 1 {
+        return Err("one channel source: the compiler folds postdivide on one channel (POSTDIV-ELNUM-FOLDED)");
+    }
+    if e == 3 && tag != crate::postdiv::ROUTE_NOUT as usize {
+        return Err("three channel source outside the copy-alpha arm (only tag 3 has a CPU route; the CPU refuses the others)");
     }
     if e < tag.min(3) {
         return Err("fewer source planes than the colour outputs");
@@ -1183,18 +1188,60 @@ fn postdiv_accepts(c: &NodeCall, args: &[ArgShape]) -> Result<(), &'static str> 
     Ok(())
 }
 
+/// The host alpha plane of the current run for host input `idx` (the plane the CPU copy-alpha arm reads), uploaded once per run
+/// and reused while the host plane holds the same words. `Err` carries the CPU's refusal when the plane is missing or short.
+fn postdiv_host_alpha(s: &Arc<Session>, idx: usize, n: usize) -> Result<Rc<DevImage>, DevError> {
+    thread_local! {
+        /// (session address, the host words uploaded, the device plane)
+        static UPLOADED: RefCell<Option<(usize, Vec<u32>, Rc<DevImage>)>> = const { RefCell::new(None) };
+    }
+    let words: Option<Vec<u32>> = crate::kernels2::COPY_ALPHA_PLANES.with(|c| c.borrow().as_ref().and_then(|v| v.get(idx)).map(|p| p.iter().map(|x| x.to_bits()).collect()));
+    let Some(words) = words else {
+        UPLOADED.with(|u| *u.borrow_mut() = None);
+        return Err(unsup(format!("copy-alpha arm: no host alpha plane for input {idx} on this route (the CPU refuses: POSTDIV-COPY-ALPHA-SOURCE)")));
+    };
+    if words.len() != n {
+        return Err(unsup(format!("copy-alpha arm: the host alpha plane has {} samples, the plane has {n} (the CPU refuses: POSTDIV-COPY-ALPHA-SOURCE)", words.len())));
+    }
+    let key = Arc::as_ptr(s) as usize;
+    if let Some(d) = UPLOADED.with(|u| u.borrow().as_ref().filter(|(k, w, _)| *k == key && *w == words).map(|(_, _, d)| d.clone())) {
+        return Ok(d);
+    }
+    let host: Vec<f32> = words.iter().map(|b| f32::from_bits(*b)).collect();
+    let d = Rc::new(DevImage::upload(s, &[host.as_slice()])?);
+    UPLOADED.with(|u| *u.borrow_mut() = Some((key, words, d.clone())));
+    Ok(d)
+}
+
 fn postdiv_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage, DevError> {
     let shapes = shapes_of(args);
     postdiv_accepts(c, &shapes).map_err(unsup)?;
     check_len(c, args)?;
     let copy_alpha = cvtt(f32::from_bits(lanes(&args[1])[0]));
-    if copy_alpha >= 0 {
-        return Err(unsup("copy_alpha at or above zero (the alpha from another image)"));
-    }
     let n = n_u32(c)?;
     let DevArg::Img(src) = &args[0] else { return Err(unsup("source is not an image")) };
     let e = src.channels();
     let tag = c.tag as usize;
+    if e == crate::postdiv::ROUTE_ELNUM {
+        // accepts admits three channels on tag 3 only: the copy-alpha arm, copy_alpha 0, 3 outputs (postdiv_copy_alpha_into)
+        if copy_alpha != crate::postdiv::ROUTE_COPY_ALPHA {
+            return Err(unsup(if copy_alpha < 0 {
+                "three channel source with copy_alpha below zero: the compiler folds it (POSTDIV-ELNUM-FOLDED)"
+            } else {
+                "three channel source with copy_alpha above zero: no CPU route (POSTDIV-COPY-ALPHA-SOURCE)"
+            }));
+        }
+        let pa = postdiv_host_alpha(s, copy_alpha as usize, c.n)?;
+        let out = DevImage::alloc(s, tag, c.n)?;
+        // colour planes 0, 1, 2 times the reciprocal of the host alpha, no alpha store (postdiv_into(view, 4, -1, 3))
+        for k in 0..3 {
+            s.launch("pointwise_postdiv_f32", c.n, &[src.plane(k).arg(), pa.plane(0).arg(), out.plane(k).arg(), ClArg::U32(n), ClArg::U32(1)])?;
+        }
+        return Ok(out);
+    }
+    if copy_alpha >= 0 {
+        return Err(unsup("copy_alpha at or above zero on a two or four channel source: no CPU route (POSTDIV-COPY-ALPHA-SOURCE)"));
+    }
     let out = DevImage::alloc(s, tag, c.n)?;
     let pa = src.plane(e - 1);
     let colour_mode = if tag <= 2 { 0u32 } else { 1 };
@@ -1636,6 +1683,84 @@ pub fn gen_cases(class: &'static str, accepts: Acc, templates: &[Vec<Od>], tags:
         .collect()
 }
 
+/// The value pool of the NaN cases: NaN of both signs with distinct payloads (quiet and signalling), then the values that meet
+/// them or make a fresh NaN (both infinities and both zeros for `inf - inf`, `0 * inf` and `0 / 0`), the unit range values the
+/// blend and alpha tests branch on, a subnormal and the largest finite value. 23 entries, a prime, so [`nan_pool_word`] covers
+/// every pair (and triple) of planes.
+pub const NAN_POOL: [u32; 23] = [
+    0x7fc0_0000, 0xffc0_0000, 0x7fc0_0001, 0xffc0_beef, 0x7f80_0001, 0xff81_2345, 0x7fff_ffff, 0xffff_ffff, 0x7fa0_0000, 0xff9a_bcde,
+    0x7f80_0000, 0xff80_0000, 0x0000_0000, 0x8000_0000, 0x3f80_0000, 0xbf80_0000, 0x3f00_0000, 0x3f40_0000, 0x3900_0000, 0x4000_0000,
+    0xc060_0000, 0x7f7f_ffff, 0x0000_0001,
+];
+
+/// The pool word of plane `g` at sample `i` of a frame of `23^digits` samples: the pool index is `sum_j g^j * d_j mod 23`, where
+/// `d_j` are the base 23 digits of `i`. For any `digits` distinct planes the map from samples to index tuples is one to one (a
+/// Vandermonde system mod a prime), so every combination of pool values meets in some sample.
+pub fn nan_pool_word(g: usize, i: usize, digits: usize) -> u32 {
+    let p = NAN_POOL.len();
+    let (mut idx, mut rest, mut gp) = (0usize, i, 1usize);
+    for _ in 0..digits {
+        idx = (idx + gp * (rest % p)) % p;
+        rest /= p;
+        gp = gp * g % p;
+    }
+    NAN_POOL[idx]
+}
+
+/// The NaN cases derived from an op's corpus: one case per operand shape and tag, with every image plane filled from
+/// [`NAN_POOL`] so that NaN of both signs and several payloads appear in every operand position, against each other (NaN pairs)
+/// and against the fresh NaN producers. A frame of 23 x 23 samples covers every pair of planes, 23 x 529 every triple (ops with
+/// three or more operands). Each constant operand takes, in turn, every pool value in every lane (and its original lanes).
+/// Thinned evenly to at most `cap` cases.
+pub fn nan_twins(cases: &[SelfCase], cap: usize) -> Vec<SelfCase> {
+    let p = NAN_POOL.len();
+    let mut seen: Vec<(Vec<(bool, usize)>, i32, bool)> = Vec::new();
+    let mut out = Vec::new();
+    for c in cases {
+        let shape: Vec<(bool, usize)> = c.args.iter().map(|a| if a.n == 0 && a.planes.len() == 5 { (true, a.planes[4][0] as usize) } else { (false, a.planes.len()) }).collect();
+        let key = (shape.clone(), c.tag, c.kp.is_none());
+        if seen.contains(&key) {
+            continue;
+        }
+        seen.push(key);
+        let digits = if c.args.len() + c.consts.len() >= 3 { 3 } else { 2 };
+        let (w, h) = (p, p.pow(digits as u32 - 1));
+        let n = w * h;
+        let has_const = shape.iter().any(|s| s.0);
+        let variants = if has_const { p + 1 } else { 1 };
+        for j in 0..variants {
+            let args: Vec<Image> = c
+                .args
+                .iter()
+                .zip(&shape)
+                .enumerate()
+                .map(|(k, (a, &(is_c, cnt)))| {
+                    if is_c {
+                        if j == p {
+                            return a.clone();
+                        }
+                        let mut l = [0u32; 4];
+                        for (lane, w) in l.iter_mut().enumerate() {
+                            *w = NAN_POOL[(j + 7 * lane) % p];
+                        }
+                        const_image(cnt, l)
+                    } else {
+                        let planes = (0..cnt).map(|q| (0..n).map(|i| f32::from_bits(nan_pool_word(k * 4 + q, i, digits))).collect()).collect();
+                        Image { n, planes }
+                    }
+                })
+                .collect();
+            out.push(SelfCase { name: format!("{} NaN {w}x{h} tag {} v{j}", c.name, c.tag), dims: (w, h), tag: c.tag, args, consts: c.consts.clone(), kp: c.kp });
+        }
+    }
+    let total = out.len();
+    if total <= cap {
+        return out;
+    }
+    let keep: Vec<usize> = (0..cap).map(|k| k * total / cap).collect();
+    out.into_iter().enumerate().filter(|(i, _)| keep.binary_search(i).is_ok()).map(|(_, c)| c).collect()
+}
+
 /// A reduced set of frame shapes for the corpora with many operand templates: one pixel, a row below and above 8, an odd frame, and one above 512
 /// samples (the pooled fill rule).
 pub const DIMS_SMALL: &[(usize, usize)] = &[(1, 1), (7, 1), (33, 2), (45, 23)];
@@ -1643,7 +1768,7 @@ pub const DIMS_SMALL: &[(usize, usize)] = &[(1, 1), (7, 1), (33, 2), (45, 23)];
 /// Frame shapes of the pointwise corpora: one pixel, a row with a partial vector tail (9), and an odd frame above 512 samples.
 pub const PW_DIMS: &[(usize, usize)] = &[(1, 1), (9, 1), (45, 23)];
 
-fn all_templates(nargs: usize, allow_const: bool) -> Vec<Vec<Od>> {
+pub(crate) fn all_templates(nargs: usize, allow_const: bool) -> Vec<Vec<Od>> {
     let mut out: Vec<Vec<Od>> = vec![vec![]];
     for _ in 0..nargs {
         let mut next = Vec::new();
@@ -1994,14 +2119,103 @@ pub const POSTDIVIDE: DeviceOp = DeviceOp {
     accepts: postdiv_accepts,
     run: postdiv_run,
     corpus: || {
-        let t: Vec<Vec<Od>> = (1..=4usize).map(|e| vec![Od::Img(e), Od::Const(1)]).collect();
+        let t: Vec<Vec<Od>> = [2usize, 4].iter().map(|&e| vec![Od::Img(e), Od::Const(1)]).collect();
         let mut cases = gen_cases("postdivide", postdiv_accepts, &t, &[1, 2, 3, 4], PW_DIMS, 200);
         for c in cases.iter_mut() {
             c.args[1] = const_image(1, [(-1.0f32).to_bits(), 0, 0, 0]);
         }
+        cases.extend(postdiv_copy_alpha_cases());
         cases
     },
 };
+
+/// Host alpha words for the copy-alpha arm: both zeros, subnormals of both signs, one ulp around the 2^-13 and 1.0 thresholds of the
+/// alpha test, values between them, negatives, the largest finite values, both infinities and NaN of both signs with several payloads.
+const PD_ALPHA: [u32; 32] = [
+    0x0000_0000, 0x8000_0000, 0x0000_0001, 0x8000_0001, 0x007f_ffff, 0x807f_ffff, 0x0080_0000, 0x38ff_ffff, 0x3900_0000, 0x3900_0001, 0xb900_0000,
+    0x3900_0002, 0x3a80_0000, 0x3e80_0000, 0x3eaa_aaab, 0x3f00_0000, 0x3f7f_fffe, 0x3f7f_ffff, 0x3f80_0000, 0x3f80_0001, 0x4000_0000, 0xbf80_0000,
+    0x7f7f_ffff, 0xff7f_ffff, 0x7f80_0000, 0xff80_0000, 0x7fc0_0000, 0xffc0_0000, 0x7f80_0001, 0xff81_2345, 0x7fbf_ffff, 0x3c23_d70a,
+];
+
+thread_local! {
+    /// The host alpha planes of the copy-alpha self-check cases by case name, filled when the corpus is built.
+    static PD_CASE_ALPHA: RefCell<Vec<(String, Vec<Vec<f32>>)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// The copy-alpha arm cases: a three channel source, copy_alpha 0, tag 3, each with its own host alpha plane for input 0
+/// (registered for [`selfcheck_host_planes`]).
+pub fn postdiv_copy_alpha_cases() -> Vec<SelfCase> {
+    let t = vec![vec![Od::Img(3), Od::Const(1)]];
+    let base = gen_cases("postdivide", postdiv_accepts, &t, &[3], PW_DIMS, 200);
+    let vals = adversarial_f32(1500, 91);
+    let mut out = Vec::new();
+    let mut reg = Vec::new();
+    for c in base {
+        let n = c.dims.0 * c.dims.1;
+        for pattern in 0..4usize {
+            let alpha: Vec<f32> = (0..n)
+                .map(|i| match pattern {
+                    0 => f32::from_bits(PD_ALPHA[i % PD_ALPHA.len()]),
+                    1 => f32::from_bits(PD_ALPHA[(i * 7 + 3) % PD_ALPHA.len()]),
+                    2 => vals[(i * 5 + n) % vals.len()],
+                    _ => if i % 2 == 0 { f32::from_bits(PD_ALPHA[(i / 2) % PD_ALPHA.len()]) } else { vals[i % vals.len()] },
+                })
+                .collect();
+            let name = format!("{} copy-alpha p{pattern}", c.name);
+            let mut args = c.args.clone();
+            args[1] = const_image(1, [0, 0, 0, 0]);
+            reg.push((name.clone(), vec![alpha]));
+            out.push(SelfCase { name, dims: c.dims, tag: c.tag, args, consts: vec![], kp: None });
+        }
+        // signalling and quiet NaN of both signs in the colour planes, carried through every arm: the copy arm (alpha at or above
+        // 1.0, infinite or NaN) must return the colour word unchanged, signalling bit included
+        let alpha: Vec<f32> = (0..n).map(|i| f32::from_bits(PD_SNAN_ALPHA[i % PD_SNAN_ALPHA.len()])).collect();
+        let mut args = c.args.clone();
+        args[0] = Image { n, planes: (0..3).map(|k| (0..n).map(|i| f32::from_bits(PD_SNAN_COLOUR[(i * 3 + k * 5) % PD_SNAN_COLOUR.len()])).collect()).collect() };
+        args[1] = const_image(1, [0, 0, 0, 0]);
+        let name = format!("{} copy-alpha snan", c.name);
+        reg.push((name.clone(), vec![alpha]));
+        out.push(SelfCase { name, dims: c.dims, tag: c.tag, args, consts: vec![], kp: None });
+    }
+    PD_CASE_ALPHA.with(|r| *r.borrow_mut() = reg);
+    out
+}
+
+/// Colour words of the signalling NaN cases: signalling NaN of both signs with several payloads, quiet NaN, infinities and
+/// finite values.
+const PD_SNAN_COLOUR: [u32; 13] = [
+    0x7fb4_6309, 0x7f80_0001, 0x7fa0_0000, 0x7fbf_ffff, 0xffa0_0000, 0xff80_0001, 0xffb4_6309, 0x7fc0_0001, 0xffc0_beef, 0x7f80_0000,
+    0x3f00_0000, 0x8000_0000, 0x0000_0001,
+];
+
+/// Alpha words of the signalling NaN cases: copy arm (1.0, above 1.0, infinity, quiet and signalling NaN), divide arm and zero arm.
+const PD_SNAN_ALPHA: [u32; 9] = [0x3f80_0000, 0x4000_0000, 0x7f80_0000, 0x7fc0_0000, 0x7fa0_0001, 0xffc0_0000, 0x3f00_0000, 0x3800_0000, 0x0000_0000];
+
+/// Restores the host alpha planes that were in place before a self-check case when dropped.
+pub struct HostPlanes {
+    prev: Option<Option<Vec<Vec<f32>>>>,
+}
+
+impl Drop for HostPlanes {
+    fn drop(&mut self) {
+        if let Some(p) = self.prev.take() {
+            crate::kernels2::COPY_ALPHA_PLANES.with(|c| *c.borrow_mut() = p);
+        }
+    }
+}
+
+/// The self-check corpus hook: for a case with registered host alpha planes, installs them as the run's host planes (the source
+/// both the CPU kernel and the device read) until the guard drops; any other case leaves them unchanged.
+pub fn selfcheck_host_planes(class: &str, case: &str) -> HostPlanes {
+    if class != "postdivide" {
+        return HostPlanes { prev: None };
+    }
+    let planes = PD_CASE_ALPHA.with(|r| r.borrow().iter().find(|(n, _)| n == case).map(|(_, p)| p.clone()));
+    match planes {
+        Some(p) => HostPlanes { prev: Some(crate::kernels2::COPY_ALPHA_PLANES.with(|c| c.replace(Some(p)))) },
+        None => HostPlanes { prev: None },
+    }
+}
 
 pub const ROUND: DeviceOp = DeviceOp {
     class: "round",
