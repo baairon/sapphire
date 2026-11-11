@@ -88,7 +88,7 @@ target/release/sapphire stage apply blur_color_autogen --width 64 --height 32 --
 
 Parity: 7 verified comparisons, 52 recorded renders and 52 re-rendered units, all equal. No approximate reciprocal instruction is used on the verified render path (MEASURED). Through each stage, 18 of the style's 24 counted recorded renders are re-checked: the ones that match the stage's host arrangement.
 
-Device: every node runs on the device (`blur`, `postdivide`, and `monochrome_a` on the mono style) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows of both stages (MEASURED on PoCL). On input with NaN, `blur` reruns its NaN outputs on the CPU (`fallback: blur 3 (nan_output 3)` on the special golden row): it has no NaN-exact kernel yet ([NaN outputs](guide.md#rendering-on-a-device)).
+Device: every node runs on the device (`blur`, `postdivide`, and `monochrome_a` on the mono style) with the CPU's bytes, `fallback: none` on the plain, threaded and special golden rows of both stages (MEASURED on PoCL). On input with NaN, `blur` keeps its NaN outputs on the device: it is NaN exact, and its self-check on PoCL reports equal NaN payloads ([NaN outputs](guide.md#rendering-on-a-device)).
 
 ### `BlurMoCurves`
 
@@ -356,7 +356,7 @@ target/release/sapphire stage apply glow --width 64 --height 32 --depth 32 --fps
 
 Parity: 36 verified comparisons (18 at 64x32 and 18 at 50x7), 36 recorded renders and 36 re-rendered units, all equal. No approximate reciprocal instruction runs on the verified render path: the blur's code holds twelve, six that it does not reach at the one to three planes Glow gives it and six in code tiers that do not run, and no other operation of the route holds one (MEASURED by a static scan of the original's code; that this route reaches none of the twelve is INFERRED). The Opacity answers 1, 2 and 3 are each verified at 64x32 and 50x7, with input alpha other than 1. The verified renders have no mask, no matte and no background: a bound mask or matte, the tracker mask, mocha with tracking data and a background layer are not verified, and the stage does not offer `combine_masks`, which has no effect without a mask. Atmosphere is not rendered (above), and no verified render uses it. 36 of 36 counted recorded renders match the stage's host arrangement.
 
-Device: every node runs on the device (`*`, `alpha_from_rgb_max`, `glow`, `postdivide`, `screen_super`, at the fourth Combine item (golden `+c4`) also `diff`, `get_alpha`, `remove_alpha`, `screen`, `v3_to_v4_if4`, and at the fifth (golden `+c5`) `overlay_super`) with the CPU's bytes, `fallback: none` on the plain, threaded and variant golden rows and on all 36 counted recorded renders through `fx_run` (MEASURED on PoCL). On input with NaN, `glow` reruns its NaN outputs on the CPU (3 nodes on the special golden row): it is built on the blur passes, which have no NaN-exact kernel yet.
+Device: every node runs on the device (`*`, `alpha_from_rgb_max`, `glow`, `postdivide`, `screen_super`, at the fourth Combine item (golden `+c4`) also `diff`, `get_alpha`, `remove_alpha`, `screen`, `v3_to_v4_if4`, and at the fifth (golden `+c5`) `overlay_super`) with the CPU's bytes, `fallback: none` on the plain, threaded and variant golden rows and on all 36 counted recorded renders through `fx_run` (MEASURED on PoCL). On input with NaN, `glow` reruns its NaN outputs on the CPU (3 nodes on the special golden row): its blur passes use the NaN-exact `blur` kernel, but `glow` itself is not on `NAN_EXACT`.
 
 ### `S_HueSatBright`
 
@@ -502,7 +502,7 @@ target/release/sapphire stage apply sharpen_fast_autogen --width 64 --height 32 
 
 Parity: 43 verified comparisons, 114 recorded renders and 114 re-rendered units, all equal in both renders. The edge-aware core of Best Quality is sensitive to approximate reciprocals, with a bound of 6 ulp (INFERRED); Fast uses none (INFERRED). Of the counted recorded renders, 19 of 42 (Best Quality) and 16 of 36 (Fast) match the stage's host arrangement.
 
-Device: every node runs on the device (`sharpen` or `edge_aware_sharpen`, and `postdivide`) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows of both stages (MEASURED on PoCL). On input with NaN, `sharpen` and `edge_aware_sharpen` rerun their NaN outputs on the CPU (3 nodes on each special golden row): they have no NaN-exact kernel yet.
+Device: every node runs on the device (`sharpen` or `edge_aware_sharpen`, and `postdivide`) with the CPU's bytes, `fallback: none` on the plain, threaded and special golden rows of both stages (MEASURED on PoCL). On input with NaN, `sharpen` and `edge_aware_sharpen` keep their NaN outputs on the device: both are NaN exact, and their self-check on PoCL reports equal NaN payloads.
 
 ### `S_SwishPan`
 
@@ -536,7 +536,7 @@ target/release/sapphire stage apply swishpan --width 64 --height 32 --depth 32 -
 
 Parity: 36 verified comparisons (18 at 64x32 and 18 at 50x7), 288 recorded renders and 288 re-rendered units, all equal. One approximate reciprocal instruction runs on the verified render path, inside the logarithm that sizes the mipmap levels; its effect on the output is 0 ulp (MEASURED on that logarithm; that the route enters it, and that the reciprocal estimates of the blur are not reached, is INFERRED). The Opacity answers 1, 2 and 3 are each verified at 64x32 and 50x7. Each verified render is one frame of a transition of 100 to 480 frames at 24 frames a second, at frames 0 to 120, with the second clip absent or present; the time values of other clip lengths and rates are INFERRED. The effect reads the default xy from a one-row host buffer whose base phase is an input of each run (`fx_run --xy-base`): each verified render is rendered and recorded at the eight base phases 0, 4, ..., 28, hence the 288 recorded renders, and the original's output is compared with the one at the phase its run used. At 64x32 the eight phases give the same bytes. At 50x7 four verified renders depend on the phase and were recorded at phase 16; the stage uses phase 0 at every size (`--xy-base 0`), so these four are verified through `fx_run` at phase 16, and through the stage each is checked against the native render at phase 0. 32 of 36 counted recorded renders match the stage's host arrangement.
 
-Device: every node runs on the device (`+`, `-`, `blur`, `make_mipmap`, `postdivide`, `screen_super`, `warp`) with the CPU's bytes, `fallback: none` on the plain, threaded and variant golden rows and on all 36 counted recorded renders through `fx_run` (MEASURED on PoCL). On input with NaN, `blur` and `warp` rerun their NaN outputs on the CPU (1 and 2 nodes on the special golden row): neither has a NaN-exact kernel yet.
+Device: every node runs on the device (`+`, `-`, `blur`, `make_mipmap`, `postdivide`, `screen_super`, `warp`) with the CPU's bytes, `fallback: none` on the plain, threaded and variant golden rows and on all 36 counted recorded renders through `fx_run` (MEASURED on PoCL). On input with NaN, `warp` reruns its NaN outputs on the CPU (2 nodes on the special golden row): it has no NaN-exact kernel yet; `blur` keeps its NaN outputs on the device.
 
 ### `S_TimeWarpRGB`
 

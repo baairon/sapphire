@@ -153,6 +153,7 @@ pub const NAN_EXACT: &[&str] = &[
     "copy", "+", "-", "*", "/", "max", "min", "diff", "screen_super", "dissolve", "postdivide", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to",
     "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of",
     "make_mipmap", "alpha_from_rgb_max", "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append",
+    "blur", "masked_blur", "sharpen", "edge_aware_sharpen",
 ];
 
 /// The [`NAN_EXACT`] ops whose NaN words follow from the CPU source on every compiler: a two-NaN pick written as `nanop`, an
@@ -162,6 +163,7 @@ pub const NAN_EXACT_WRITTEN: &[&str] = &[
     "copy", "-", "/", "max", "min", "diff", "postdivide", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha",
     "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "alpha_from_rgb_max",
     "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append",
+    "blur", "masked_blur", "sharpen", "edge_aware_sharpen",
 ];
 
 /// The [`NAN_EXACT`] ops whose NaN words are those of the compiled CPU instruction: a commutative `+` or `*` (the compiler may
