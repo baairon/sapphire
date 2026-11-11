@@ -24,7 +24,6 @@
 //! One runner thread (with the stack the effect code needs) serves a clip. `--device` picks the backend that thread installs
 //! (`fx_exec::fxrun::select_and_install`).
 
-use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use fx_exec::fxrun::{Runner, StageIo};
@@ -782,6 +781,18 @@ struct Extra {
     history: Option<Vec<Vec<u32>>>,
     /// `--host-value NAME=VALUE` entries (get_percent_time, get_total_frames), values as f32 bits.
     host_values: Vec<(String, f32)>,
+    /// The clip length in frames: the `N` field of a `--tw-route` value stands for it.
+    clip_len: Option<u64>,
+}
+
+/// A fixed stage value with its size placeholders filled in: `W` of `--palpha-cells` is the frame width, and the first `N` of
+/// `--tw-route` is the clip length (left as it is when the length is unknown).
+fn fill_fixed(key: &str, value: &str, width: u64, clip_len: Option<u64>) -> String {
+    match (key, clip_len) {
+        ("--palpha-cells", _) => value.replacen('W', &width.to_string(), 1),
+        ("--tw-route", Some(n)) => value.replacen('N', &n.to_string(), 1),
+        _ => value.to_string(),
+    }
 }
 
 /// The in-memory files of one run: names are the virtual paths on the command line.
@@ -869,8 +880,8 @@ fn run_fx(
             continue;
         }
         args.push(k.clone());
-        // `W` in a size-dependent value stands for the frame width
-        args.push(if k == "--palpha-cells" { v.replacen('W', &w.to_string(), 1) } else { v.clone() });
+        // `W` in a size-dependent value stands for the frame width, `N` of `--tw-route` for the clip length
+        args.push(fill_fixed(k, v, w as u64, extra.clip_len));
     }
     args.extend(params.iter().cloned());
     for (name, v) in &extra.host_values {
@@ -1384,36 +1395,23 @@ pub fn apply(
     let learned = Learned::default();
     let layer_words = |index: u64| -> Result<Vec<(String, Vec<u32>)>> { ls.iter().map(|l| l.at(index)).collect() };
     if p.id == "time_warp_rgb_autogen" {
-        // the window covers every shift a frame can take (a keyed shift holds one of its key values)
-        let all: Vec<i32> = keyed.variants().iter().flat_map(|v| tw_shifts(p, v)).collect();
-        let maxpos = all.iter().copied().max().unwrap_or(0).max(0) as u64;
-        let maxneg = (-all.iter().copied().min().unwrap_or(0)).max(0) as u64;
-        // window of input frames: `base` is the index of window[0]
-        let mut window: VecDeque<Vec<u32>> = VecDeque::new();
-        let mut base = 0u64;
-        let mut ended = false;
+        // the clip is read whole: its length is the duration of the time warp route
+        let mut clip: Vec<Vec<u32>> = Vec::new();
+        while read_frame(input, &mut buf, clip.len() as u64)? {
+            clip.push(frame_to_words(spec, &buf));
+        }
+        let last = clip.len() as u64;
         let mut f = 0u64;
         loop {
-            while !ended && base + (window.len() as u64) <= f + maxpos {
-                let idx = base + window.len() as u64;
-                if read_frame(input, &mut buf, idx)? {
-                    window.push_back(frame_to_words(spec, &buf));
-                } else {
-                    ended = true;
-                }
-            }
-            let last = base + window.len() as u64;
             if f >= last {
                 break;
             }
-            let get = |k: u64| -> &Vec<u32> {
-                let k = k.min(last - 1);
-                &window[(k - base) as usize]
-            };
-            let mut extra = Extra { host_values: time_values(total, rate, f, spec)?, ..Extra::default() };
+            let get = |k: u64| -> &Vec<u32> { &clip[k.min(last - 1) as usize] };
+            let mut extra = Extra { host_values: time_values(total, rate, f, spec)?, clip_len: Some(last), ..Extra::default() };
             let vf = keyed.values_at(f);
             for s in tw_shifts(p, &vf) {
-                let k = (f as i64 + s as i64).max(0) as u64;
+                // the route asks at most the last frame of the clip
+                let k = ((f as i64 + s as i64).max(0) as u64).min(last - 1);
                 extra.frame_words.push((format!("{},{}", k, k), get(k).clone()));
             }
             let words = run_fx(&runner, p, spec, f, get(f).clone(), layer_words(f)?, &param_args(p, &vf)?, &host_at(p, &vf), extra, &learned)?.remove(0);
@@ -1421,10 +1419,6 @@ pub fn apply(
             write_out(output, &out, f)?;
             count += 1;
             f += 1;
-            while base + maxneg < f && window.len() > 1 {
-                window.pop_front();
-                base += 1;
-            }
         }
     } else if p.spool {
         // Trails: buffer the clip, run the measured history route once (render k is frame k-1 at time k)
@@ -1433,7 +1427,7 @@ pub fn apply(
             clip.push(frame_to_words(spec, &buf));
         }
         if !clip.is_empty() {
-            let extra = Extra { frame_words: Vec::new(), history: Some(clip), host_values: Vec::new() };
+            let extra = Extra { frame_words: Vec::new(), history: Some(clip), host_values: Vec::new(), clip_len: None };
             let outs = run_fx(&runner, p, spec, 0, Vec::new(), Vec::new(), &args_at(0)?, &host_at(p, &keyed.values_at(0)), extra, &learned)?;
             for (i, words) in outs.iter().enumerate() {
                 words_to_frame(spec, words, &mut out);
@@ -2324,5 +2318,17 @@ mod popup_default_tests {
     fn describe_params_keeps_the_range_column_default() {
         let doc = fx_exec::fxrun::describe_params_json(&["SwishPan"]);
         assert!(doc.contains("\"name\":\"auto_trans\",\"type\":\"popup\",\"lanes\":1,\"min\":0,\"max\":1,\"default\":\"0\""), "{}", doc);
+    }
+
+    #[test]
+    fn time_warp_route_duration_is_the_clip_length() {
+        assert_eq!(fill_fixed("--tw-route", "N,0,1,1,0,0,1", 64, Some(250)), "250,0,1,1,0,0,1");
+        assert_eq!(fill_fixed("--tw-route", "N,0,1,1,0,0,1", 64, Some(12)), "12,0,1,1,0,0,1");
+        assert_eq!(fill_fixed("--tw-route", "N,0,1,1,0,0,1", 64, None), "N,0,1,1,0,0,1");
+        assert_eq!(fill_fixed("--palpha-cells", "0,W", 64, Some(250)), "0,64");
+        assert_eq!(fill_fixed("--set", "N", 64, Some(250)), "N");
+        let p = profile("time_warp_rgb_autogen").expect("stage");
+        let route = p.fixed.iter().find(|(k, _)| k == "--tw-route").expect("route");
+        assert!(route.1.starts_with("N,"), "{}", route.1);
     }
 }
