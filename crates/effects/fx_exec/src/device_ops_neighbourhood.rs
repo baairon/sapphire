@@ -824,6 +824,7 @@ fn blur_corpus() -> Vec<SelfCase> {
         }
     }
     out.extend(blur_nan_pair_cases());
+    out.extend(blur_nan_wide_cases());
     // a constant source (the CPU lays it out as an image of constant planes)
     for &(w, h) in &[(3usize, 5usize), (16, 16), (45, 23)] {
         for lanes in [&[0.5f32][..], &[0.25, 2.0, -1.0][..]] {
@@ -972,6 +973,156 @@ pub fn sharpen_nan_pair_cases() -> Vec<SelfCase> {
     out
 }
 
+/// A NaN gain lane (quiet, positive, payload 5), for the final scale and the per channel gains.
+const NAN_LANE: u32 = 0x7fc0_0005;
+
+/// Frames whose rows or columns are long enough for the eight and sixty-four lane window sums of the blur passes, with radii of
+/// 15 to 75 samples, both edge modes, one to three passes, the subpixel blend, the aspect and a NaN gain lane; NaN of both signs
+/// and several payloads sit between finite values, infinities and zeros. The device result must equal the CPU bit for bit.
+pub fn blur_nan_wide_cases() -> Vec<SelfCase> {
+    let nan = f32::from_bits(NAN_LANE);
+    // (amount x, amount y, shape, subpixel, edge, aspect, scale lanes)
+    type P = (f32, f32, f32, f32, i32, Option<f32>, [f32; 4]);
+    let sets: [P; 5] = [
+        (1.5, 1.5, 2.0, 1.0, 1, None, [1.0, 0.5, 2.0, 1.0]),
+        (0.6, 0.3, 0.0, 0.0, 0, None, [1.0, 1.0, 1.0, 1.0]),
+        (0.9, 1.4, 1.0, 1.0, 0, Some(0.75), [0.75, nan, 1.0, 1.0]),
+        (1.1, 1.1, 2.0, 0.0, 1, None, [nan, 1.0, 1.0, 0.25]),
+        (0.4, 0.8, -1.0, 1.0, 1, None, [1.0, 1.0, 1.0, 1.0]),
+    ];
+    let mut out = Vec::new();
+    for &(w, h) in &[(200usize, 5usize), (5, 200), (257, 3), (96, 40)] {
+        let n = w * h;
+        for (si, p) in sets.iter().enumerate() {
+            for density in [5usize, 1] {
+                for tag in [1usize, 3] {
+                    let seed = (w * 31 + h * 17 + si * 5 + density) as u64;
+                    let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 23 * c as u64, density, -0.25, 1.25)).collect() };
+                    let mut kp = kp_blur(p.4, 400);
+                    kp.blur_aspect = p.5;
+                    out.push(SelfCase {
+                        name: format!("{w}x{h} wide nan set {si} density {density} tag {tag}"),
+                        dims: (w, h),
+                        tag: tag as i32,
+                        args: vec![src],
+                        consts: vec![cst(1, &[p.0, p.1]), cst(2, &[p.2]), cst(3, &p.6), cst(4, &[p.3])],
+                        kp: Some(kp),
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// masked_blur on the same long frames: NaN in the source and in the mask, so the clamp, the premultiply, both blurs, the
+/// division by the blurred mask and the fused combine all see NaN operands. The device result must equal the CPU bit for bit.
+pub fn masked_blur_nan_wide_cases() -> Vec<SelfCase> {
+    let sets: [(f32, f32, f32, f32); 3] = [(1.5, 1.5, 2.0, 1.0), (0.6, 0.3, 0.0, 0.0), (0.9, 1.4, 1.0, 1.0)];
+    let mut out = Vec::new();
+    for &(w, h) in &[(200usize, 5usize), (5, 200), (96, 40)] {
+        let n = w * h;
+        for (si, p) in sets.iter().enumerate() {
+            for density in [5usize, 1] {
+                for tag in [1usize, 3] {
+                    let seed = (w * 37 + h * 11 + si * 7 + density) as u64;
+                    let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 19 * c as u64, density, -0.25, 1.25)).collect() };
+                    let mask = Image { n, planes: vec![pair_plane(n, seed ^ 0x3c, density + 2, -0.1, 1.2)] };
+                    let mut kp = KParams::standin();
+                    kp.blur_render_scale = 400;
+                    out.push(SelfCase {
+                        name: format!("{w}x{h} wide nan set {si} density {density} tag {tag}"),
+                        dims: (w, h),
+                        tag: tag as i32,
+                        args: vec![src, mask],
+                        consts: vec![cst(2, &[p.0, p.1]), cst(3, &[p.2]), cst(4, &[p.3])],
+                        kp: Some(kp),
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// sharpen on the long frames (the blur's wide window sums under the combine), gain exactly 1.0, other gains and a NaN gain.
+pub fn sharpen_nan_wide_cases() -> Vec<SelfCase> {
+    let nan = f32::from_bits(NAN_LANE);
+    let sets: [(f32, [f32; 4], bool); 3] = [(0.8, [1.0, 1.0, 1.0, 1.0], false), (0.5, [2.0, nan, 1.0, 0.5], true), (1.2, [nan, 1.0, 1.5, 1.0], false)];
+    let mut out = Vec::new();
+    for &(w, h) in &[(200usize, 5usize), (5, 200), (96, 40)] {
+        let n = w * h;
+        for (si, p) in sets.iter().enumerate() {
+            for density in [5usize, 1] {
+                for tag in [1usize, 3] {
+                    let seed = (w * 41 + h * 13 + si * 3 + density) as u64;
+                    let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 29 * c as u64, density, -0.25, 1.25)).collect() };
+                    let mut kp = KParams::standin();
+                    kp.sharpen_count = Some(if si == 1 { n / 2 } else { n });
+                    kp.sharpen_alias = p.2;
+                    kp.blur_render_scale = 400;
+                    out.push(SelfCase {
+                        name: format!("{w}x{h} wide nan set {si} density {density} tag {tag}"),
+                        dims: (w, h),
+                        tag: tag as i32,
+                        args: vec![src],
+                        consts: vec![cst(1, &p.1), cst(2, &[p.0])],
+                        kp: Some(kp),
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// edge_aware_sharpen with NaN of both signs and several payloads in the source channels (the absolute differences and their
+/// sums in the weights), in a plane mask (the minimum and the reciprocal of the weight functions), infinities (fresh NaN in the
+/// differences) and a NaN sigmoid or channel lane (the mix factor). The device result must equal the CPU bit for bit.
+pub fn esh_nan_cases() -> Vec<SelfCase> {
+    let nan = f32::from_bits(NAN_LANE);
+    // (plane mask, scalar mask value, levels, tiny, threshold, sigmoid lanes, rel_chan lanes)
+    type P = (bool, f32, f32, f32, f32, [f32; 4], [f32; 3]);
+    let sets: [P; 5] = [
+        (true, 0.0, 4.0, 0.5, 1.0, [1.0, 0.75, 0.5, 0.25], [1.0, 1.0, 1.0]),
+        (false, 0.4, 3.0, 0.6, 2.0, [1.0, 1.0, 1.0, 1.0], [0.5, 1.5, 1.0]),
+        (false, 1.0, 7.0, 0.9, 0.5, [1.5, 1.0, 0.5, 0.25], [1.0, 2.0, 0.25]),
+        (true, 0.0, 3.0, 0.5, 1.0, [1.0, nan, 0.5, 0.25], [1.0, 1.0, 1.0]),
+        (false, 0.4, 2.0, 0.3, 1.0, [1.0, 1.0, 1.0, 1.0], [1.0, nan, 2.0]),
+    ];
+    let mut out = Vec::new();
+    for &(w, h) in &[(3usize, 5usize), (16, 16), (45, 23), (70, 9), (9, 70)] {
+        let n = w * h;
+        for (si, p) in sets.iter().enumerate() {
+            for density in [5usize, 1] {
+                for tag in [1usize, 2, 3] {
+                    let seed = (w * 43 + h * 19 + si * 11 + density) as u64;
+                    let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 31 * c as u64, density, -0.25, 1.25)).collect() };
+                    let mut args = vec![src];
+                    let mut consts = vec![];
+                    if p.0 {
+                        args.push(Image { n, planes: vec![pair_plane(n, seed ^ 0x5a, density + 3, 0.0, 1.0)] });
+                    } else {
+                        consts.push(cst(1, &[p.1]));
+                    }
+                    consts.push(cst(2, &[4.0]));
+                    consts.push(cst(3, &[0.0, 0.0]));
+                    consts.push(cst(4, &[p.2]));
+                    consts.push(cst(5, &[p.3]));
+                    consts.push(cst(6, &[p.4]));
+                    consts.push(cst(7, &p.5));
+                    consts.push(cst(8, &p.6));
+                    consts.push(cst(9, &[1.0]));
+                    let mut kp = KParams::standin();
+                    kp.host_aspect = if si % 2 == 0 { 1.0 } else { 0.5 };
+                    out.push(SelfCase { name: format!("{w}x{h} nan set {si} density {density} tag {tag}"), dims: (w, h), tag: tag as i32, args, consts, kp: Some(kp) });
+                }
+            }
+        }
+    }
+    out
+}
+
 fn masked_blur_corpus() -> Vec<SelfCase> {
     let sets: [(f32, f32, f32, f32, i32); 5] = [(0.5, 0.5, 2.0, 0.0, 0), (0.3, 0.8, 0.0, 1.0, 0), (1.3, 0.2, 1.0, 1.0, 0), (0.0, 0.0, 2.0, 0.0, 0), (8.0, 6.0, 2.0, 1.0, 400)];
     let mut out = Vec::new();
@@ -1009,6 +1160,7 @@ fn masked_blur_corpus() -> Vec<SelfCase> {
         });
     }
     out.extend(masked_blur_nan_pair_cases());
+    out.extend(masked_blur_nan_wide_cases());
     out
 }
 
@@ -1099,6 +1251,7 @@ fn sharpen_corpus() -> Vec<SelfCase> {
         out.push(SelfCase { name: format!("{w}x{h} constant source"), dims: (w, h), tag: 3, args: vec![], consts: vec![cst(0, &[0.5, 0.25, 0.75]), cst(1, &[2.0, 2.0, 2.0, 2.0]), cst(2, &[0.4])], kp: Some(kp) });
     }
     out.extend(sharpen_nan_pair_cases());
+    out.extend(sharpen_nan_wide_cases());
     out
 }
 
@@ -1203,5 +1356,125 @@ fn esh_corpus() -> Vec<SelfCase> {
             kp: Some(KParams::standin()),
         });
     }
+    out.extend(esh_nan_cases());
     out
+}
+
+/// The NaN-exact neighbourhood kernels on a real device (prints NOT RUN without one, fails when `SAPPHIRE_REQUIRE_DEVICE=1`):
+/// single edits of their OpenCL source, each its own program build, must be refused by the self-check of at least one op (a
+/// mismatch, or other NaN payloads, which keeps the op off the NaN-exact set).
+#[cfg(test)]
+mod device_nan_exact_neighbourhood_tests {
+    use crate::device_ops;
+    use fx_device::selfcheck::{NanPayloads, Tally};
+    use fx_device::{Backend as Handle, DeviceCtx, DeviceKind, Session};
+    use std::sync::Arc;
+
+    fn device() -> Option<Arc<DeviceCtx>> {
+        match fx_device::select(DeviceKind::Gpu) {
+            Handle::Device(d) => Some(d),
+            other => {
+                if std::env::var("SAPPHIRE_REQUIRE_DEVICE").as_deref() == Ok("1") {
+                    panic!("device required but unavailable: {}", other.describe());
+                }
+                println!("NOT RUN: no usable OpenCL device ({})", other.describe());
+                None
+            }
+        }
+    }
+
+    fn op(class: &str) -> &'static device_ops::DeviceOp {
+        device_ops::DEVICE_OPS.iter().find(|o| o.class == class).expect("a NaN-exact op has a kernel")
+    }
+
+    fn mutant_session(ctx: &DeviceCtx, source: &str) -> Arc<Session> {
+        let (dev, info) = fx_device::probe::open(ctx.info.index).unwrap();
+        let _ = Tally::empty();
+        Arc::new(Session::open_source(&dev, &info, source, fx_device::kernels::BUILD_OPTIONS).unwrap())
+    }
+
+    /// (name, text, replacement, ops whose self-check must refuse it)
+    const MUTANTS: &[(&str, &str, &str, &[&str])] = &[
+        (
+            "pick operand order",
+            "float nf_pick(float a, float b) {\n    if (a != a) {\n        return as_float(as_uint(a) | 0x400000u);\n    }\n    if (b != b) {\n        return as_float(as_uint(b) | 0x400000u);\n    }",
+            "float nf_pick(float a, float b) {\n    if (b != b) {\n        return as_float(as_uint(b) | 0x400000u);\n    }\n    if (a != a) {\n        return as_float(as_uint(a) | 0x400000u);\n    }",
+            &["blur", "sharpen", "edge_aware_sharpen"],
+        ),
+        (
+            "pick quiet bit constant",
+            "float nf_pick(float a, float b) {\n    if (a != a) {\n        return as_float(as_uint(a) | 0x400000u);",
+            "float nf_pick(float a, float b) {\n    if (a != a) {\n        return as_float(as_uint(a) | 0x200000u);",
+            &["blur", "sharpen"],
+        ),
+        ("fresh NaN sign", "    return as_float(0xffc00000u);\n}\nfloat nf_pick3", "    return as_float(0x7fc00000u);\n}\nfloat nf_pick3", &["blur", "sharpen"]),
+        (
+            "fused pick operand order",
+            "float nf_pick3(float a, float b, float c) {\n    if (a != a) {\n        return as_float(as_uint(a) | 0x400000u);\n    }\n    return nf_pick(b, c);",
+            "float nf_pick3(float a, float b, float c) {\n    if (b != b) {\n        return as_float(as_uint(b) | 0x400000u);\n    }\n    return nf_pick(a, c);",
+            &["sharpen", "masked_blur", "blur"],
+        ),
+        ("contracted multiply-add replaced by two roundings", "    float r = fma(d, s2, -s3);", "    float r = d * s2 - s3;", &["sharpen", "blur"]),
+        (
+            "window sum order",
+            "        y = nf_add(nf_sub(BW_AT(x, i + r + 1), BW_AT(x, i - r)), y);",
+            "        y = nf_add(y, nf_sub(BW_AT(x, i + r + 1), BW_AT(x, i - r)));",
+            &["blur"],
+        ),
+        (
+            "add NaN select arm",
+            "float nf_add(float a, float b) {\n    float r = a + b;\n    return (r == r) ? r : nf_pick(a, b);",
+            "float nf_add(float a, float b) {\n    float r = a + b;\n    return (r == r) ? r : nf_pick(b, a);",
+            &["blur", "edge_aware_sharpen"],
+        ),
+        ("combine threshold compare direction", "    if (!(mv > thr)) {", "    if (!(mv >= thr)) {", &["masked_blur"]),
+        ("box filter compare direction", "                if (t > b[(size_t)lo * bst]) {", "                if (t >= b[(size_t)lo * bst]) {", &["edge_aware_sharpen"]),
+        ("negation constant", "    float c = nf_fma213(bb[i], -0x1p+0f, 0x0p+0f);", "    float c = nf_fma213(bb[i], 0x1p+0f, 0x0p+0f);", &["edge_aware_sharpen"]),
+        ("box filter sum operand order", "            sum = nf_add(sum, a[(size_t)hh * ast]);", "            sum = nf_add(a[(size_t)hh * ast], sum);", &["edge_aware_sharpen"]),
+        (
+            "gain 1 lone NaN subtrahend negated",
+            "    float r = fma(d, s2, -s3);\n    return (r == r) ? r : nf_pick3(d, s2, s3);",
+            "    float r = fma(d, s2, -s3);\n    return (r == r) ? r : nf_pick3(d, s2, -s3);",
+            &["sharpen"],
+        ),
+        ("masked division replaced", "            b = nf_div(b, mb_min_x86(wv, 0x1p+0f));", "            b = nf_mul(b, mb_min_x86(wv, 0x1p+0f));", &["masked_blur"]),
+    ];
+
+    #[test]
+    #[ignore]
+    fn nan_exact_neighbourhood_source_mutants_are_refused() {
+        let Some(ctx) = device() else { return };
+        let base = fx_device::kernels::device_program();
+        let base_digest = fx_device::progcache::fnv(base.as_bytes());
+        let mut prev = base_digest;
+        let mut survivors = Vec::new();
+        for (name, from, to, ops) in MUTANTS {
+            assert_eq!(base.matches(from).count(), 1, "mutant `{name}`: the edited text must occur once");
+            let src = base.replacen(from, to, 1);
+            let digest = fx_device::progcache::fnv(src.as_bytes());
+            assert!(digest != base_digest && digest != prev, "mutant `{name}` equals the base or the previous mutant");
+            prev = digest;
+            let session = mutant_session(&ctx, &src);
+            let mut verdicts = Vec::new();
+            let mut killed = false;
+            for class in *ops {
+                match device_ops::selfcheck(&session, op(class)) {
+                    Err(e) => {
+                        killed = true;
+                        verdicts.push(format!("{class}: mismatch ({})", e.chars().take(160).collect::<String>()));
+                    }
+                    Ok(t) if t.nan_payloads != NanPayloads::Same => {
+                        killed = true;
+                        verdicts.push(format!("{class}: NaN payloads differ"));
+                    }
+                    Ok(_) => verdicts.push(format!("{class}: equal")),
+                }
+            }
+            println!("MUTANT {name} program {digest:016x}: {} | {}", if killed { "KILLED" } else { "SURVIVED" }, verdicts.join("; "));
+            if !killed {
+                survivors.push(*name);
+            }
+        }
+        assert!(survivors.is_empty(), "surviving mutants: {survivors:?}");
+    }
 }

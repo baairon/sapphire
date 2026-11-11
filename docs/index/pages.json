@@ -52,7 +52,7 @@
   "path": "docs/cli.md",
   "title": "Command-line reference",
   "line": "This page is the exact interface of the `sapphire` executable and of `fx_run --describe-params`, for a program or an AI agent that drives them.",
-  "bytes": 68825,
+  "bytes": 68774,
   "generated": false
  },
  {
@@ -80,7 +80,7 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Fifteen of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 70356,
+  "bytes": 70405,
   "generated": false
  },
  {
@@ -283,7 +283,7 @@
   "path": "docs/guide.md",
   "title": "Using the effects",
   "line": "This page shows how to run the fifteen native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match.",
-  "bytes": 30129,
+  "bytes": 30142,
   "generated": false
  },
  {

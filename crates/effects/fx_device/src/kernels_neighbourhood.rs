@@ -45,6 +45,10 @@ float nf_mul(float a, float b) {
     float r = a * b;
     return (r == r) ? r : nf_pick(a, b);
 }
+float nf_div(float a, float b) {
+    float r = a / b;
+    return (r == r) ? r : nf_pick(a, b);
+}
 /* vfmsub213ss d, s2, s3: d * s2 - s3, one rounding; NaN priority d, s2, s3. */
 float nf_fms213(float d, float s2, float s3) {
     float r = fma(d, s2, -s3);
@@ -423,7 +427,7 @@ __kernel void mb_combine_f32(__global const float* m, __global const float* bb, 
         float b = bb[i];
         float wv = ww[i];
         if (wv > 0x0p+0f) {
-            b = b / mb_min_x86(wv, 0x1p+0f);
+            b = nf_div(b, mb_min_x86(wv, 0x1p+0f));
         }
         float m1 = mb_min_x86(mv, 0x1p+0f);
         r = nf_fma231(sv, nf_sub(b, sv), m1);
@@ -550,7 +554,7 @@ float esh_h_a(float m, float ca) {
     if (md > 0x1.ffffffff24190p-1) {
         return 0x1p+0f;
     }
-    return esh_minss(0x1p+0f / m, ca);
+    return esh_minss(nf_div(0x1p+0f, m), ca);
 }
 
 float esh_g_t(float m, float k, float cb, float kcb) {
@@ -561,7 +565,7 @@ float esh_g_t(float m, float k, float cb, float kcb) {
     if (md > 0x1.ffffffff24190p-1) {
         return k;
     }
-    return nf_mul(k, esh_minss(0x1p+0f / m, cb));
+    return nf_mul(k, esh_minss(nf_div(0x1p+0f, m), cb));
 }
 
 float esh_l1(__global const float* c0, __global const float* c1, __global const float* c2, int nch, size_t i, size_t j) {
@@ -728,14 +732,14 @@ void esh_filter3(__global const float* a, size_t ast, __global float* out, size_
                     s8 = nf_sub(s8, a[(size_t)(hh - 1) * ast]);
                 }
                 if (c8 > 0) {
-                    v = s8 / (float)c8;
+                    v = nf_div(s8, (float)c8);
                 }
             }
-            float mean = sum / (float)cnt;
+            float mean = nf_div(sum, (float)cnt);
             float dd = nf_sub(mean, v);
             v9 = nf_fma231(v, dd, p2);
         } else {
-            v9 = sum / (float)cnt;
+            v9 = nf_div(sum, (float)cnt);
         }
         out[(size_t)i * ost] = v9;
     }
@@ -763,29 +767,29 @@ __kernel void esh_filter_y_f32(__global const float* src, __global float* dst, _
 }
 
 float esh_tanh_elem(float s0, float x) {
-    float t1 = s0 * x;
-    t1 = as_float(0x3fb8aa3bu) * t1;
+    float t1 = nf_mul(s0, x);
+    t1 = nf_mul(as_float(0x3fb8aa3bu), t1);
     float p = as_float(as_uint(t1) ^ 0x80000000u);
     float off = (0x0p+0f > p) ? 0x1p+0f : 0x0p+0f;
     float c_floor = as_float(0xc2fc0000u);
     float clipp = (c_floor > p) ? c_floor : p;
     int wi = cvtt_i32_f(clipp);
     float wf = (float)wi;
-    float u = clipp - wf;
-    float a1 = as_float(0x42f28c51u) + clipp;
-    float z0 = u + off;
-    float r = as_float(0x409af5f8u) - clipp;
-    float x3 = r + wf;
-    float x4 = x3 - off;
-    float q = as_float(0x41ddd2feu) / x4;
-    float v = a1 + q;
-    v = fma(-z0, as_float(0x3fbebc8du), v);
-    float m = 0x1p+23f * v;
+    float u = nf_sub(clipp, wf);
+    float a1 = nf_add(as_float(0x42f28c51u), clipp);
+    float z0 = nf_add(u, off);
+    float r = nf_sub(as_float(0x409af5f8u), clipp);
+    float x3 = nf_add(r, wf);
+    float x4 = nf_sub(x3, off);
+    float q = nf_div(as_float(0x41ddd2feu), x4);
+    float v = nf_add(a1, q);
+    v = nf_fma231(v, -z0, as_float(0x3fbebc8du));
+    float m = nf_mul(0x1p+23f, v);
     long l = cvtt_i64_f(m);
     uint lo = (uint)((ulong)l);
-    float d = 0x1p+0f + as_float(lo);
-    float e = 0x1p+0f / d;
-    return fma(e, 0x1p+1f, -0x1p+0f);
+    float d = nf_add(0x1p+0f, as_float(lo));
+    float e = nf_div(0x1p+0f, d);
+    return nf_fms213(e, 0x1p+1f, 0x1p+0f);
 }
 
 /* out += tanh(s0, fma(b, -1, 0) + a): the "C = -B; C += A; transform; out += C" steps of one channel and iteration. */
@@ -794,7 +798,7 @@ __kernel void esh_level_f32(__global const float* bb, __global const float* aa, 
     if (i >= n) {
         return;
     }
-    float c = fma(bb[i], -0x1p+0f, 0x0p+0f);
+    float c = nf_fma213(bb[i], -0x1p+0f, 0x0p+0f);
     c = nf_add(c, aa[i]);
     c = esh_tanh_elem(s0, c);
     out[i] = nf_add(out[i], c);

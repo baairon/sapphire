@@ -4,6 +4,7 @@
 use fx_device::{Backend as Handle, DeviceKind};
 use fx_exec::backend::{Backend, DeviceBackend};
 use fx_exec::device_ops_neighbourhood::ALLOW;
+use fx_exec::{KParams, Val};
 
 #[test]
 fn the_neighbourhood_kernels_pass_the_self_check_against_the_cpu() {
@@ -388,4 +389,146 @@ fn the_masked_blur_and_sharpen_kernels_equal_the_cpu_bit_for_bit_on_two_nan_oper
     let tally = fx_exec::device_ops::selfcheck(&ctx.session, &op).expect("sharpen: device equals the CPU");
     println!("SHARPEN NAN-PAIR cases {} outputs {}", cases.len(), tally.outputs);
     assert!(matches!(tally.nan_payloads, NanPayloads::Same), "sharpen NaN payloads differ: {}", tally);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// NaN-exact admission of blur, masked_blur, sharpen and edge_aware_sharpen: their NaN cases (long rows and columns, NaN gains and
+// lanes, NaN masks) report equal NaN payloads, and a NaN output of each stays on the device with the CPU's words
+
+fn require_device() -> Option<std::sync::Arc<fx_device::DeviceCtx>> {
+    match fx_device::select(DeviceKind::Gpu) {
+        Handle::Device(d) => Some(d),
+        other => {
+            not_run(&format!("no usable OpenCL device ({})", other.describe()));
+            None
+        }
+    }
+}
+
+type CaseFn = fn() -> Vec<fx_exec::device_ops::SelfCase>;
+
+fn nan_case_sets() -> Vec<(fx_exec::device_ops::DeviceOp, &'static str, CaseFn)> {
+    use fx_exec::device_ops_neighbourhood as nb;
+    vec![
+        (nb::BLUR, "blur wide", nb::blur_nan_wide_cases as CaseFn),
+        (nb::MASKED_BLUR, "masked_blur wide", nb::masked_blur_nan_wide_cases as CaseFn),
+        (nb::SHARPEN, "sharpen wide", nb::sharpen_nan_wide_cases as CaseFn),
+        (nb::EDGE_AWARE_SHARPEN, "edge_aware_sharpen", nb::esh_nan_cases as CaseFn),
+    ]
+}
+
+/// The CPU output words of a case and the operands as executor values (constants at their operand positions).
+fn cpu_words_and_vals(class: &'static str, c: &fx_exec::device_ops::SelfCase) -> (Vec<Vec<u32>>, Vec<Val>) {
+    let total = c.args.len() + c.consts.len();
+    let mut imgs = c.args.iter();
+    let mut vals = Vec::with_capacity(total);
+    for pos in 0..total {
+        match c.consts.iter().find(|k| k.0 == pos) {
+            Some(k) => vals.push(Val::Const { n: k.1, lanes: k.2 }),
+            None => vals.push(Val::Img(std::rc::Rc::new(imgs.next().expect("an image operand").clone()))),
+        }
+    }
+    let args: Vec<fx_exec::Arg> = vals
+        .iter()
+        .map(|v| match v {
+            Val::Img(i) => fx_exec::Arg::Img(i),
+            Val::Const { n, lanes } => fx_exec::Arg::Const { n: *n, lanes: *lanes },
+            _ => unreachable!(),
+        })
+        .collect();
+    let kp = c.kp.unwrap_or_else(KParams::standin);
+    let n = c.dims.0 * c.dims.1;
+    let want = match fx_exec::kernels::run_any(class, c.tag, &args, n, c.dims, &kp).expect("the CPU kernel runs the case") {
+        fx_exec::kernels2::Out::Img(i) => i.planes.iter().map(|p| p.iter().map(|v| v.to_bits()).collect()).collect(),
+        _ => panic!("not an image"),
+    };
+    (want, vals)
+}
+
+#[test]
+fn the_wide_and_edge_aware_nan_cases_report_equal_nan_payloads() {
+    use fx_device::selfcheck::NanPayloads;
+    let Some(ctx) = require_device() else { return };
+    for (mut op, name, cases) in nan_case_sets() {
+        let list = cases();
+        let mut nan_out = 0usize;
+        let mut words = std::collections::BTreeSet::new();
+        for c in &list {
+            let (want, _) = cpu_words_and_vals(op.class, c);
+            for w in want.iter().flatten().filter(|w| (*w & 0x7fff_ffff) > 0x7f80_0000) {
+                nan_out += 1;
+                words.insert(*w);
+            }
+        }
+        op.corpus = cases;
+        let tally = fx_exec::device_ops::selfcheck(&ctx.session, &op).expect("device equals the CPU");
+        println!("NAN-CASES {name}: cases {} outputs {} CPU NaN output words {nan_out} distinct {}", list.len(), tally.outputs, words.len());
+        assert!(nan_out > 0 && words.len() >= 4, "{name}: the cases must reach NaN outputs with several words");
+        assert!(matches!(tally.nan_payloads, NanPayloads::Same), "{name}: NaN payloads differ: {tally}");
+    }
+}
+
+#[test]
+fn a_nan_output_of_the_neighbourhood_nan_exact_ops_stays_on_the_device_with_the_cpu_words() {
+    let Some(ctx) = require_device() else { return };
+    let classes = ["blur", "masked_blur", "sharpen", "edge_aware_sharpen"];
+    let mut b = DeviceBackend::with_allowlist(ctx, &classes);
+    for c in classes {
+        assert!(fx_exec::device_ops::NAN_EXACT.contains(&c), "{c} is on NAN_EXACT");
+        assert!(b.nan_exact().contains(&c), "{c}: the self-check must report equal NaN payloads ({:?})", b.nan_exact());
+    }
+    for (op, name, cases) in nan_case_sets() {
+        let list = cases();
+        let mut ran = 0;
+        for c in list.iter().step_by(7).take(4) {
+            let (want, vals) = cpu_words_and_vals(op.class, c);
+            if !want.iter().flatten().any(|w| (*w & 0x7fff_ffff) > 0x7f80_0000) {
+                continue;
+            }
+            let kp = c.kp.unwrap_or_else(KParams::standin);
+            let call = fx_exec::backend::NodeCall { idx: 0, class: op.class, tag: c.tag, n: c.dims.0 * c.dims.1, dims: c.dims, kp: &kp };
+            let got = b.try_run(&call, &vals);
+            let Ok(Val::Dev(d)) = got else { panic!("{name} {}: expected a device result, got {:?}", c.name, got.err()) };
+            let img = d.materialize().expect("download");
+            let words: Vec<Vec<u32>> = img.planes.iter().map(|p| p.iter().map(|v| v.to_bits()).collect()).collect();
+            assert_eq!(words, want, "{name} {}: device words differ from the CPU", c.name);
+            ran += 1;
+        }
+        assert!(ran > 0, "{name}: no case with a NaN output");
+        println!("NAN-STAYS {name}: {ran} nodes with NaN outputs stayed on the device");
+    }
+    assert!(b.report().fallback.is_empty(), "no fallback expected: {:?}", b.report().fallback);
+}
+
+/// sharpen at gain exactly 1.0 (x * 2 - b fused): where the source is finite and the blurred value is a lone NaN, the result is
+/// that NaN quieted with its own sign, never negated; the device gives the CPU's words.
+#[test]
+fn sharpen_at_gain_one_returns_a_lone_blurred_nan_quieted_with_its_own_sign() {
+    let Some(ctx) = require_device() else { return };
+    let (w, h) = (21usize, 1usize);
+    for word in [0x7fa0_0001u32, 0xff80_0007, 0x7fc0_0003, 0xffc0_0009] {
+        let mut x: Vec<f32> = (0..w).map(|i| 0.25 + i as f32 / 64.0).collect();
+        x[10] = f32::from_bits(word);
+        let mut kp = KParams::standin();
+        kp.sharpen_count = Some(w * h);
+        let case = fx_exec::device_ops::SelfCase {
+            name: format!("gain one lone NaN {word:08x}"),
+            dims: (w, h),
+            tag: 1,
+            args: vec![fx_exec::Image { n: w * h, planes: vec![x.clone()] }],
+            consts: vec![(1, 4, [0x3f80_0000; 4]), (2, 1, [0.4f32.to_bits(), 0, 0, 0])],
+            kp: Some(kp),
+        };
+        let (want, vals) = cpu_words_and_vals("sharpen", &case);
+        let quiet = word | 0x0040_0000;
+        let lone: Vec<usize> = (0..w).filter(|&i| i != 10 && want[0][i] == quiet).collect();
+        assert!(!lone.is_empty(), "{word:08x}: the blur must spread the NaN to finite source samples: {:08x?}", want[0]);
+        let mut b = DeviceBackend::with_allowlist(ctx.clone(), &["sharpen"]);
+        assert!(b.nan_exact().contains(&"sharpen"));
+        let call = fx_exec::backend::NodeCall { idx: 0, class: "sharpen", tag: 1, n: w * h, dims: (w, h), kp: &kp };
+        let Ok(Val::Dev(d)) = b.try_run(&call, &vals) else { panic!("{word:08x}: expected a device result") };
+        let got: Vec<u32> = d.materialize().expect("download").planes[0].iter().map(|v| v.to_bits()).collect();
+        assert_eq!(got, want[0], "{word:08x}: device words differ from the CPU");
+        println!("GAIN-ONE {word:08x}: {} finite-source samples give {quiet:08x}", lone.len());
+    }
 }
