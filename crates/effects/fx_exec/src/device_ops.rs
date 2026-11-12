@@ -184,6 +184,10 @@ pub const NAN_TWIN_CAP: usize = 600;
 /// Ops with no device kernel, each with the reason. The list shrinks as kernels land. `get_frame`, `get_prev_dest` and
 /// `save_prev_dest` are host data movement (`kernels::HOST_CLASSES`) and are not kernel ops.
 pub const CPU_ONLY: &[(&str, &str)] = &[
+    ("tilt", "data dependent scalar perspective loops with per element branches and a platform sincosf; no OpenCL kernel"),
+    ("tilt_alpha", "the ramp needs the plugin sincos (crate libm_sincos) and a per row 32 byte alignment peel that depends on the destination base address, which the device path does not carry; no OpenCL kernel"),
+    ("edge_detect", "needs the blur-core kernel chained with a neighbour-row gradient pass; no OpenCL kernel"),
+    ("blur_channels", "per channel widths and gains over the blur driver; no OpenCL kernel yet, the blur kernel does not take per channel sigma; a source with fewer planes than the tag (planes at or beyond the source count copy the previous plane) is served here too"),
 ];
 
 fn copy_calls_are_identity(tag: i32) -> bool {

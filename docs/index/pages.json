@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 38916,
+  "bytes": 39210,
   "generated": false
  },
  {
@@ -38,7 +38,7 @@
   "path": "docs/adding-an-effect.md",
   "title": "Adding an effect",
   "line": "The conventions every new effect follows, and the parity proof it shows before it is added.",
-  "bytes": 15526,
+  "bytes": 15527,
   "generated": false
  },
  {
@@ -52,7 +52,7 @@
   "path": "docs/cli.md",
   "title": "Command-line reference",
   "line": "This page is the exact interface of the `sapphire` executable and of `fx_run --describe-params`, for a program or an AI agent that drives them.",
-  "bytes": 68774,
+  "bytes": 69047,
   "generated": false
  },
  {
@@ -79,8 +79,8 @@
  {
   "path": "docs/effects.md",
   "title": "Effects",
-  "line": "Fifteen of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 70405,
+  "line": "Eighteen of the plugin's effects are rebuilt in this repository as native Rust code.",
+  "bytes": 83770,
   "generated": false
  },
  {
@@ -282,8 +282,8 @@
  {
   "path": "docs/guide.md",
   "title": "Using the effects",
-  "line": "This page shows how to run the fifteen native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match.",
-  "bytes": 30142,
+  "line": "This page shows how to run the eighteen native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match.",
+  "bytes": 30589,
   "generated": false
  },
  {
@@ -324,8 +324,8 @@
  {
   "path": "docs/parameters-guide.md",
   "title": "Driving the effect parameters",
-  "line": "How to run each of the 20 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.",
-  "bytes": 51017,
+  "line": "How to run each of the 24 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.",
+  "bytes": 59338,
   "generated": false
  },
  {
@@ -346,14 +346,14 @@
   "path": "docs/roadmap.md",
   "title": "Roadmap",
   "line": "The planned effects are ranked by how useful they are in YouTube edits: montages, highlights, music videos and gaming videos.",
-  "bytes": 6347,
+  "bytes": 6661,
   "generated": false
  },
  {
   "path": "docs/stages.md",
   "title": "Adding a provider",
   "line": "A provider is a program that offers stages over raw frames; twixtor's `vfx` and `sapphire` are two.",
-  "bytes": 44028,
+  "bytes": 45145,
   "generated": false
  }
 ]

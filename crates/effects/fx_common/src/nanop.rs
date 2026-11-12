@@ -87,6 +87,41 @@ pub fn fma132(d: f32, s2: f32, s3: f32) -> f32 {
     if r.is_nan() { pick3(d, s2, s3) } else { r }
 }
 
+/// `vfnmadd213ss d, s2, s3`: -(d * s2) + s3 with one rounding. NaN priority d, s2, s3.
+#[inline(always)]
+pub fn fnma213(d: f32, s2: f32, s3: f32) -> f32 {
+    let r = (-d).mul_add(s2, s3);
+    if r.is_nan() { pick3(d, s2, s3) } else { r }
+}
+
+/// `vfnmadd231ss d, s2, s3`: -(s2 * s3) + d with one rounding. NaN priority d, s2, s3.
+#[inline(always)]
+pub fn fnma231(d: f32, s2: f32, s3: f32) -> f32 {
+    let r = (-s2).mul_add(s3, d);
+    if r.is_nan() { pick3(d, s2, s3) } else { r }
+}
+
+/// `vfnmsub213ss d, s2, s3`: -(d * s2) - s3 with one rounding. NaN priority d, s2, s3.
+#[inline(always)]
+pub fn fnms213(d: f32, s2: f32, s3: f32) -> f32 {
+    let r = (-d).mul_add(s2, -s3);
+    if r.is_nan() { pick3(d, s2, s3) } else { r }
+}
+
+/// `vfmsub231ss d, s2, s3`: s2 * s3 - d with one rounding. NaN priority d, s2, s3.
+#[inline(always)]
+pub fn fms231(d: f32, s2: f32, s3: f32) -> f32 {
+    let r = s2.mul_add(s3, -d);
+    if r.is_nan() { pick3(d, s2, s3) } else { r }
+}
+
+/// `vfmsub132ss d, s2, s3`: d * s3 - s2 with one rounding. NaN priority d, s2, s3.
+#[inline(always)]
+pub fn fms132(d: f32, s2: f32, s3: f32) -> f32 {
+    let r = d.mul_add(s3, -s2);
+    if r.is_nan() { pick3(d, s2, s3) } else { r }
+}
+
 /// True when any element is a NaN. A branch free reduction the compiler can vectorize.
 #[inline]
 pub fn has_nan(s: &[f32]) -> bool {
@@ -246,5 +281,111 @@ mod tests {
                 assert_eq!(o[i].to_bits(), fma231(k.fmul(z[i]), c, src[i]).to_bits());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod fma213_tests {
+    use super::fma213;
+
+    const QA: u32 = 0x7fc0_0011;
+    const QB: u32 = 0xffc0_0022;
+    const SA: u32 = 0x7f80_0033;
+    const SB: u32 = 0xff80_0044;
+
+    fn f(b: u32) -> f32 {
+        f32::from_bits(b)
+    }
+
+    #[test]
+    fn a_nan_in_each_position() {
+        assert_eq!(fma213(f(QA), 2.0, 3.0).to_bits(), QA);
+        assert_eq!(fma213(2.0, f(QA), 3.0).to_bits(), QA);
+        assert_eq!(fma213(2.0, 3.0, f(QA)).to_bits(), QA);
+        assert_eq!(fma213(f(SA), 2.0, 3.0).to_bits(), SA | 0x0040_0000);
+    }
+
+    #[test]
+    fn two_nans_of_different_bits() {
+        for (x, y) in [(QA, QB), (QA, SB), (SA, QB), (SA, SB)] {
+            let q = |b: u32| b | 0x0040_0000;
+            assert_eq!(fma213(f(x), f(y), 1.0).to_bits(), q(x));
+            assert_eq!(fma213(f(x), 1.0, f(y)).to_bits(), q(x));
+            assert_eq!(fma213(1.0, f(x), f(y)).to_bits(), q(x));
+        }
+    }
+
+    #[test]
+    fn fresh_nan_and_finite() {
+        assert_eq!(fma213(f32::INFINITY, 0.0, 1.0).to_bits(), 0xffc0_0000);
+        assert_eq!(fma213(f32::INFINITY, 1.0, f32::NEG_INFINITY).to_bits(), 0xffc0_0000);
+        for (a, b, c) in [(1.5f32, 2.25, -0.125), (1e-30, 1e-30, 0.0), (3.0e19, 3.0e19, 1.0), (0.1, 0.3, 0.7)] {
+            assert_eq!(fma213(a, b, c).to_bits(), a.mul_add(b, c).to_bits());
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod fused_forms_tests {
+    use super::*;
+
+    const QA: u32 = 0x7fc0_0011;
+    const QB: u32 = 0xffc0_0022;
+    const SA: u32 = 0x7f80_0033;
+    const SB: u32 = 0xff80_0044;
+    type F = fn(f32, f32, f32) -> f32;
+    const FORMS: [(&str, F); 6] = [("fnma213", fnma213), ("fnma231", fnma231), ("fnms213", fnms213), ("fms231", fms231), ("fma132", fma132), ("fms132", fms132)];
+
+    fn f(b: u32) -> f32 {
+        f32::from_bits(b)
+    }
+
+    #[test]
+    fn a_nan_in_each_position() {
+        for (name, g) in FORMS {
+            assert_eq!(g(f(QA), 2.0, 3.0).to_bits(), QA, "{name}");
+            assert_eq!(g(2.0, f(QA), 3.0).to_bits(), QA, "{name}");
+            assert_eq!(g(2.0, 3.0, f(QA)).to_bits(), QA, "{name}");
+            assert_eq!(g(f(SA), 2.0, 3.0).to_bits(), SA | 0x0040_0000, "{name}");
+            assert_eq!(g(2.0, f(SB), 3.0).to_bits(), SB | 0x0040_0000, "{name}");
+        }
+    }
+
+    #[test]
+    fn two_nans_of_different_bits() {
+        let q = |b: u32| b | 0x0040_0000;
+        for (name, g) in FORMS {
+            for (x, y) in [(QA, QB), (QA, SB), (SA, QB), (SA, SB)] {
+                assert_eq!(g(f(x), f(y), 1.0).to_bits(), q(x), "{name}");
+                assert_eq!(g(f(x), 1.0, f(y)).to_bits(), q(x), "{name}");
+                assert_eq!(g(1.0, f(x), f(y)).to_bits(), q(x), "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn fresh_nan() {
+        assert_eq!(fnma213(f32::INFINITY, 1.0, f32::INFINITY).to_bits(), 0xffc0_0000);
+        assert_eq!(fnma231(f32::INFINITY, 1.0, f32::INFINITY).to_bits(), 0xffc0_0000);
+        assert_eq!(fnms213(f32::INFINITY, 1.0, f32::NEG_INFINITY).to_bits(), 0xffc0_0000);
+        assert_eq!(fms231(f32::INFINITY, 1.0, f32::INFINITY).to_bits(), 0xffc0_0000);
+        assert_eq!(fma132(1.0, f32::NEG_INFINITY, f32::INFINITY).to_bits(), 0xffc0_0000);
+        assert_eq!(fms132(1.0, f32::INFINITY, f32::INFINITY).to_bits(), 0xffc0_0000);
+    }
+
+    #[test]
+    fn finite_results_and_signs() {
+        for (a, b, c) in [(1.5f32, 2.25, -0.125), (1e-30, 1e-30, 0.0), (3.0e19, 3.0e19, 1.0), (0.1, 0.3, 0.7)] {
+            assert_eq!(fnma213(a, b, c).to_bits(), (-a).mul_add(b, c).to_bits());
+            assert_eq!(fnma231(a, b, c).to_bits(), (-b).mul_add(c, a).to_bits());
+            assert_eq!(fnms213(a, b, c).to_bits(), (-a).mul_add(b, -c).to_bits());
+            assert_eq!(fms231(a, b, c).to_bits(), b.mul_add(c, -a).to_bits());
+            assert_eq!(fma132(a, b, c).to_bits(), a.mul_add(c, b).to_bits());
+            assert_eq!(fms132(a, b, c).to_bits(), a.mul_add(c, -b).to_bits());
+        }
+        // an exact zero keeps the sign the form gives it
+        assert_eq!(fnma213(1.0, 1.0, 1.0).to_bits(), 0.0f32.to_bits());
+        assert_eq!(fnms213(1.0, 1.0, -1.0).to_bits(), 0.0f32.to_bits());
     }
 }

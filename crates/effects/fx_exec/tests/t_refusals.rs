@@ -93,8 +93,8 @@ fn glow_default_run_renders() {
 
 #[test]
 fn a_glow_atmosphere_is_refused_by_name_and_renders_nothing() {
-    // a nonzero atmosphere amplitude keeps simplex_noise on the executed route; get_time is given so the missing-value refusal is not the one that fires
-    let (rc, e, out) = glow("atm", &format!("{}x{}", W, H), &["--set", "atmosphere_amp=0.6", "--host-value", "get_time=0x00000000"]);
+    // a nonzero atmosphere amplitude (a 16.16 host value: 39322 / 65536) keeps simplex_noise on the executed route; get_time is given so the missing-value refusal is not the one that fires
+    let (rc, e, out) = glow("atm", &format!("{}x{}", W, H), &["--set", "atmosphere_amp=0.600006103515625", "--host-value", "get_time=0x00000000"]);
     assert_eq!(rc, Some(2), "{}", e);
     assert!(e.contains("SIMPLEX-GRADIENT-TABLE-ABSENT"), "{}", e);
     assert!(out.is_empty());

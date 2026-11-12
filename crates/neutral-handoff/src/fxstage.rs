@@ -582,8 +582,37 @@ fn placement_for<'a>(p: &'a Profile, w: u32, h: u32) -> &'a [(String, String)] {
         .unwrap_or(&[])
 }
 
+/// A lane of a multi-lane parameter value: a decimal number, or an `0x` word of eight hex digits that is the lane's f32 bit pattern.
+fn lane_text_ok(t: &str) -> bool {
+    let t = t.trim();
+    match t.strip_prefix("0x") {
+        Some(h) => h.len() == 8 && h.bytes().all(|b| b.is_ascii_hexdigit()),
+        None => t.parse::<f32>().is_ok(),
+    }
+}
+
+/// A host value on the 16.16 grid of a host slider: round(v x 65536) / 65536 with ties to even (the host's own conversion).
+pub fn snap_host16(v: f64) -> f64 {
+    (v * 65536.0).round_ties_even() / 65536.0
+}
+
+/// A comma separated value text with every decimal lane put on the 16.16 grid; a hex bit word lane and any text that is not a number stay as given.
+pub fn snap_text(value: &str) -> String {
+    value
+        .split(',')
+        .map(|t| {
+            let u = t.trim();
+            match u.parse::<f64>() {
+                Ok(x) if !u.starts_with("0x") && x.is_finite() => format!("{}", snap_host16(x)),
+                _ => t.to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 /// A checked `--param` list as `fx_run` arguments.
-fn param_args(p: &Profile, values: &[(String, String)]) -> Result<Vec<String>> {
+fn param_args(p: &Profile, values: &[(String, String)], width: u32) -> Result<Vec<String>> {
     let mut out = Vec::new();
     for (id, value) in values {
         let q = match p.params.iter().find(|q| q.id == *id) {
@@ -598,10 +627,25 @@ fn param_args(p: &Profile, values: &[(String, String)]) -> Result<Vec<String>> {
         };
         if q.kind == "text" && q.lanes > 1 {
             let parts: Vec<&str> = value.split(',').collect();
-            if parts.len() != q.lanes || parts.iter().any(|t| t.trim().parse::<f32>().is_err()) {
+            if parts.len() != q.lanes || parts.iter().any(|t| !lane_text_ok(t)) {
                 return Err(Error::unsupported(format!("bad value for `{}`: expects {} numbers separated by commas", q.id, q.lanes)));
             }
         }
+        let snapped;
+        let value = if fx_exec::fxrun::host16_slider(&p.program, &q.name, &q.form) {
+            snapped = snap_text(value);
+            snapped.as_str()
+        } else if q.form == "--set" {
+            match fx_exec::fxrun::lattice_set_text(&p.program, &q.name, value, width) {
+                Some(s) => {
+                    snapped = s;
+                    snapped.as_str()
+                }
+                None => value,
+            }
+        } else {
+            value
+        };
         match q.form.as_str() {
             "--set" | "--host-param" | "--cset" => {
                 out.push(q.form.clone());
@@ -752,6 +796,30 @@ pub fn fit_xy_list(args: &mut [String], n: usize, index: u64) -> Result<()> {
     }
     args[at] = vec![entries[0]; n].join(",");
     Ok(())
+}
+
+/// The per-writer-count form of a placement `--xy-base-list` value: entries `N:list` separated by `;`, where N is the default-xy
+/// writer count of the compiled plan and `list` the comma separated base phases for that many writers. A value without a `:` is the
+/// older single list and gives `None`.
+pub fn xy_list_entries(spec: &str) -> Option<Vec<(usize, String)>> {
+    if !spec.contains(':') {
+        return None;
+    }
+    let mut out = Vec::new();
+    for e in spec.split(';') {
+        let (n, list) = e.split_once(':')?;
+        let n: usize = n.trim().parse().ok().filter(|&n: &usize| (1..=64).contains(&n))?;
+        if list.is_empty() || list.split(',').count() != n || out.iter().any(|(m, _)| *m == n) {
+            return None;
+        }
+        out.push((n, list.to_string()));
+    }
+    Some(out)
+}
+
+/// The phase list a per-count placement value holds for `n` writers.
+pub fn xy_list_for(entries: &[(usize, String)], n: usize) -> Option<&str> {
+    entries.iter().find(|(m, _)| *m == n).map(|(_, l)| l.as_str())
 }
 
 /// What a clip learns from fx_run's own refusals and then reuses for every frame.
@@ -921,8 +989,29 @@ fn run_fx(
         *device_lines.borrow_mut() = device_lines_of(&io.log);
         (code, io)
     };
-    if let Some(n) = learned.xy_writers.get() {
-        fit_xy_list(&mut args, n, index)?;
+    // a per-writer-count `--xy-base-list` takes the list of the count learned so far, else the first one; fx_run names the true count
+    let mut count_lists: Option<Vec<(usize, String)>> = None;
+    if let Some(at) = args.iter().position(|a| a == "--xy-base-list") {
+        if let Some(entries) = args.get(at + 1).and_then(|v| xy_list_entries(v)) {
+            let pick = match learned.xy_writers.get() {
+                Some(0) => None,
+                Some(n) => xy_list_for(&entries, n).map(|l| l.to_string()),
+                None => entries.first().map(|(_, l)| l.clone()),
+            };
+            if learned.xy_writers.get() == Some(0) {
+                // the plan has no default-xy writer: no list is passed
+                args.drain(at..at + 2);
+                count_lists = Some(entries);
+            } else {
+                args[at + 1] = pick.ok_or_else(|| Error::unsupported(format!("frame {}: XY-BASE-LIST-UNSERVED: the placement lists no phase list for {} default-xy writers", index, learned.xy_writers.get().unwrap_or(0))))?;
+                count_lists = Some(entries);
+            }
+        }
+    }
+    if count_lists.is_none() {
+        if let Some(n) = learned.xy_writers.get() {
+            fit_xy_list(&mut args, n, index)?;
+        }
     }
     #[cfg(test)]
     LAST_RUN.with(|l| *l.borrow_mut() = Some((args.clone(), files.words.iter().map(|(k, v)| (k.clone(), v.clone())).collect())));
@@ -933,6 +1022,31 @@ fn run_fx(
     // sample, which is added with its identity value.
     for _ in 0..8 + CURVE_RERUNS {
         let text = io.log.clone();
+        if code == 1 && text.contains("XY-BASE-LIST-MISMATCH") {
+            if let Some(entries) = &count_lists {
+                // the placement holds one list per writer count: the run names the count and the matching list is passed
+                if text.contains("XY-BASE-LIST-MISMATCH (the placement model has 0 default-xy writers") {
+                    let at = args.iter().position(|a| a == "--xy-base-list").expect("xy-base-list");
+                    args.drain(at..at + 2);
+                    learned.xy_writers.set(Some(0));
+                    (code, io) = exec(&args, &files);
+                    continue;
+                }
+                let n = parse_xy_writers(&text).ok_or_else(|| Error::unsupported(format!("frame {}: XY-BASE-LIST-UNSERVED: cannot read the writer count from fx_run", index)))?;
+                let list = match xy_list_for(entries, n) {
+                    Some(l) => l.to_string(),
+                    None => return Err(Error::unsupported(format!("frame {}: XY-BASE-LIST-UNSERVED: the placement lists no phase list for {} default-xy writers", index, n)).with_tail(tail_lines(&text, 3))),
+                };
+                let at = args.iter().position(|a| a == "--xy-base-list").expect("xy-base-list") + 1;
+                if args[at] == list {
+                    break;
+                }
+                args[at] = list;
+                learned.xy_writers.set(Some(n));
+                (code, io) = exec(&args, &files);
+                continue;
+            }
+        }
         if code == 1 && text.contains("XY-BASE-LIST-MISMATCH") && learned.xy_writers.get().is_none() {
             // the measured placement lists fewer or more default-xy writers than this plan has: the run names the count
             let line = text.lines().find(|l| l.contains("XY-BASE-LIST-MISMATCH")).unwrap_or("").to_string();
@@ -1163,7 +1277,7 @@ impl Keyed {
                 Ok(i) => t.keys[i].text.clone(),
                 Err(lanes) => lanes
                     .iter()
-                    .map(|x| if *host { (x * 65536.0).round() / 65536.0 } else { *x })
+                    .map(|x| if *host { snap_host16(*x) } else { *x })
                     .map(|x| format!("{}", x))
                     .collect::<Vec<_>>()
                     .join(","),
@@ -1385,8 +1499,24 @@ pub fn apply(
     }
     let keyed = Keyed::new(p, values, rate)?;
     check_time_rate(rate)?;
+    // a plain value of a host slider is put on the 16.16 grid before the runner; the log names each value that moves
+    for (id, v) in keyed.values_at(0) {
+        if let Some(q) = p.params.iter().find(|q| q.id == id) {
+            if fx_exec::fxrun::host16_slider(&p.program, &q.name, &q.form) {
+                let s = snap_text(v.trim());
+                if s != v.trim() {
+                    eprintln!("note: `{}` {} is put on the 16.16 host grid as {}", id, v.trim(), s);
+                }
+            }
+            if q.form == "--set" {
+                if let Some(s) = fx_exec::fxrun::lattice_set_text(&p.program, &q.name, v.trim(), spec.width) {
+                    eprintln!("note: `{}` {} is put on the 16.16 host lattice as {}", id, v.trim(), s);
+                }
+            }
+        }
+    }
     // the arguments of frame `f`: a keyed parameter takes its value at that frame
-    let args_at = |f: u64| param_args(p, &keyed.values_at(f));
+    let args_at = |f: u64| param_args(p, &keyed.values_at(f), spec.width);
     let ls: Vec<Layer> = load_layers(p, layers, spec)?;
     let fb = spec.frame_bytes() as usize;
     let mut buf = vec![0u8; fb];
@@ -1414,7 +1544,7 @@ pub fn apply(
                 let k = ((f as i64 + s as i64).max(0) as u64).min(last - 1);
                 extra.frame_words.push((format!("{},{}", k, k), get(k).clone()));
             }
-            let words = run_fx(&runner, p, spec, f, get(f).clone(), layer_words(f)?, &param_args(p, &vf)?, &host_at(p, &vf), extra, &learned)?.remove(0);
+            let words = run_fx(&runner, p, spec, f, get(f).clone(), layer_words(f)?, &param_args(p, &vf, spec.width)?, &host_at(p, &vf), extra, &learned)?.remove(0);
             words_to_frame(spec, &words, &mut out);
             write_out(output, &out, f)?;
             count += 1;
@@ -1482,7 +1612,23 @@ mod tests {
 
     fn forwarded(id: &str, value: &str) -> Vec<String> {
         let p = profile("blur_color_autogen").expect("stage");
-        super::param_args(p, &[(id.to_string(), value.to_string())]).expect("args")
+        super::param_args(p, &[(id.to_string(), value.to_string())], 64).expect("args")
+    }
+
+    #[test]
+    fn an_off_lattice_normalize_scale_set_lane_is_moved_onto_the_lattice() {
+        let p = profile("drop_shadow").expect("stage");
+        let args = |v: &str, w: u32| super::param_args(p, &[("shift".to_string(), v.to_string())], w).expect("args");
+        // at 50x7 the 64x32 lane pair is off the lattice and moves; the same pair at 64x32 and the 50x7 pair stay as given
+        let moved = args("0.00299692154,-0.00117826462", 50);
+        assert_eq!(moved[0], "--set");
+        assert_ne!(moved[1], "shift=0.00299692154,-0.00117826462", "{:?}", moved);
+        let lanes: Vec<f32> = moved[1].strip_prefix("shift=").unwrap().split(',').map(|x| x.parse().unwrap()).collect();
+        assert!(lanes[0] > 0.0 && lanes[1] < 0.0);
+        // the moved text is on the lattice: the rule leaves it unchanged
+        assert_eq!(fx_exec::fxrun::lattice_set_text("Drop_Shadow", "shift", moved[1].strip_prefix("shift=").unwrap(), 50), None);
+        assert_eq!(args("0.00299692154,-0.00117826462", 64), vec!["--set", "shift=0.00299692154,-0.00117826462"]);
+        assert_eq!(args("0.00383605948,-0.00150817866", 50), vec!["--set", "shift=0.00383605948,-0.00150817866"]);
     }
 
     #[test]
@@ -1495,11 +1641,48 @@ mod tests {
     }
 
     #[test]
+    fn host_slider_values_are_put_on_the_16_16_grid() {
+        // the registered Glow_Edges width and threshold: the decimals are not host values, their grid words are
+        assert_eq!(super::snap_text("53.76"), "53.75999450683594");
+        assert_eq!(super::snap_text("0.35"), "0.350006103515625");
+        assert_eq!(super::snap_text("2"), "2");
+        assert_eq!(super::snap_text("0x3f800000"), "0x3f800000");
+        assert_eq!(super::snap_text("0.35,1.5"), "0.350006103515625,1.5");
+        // ties go to even: k + 0.5 for k = 2 and k = 3 gives 2 and 4
+        assert_eq!(super::snap_host16(2.5 / 65536.0), 2.0 / 65536.0);
+        assert_eq!(super::snap_host16(3.5 / 65536.0), 4.0 / 65536.0);
+        assert_eq!(super::snap_host16(-2.5 / 65536.0), -2.0 / 65536.0);
+        let p = profile("blur_color_autogen").expect("stage");
+        assert_eq!(super::param_args(p, &[("blur_amount".to_string(), "0.35".to_string())], 64).expect("args"), vec!["--host-param", "blur_amount=0.350006103515625"]);
+        // a --set slider without normalize_scale is a host value; a normalize_scale lane is put on the lattice of its record rule
+        // (an on-lattice lane stays), and a popup and a checkbox are not put on the grid
+        assert_eq!(forwarded("mocha_mask_opacity", "0.35"), vec!["--set", "mocha_mask_opacity=0.350006103515625"]);
+        let moved = forwarded("shift_mocha_mask", "0.35,1");
+        assert_eq!(moved[0], "--set");
+        assert!(moved[1].starts_with("shift_mocha_mask=") && moved[1].ends_with(",1") && moved[1] != "shift_mocha_mask=0.35,1", "{:?}", moved);
+        assert_eq!(forwarded("combine_masks", "2"), vec!["--set", "combine_masks=2"]);
+    }
+
+    #[test]
+    fn keyed_host_slider_value_at_k_plus_half_rounds_to_even() {
+        let p = profile("blur_color_autogen").expect("stage");
+        let rate = crate::rate::Rate::parse("24").expect("rate");
+        // 0 at frame 0 and 5 / 65536 at frame 2: frame 1 is 2.5 / 65536
+        let k = Keyed::new(p, &[("blur_amount".to_string(), "0@0;0.0000762939453125@2".to_string())], Some(&rate)).expect("keyed");
+        let at = |f: u64| super::param_args(p, &k.values_at(f), 64).expect("args");
+        assert_eq!(at(1), vec!["--host-param", "blur_amount=0.000030517578125"]);
+        // the exact key text is put on the grid too
+        let k = Keyed::new(p, &[("blur_amount".to_string(), "0.35@0;1@2".to_string())], Some(&rate)).expect("keyed");
+        let at = |f: u64| super::param_args(p, &k.values_at(f), 64).expect("args");
+        assert_eq!(at(0), vec!["--host-param", "blur_amount=0.350006103515625"]);
+    }
+
+    #[test]
     fn keyed_checkbox_words_are_forwarded_as_numbers() {
         let p = profile("blur_color_autogen").expect("stage");
         let rate = crate::rate::Rate::parse("24").expect("rate");
         let k = Keyed::new(p, &[("subpixel".to_string(), "off@0;on@10".to_string())], Some(&rate)).expect("keyed");
-        let at = |f: u64| super::param_args(p, &k.values_at(f)).expect("args");
+        let at = |f: u64| super::param_args(p, &k.values_at(f), 64).expect("args");
         assert_eq!(at(5), vec!["--set", "subpixel=0"]);
         assert_eq!(at(10), vec!["--set", "subpixel=1"]);
     }
@@ -1535,9 +1718,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tables_parse_for_twenty_stages() {
+    fn tables_parse_for_twenty_four_stages() {
         let ps = profiles();
-        assert_eq!(ps.len(), 20);
+        assert_eq!(ps.len(), 24);
         let hsb = profile("hue_sat_bright_autogen").expect("hsb");
         assert_eq!(hsb.family, "S_HueSatBright");
         assert_eq!(hsb.kind, "temporal");
@@ -1605,6 +1788,42 @@ mod tests {
         assert_eq!(a[1], "0,0,0");
         let mut b: Vec<String> = ["--xy-base-list", "0,16"].iter().map(|s| s.to_string()).collect();
         assert!(fit_xy_list(&mut b, 3, 0).is_err());
+    }
+
+    #[test]
+    fn point_lanes_take_decimals_or_bit_words() {
+        assert!(lane_text_ok("-0.25"));
+        assert!(lane_text_ok(" 0xbe4ccccc "));
+        assert!(!lane_text_ok("0xbe4ccc"));
+        assert!(!lane_text_ok("0xbe4cccczz"));
+        assert!(!lane_text_ok("abc"));
+    }
+
+    #[test]
+    fn per_count_xy_lists_parse_and_select() {
+        let e = xy_list_entries("1:0;2:16,0").unwrap();
+        assert_eq!(e.len(), 2);
+        assert_eq!(xy_list_for(&e, 1), Some("0"));
+        assert_eq!(xy_list_for(&e, 2), Some("16,0"));
+        assert_eq!(xy_list_for(&e, 3), None);
+        // the older single list is not the per-count form; a list of the wrong length or a repeated count is refused
+        assert!(xy_list_entries("16,16").is_none());
+        assert!(xy_list_entries("2:16").is_none());
+        assert!(xy_list_entries("1:0;1:16").is_none());
+        assert!(xy_list_entries("0:").is_none());
+    }
+
+    #[test]
+    fn per_count_placement_parses_in_a_row() {
+        let stages = "stage_id\tprogram\tfamily\tkind\tspool\tlayers\tsrc_name\thidden\tfixed\thost\tplacement\tnotes\thost_variants\n\
+            s1\tP\tF\ttemporal\tfalse\t-\tSource\tfalse\t--set a=0\t--palpha-cells W,1,1.0\t64x32=--ds-phase 16|--xy-base-list 1:16;2:16,0/50x7=--xy-base-list 2:16,0\t-\t-\n";
+        let ps = parse_tables(stages, "stage_id\tparam_id\toption_form\toption_name\tobserved_distinct\n");
+        assert_eq!(ps.len(), 1);
+        let at = placement_for(&ps[0], 64, 32);
+        let list = &at.iter().find(|(k, _)| k == "--xy-base-list").unwrap().1;
+        assert_eq!(xy_list_entries(list).unwrap().len(), 2);
+        assert!(at.iter().any(|(k, v)| k == "--ds-phase" && v == "16"));
+        assert_eq!(ps[0].host[0], ("--palpha-cells".to_string(), "W,1,1.0".to_string()));
     }
 
     #[test]
@@ -2006,7 +2225,7 @@ mod tests {
             check_variants(p).unwrap();
             // only the stages whose recorded runs differ by opacity answer carry entries, keyed on cset_opacity at the answers 1 and 3
             let keyed: Vec<(&str, &str)> = p.variants.iter().map(|v| (v.param.as_str(), v.value.as_str())).collect();
-            if ["glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake"].contains(&p.id.as_str()) {
+            if ["glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake", "blur_motion_autogen", "blur_motion_mono_autogen", "warp_transform_autogen", "glow_edges"].contains(&p.id.as_str()) {
                 assert_eq!(keyed, [("cset_opacity", "1"), ("cset_opacity", "3")], "{}", p.id);
             } else {
                 assert!(keyed.is_empty(), "{}", p.id);
@@ -2247,7 +2466,7 @@ mod tests {
                 seen += 1;
             }
         }
-        assert_eq!(seen, 18);
+        assert_eq!(seen, 22);
     }
 
     #[test]

@@ -12,8 +12,8 @@ use plane_service as ps;
 /// Classes wired here.
 pub const WIRED: &[&str] = &[
     "make_mipmap", "blur_warp", "warp_rel", "static2", "monochrome", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "rotate", "max_element",
-    "min_element", "blur", "dissolve", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "v3_to_v4", "sharpen", "monochrome_a",
-    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "copy_alpha", "grad", "perspective", "perspective_alpha", "warp", "postdivide", "glow", "alpha_from_rgb_max", "append", "v3_to_v4_if4_a", "get_alpha",
+    "min_element", "blur", "blur_channels", "dissolve", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "v3_to_v4", "sharpen", "monochrome_a",
+    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "copy_alpha", "grad", "edge_detect", "perspective", "perspective_alpha", "tilt", "tilt_alpha", "warp", "postdivide", "glow", "alpha_from_rgb_max", "append", "v3_to_v4_if4_a", "get_alpha",
 ];
 
 /// Result of one run-primitive: a plain planar image or the ripmap object of make_mipmap.
@@ -313,6 +313,24 @@ fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resul
         Ok(band)
     })?;
     Ok(Image { n, planes: crate::par::join_planes(parts, c, n) })
+}
+
+/// `tilt`: operand 0 the 2-channel xy plane; swivel and tilt, perspective, shift, rotate, scale, shear and wrap follow as constants
+/// (original slot 52, AVX2 body 0x63b5d0). Two output planes. The host offload flag path is not rendered.
+fn tilt_k(args: &[Arg], n: usize) -> Result<Image, ExecError> {
+    need(args, 8, "tilt")?;
+    if args[1..].iter().any(|a| !a.is_const()) {
+        return Err(unsupported("tilt", "non-constant parameter operand at run time (the compiler folds it)"));
+    }
+    let planes = args[0].planes();
+    if planes.len() != 2 || planes.iter().any(|p| p.len() < n) {
+        return Err(ExecError::Shape("tilt: operand 0 must be a 2-channel plane pair".into()));
+    }
+    let (sv, pa, sh, ro, sc, sr, wr) = (args[1].f32s(), args[2].f32s(), args[3].f32s(), args[4].f32s(), args[5].f32s(), args[6].f32s(), args[7].bits());
+    let st = tilt::State { swivel: sv[0], tilt: sv[1], perspective: pa[0], shift: [sh[0], sh[1]], rotate: ro[0], scale: [sc[0], sc[1]], shear: [sr[0], sr[1]], wrap: [wr[0], wr[1]] };
+    let (mut out_u, mut out_v) = (vec![f32::from_bits(0x7fc0_ffee); n], vec![f32::from_bits(0x7fc0_ffee); n]);
+    tilt::render(&st, planes[0], planes[1], &mut out_u, &mut out_v, n as i32, false).map_err(|e| ExecError::Kernel { class: "tilt".into(), msg: format!("{:?}", e) })?;
+    Ok(Image { n, planes: vec![out_u, out_v] })
 }
 
 fn static2_k(args: &[Arg], n: usize, kp: &KParams) -> Result<Image, ExecError> {
@@ -639,6 +657,42 @@ fn grad_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     Ok(Image { n, planes: vec![dx, dy] })
 }
 
+/// class `edge_detect` (slot 52, CPU route, crate `edge_detect`). Operands in program order, as the Glow_Edges text reads
+/// `(edge_detect (monochrome s) edges_smooth e_scale subpixel)`: argument 0 = the source plane (one channel, combo row (1,1,1,1) -> tag 1), argument 1 =
+/// object field 0x6c (blur amount), argument 2 = field 0x88 (gain multiplier), argument 3 = field 0xa4 (subpixel flag). One output plane: the gradient
+/// magnitude of the blurred source. A frame of width 1 is refused (the body reads one float past the plane).
+fn edge_detect_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 4, "edge_detect")?;
+    if tag != 1 {
+        return Err(unsupported("edge_detect", "source of 2 or 3 elements (combo rows 1 and 2): only the one-element row is ported"));
+    }
+    if w < 2 {
+        return Err(unsupported("edge_detect", "width 1: the body reads one float past the plane (host memory)"));
+    }
+    let src_owned = image_or_const(&args[0], w * h, "edge_detect")?;
+    if src_owned.n != w * h || src_owned.channels() < 1 {
+        return Err(ExecError::Shape("edge_detect: source smaller than the frame".into()));
+    }
+    let a_eff = if crate::aspect::in_caller_range(kp.host_aspect) { kp.host_aspect } else { crate::aspect::FALLBACK_A };
+    let asp_blk = crate::aspect::set_aspect(a_eff, 0.0).expect("in-range aspect is nonzero");
+    let p = edge_detect::EdgeParams {
+        amount: const_lane(&args[1], 0, "edge_detect", "amount")?,
+        gain_param: const_lane(&args[2], 0, "edge_detect", "gain")?,
+        subpixel: cvt_i32(const_lane(&args[3], 0, "edge_detect", "subpixel")?),
+        edge_mode: kp.blur_edge,
+        render_scale: if kp.blur_render_scale > 0 { kp.blur_render_scale } else { w as i32 },
+        aspect: if asp_blk.aspect_block_b != 0 { Some(f32::from_bits(asp_blk.aspect_block_d)) } else { None },
+        info3c: asp_blk.aspect_block_e != 0,
+        flag_cell: 1,
+        past_end: 0.0,
+    };
+    let n = w * h;
+    let mut aux = vec![0.0f32; n];
+    let mut dst = vec![0.0f32; n];
+    edge_detect::render(&p, &src_owned.planes[0], w, h, &mut aux, &mut dst).map_err(|e| kerr("edge_detect", e))?;
+    Ok(Image { n, planes: vec![dst] })
+}
+
 /// `round` (slot 53, AVX2 body, `scale_rgb::round_snap`K-PARITY at floor) and `scale_rgb` (slot 53
 /// `scale_rgb::scale_rgb`K-PARITY). Both read the same two-record object (this: operand channel count, constant flag,
 /// constant lanes, plane array), so the operand mapping is shared: argument 0 = record 0 (n_in, flag_a, in_p, src planes), argument 1 =
@@ -912,6 +966,50 @@ fn blur_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     Ok(Image { n: w * h, planes: outv })
 }
 
+/// blur_channels (slot 52): arguments (source, amount, channel_amount, filter_shape, scale, subpixel); the tag is the plane count.
+fn blur_channels_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 6, "blur_channels")?;
+    let src_owned = image_or_const(&args[0], w * h, "blur_channels")?;
+    let src = &src_owned;
+    let c = tag.max(0) as usize;
+    // A source with fewer planes than the tag is served by the original's copy chain: each plane at or beyond
+    // the source plane count starts as a copy of the plane before it (slot 52, loop 0x52cce0 to 0x52cd57).
+    if c == 0 || c > 4 || src.channels() == 0 || src.n != w * h {
+        return Err(ExecError::Shape("blur_channels: source without planes or not the frame size".into()));
+    }
+    let n_in = src.channels().min(c);
+    let amount = [const_lane(&args[1], 0, "blur_channels", "amount")?, const_lane(&args[1], 1, "blur_channels", "amount")?];
+    if !args[2].is_const() || !args[4].is_const() {
+        return Err(unsupported("blur_channels", "channel_amount and scale must be constants"));
+    }
+    let (wid, gain) = (args[2].f32s(), args[4].f32s());
+    let shape = cvt_i32(const_lane(&args[3], 0, "blur_channels", "filter_shape")?);
+    let subpixel = cvt_i32(const_lane(&args[5], 0, "blur_channels", "subpixel")?);
+    let chan_params = blur_channels::ChannelParams {
+        amount,
+        widths: [wid[0], wid[1], wid[2], wid[3]],
+        gains: [gain[0], gain[1], gain[2], gain[3]],
+        filter_shape: shape,
+        scale_count: args[4].count(),
+        subpixel,
+        edge_mode: kp.blur_edge,
+        plane_count: c,
+        n_in,
+        render_scale: if kp.blur_render_scale > 0 { kp.blur_render_scale } else { w as i32 },
+        aspect: kp.blur_aspect,
+    };
+    let src_planes: Vec<fx_common::plane::Plane> = (0..n_in).map(|k| fx_common::plane::Plane::new(&src.planes[k], w, h, w)).collect::<Result<_, _>>().map_err(|e| kerr("blur_channels", e))?;
+    let mut outv: Vec<Vec<f32>> = vec![vec![0.0; w * h]; c];
+    {
+        let mut dp: Vec<fx_common::plane::PlaneMut> = Vec::new();
+        for v in outv.iter_mut() {
+            dp.push(fx_common::plane::PlaneMut::new(v.as_mut_slice(), w, h, w).map_err(|e| kerr("blur_channels", e))?);
+        }
+        blur_channels::render(&chan_params, &src_planes, &mut dp).map_err(|e| kerr("blur_channels", e))?;
+    }
+    Ok(Image { n: w * h, planes: outv })
+}
+
 /// IN3-A1 (dissolve, slot 53 -> AVX2 body, crate `dissolve`K-PARITY plus RPARITY.tsv "ACHIEVED (I)"): the plan's
 /// arguments are (A = value at t <= 0, B = value at t >= 1, T = matte), the order of slot 38 rule (: argument 2 is
 /// the matte, arguments 0 and 1 are compared by). An image operand is one plane per channel (count = channels); a
@@ -1071,6 +1169,35 @@ fn perspective_alpha_k(args: &[Arg], w: usize, h: usize, kp: &KParams) -> Result
         let o = warp_render::slot52_perspective_alpha(WPG1_FW, &par, &info, false, &v[lo..lo + cnt], &mut dst, ph).map_err(|e| kerr("perspective_alpha", e))?;
         if let warp_render::AlphaRoute::Fill { .. } = o.route {
             return Err(unsupported("perspective_alpha", "x8 == 0 takes the ROI zero fill whose record fields are host values (not wired)"));
+        }
+        out[lo..lo + cnt].copy_from_slice(&dst);
+    }
+    Ok(Image { n, planes: vec![out] })
+}
+
+/// tilt_alpha (slot 52): arguments (xy image of 2 channels, (swivel, tilt) pair, perspective amount). The host record fields are the same
+/// three cells as perspective_alpha's (PARAM-UNCAPTURED, no default): without the KParams palpha_cells value the class is refused. The flag path and the host
+/// branch (|cos(angle) / amount| < 1e-4) are refused by name.
+fn tilt_alpha_k(args: &[Arg], w: usize, h: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 3, "tilt_alpha")?;
+    let n = w * h;
+    let (u, v) = uv_of(args, "tilt_alpha", n)?;
+    let swivel = const_lane(&args[1], 0, "tilt_alpha", "argument 1 (swivel)")?;
+    let tilt = const_lane(&args[1], 1, "tilt_alpha", "argument 1 (tilt)")?;
+    let amount = const_lane(&args[2], 0, "tilt_alpha", "argument 2 (perspective amount)")?;
+    let Some((hw, hh, hd)) = kp.palpha_cells else {
+        return Err(unsupported("tilt_alpha", "the host record fields are not measured (PARAM-UNCAPTURED, no default): palpha_cells is not given"));
+    };
+    let st = tilt_alpha::State { swivel, tilt, amount };
+    let host = tilt_alpha::Host { w: hw, d: hd, h: hh };
+    let mut out = vec![0.0f32; n];
+    for (lo, cnt, ph) in rows_of_p(w, h, if kp.palpha_base >= 0 { kp.palpha_base as usize } else { 0 }, kp.palpha_rowbuf) {
+        let mut dst = vec![0.0f32; cnt];
+        let o = tilt_alpha::tilt_alpha(&st, &host, false, cnt as i32, &u[lo..lo + cnt], &v[lo..lo + cnt], &mut dst, ph).map_err(|e| kerr("tilt_alpha", e))?;
+        match o.route {
+            tilt_alpha::Route::HostBranch => return Err(unsupported("tilt_alpha", "HOST-BRANCH-REFUSED (|cos(angle) / amount| < 1e-4 takes the ROI helper and host dispatch, not rebuilt)")),
+            tilt_alpha::Route::Flag => return Err(unsupported("tilt_alpha", "the flag path is not rebuilt")),
+            _ => {}
         }
         out[lo..lo + cnt].copy_from_slice(&dst);
     }
@@ -1344,10 +1471,12 @@ pub fn run_wired(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, us
         "warp_rel" => Out::Img(warp_rel_k(args, tag, w, h, kp)?),
         "static2" => Out::Img(static2_k(args, n, kp)?),
         "monochrome" => Out::Img(monochrome_k(args, n, kp)?),
+        "tilt" => Out::Img(tilt_k(args, n)?),
         "coerce_up" | "coerce_up_a1" | "coerce_to" | "coerce_to_alpha" => Out::Img(coerce_k(class, args, tag, n, kp)?),
         "rotate" => Out::Img(rotate_k(args, n)?),
         "max_element" | "min_element" => Out::Img(element_reduce_k(class, args, n, kp)?),
         "blur" => Out::Img(blur_k(args, tag, w, h, kp)?),
+        "blur_channels" => Out::Img(blur_channels_k(args, tag, w, h, kp)?),
         "dissolve" => Out::Img(dissolve_k(args, tag, w, h)?),
         "coerce_to_v3" | "coerce_to_v4" | "coerce_up_to_v3" | "remove_alpha" => Out::Img(coerce_ext_k(class, args, tag, n, kp)?),
         "round" | "scale_rgb" => Out::Img(round_k(class, args, tag, n, kp)?),
@@ -1357,12 +1486,14 @@ pub fn run_wired(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, us
         "copy" => Out::Img(copy_k(args, tag, n, kp)?),
         "copy_alpha" => Out::Img(copy_alpha_k(args, tag, n, kp)?),
         "grad" => Out::Img(grad_k(args, tag, w, h, kp)?),
+        "edge_detect" => Out::Img(edge_detect_k(args, tag, w, h, kp)?),
         "v3_to_v4" => Out::Img(v3_to_v4_k(args, tag, n, kp)?),
         "sharpen" => Out::Img(sharpen_k(args, tag, w, h, kp)?),
         "edge_aware_sharpen" => Out::Img(edge_aware_sharpen_k(args, tag, w, h, kp)?),
         "monochrome_a" => Out::Img(monochrome_a_k(args, tag, n, kp)?),
         "perspective" => Out::Img(perspective_k(args, w, h, kp)?),
         "perspective_alpha" => Out::Img(perspective_alpha_k(args, w, h, kp)?),
+        "tilt_alpha" => Out::Img(tilt_alpha_k(args, w, h, kp)?),
         "warp" => Out::Img(warp_k(args, tag, w, h, kp)?),
         "postdivide" => Out::Img(postdivide_k(args, tag, n)?),
         "glow" => Out::Img(glow_k(args, tag, w, h, kp)?),

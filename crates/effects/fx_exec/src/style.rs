@@ -27,6 +27,8 @@ pub const STYLE_TABLE: &[(&str, &[&str])] = &[
     // def name Blur_Motion_Curves_No_Transform_Autogen (39 characters, bound 32), so the Blur_Only render is the layout object's own plan, which is
     // plan-equal (runs/cmp_rm30.txt) to the native compile of that def. The style name used here is the layout's style name.
     ("S_BlurMoCurves", &["Transform_and_Blur", "Blur_Only"]),
+    // S_BlurMotion: two registered programs (the Effect popup, index 5, has 2 choices); Effect = 2 is Blur_Motion_Mono.
+    ("S_BlurMotion", &["Blur_Motion", "Blur_Motion_Mono"]),
 ];
 
 /// the registered def a style of S_BlurMoCurves runs. Blur_Only has no registered def in the plugin; its layout object compiles the same plan as
@@ -35,6 +37,8 @@ pub fn style_program(core: &str) -> Option<&'static str> {
     match core {
         "Transform_and_Blur" => Some("Transform_and_Blur_Autogen"),
         "Blur_Only" | "Blur_Motion_Curves_No_Transform" => Some("Blur_Motion_Curves_No_Transform_Autogen"),
+        "Blur_Motion" => Some("Blur_Motion_Autogen"),
+        "Blur_Motion_Mono" => Some("Blur_Motion_Mono_Autogen"),
         _ => None,
     }
 }
@@ -80,6 +84,17 @@ mod tests {
         assert!(select("Transform_and_Blur", 2, 3).is_err()); // index 2 is out of the table
         assert!(select("Transform_and_Blur", 3, 2).is_err()); // wrong declared count
         assert!(select("Blur_Motion_Curves_No_Transform_Autogen", 2, 2).is_err()); // the 39 character def is in no table (STYLE-REFUSED-BY-PLUGIN)
+    }
+    #[test]
+    fn style_select_s_blur_motion() {
+        assert_eq!(select("Blur_Motion_Autogen", 2, 1).unwrap(), ("S_BlurMotion", 0, "Blur_Motion"));
+        assert_eq!(select("Blur_Motion_Autogen", 2, 0).unwrap().2, "Blur_Motion"); // unbound answer clamps to style 0
+        assert_eq!(select("Blur_Motion_Mono_Autogen", 2, 2).unwrap(), ("S_BlurMotion", 1, "Blur_Motion_Mono"));
+        assert_eq!(select("Blur_Motion_Autogen", 2, 2).unwrap().2, "Blur_Motion_Mono"); // Effect 2 wins over the label
+        assert!(select("Blur_Motion_Autogen", 2, 3).is_err()); // index 2 is out of the table
+        assert!(select("Blur_Motion_Autogen", 3, 2).is_err()); // wrong declared count
+        assert_eq!(style_program("Blur_Motion_Mono"), Some("Blur_Motion_Mono_Autogen"));
+        assert_eq!(style_program("Blur_Motion"), Some("Blur_Motion_Autogen"));
     }
     #[test]
     fn style_program_rule() {

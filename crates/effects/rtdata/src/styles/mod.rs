@@ -23,6 +23,10 @@ mod shake_normal;
 mod shake_twitchy;
 mod shake_jumpy;
 mod dissolve_shake;
+mod blur_motion;
+mod blur_motion_mono;
+mod warp_transform;
+mod glow_edges;
 
 /// Every style, in the order of the effect list.
 pub static STYLES: &[&Style] = &[
@@ -46,4 +50,8 @@ pub static STYLES: &[&Style] = &[
     &shake_twitchy::STYLE,
     &shake_jumpy::STYLE,
     &dissolve_shake::STYLE,
+    &blur_motion::STYLE,
+    &blur_motion_mono::STYLE,
+    &warp_transform::STYLE,
+    &glow_edges::STYLE,
 ];

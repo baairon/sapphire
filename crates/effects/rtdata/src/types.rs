@@ -11,6 +11,9 @@ pub struct StyleParam {
     pub record_name: &'static str,
     /// the name the host shows
     pub display_name: &'static str,
+    /// the program's parameter name this row feeds (`-` when no program parameter reads it); a two-lane parameter
+    /// (for example `shift_mocha_mask`) names the same parameter on the row of each lane
+    pub param: &'static str,
     /// the host's index of the parameter
     pub host_index: i32,
     /// the host's parameter type (2 = fixed slider)
