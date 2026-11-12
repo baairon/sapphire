@@ -1,0 +1,9 @@
+[package]
+name = "glint_dispatch"
+version = "0.1.0"
+edition = "2021"
+description = "Glint render dispatch: the AVX2 wrapper that builds the plane handles, scale factors and region record for the three-plane and one-plane glint workers."
+
+[dependencies]
+fx_common = { path = "../../fx_common" }
+glint_worker = { path = "../glint_worker" }

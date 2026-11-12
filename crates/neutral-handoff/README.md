@@ -40,13 +40,13 @@ output file, verified against the input, then moved into place
 
 ## Stages
 
-`stage list --json` prints a manifest with `"contract": "frames/2"`, provider id `sapphire` and 26 stages, `selftest-invert`, `ffmpeg-filter` and the 24 effect stages:
+`stage list --json` prints a manifest with `"contract": "frames/2"`, provider id `sapphire` and 27 stages, `selftest-invert`, `ffmpeg-filter` and the 25 effect stages:
 
 | Stage | Kind, geometry | Parameters | Module |
 |---|---|---|---|
 | `selftest-invert` | frame, preserve | `invert_alpha` (checkbox, default off) | `src/stage.rs`: the conformance stage; inverting twice returns the input |
 | `ffmpeg-filter` | frame, declared | `graph` (one input, one output, default `null`), `expect` (`preserve` or `declared`), `unsafe` (`1` runs filters outside the safe list) | `src/ffstage.rs` on `neutral_ffmpeg::Filter` |
-| 24 effect stages | temporal, preserve | per stage from `data/fx_params.tsv` | `src/fxstage.rs`: rendered in process through the `fx_exec` library, tables in `data/`; see [Effects provider](../../docs/stages.md#effects-provider) |
+| 25 effect stages | temporal, preserve | per stage from `data/fx_params.tsv` | `src/fxstage.rs`: rendered in process through the `fx_exec` library, tables in `data/`; see [Effects provider](../../docs/stages.md#effects-provider) |
 
 | `ffmpeg-filter` rule | Detail |
 |---|---|

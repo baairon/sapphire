@@ -1,0 +1,8 @@
+[package]
+name = "scaled_screen_blend"
+version = "0.1.0"
+edition = "2021"
+description = "Glint scaled screen blend of a source plane into a destination plane."
+
+[dependencies]
+fx_common = { path = "../../fx_common" }

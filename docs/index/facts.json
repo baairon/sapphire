@@ -372,28 +372,28 @@
    "source": "docs/data/effect_names.tsv rows"
   },
   "effects_listed": {
-   "value": 18,
-   "text": "18",
+   "value": 19,
+   "text": "19",
    "source": "docs/data/effects_status.tsv rows"
   },
   "effects_rebuilt": {
-   "value": 18,
-   "text": "18",
+   "value": 19,
+   "text": "19",
    "source": "docs/data/effects_status.tsv rows with state REBUILT"
   },
   "effects_counted_rows": {
-   "value": 824,
-   "text": "824",
+   "value": 847,
+   "text": "847",
    "source": "docs/data/effects_status.tsv sum of counted_rows"
   },
   "effects_frozen_members": {
-   "value": 4161,
-   "text": "4,161",
+   "value": 4184,
+   "text": "4,184",
    "source": "docs/data/effects_status.tsv sum of frozen_members"
   },
   "effects_rerun_units": {
-   "value": 4211,
-   "text": "4,211",
+   "value": 4234,
+   "text": "4,234",
    "source": "docs/data/effects_status.tsv sum of landing_rerun_units"
   },
   "params_total": {

@@ -1,0 +1,8 @@
+[package]
+name = "diagonal_box_sum"
+version = "0.1.0"
+edition = "2021"
+description = "Glint box sum along the main and anti diagonals of a plane, with an optional shifted blend."
+
+[dependencies]
+fx_common = { path = "../../fx_common" }

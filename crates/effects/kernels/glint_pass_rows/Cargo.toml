@@ -1,0 +1,8 @@
+[package]
+name = "glint_pass_rows"
+version = "0.1.0"
+edition = "2021"
+description = "Glint pass callback over rows: multipass box blur with zero or mirrored edges, an optional shifted two-tap blend and the final scale."
+
+[dependencies]
+fx_common = { path = "../../fx_common" }

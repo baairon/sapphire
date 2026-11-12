@@ -295,11 +295,13 @@ pub struct KParams {
     /// in_data, pixel_aspect_ratio.den); at a 1/1 pixel aspect the cells are 0, 1.0, 1.0, so the claim value is None (HOST-ASPECT-SQUARE). state A
     /// is None. The state A constructor keeps None (its E-PARITY is for None); a SMART-context run must give the recorded cells (fx_run --blur-aspect-ctx).
     pub blur_aspect: Option<f32>,
+    /// glint: RADII-ALIGN, BOXSUM-ALIGN and BLUR-ALIGN, host byte phases of the allocations its passes depend on; default 0
+    pub glint_align: glint_wire::host::Align,
 }
 
 impl KParams {
     pub fn standin() -> KParams {
-        KParams { vec_one: 1.0, dst3_phase_bytes: 0, in_pool: false, geom: None, geom_mode: GeomMode::Dump, host_aspect: 1.0, static2_seed_a: 0, pad_pixel: [0.0; 4], blur_edge: 1, blur_render_scale: if std::env::var("NV9_BLUR_SCALE_OLD").map(|v| v == "1").unwrap_or(false) { 1 } else { 0 }, xy_head: 0, xy_head_mode: XyHeadMode::OneHead, persp_base: -1, palpha_base: -1, persp_rowbuf: false, palpha_rowbuf: false, xy_base: -1, palpha_cells: None, ds_dst_phase: 0, ds_off: std::env::var("DS1_OFF").map(|v| v == "1").unwrap_or(false), kparams_a: None, sharpen_count: None, sharpen_alias: false, blur_aspect: None }
+        KParams { vec_one: 1.0, dst3_phase_bytes: 0, in_pool: false, geom: None, geom_mode: GeomMode::Dump, host_aspect: 1.0, static2_seed_a: 0, pad_pixel: [0.0; 4], blur_edge: 1, blur_render_scale: if std::env::var("NV9_BLUR_SCALE_OLD").map(|v| v == "1").unwrap_or(false) { 1 } else { 0 }, xy_head: 0, xy_head_mode: XyHeadMode::OneHead, persp_base: -1, palpha_base: -1, persp_rowbuf: false, palpha_rowbuf: false, xy_base: -1, palpha_cells: None, ds_dst_phase: 0, ds_off: std::env::var("DS1_OFF").map(|v| v == "1").unwrap_or(false), kparams_a: None, sharpen_count: None, sharpen_alias: false, blur_aspect: None, glint_align: glint_wire::host::Align::default() }
     }
 }
 

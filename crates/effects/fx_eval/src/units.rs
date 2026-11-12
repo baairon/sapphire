@@ -719,7 +719,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(n, 123);
+        assert_eq!(n, 128);
         assert_eq!(unresolved.len(), 24, "{:?}", unresolved);
         // Autogen programs are the claimed ones: all of their rows resolve
         assert!(unresolved.iter().all(|(p, _)| !p.ends_with("_Autogen")));

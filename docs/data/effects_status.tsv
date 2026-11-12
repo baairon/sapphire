@@ -7,6 +7,7 @@ S_DissolveShake	registered without a wrapper program	38	304	304	REBUILT
 S_DistortRGB	Distort_RGB_Autogen	30	30	30	REBUILT
 S_DropShadow	registered without a wrapper program	24	26	26	REBUILT
 S_Flicker	registered without a wrapper program	24	24	24	REBUILT
+S_Glint	registered without a wrapper program	23	23	23	REBUILT
 S_Glow	registered without a wrapper program	36	36	36	REBUILT
 S_GlowEdges	registered without a wrapper program	68	34	34	REBUILT
 S_HueSatBright	Hue_Sat_Bright_Autogen	130	196	196	REBUILT

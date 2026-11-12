@@ -1,0 +1,17 @@
+[package]
+name = "glint_wire"
+version = "0.1.0"
+edition = "2021"
+description = "Glint op host: maps each typed request of the glint workers to the ported kernel crates and refuses the frames the diagonal and shift ranges exclude."
+
+[dependencies]
+fx_common = { path = "../../fx_common" }
+blur = { path = "../blur" }
+glow_layer = { path = "../glow_layer" }
+glint_worker = { path = "../glint_worker" }
+glint_dispatch = { path = "../glint_dispatch" }
+glint_diag_box = { path = "../glint_diag_box" }
+diagonal_box_sum = { path = "../diagonal_box_sum" }
+scaled_screen_blend = { path = "../scaled_screen_blend" }
+glint_pass_rows = { path = "../glint_pass_rows" }
+glint_pass_cols = { path = "../glint_pass_cols" }

@@ -27,6 +27,7 @@ mod blur_motion;
 mod blur_motion_mono;
 mod warp_transform;
 mod glow_edges;
+mod glint;
 
 /// Every style, in the order of the effect list.
 pub static STYLES: &[&Style] = &[
@@ -54,4 +55,5 @@ pub static STYLES: &[&Style] = &[
     &blur_motion_mono::STYLE,
     &warp_transform::STYLE,
     &glow_edges::STYLE,
+    &glint::STYLE,
 ];

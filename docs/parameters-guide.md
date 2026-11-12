@@ -1,14 +1,14 @@
 # Driving the effect parameters
 
-How to run each of the 24 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
+How to run each of the 25 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
 
 The stages themselves (requirements, host arrangement, exits, limits) are described in [Effects provider](stages.md#effects-provider). This page is about the parameters.
 
 ## Conventions on this page
 
 - **INFERRED** marks a description that rests on reading the effect graph (the native program constructors in `crates/effects/fx_eval/src/programs_native.rs` and the parameter definitions in `crates/effects/rtdata`), not on a measurement.
-- **MEASURED** marks a statement checked by running the code. "Verified at these values" lists the parameter values at which the stage output is byte identical to a recorded render of the original (MEASURED at depth 32, full SHA-256: by `crates/neutral-handoff/tests/fx_stage_parity.rs` for 382 recorded renders over the 13 stages of the first ten effects, and for `flicker`, `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage by rendering through `sapphire stage apply` their counted renders that match the stage's host arrangement, 24, 36, 32, 54 and 27, and for the two `S_BlurMotion` stages, `warp_transform_autogen` and the `S_GlowEdges` stage the same way, 112, 120, 61 and 34; all byte identical). Values outside those lists run through the same code path and are INFERRED.
-- Every worked command below was run on this tree and ended with exit 0 (MEASURED, 64x32 `testsrc` clip, 3 frames, depth 32).
+- **MEASURED** marks a statement checked by running the code. "Verified at these values" lists the parameter values at which the stage output is byte identical to a recorded render of the original (MEASURED at depth 32, full SHA-256: by `crates/neutral-handoff/tests/fx_stage_parity.rs` for 382 recorded renders over the 13 stages of the first ten effects, and for `flicker`, `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage by rendering through `sapphire stage apply` their counted renders that match the stage's host arrangement, 24, 36, 32, 54 and 27, and for the two `S_BlurMotion` stages, `warp_transform_autogen`, the `S_GlowEdges` stage and the `glint` stage the same way, 112, 120, 61, 34 and 22; all byte identical). Values outside those lists run through the same code path and are INFERRED.
+- Every worked command below was run on this tree and ended with exit 0 (MEASURED, 64x32 `testsrc` clip, 3 frames, depth 32; the `S_Glint` command on a 64x32 clip of random values, 3 frames, depth 32, and that its exit does not depend on the clip is INFERRED).
 
 ## Running a stage
 
@@ -245,6 +245,29 @@ The verified times are the frames 0, 2, 3, 5, 11, 13, 19 and 29 of a 24 frames a
 ```sh
 target/release/sapphire stage apply flicker --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
   --param amplitude=0.5 --param rand_color_amp=0.6 --param wave_amp=0.5 --param wave_freq=2.5 --in clip.raw --out out.raw
+```
+
+## `S_Glint`
+
+One stage, `glint`, which runs the registered program itself (no wrapper). It draws rays of light out of the parts of the image above a threshold and combines them with the source by a screen blend (INFERRED). The background, sparks matte and mask inputs are not connected and mocha is off; Matte Type and Combine Masks are not offered. A frame narrower than 2 pixels is refused.
+
+- `threshold`, scalar, `--set`. The level above which a part of the image gives rays (INFERRED). Verified at `0.25`, `0.3000030517578125` and `0.350006103515625`.
+- `size`, scalar, `--host-param` (host units). The length of the rays (INFERRED). Verified at `300`.
+- `size_x`, `size_y` and `size_diag1`, scalar, `--set`. Scale the length per direction: along the rows, the columns and a diagonal (INFERRED). Verified at `1.5` (`size_x`); `0.75` (`size_y`); `0.5` (`size_diag1`).
+- `size_red` and `size_blue`, scalar, `--set`. Scale the length per colour channel (INFERRED). Verified at `0.5` (red); `2.0` (blue).
+- `brightness`, scalar, `--set`. Scales the rays (INFERRED). Verified at `0.8000030517578125`, `1.25` and `1.5`.
+- `brightness_x` and `brightness_y`, scalar, `--set`. Scale the rays per direction (INFERRED). Verified at `1.25` (`brightness_x`); `0.5` (`brightness_y`).
+- `hue_shift`, scalar, `--set`. Turns the hue of the rays and keeps their brightness (INFERRED). Verified at `-0.5`.
+- `glint_from_alpha`, scalar, `--set`. Takes the rays from the alpha instead of the colour (INFERRED). Verified at `1.0`.
+- `scale_source` and `scale_background`, scalar, `--set`. Scale the source and the background in the mix (INFERRED). Verified at `0.75` (`scale_source`); `0.5` (`scale_background`).
+- `affect_alpha`, scalar, `--set`. How much the rays add to the alpha (INFERRED). Verified at `0.5`.
+- `cset_opacity`: see the opacity popup. The answers 2 and 3 render on this stage; the answer 1 is refused with `SOURCE-VARIANT-MISMATCH` (exit 3). Verified at `2` and `3`; the renders that leave it unset run the default answer.
+
+The verified sizes are 64x32 and 50x7, at a pixel aspect of 1.0. At the registered `threshold` the verified test images give no rays, so the default parameters verify only the pass-through (see `S_Glint` in [Effects](effects.md)).
+
+```sh
+target/release/sapphire stage apply glint --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param threshold=0.350006103515625 --param size=300 --param size_red=0.5 --param size_blue=2.0 --in clip.raw --out out.raw
 ```
 
 ## `S_Glow`

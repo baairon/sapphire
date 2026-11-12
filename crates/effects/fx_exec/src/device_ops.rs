@@ -188,6 +188,7 @@ pub const CPU_ONLY: &[(&str, &str)] = &[
     ("tilt_alpha", "the ramp needs the plugin sincos (crate libm_sincos) and a per row 32 byte alignment peel that depends on the destination base address, which the device path does not carry; no OpenCL kernel"),
     ("edge_detect", "needs the blur-core kernel chained with a neighbour-row gradient pass; no OpenCL kernel"),
     ("blur_channels", "per channel widths and gains over the blur driver; no OpenCL kernel yet, the blur kernel does not take per channel sigma; a source with fewer planes than the tag (planes at or beyond the source count copy the previous plane) is served here too"),
+    ("glint", "a composition of box passes, diagonal passes and a bright pass whose device kernels do not exist yet"),
 ];
 
 fn copy_calls_are_identity(tag: i32) -> bool {

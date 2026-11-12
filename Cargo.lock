@@ -128,6 +128,13 @@ name = "copy_planes"
 version = "0.1.0"
 
 [[package]]
+name = "diagonal_box_sum"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
 name = "dissolve"
 version = "0.1.0"
 dependencies = [
@@ -267,6 +274,7 @@ dependencies = [
  "fx_device",
  "fx_eval",
  "get_alpha",
+ "glint_wire",
  "glow_layer",
  "grad",
  "hue_shift",
@@ -311,6 +319,58 @@ name = "get_alpha"
 version = "0.0.0"
 dependencies = [
  "plane_service",
+]
+
+[[package]]
+name = "glint_diag_box"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "glint_dispatch"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+ "glint_worker",
+]
+
+[[package]]
+name = "glint_pass_cols"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "glint_pass_rows"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
+
+[[package]]
+name = "glint_wire"
+version = "0.1.0"
+dependencies = [
+ "blur",
+ "diagonal_box_sum",
+ "fx_common",
+ "glint_diag_box",
+ "glint_dispatch",
+ "glint_pass_cols",
+ "glint_pass_rows",
+ "glint_worker",
+ "glow_layer",
+ "scaled_screen_blend",
+]
+
+[[package]]
+name = "glint_worker"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
 ]
 
 [[package]]
@@ -588,6 +648,13 @@ dependencies = [
 [[package]]
 name = "scale_rgb"
 version = "0.1.0"
+
+[[package]]
+name = "scaled_screen_blend"
+version = "0.1.0"
+dependencies = [
+ "fx_common",
+]
 
 [[package]]
 name = "screen"

@@ -1,0 +1,8 @@
+[package]
+name = "glint_worker"
+version = "0.1.0"
+edition = "2021"
+description = "Glint worker: the orchestration of the box-blur glint pass for the three-plane and one-plane workers, as typed host requests."
+
+[dependencies]
+fx_common = { path = "../../fx_common" }
