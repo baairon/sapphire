@@ -76,6 +76,6 @@ fn every_registered_popup_row_gives_its_converted_default() {
     let routed = |n: &str| ["opacity", "input_opacity", "output_opacity", "combine_new"].iter().any(|k| n.ends_with(&format!(" {}", k)));
     let others: Vec<&String> = skipped.iter().filter(|n| !routed(n)).collect();
     assert!(others.is_empty(), "rows whose program does not compile unbound: {:?}", others);
-    assert_eq!(skipped.len(), 23, "{:?}", skipped);
+    assert_eq!(skipped.len(), 24, "{:?}", skipped);
     assert!(differs.iter().all(|d| d.starts_with("SwishPan ") || d.starts_with("Dissolve_Shake ")), "a text default other than the auto_trans rows differs: {:?}", differs);
 }

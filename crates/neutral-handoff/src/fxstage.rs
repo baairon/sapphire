@@ -1718,9 +1718,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tables_parse_for_twenty_four_stages() {
+    fn tables_parse_for_twenty_five_stages() {
         let ps = profiles();
-        assert_eq!(ps.len(), 24);
+        assert_eq!(ps.len(), 25);
         let hsb = profile("hue_sat_bright_autogen").expect("hsb");
         assert_eq!(hsb.family, "S_HueSatBright");
         assert_eq!(hsb.kind, "temporal");
@@ -2225,7 +2225,9 @@ mod tests {
             check_variants(p).unwrap();
             // only the stages whose recorded runs differ by opacity answer carry entries, keyed on cset_opacity at the answers 1 and 3
             let keyed: Vec<(&str, &str)> = p.variants.iter().map(|v| (v.param.as_str(), v.value.as_str())).collect();
-            if ["glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake", "blur_motion_autogen", "blur_motion_mono_autogen", "warp_transform_autogen", "glow_edges"].contains(&p.id.as_str()) {
+            if p.id == "glint" {
+                assert_eq!(keyed, [("cset_opacity", "3")], "{}", p.id);
+            } else if ["glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake", "blur_motion_autogen", "blur_motion_mono_autogen", "warp_transform_autogen", "glow_edges"].contains(&p.id.as_str()) {
                 assert_eq!(keyed, [("cset_opacity", "1"), ("cset_opacity", "3")], "{}", p.id);
             } else {
                 assert!(keyed.is_empty(), "{}", p.id);
@@ -2466,7 +2468,7 @@ mod tests {
                 seen += 1;
             }
         }
-        assert_eq!(seen, 22);
+        assert_eq!(seen, 23);
     }
 
     #[test]

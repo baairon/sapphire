@@ -13,7 +13,7 @@ use plane_service as ps;
 pub const WIRED: &[&str] = &[
     "make_mipmap", "blur_warp", "warp_rel", "static2", "monochrome", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "rotate", "max_element",
     "min_element", "blur", "blur_channels", "dissolve", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "v3_to_v4", "sharpen", "monochrome_a",
-    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "copy_alpha", "grad", "edge_detect", "perspective", "perspective_alpha", "tilt", "tilt_alpha", "warp", "postdivide", "glow", "alpha_from_rgb_max", "append", "v3_to_v4_if4_a", "get_alpha",
+    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "copy_alpha", "grad", "edge_detect", "perspective", "perspective_alpha", "tilt", "tilt_alpha", "warp", "postdivide", "glow", "alpha_from_rgb_max", "append", "v3_to_v4_if4_a", "get_alpha", "glint",
 ];
 
 /// Result of one run-primitive: a plain planar image or the ripmap object of make_mipmap.
@@ -1413,6 +1413,58 @@ fn glow_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     Ok(Image { n: w * h, planes: outv })
 }
 
+/// glint: source, thresholds [3], strength [1], A [3], B [3], pass scale [4], pass gain [4] (the plan's order, filled by meaning). The wrapper's
+/// count is the render scale: the frame width unless the host sets `blur_render_scale`, the way the glow class binds its render
+/// scale. Only the three-plane layout (combo tag 3) is rendered.
+/// The six float arguments of glint, taken from the evaluator's computed lanes in plan order and filled by meaning.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GlintLanes {
+    pub thresholds: [f32; 3],
+    pub strength: f32,
+    pub a: [f32; 3],
+    pub b: [f32; 3],
+    pub pass_scale: [f32; 4],
+    pub pass_gain: [f32; 4],
+}
+
+/// Reads the lanes of plan arguments 1 to 6 (a single value is broadcast over the lanes).
+pub fn glint_lanes(args: &[Arg]) -> Result<GlintLanes, ExecError> {
+    need(args, 7, "glint")?;
+    let lane = |a: &Arg, i: usize, what: &str| const_lane(a, if a.count() == 1 { 0 } else { i }, "glint", what);
+    let lanes3 = |a: &Arg, what: &str| -> Result<[f32; 3], ExecError> { Ok([lane(a, 0, what)?, lane(a, 1, what)?, lane(a, 2, what)?]) };
+    let lanes4 = |a: &Arg, what: &str| -> Result<[f32; 4], ExecError> { Ok([lane(a, 0, what)?, lane(a, 1, what)?, lane(a, 2, what)?, lane(a, 3, what)?]) };
+    Ok(GlintLanes { thresholds: lanes3(&args[1], "thresholds")?, strength: lane(&args[2], 0, "strength")?, a: lanes3(&args[3], "A")?, b: lanes3(&args[4], "B")?, pass_scale: lanes4(&args[5], "T0")?, pass_gain: lanes4(&args[6], "T1")? })
+}
+
+fn glint_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 7, "glint")?;
+    if tag != 3 {
+        return Err(ExecError::Kernel { class: "glint".into(), msg: glint_wire::refusal::LAYOUT.into() });
+    }
+    let count = if kp.blur_render_scale > 0 { kp.blur_render_scale } else { count_i32("glint", "the frame width", w)? };
+    let src = image_or_const(&args[0], w * h, "glint")?;
+    if src.channels() < 3 || src.n != w * h {
+        return Err(ExecError::Shape("glint: the source must hold three planes of the frame".into()));
+    }
+    let g = glint_lanes(args)?;
+    let req = glint_wire::op::Request {
+        width: w,
+        height: h,
+        count,
+        sources: [&src.planes[0], &src.planes[1], &src.planes[2]],
+        thresholds: g.thresholds,
+        strength: g.strength,
+        a: g.a,
+        b: g.b,
+        pass_scale: g.pass_scale,
+        pass_gain: g.pass_gain,
+        align: kp.glint_align,
+        flag: 0,
+    };
+    let planes = glint_wire::op::render(&req).map_err(|msg| ExecError::Kernel { class: "glint".into(), msg })?;
+    Ok(Image { n: w * h, planes: planes.into_iter().collect() })
+}
+
 /// alpha_from_rgb_max rgb amount output: mode 4 of the builtin (the mode word of the object is 4 on every recorded plan). The
 /// amount is the scale; the output operand only carries the output channel count, which the combo tag gives (4 for the
 /// recorded 4 channel input). Output planes 0 to 2 copy the input colour channels, plane 3 is the scaled maximum of the three.
@@ -1497,6 +1549,7 @@ pub fn run_wired(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, us
         "warp" => Out::Img(warp_k(args, tag, w, h, kp)?),
         "postdivide" => Out::Img(postdivide_k(args, tag, n)?),
         "glow" => Out::Img(glow_k(args, tag, w, h, kp)?),
+        "glint" => Out::Img(glint_k(args, tag, w, h, kp)?),
         "alpha_from_rgb_max" => Out::Img(alpha_from_rgb_max_k(args, tag, n)?),
         "append" => Out::Img(append_k(args, tag, n, kp)?),
         "v3_to_v4_if4_a" => Out::Img(v3_to_v4_if4_a_k(args, tag, n, kp)?),

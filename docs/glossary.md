@@ -36,7 +36,7 @@ The program that runs the original x86-64 code in place of a processor and judge
 
 ## Parity record
 
-The record behind the <!--f:effects_rebuilt-->18<!--/f--> rebuilt effects, separate from the [function record](#function-record): the verified comparisons of each effect with the original plugin running in the [emulator](#emulator), and the recorded renders, the outputs of the final binary kept as the expected result of each case ([effects: what rebuilt means](effects.md#what-rebuilt-means)). It is kept outside the repository; `docs/data/effects_status.tsv` holds its counts.
+The record behind the <!--f:effects_rebuilt-->19<!--/f--> rebuilt effects, separate from the [function record](#function-record): the verified comparisons of each effect with the original plugin running in the [emulator](#emulator), and the recorded renders, the outputs of the final binary kept as the expected result of each case ([effects: what rebuilt means](effects.md#what-rebuilt-means)). It is kept outside the repository; `docs/data/effects_status.tsv` holds its counts.
 
 ## Oracle vector
 

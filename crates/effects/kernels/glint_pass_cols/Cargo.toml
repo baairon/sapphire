@@ -1,0 +1,8 @@
+[package]
+name = "glint_pass_cols"
+version = "0.1.0"
+edition = "2021"
+description = "Glint pass callback over columns: the row pass applied to gathered columns."
+
+[dependencies]
+fx_common = { path = "../../fx_common" }

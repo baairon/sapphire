@@ -1,0 +1,8 @@
+[package]
+name = "glint_diag_box"
+version = "0.1.0"
+edition = "2021"
+description = "Glint diagonal box callback: three prefix box passes per diagonal slice on interleaved rows, an optional shifted two-tap blend and the final scale."
+
+[dependencies]
+fx_common = { path = "../../fx_common" }

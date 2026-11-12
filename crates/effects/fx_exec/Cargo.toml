@@ -26,6 +26,7 @@ format14_write = { path = "../kernels/format14_write" }
 # Variant-B format-14 readers, R-PARITY (FLOOR PENDING second reader)
 format14_read_b = { path = "../kernels/format14_read_b" }
 plane_service = { path = "../kernels/plane_service" }
+glint_wire = { path = "../kernels/glint_wire" }
 hue_shift = { path = "../kernels/hue_shift" }
 sat_scale = { path = "../kernels/sat_scale" }
 hue_shift_preserve_luma = { path = "../kernels/hue_shift_preserve_luma" }
