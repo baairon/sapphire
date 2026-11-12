@@ -12,21 +12,23 @@ The work that every effect shares, finished or in progress:
 - **Keyframes.** Every effect stage but `trails_autogen` takes keyed values ([keyframes](parameters-guide.md#keyframed-values)). Values between keys are INFERRED.
 - **Device path.** OpenCL kernels for the heavy operations, byte identical to the CPU path, MEASURED on PoCL; speed on a real GPU is not yet measured ([device](guide.md#rendering-on-a-device)).
 - **Time and transitions.** The stages give each frame its time and the frame rate from `--fps`, and a transition stage takes a second clip and the length of the transition ([transition stages](cli.md#transition-stages)). `S_SwishPan` and `S_DissolveShake` are the transitions.
-- **Opacity answers.** A stage can run each opacity answer with the host arrangement of that answer's own recorded renders ([effects provider](stages.md#effects-provider)); `S_Glow`, `S_SwishPan`, `Shake` and `S_DissolveShake` render all three.
-- **Determinism across processors.** The effect crates avoid the platform math library, and the golden hashes of `tools/fx_golden.py`, whose rows include infinities, both default NaN patterns and invalid operations, are checked in CI on Linux, Windows and macOS on ARM. For input without NaN, infinite and overflowing values included, and for input whose NaN words are all `0xffc00000`, every kernel gives the same output bytes on x86_64 and on 64-bit ARM, except `blur_warp`, the motion blur sampler of `BlurMoCurves`, `Shake` and `S_DissolveShake`, whose NaN words can still differ for such input (MEASURED kernel by kernel under emulation and through every effect stage on constructed frames; INFERRED for other renders). Input that holds another NaN pattern, or two NaN values with different bits that meet in one operation, can still give NaN words whose sign or payload bits differ between processors, but no number differs (both MEASURED kernel by kernel); for two such NaN values the bits can also differ between compilers (INFERRED).
+- **Opacity answers.** A stage can run each opacity answer with the host arrangement of that answer's own recorded renders ([effects provider](stages.md#effects-provider)); `S_Glow`, `S_SwishPan`, `Shake`, `S_DissolveShake`, `S_BlurMotion`, `S_WarpTransform` and `S_GlowEdges` render all three.
+- **Determinism across processors.** The effect crates avoid the platform math library, and the golden hashes of `tools/fx_golden.py`, whose rows include infinities, both default NaN patterns and invalid operations, are checked in CI on Linux, Windows and macOS on ARM. For input without NaN, infinite and overflowing values included, and for input whose NaN words are all `0xffc00000`, every kernel gives the same output bytes on x86_64 and on 64-bit ARM, except `blur_warp`, the motion blur sampler of `BlurMoCurves`, `Shake`, `S_DissolveShake` and `S_BlurMotion`, whose NaN words can still differ for such input (MEASURED kernel by kernel under emulation and through every effect stage on constructed frames; INFERRED for other renders). Input that holds another NaN pattern, or two NaN values with different bits that meet in one operation, can still give NaN words whose sign or payload bits differ between processors, but no number differs (both MEASURED kernel by kernel); for two such NaN values the bits can also differ between compilers (INFERRED).
 
 ## Done
 
-Each of these matches the original bit for bit on every compared case, apart from four counted comparisons of `Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner ([what that covers](effects.md#what-rebuilt-means)). Per-effect status is in the table of [effects](effects.md).
+Each of these matches the original bit for bit on every compared case, apart from four counted comparisons of `Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner, and 34 of `S_GlowEdges` that were run with slider values passed as decimals, not as the 16.16 fixed-point values a host passes ([what that covers](effects.md#what-rebuilt-means)). Per-effect status is in the table of [effects](effects.md).
 
 - `S_Blur`
 - `BlurMoCurves`
+- `S_BlurMotion`
 - `S_Diffuse`
 - `S_DissolveShake`
 - `S_DistortRGB`
 - `S_DropShadow`
 - `S_Flicker`
 - `S_Glow`
+- `S_GlowEdges`
 - `S_HueSatBright`
 - `Shake`
 - `S_Sharpen`
@@ -34,6 +36,7 @@ Each of these matches the original bit for bit on every compared case, apart fro
 - `S_TimeWarpRGB`
 - `S_Trails`
 - `S_WarpPerspective`
+- `S_WarpTransform`
 
 ## Tier 1: essential
 
@@ -52,16 +55,16 @@ Ranks 1 to 8. The effects most edits reach for first. All eight are done.
 
 ## Tier 2: very useful
 
-Ranks 9 to 16. Polish for montages and cinematic edits.
+Ranks 9 to 16. Polish for montages and cinematic edits. Three of the six are done.
 
-| Rank | Effect | Use |
-|---|---|---|
-| 9 | `S_BlurMotion` | Motion blur on fast movement |
-| 10 | `S_WarpTransform` | Zooms, rotations and dynamic framing |
-| 11 | `S_GlowEdges` | Glowing outlines and edge highlights |
-| 12 | `S_Retime` | Slow motion and speed changes |
-| 13 | `S_DigitalDamage` | Glitches and digital distortion |
-| 14 | `S_Glint` | Sparkles on bright objects |
+| Rank | Effect | Use | Status |
+|---|---|---|---|
+| 9 | `S_BlurMotion` | Motion blur on fast movement | done |
+| 10 | `S_WarpTransform` | Zooms, rotations and dynamic framing | done |
+| 11 | `S_GlowEdges` | Glowing outlines and edge highlights | done |
+| 12 | `S_Retime` | Slow motion and speed changes | |
+| 13 | `S_DigitalDamage` | Glitches and digital distortion | |
+| 14 | `S_Glint` | Sparkles on bright objects | |
 
 Ranks 15 and 16 are push-in and pull-out transitions (Hyper Push and Hyper Pull). Neither is in the name bank or the host records of the plugin version this project rebuilds (MEASURED), so neither has code to rebuild.
 

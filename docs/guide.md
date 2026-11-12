@@ -1,6 +1,6 @@
 # Using the effects
 
-This page shows how to run the fifteen native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match. The effects themselves are described in [effects](effects.md); the stage interface they use is specified in [stages](stages.md).
+This page shows how to run the eighteen native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match. The effects themselves are described in [effects](effects.md); the stage interface they use is specified in [stages](stages.md).
 
 Every command below was run from the repository root on a one second 160x96 test clip, and each ended with exit code 0.
 
@@ -28,12 +28,14 @@ Each registered style of an effect is one stage. `sapphire stage list` prints th
 |---|---|---|
 | `@blur_color_autogen`, `@blur_mono_autogen` | `S_Blur` | temporal |
 | `@transform_and_blur_autogen`, `@blur_motion_curves_no_transform_autogen` | `BlurMoCurves` | temporal |
+| `@blur_motion_autogen`, `@blur_motion_mono_autogen` | `S_BlurMotion` | temporal |
 | `@diffuse_autogen` | `S_Diffuse` | temporal |
 | `stage apply dissolve_shake` only, see [Time and transitions](#time-and-transitions) | `S_DissolveShake` | temporal |
 | `@distort_rgb_autogen` | `S_DistortRGB` | temporal |
 | `@drop_shadow` | `S_DropShadow` | temporal |
 | `@flicker` | `S_Flicker` | temporal |
 | `@glow` | `S_Glow` | temporal |
+| `@glow_edges` | `S_GlowEdges` | temporal |
 | `@hue_sat_bright_autogen` | `S_HueSatBright` | temporal |
 | `@shake_normal_autogen`, `@shake_twitchy_autogen`, `@shake_jumpy_autogen` | `Shake` | temporal |
 | `@sharpen_best_quality_autogen`, `@sharpen_fast_autogen` | `S_Sharpen` | temporal |
@@ -41,12 +43,13 @@ Each registered style of an effect is one stage. `sapphire stage list` prints th
 | `@time_warp_rgb_autogen` | `S_TimeWarpRGB` | temporal |
 | `@trails_autogen` | `S_Trails` | temporal |
 | `@warp_perspective_autogen` | `S_WarpPerspective` | temporal |
+| `@warp_transform_autogen` | `S_WarpTransform` | temporal |
 
 ```sh
 target/release/sapphire stage list
 ```
 
-All 20 stages have kind `temporal`, because the frames/2 convention accepts keyed values only for temporal stages. Only `time_warp_rgb_autogen` and `trails_autogen` read other frames of the clip: the first shifts colour channels in time, and the second reads the whole clip before it writes. The other 18 stages turn each input frame into one output frame and are `temporal` so that they accept keyframes; of them, `swishpan` and the `S_DissolveShake` stage also read the matching frame of a second clip. The kind `frame` belongs to `selftest-invert` and `ffmpeg-filter`.
+All 24 stages have kind `temporal`, because the frames/2 convention accepts keyed values only for temporal stages. Only `time_warp_rgb_autogen` and `trails_autogen` read other frames of the clip: the first shifts colour channels in time, and the second reads the whole clip before it writes. The other 22 stages turn each input frame into one output frame and are `temporal` so that they accept keyframes (INFERRED for the four stages of `S_BlurMotion`, `S_WarpTransform` and `S_GlowEdges`: their stage rows request no other frame); of them, `swishpan` and the `S_DissolveShake` stage also read the matching frame of a second clip. The kind `frame` belongs to `selftest-invert` and `ffmpeg-filter`.
 
 ## Running a stage on a clip
 
@@ -272,7 +275,7 @@ Most of the remaining time of the light stages is moving the frame in and out of
 
 ## What is claimed
 
-The fifteen effects are rebuilt so that, on every case the parity record compares, they give the original's output bit for bit, apart from four counted comparisons of `Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner ([what rebuilt means](effects.md#what-rebuilt-means)). For the stages, in plain words:
+The eighteen effects are rebuilt so that, on every case the parity record compares, they give the original's output bit for bit, apart from four counted comparisons of `Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner, and 34 of `S_GlowEdges` that were run with slider values passed as decimals, not as the 16.16 fixed-point values a host passes ([what rebuilt means](effects.md#what-rebuilt-means)). For the stages, in plain words:
 
 - **MEASURED.** At depth 32, with the frame sizes and parameter values of the recorded renders that use each stage's host arrangement, the stage output is byte identical to the recorded native render, checked by full SHA-256: 382 of 382 on the stages of the first ten effects, 24 of 24 on `flicker`, 36 of 36 on `glow`, 32 of 32 on `swishpan`, 54 of 54 on the three `Shake` stages and 27 of 27 on the `S_DissolveShake` stage ([Effects and stages](../README.md#effects-and-stages)). The other 4 counted `swishpan` renders and 9 counted renders of each of `Shake` and `S_DissolveShake` were recorded at another phase of the default xy buffer, and the three channel renders of `Shake` at 50x7 with their three buffers not all at one phase; they are verified through `fx_run`.
 - **INFERRED.** Other frame sizes and parameter values, a real clip among them, run the same code path and are expected to match, but were not measured. The same holds for buffer placement at unmeasured sizes, `S_Trails` clips longer than the measured histories, `S_TimeWarpRGB` shifts beyond the measured ones, host curves other than the identity curve and the recorded `swishpan` Wipe Percent curves, frame times at rates other than 24 frames a second, and transitions of other lengths.

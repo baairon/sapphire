@@ -27,6 +27,12 @@ pub fn style_param(program: &str, record_name: &str) -> Option<&'static StylePar
     all_styles().flat_map(|s| s.style_params.iter()).find(|r| r.program == program && r.record_name == record_name)
 }
 
+/// The first registered row of PROGRAM that feeds the program's parameter PARAM (the program's own parameter name,
+/// which can differ from the record name), None when no row names it.
+pub fn style_param_by_program_name(program: &str, param: &str) -> Option<&'static StyleParam> {
+    all_styles().flat_map(|s| s.style_params.iter()).find(|r| r.program == program && r.param == param && param != "-")
+}
+
 /// The registered parameters of PROGRAM, in table order.
 pub fn style_params_of(program: &str) -> impl Iterator<Item = &'static StyleParam> + '_ {
     all_styles().flat_map(|s| s.style_params.iter()).filter(move |r| r.program == program)

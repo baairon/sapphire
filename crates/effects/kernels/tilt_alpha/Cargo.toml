@@ -1,0 +1,14 @@
+[package]
+name = "tilt_alpha"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the tilt_alpha slot 52 AVX2 body: a one channel ramp from the swivel and tilt pair; the sincosf callee is the crate libm_sincos."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+libm_sincos = { path = "../libm_sincos" }
+fx_common = { path = "../../fx_common" }
+

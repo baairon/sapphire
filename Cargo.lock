@@ -21,6 +21,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "blur_channels"
+version = "0.0.0"
+dependencies = [
+ "blur",
+ "fx_common",
+]
+
+[[package]]
 name = "blur_coef"
 version = "0.0.0"
 dependencies = [
@@ -180,6 +188,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "edge_detect"
+version = "0.0.0"
+dependencies = [
+ "blur",
+ "fx_common",
+]
+
+[[package]]
 name = "effects_rtdata"
 version = "0.1.0"
 
@@ -227,6 +243,7 @@ dependencies = [
  "add_rgb",
  "alpha_from_rgb_max",
  "blur",
+ "blur_channels",
  "blur_coef",
  "blur_warp",
  "comp_premult",
@@ -240,6 +257,7 @@ dependencies = [
  "edge_aware_sharpen_box_filter",
  "edge_aware_sharpen_jobs",
  "edge_aware_sharpen_render",
+ "edge_detect",
  "effects_rtdata",
  "effects_vecdir",
  "format14_read",
@@ -278,6 +296,8 @@ dependencies = [
  "screen_super",
  "sharpen",
  "static2",
+ "tilt",
+ "tilt_alpha",
  "v3_to_v4_if4",
  "v3_to_v4_if4_a",
  "warp_log_gradient",
@@ -605,6 +625,22 @@ name = "tickmap"
 version = "0.1.0"
 dependencies = [
  "fx_common",
+]
+
+[[package]]
+name = "tilt"
+version = "0.0.0"
+dependencies = [
+ "fx_common",
+ "libm_sincos",
+]
+
+[[package]]
+name = "tilt_alpha"
+version = "0.0.0"
+dependencies = [
+ "fx_common",
+ "libm_sincos",
 ]
 
 [[package]]

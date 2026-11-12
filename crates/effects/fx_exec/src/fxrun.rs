@@ -2331,8 +2331,13 @@ impl Ae32Args {
         let (fx_run_cell_b, fx_run_cell_a) = self.ratio.unwrap();
         let uw = fx_eval::units::units_width(w as i32, fx_run_cell_b, fx_run_cell_a);
         let nsrows: Vec<(String, f32)> = fx_eval::units::ns_rows_of(&prog);
+        let mut bound_ks: Vec<(String, Vec<i64>)> = Vec::new();
         for (n, x) in &self.host_params {
             if let Some(lane) = fx_eval::units::angle_host_lane(prog, n, *x) {
+                if let Some(k) = fx_eval::units::host_value_off_grid(prog, n, *x) {
+                    return Err(format!("HOST-VALUE-OFF-GRID ({} {}: --host-param {} is {} / 65536 with k not an integer; a host type 2 slider's checkout is a 16.16 value)", prog, n, x, k));
+                }
+                bound_ks.push((n.clone(), vec![(*x as f64 * 65536.0) as i64]));
                 // host angle -> record lane = -host (MEASURED in the S_WarpPerspective records)
                 b.overrides.insert(n.clone(), vec![lane]);
                 labels.push(format!("param {} host 0x{:08x} as bound angle lane 0x{:08x} (negated host value) ANGLE-LANE-NEGATED", n, x.to_bits(), lane.to_bits()));
@@ -2350,11 +2355,13 @@ impl Ae32Args {
                 if b.overrides.contains_key(n) {
                     return Err(format!("{} given both as --host-param and --set", n));
                 }
+                let mut lane_ks = Vec::new();
                 for hv in [*x, y] {
-                    if let Some(k) = fx_eval::units::host_value_off_grid(prog, n, hv) {
-                        return Err(format!("HOST-VALUE-OFF-GRID ({} {}: --host-param {} is {} / 65536 with k not an integer)", prog, n, hv, k));
+                    if let Some(k) = fx_eval::units::check_host_value(prog, n, hv)? {
+                        lane_ks.push(k);
                     }
                 }
+                bound_ks.push((n.clone(), lane_ks));
                 let uw2 = if cfg!(feature = "nss1_w64_mut") { 64.0f32 } else { uw };
                 let r0 = fx_eval::units::normalize_scale_record(*x, uw2, ns, false);
                 let r1 = -fx_eval::units::normalize_scale_record(y, uw2, ns, false);
@@ -2364,8 +2371,8 @@ impl Ae32Args {
             }
             let uh = fx_eval::units::units_width(h as i32, fx_run_cell_b, fx_run_cell_a);
             let rec = fx_eval::units::host_param_lane0(prog, n, *x, ns, uw, uh)?;
-            if let Some(k) = fx_eval::units::host_value_off_grid(prog, n, *x) {
-                return Err(format!("HOST-VALUE-OFF-GRID ({} {}: --host-param {} is {} / 65536 with k not an integer; a host type 2 slider's checkout is a 16.16 value)", prog, n, x, k));
+            if let Some(k) = fx_eval::units::check_host_value(prog, n, *x)? {
+                bound_ks.push((n.clone(), vec![k]));
             }
             if b.overrides.contains_key(n) {
                 return Err(format!("{} given both as --host-param and --set", n));
@@ -2373,6 +2380,17 @@ impl Ae32Args {
             // the host value as the runner bound it (never re-snapped)
             b.overrides.insert(n.clone(), vec![rec]);
             labels.push(format!("param {} host 0x{:08x} as bound ns {} width {} compiled {:.9} (0x{:08x}) PARAM-UNITS", n, x.to_bits(), ns, uw, rec, rec.to_bits()));
+        }
+        // --set lanes of host type 2 sliders: the 16.16 word of each lane is printed; a lane that is not a 16.16 host value (or the
+        // record lane of one) is refused (SET-VALUE-OFF-GRID, SET-LANE-OFF-GRID) before any output
+        let mut set_names: Vec<&String> = b.overrides.keys().filter(|n| !self.host_params.iter().any(|(m, _)| m == *n)).collect();
+        set_names.sort();
+        for n in set_names {
+            match fx_eval::units::check_set_lanes(prog, n, &b.overrides[n], uw) {
+                Ok(Some(ks)) => bound_ks.push((n.clone(), ks)),
+                Ok(None) => {}
+                Err(e) => return Err(e),
+            }
         }
         for (n, _) in &nsrows {
             if self.host_params.iter().any(|(m, _)| m == n) {
@@ -2382,7 +2400,7 @@ impl Ae32Args {
                 Some(v) => labels.push(param_by_record_label(n, v)),
                 None => {
                     // SDS widened: an unbound NS host type 2 slider takes its registered bits / 65536 before the width scaling
-                    if let Some(h) = fx_eval::units::unbound_ns_host(prog, n) {
+                    if let Some(h) = fx_eval::units::unbound_ns_host(prog, n).filter(|_| fx_eval::units::param_lanes(prog, n) == Some(1)) {
                         let ns = fx_eval::units::ns_of(prog, n).unwrap_or(4.0);
                         let rec = fx_eval::units::normalize_scale_record(h, uw, ns, false);
                         b.overrides.insert(n.clone(), vec![rec]);
@@ -2395,6 +2413,9 @@ impl Ae32Args {
                     }
                 }
             }
+        }
+        for l in fx_eval::units::host16_lines(prog, &bound_ks) {
+            labels.push(l);
         }
         // sources: the derived gate gives the reader head; the recorded head is a check (SOURCE-VARIANT-MISMATCH)
         let g = crate::hostconv14::SourceGate::from_arm(&arm, self.row_gate_cell.unwrap());
@@ -3575,6 +3596,27 @@ fn popup_answer_check(prog: &str, display: &str, v: i32) -> Result<(), String> {
         return Err(format!("POPUP-ANSWER-OUT-OF-RANGE ({}: '{}' answer {} outside 1..{})", prog, display, v, n));
     }
     Ok(())
+}
+
+/// true when the value a host passes for PROGRAM's parameter NAME in the option form FORM is a host type 2 slider value, which
+/// the host puts on the 16.16 grid: every `--host-param` value, and a `--set` value of a host type 2 slider without
+/// normalize_scale (its record lane is its host value).
+pub fn host16_slider(program: &str, name: &str, form: &str) -> bool {
+    match form {
+        "--host-param" => true,
+        "--set" => fx_eval::units::program_param_row(program, name).map(|r| r.host_type == 2).unwrap_or(false) && fx_eval::units::ns_of(program, name).is_none(),
+        _ => false,
+    }
+}
+
+/// The text of a normalize_scale host type 2 `--set` lane set put on the 16.16 lattice at the frame width (units ratio 1), or None
+/// when every lane is already a record lane of a host value (or is not a plain decimal list).
+pub fn lattice_set_text(program: &str, name: &str, value: &str, width: u32) -> Option<String> {
+    let lanes: Option<Vec<f32>> = value.split(',').map(|t| t.trim().parse::<f32>().ok().filter(|_| !t.trim().starts_with("0x"))).collect();
+    let lanes = lanes?;
+    let uw = fx_eval::units::units_width(width as i32, 1.0, 1.0);
+    let moved = fx_eval::units::lattice_set_lanes(program, name, &lanes, uw)?;
+    Some(moved.iter().map(|x| format!("{}", x)).collect::<Vec<_>>().join(","))
 }
 
 /// the registered default checkout integer of PROG's popup NAME (record name), with its display name, record and style.

@@ -1,6 +1,6 @@
 # Parity
 
-This page gives the parity figures of the [function record](glossary.md#function-record), a reverse-engineering reference of one small code section of a separate code image, the [dump](glossary.md#dump): by their bank names its <!--f:fn_total-->2,702<!--/f--> functions are mostly the bundled AJA video hardware SDK and std, plus display and video output classes of its own ([names: origin](names.md#origin)). The record serves anyone studying how that code behaves. The <!--f:effects_rebuilt-->15<!--/f--> [effects](effects.md) are rebuilt separately, do not call the function record and are checked in their own way ([what rebuilt means](effects.md#what-rebuilt-means)).
+This page gives the parity figures of the [function record](glossary.md#function-record), a reverse-engineering reference of one small code section of a separate code image, the [dump](glossary.md#dump): by their bank names its <!--f:fn_total-->2,702<!--/f--> functions are mostly the bundled AJA video hardware SDK and std, plus display and video output classes of its own ([names: origin](names.md#origin)). The record serves anyone studying how that code behaves. The <!--f:effects_rebuilt-->18<!--/f--> [effects](effects.md) are rebuilt separately, do not call the function record and are checked in their own way ([what rebuilt means](effects.md#what-rebuilt-means)).
 
 How many functions of the dump have a Rust port that matches the original function, and under which standard. The comparison itself is in [harness](harness.md); every term is defined in the [glossary](glossary.md).
 

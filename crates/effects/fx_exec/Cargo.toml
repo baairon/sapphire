@@ -54,6 +54,7 @@ comp_premult = { path = "../kernels/comp_premult" }
 copy_planes = { path = "../kernels/copy_planes" }
 copy_alpha = { path = "../kernels/copy_alpha" }
 grad = { path = "../kernels/grad" }
+edge_detect = { path = "../kernels/edge_detect" }
 warp_render = { path = "../kernels/warp_render" }
 warp_log_gradient = { path = "../kernels/warp_log_gradient" }
 monochrome_a = { path = "../kernels/monochrome_a" }
@@ -64,11 +65,14 @@ blur_warp = { path = "../kernels/blur_warp" }
 warp_rel = { path = "../kernels/warp_rel" }
 warp_sampler = { path = "../kernels/warp_sampler" }
 static2 = { path = "../kernels/static2" }
+tilt_alpha = { path = "../kernels/tilt_alpha" }
 monochrome = { path = "../kernels/monochrome" }
 rotate2d = { path = "../kernels/rotate2d" }
 libm_sincos = { path = "../kernels/libm_sincos" }
+tilt = { path = "../kernels/tilt" }
 ops_coerce = { path = "../kernels/ops_coerce" }
 blur = { path = "../kernels/blur" }
+blur_channels = { path = "../kernels/blur_channels" }
 glow_layer = { path = "../kernels/glow_layer" }
 blur_coef = { path = "../kernels/blur_coef" }
 edge_aware_sharpen_jobs = { path = "../kernels/edge_aware_sharpen_jobs" }

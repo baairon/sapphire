@@ -1,0 +1,16 @@
+[package]
+name = "tilt"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the AVX2 body of class tilt (slot 52 body 0x63b5d0): state, sincosf wiring, the tilt2 = 0 loops and the perspective blocks."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+libm_sincos = { path = "../libm_sincos" }
+fx_common = { path = "../../fx_common" }
+
+
+

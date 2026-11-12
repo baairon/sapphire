@@ -40,13 +40,13 @@ output file, verified against the input, then moved into place
 
 ## Stages
 
-`stage list --json` prints a manifest with `"contract": "frames/2"`, provider id `sapphire` and 22 stages, `selftest-invert`, `ffmpeg-filter` and the 20 effect stages:
+`stage list --json` prints a manifest with `"contract": "frames/2"`, provider id `sapphire` and 26 stages, `selftest-invert`, `ffmpeg-filter` and the 24 effect stages:
 
 | Stage | Kind, geometry | Parameters | Module |
 |---|---|---|---|
 | `selftest-invert` | frame, preserve | `invert_alpha` (checkbox, default off) | `src/stage.rs`: the conformance stage; inverting twice returns the input |
 | `ffmpeg-filter` | frame, declared | `graph` (one input, one output, default `null`), `expect` (`preserve` or `declared`), `unsafe` (`1` runs filters outside the safe list) | `src/ffstage.rs` on `neutral_ffmpeg::Filter` |
-| 20 effect stages | temporal, preserve | per stage from `data/fx_params.tsv` | `src/fxstage.rs`: rendered in process through the `fx_exec` library, tables in `data/`; see [Effects provider](../../docs/stages.md#effects-provider) |
+| 24 effect stages | temporal, preserve | per stage from `data/fx_params.tsv` | `src/fxstage.rs`: rendered in process through the `fx_exec` library, tables in `data/`; see [Effects provider](../../docs/stages.md#effects-provider) |
 
 | `ffmpeg-filter` rule | Detail |
 |---|---|
@@ -82,7 +82,7 @@ In the pipeline, `--stage @selftest-invert` runs that stage in process; `--stage
 
 ## Tests
 
-`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->266<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
+`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->273<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
 
 | File | Checks | Needs |
 |---|---|---|

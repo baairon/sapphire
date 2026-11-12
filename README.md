@@ -2,11 +2,11 @@
 
 An independent open source reimplementation of Sapphire behaviour, function by function. It is not affiliated with or endorsed by any other company, product or library.
 
-sapphire has two parts with different jobs. The **effects** are <!--f:effects_rebuilt-->15<!--/f--> of the plugin's video effects, rebuilt in Rust: `fx_run` renders one effect from its input planes, and the `sapphire` command decodes a clip with ffmpeg, passes its frames through one or more effect stages (and, if wanted, twixtor's `vfx`), encodes the result and checks it before writing the output. The **function record** is a reverse-engineering reference of one small code section of a separate code image of a build of the plugin, by its function names mostly bundled video hardware library code and std: for each of its <!--f:fn_total-->2,702<!--/f--> functions it holds the exact name, the call edges, a Rust port and the evidence that the port matches the original on every compared input, and [docs/parity.md](docs/parity.md) says exactly what is covered. The effects are rebuilt separately and do not call the function record ([Effects and stages](#effects-and-stages)).
+sapphire has two parts with different jobs. The **effects** are <!--f:effects_rebuilt-->18<!--/f--> of the plugin's video effects, rebuilt in Rust: `fx_run` renders one effect from its input planes, and the `sapphire` command decodes a clip with ffmpeg, passes its frames through one or more effect stages (and, if wanted, twixtor's `vfx`), encodes the result and checks it before writing the output. The **function record** is a reverse-engineering reference of one small code section of a separate code image of a build of the plugin, by its function names mostly bundled video hardware library code and std: for each of its <!--f:fn_total-->2,702<!--/f--> functions it holds the exact name, the call edges, a Rust port and the evidence that the port matches the original on every compared input, and [docs/parity.md](docs/parity.md) says exactly what is covered. The effects are rebuilt separately and do not call the function record ([Effects and stages](#effects-and-stages)).
 
 ## Status
 
-- **Effects.** Fifteen effects run as native Rust and match the original bit for bit on every compared case, apart from four counted comparisons of `Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner ([effects](docs/effects.md)). They render through `fx_run` and as `sapphire stage` commands, from code in this repository alone, with no external data. The planned effects are ranked in four tiers for YouTube edits; the eight of Tier 1 are done, and the later tiers follow in rank order ([roadmap](docs/roadmap.md)). Effects outside the roadmap are not planned.
+- **Effects.** Eighteen effects run as native Rust and match the original bit for bit on every compared case, apart from four counted comparisons of `Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner, and 34 of `S_GlowEdges` that were run with slider values passed as decimals, not as the 16.16 fixed-point values a host passes ([effects](docs/effects.md)). They render through `fx_run` and as `sapphire stage` commands, from code in this repository alone, with no external data. The planned effects are ranked in four tiers for YouTube edits; the eight of Tier 1 and three of Tier 2 are done, and the later tiers follow in rank order ([roadmap](docs/roadmap.md)). Effects outside the roadmap are not planned.
 - **Speed.** The CPU path renders one 1920x1080 frame of the slowest stage, `blur_motion_curves_no_transform_autogen`, in about 1.1 s where the earlier one process per frame route took about 52 s (MEASURED; [Speed](docs/guide.md#speed)).
 - **Keyframes.** Every effect stage accepts keyed parameter values (`VALUE@FRAME;VALUE@FRAME`) except `trails_autogen`; each frame is a plain run at the value the keys give for it (MEASURED), and the values between keys are INFERRED ([guide](docs/guide.md#running-a-stage-on-a-clip)).
 - **Device path.** `--device gpu|gpu=N|auto` and `SAPPHIRE_DEVICE` run the kernels through OpenCL, byte identical to the CPU path. It is MEASURED on PoCL, an OpenCL runtime on the CPU, only; speed on a real GPU is INFERRED ([guide](docs/guide.md#rendering-on-a-device)).
@@ -71,9 +71,9 @@ The last command decodes `clip.mp4`, shifts its hue with the `S_HueSatBright` st
 - [Command-line reference](docs/cli.md): every command, flag, environment variable, exit code and refusal of `sapphire`, `sapphire stage` and `fx_run`.
 - [docs/guide.md](docs/guide.md): using the effects on a clip or on raw frames, chaining, parameters, speed and what is claimed.
 - [docs/parameters-guide.md](docs/parameters-guide.md): every stage parameter, how to write its value, and the values verified against recorded renders.
-- [docs/effects.md](docs/effects.md): the fifteen native effects, their status, how to build and run `fx_run`, and their shared limits.
+- [docs/effects.md](docs/effects.md): the eighteen native effects, their status, how to build and run `fx_run`, and their shared limits.
 - [docs/stages.md](docs/stages.md): the stage manifest and apply command, how a new provider joins, and the effects provider.
-- [docs/roadmap.md](docs/roadmap.md): the planned effects, ranked in four tiers for YouTube edits, and the fifteen done.
+- [docs/roadmap.md](docs/roadmap.md): the planned effects, ranked in four tiers for YouTube edits, and the eighteen done.
 - [docs/adding-an-effect.md](docs/adding-an-effect.md): how to add the next effects.
 - [docs/glossary.md](docs/glossary.md): the technical terms of the function record.
 - [docs/parity.md](docs/parity.md): what parity means for the function record, the tiers, strict and strictest, the caveats.
@@ -95,7 +95,7 @@ For scripts, the quickest answers are: `python -I tools/fn_info.py ID|NAME|OFFSE
 
 ## Parity
 
-The figures in this section are those of the function record: the <!--f:fn_total-->2,702<!--/f--> functions of the [dump](docs/glossary.md#dump), one small code section of a separate code image; by their bank names they are mostly bundled video hardware library code and std, plus display and video output classes of its own ([Names](#names)). The <!--f:effects_rebuilt-->15<!--/f--> effects are checked separately ([what rebuilt means](docs/effects.md#what-rebuilt-means)).
+The figures in this section are those of the function record: the <!--f:fn_total-->2,702<!--/f--> functions of the [dump](docs/glossary.md#dump), one small code section of a separate code image; by their bank names they are mostly bundled video hardware library code and std, plus display and video output classes of its own ([Names](#names)). The <!--f:effects_rebuilt-->18<!--/f--> effects are checked separately ([what rebuilt means](docs/effects.md#what-rebuilt-means)).
 
 1:1 parity with the original code comes before speed, convenience and a cleaner design: when they conflict, parity wins.
 
@@ -121,24 +121,26 @@ Shares are of the <!--f:code_bytes-->964,659<!--/f--> code bytes of the <!--f:fn
 
 ## Effects and stages
 
-The two parts of the repository share a method and its tools, but their crates share no code: each part judges Rust code against the original running in the Unicorn [emulator](docs/glossary.md#emulator). The <!--f:effects_rebuilt-->15<!--/f--> effects are rebuilt from the plugin's effect programs and the builtin classes they call ([what rebuilt means](docs/effects.md#what-rebuilt-means)); the effect crates cite the listing of a separate code section of a build of the plugin, much larger than the one the function record covers, and none cites the record's section. Per the name bank, the function record's section holds bundled library code, std, component code (by its class names, display and video output classes) and functions of undetermined origin, and the bank maps no effect to any of them ([Names](#names)).
+The two parts of the repository share a method and its tools, but their crates share no code: each part judges Rust code against the original running in the Unicorn [emulator](docs/glossary.md#emulator). The <!--f:effects_rebuilt-->18<!--/f--> effects are rebuilt from the plugin's effect programs and the builtin classes they call ([what rebuilt means](docs/effects.md#what-rebuilt-means)); the effect crates cite the listing of a separate code section of a build of the plugin, much larger than the one the function record covers, and none cites the record's section. Per the name bank, the function record's section holds bundled library code, std, component code (by its class names, display and video output classes) and functions of undetermined origin, and the bank maps no effect to any of them ([Names](#names)).
 
 The effects' tools build on the function record's. Their kernel comparisons run in a harness that uses the register and error tables of the record's oracle (`archive:tools/oracle.py`); the disassembly listing that the effect crates cite was made by the record's indexing tool (`archive:tools/index_dump.py`); and an adapted copy of the record's lifter has lifted and compared functions of the larger section, none of which is in this repository. The effect crates use no code of the function record: their x86 rules are their own (`crates/effects/fx_common/src/x86.rs` and `crates/effects/fx_common/src/nanop.rs`), and no effect crate and no command depends on a lift crate, `neutral-world` or `neutral-parity` ([Crate map](#crate-map)).
 
-The fifteen native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned effects, ranked in four tiers, are in [docs/roadmap.md](docs/roadmap.md). A stage is a program that passes raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
+The eighteen native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned effects, ranked in four tiers, are in [docs/roadmap.md](docs/roadmap.md). A stage is a program that passes raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
 
-Each registered style of the fifteen effects is also a frames/2 stage, so twixtor and any other wrapper can run it as `sapphire stage apply STAGE` (20 stages). They are linked into `sapphire`, are always listed and need no `fx_run` process; `fx_run` is needed only for `--describe-params`. The [guide](docs/guide.md) shows how to run them.
+Each registered style of the eighteen effects is also a frames/2 stage, so twixtor and any other wrapper can run it as `sapphire stage apply STAGE` (24 stages). They are linked into `sapphire`, are always listed and need no `fx_run` process; `fx_run` is needed only for `--describe-params`. The [guide](docs/guide.md) shows how to run them.
 
 | Effect | Stages | Kind | Byte identical through the stage |
 |---|---|---|---|
 | `S_Blur` | 2 | temporal | 36 of 48 recorded renders |
 | `BlurMoCurves` styles | 2 | temporal | 26 of 67 |
+| `S_BlurMotion` | 2 | temporal | 232 of 352 |
 | `S_Diffuse` | 1 | temporal | 31 of 42 |
 | `S_DissolveShake` | 1 | temporal | 27 of 36 |
 | `S_DistortRGB` | 1 | temporal | 26 of 30 |
 | `S_DropShadow` | 1 | temporal | 20 of 24 |
 | `S_Flicker` | 1 | temporal | 24 of 24 |
 | `S_Glow` | 1 | temporal | 36 of 36 |
+| `S_GlowEdges` | 1 | temporal | 34 of 34 |
 | `S_HueSatBright` | 1 | temporal | 118 of 130 |
 | `Shake` | 3 | temporal | 54 of 66 |
 | `S_Sharpen` | 2 | temporal | 35 of 78 |
@@ -146,8 +148,9 @@ Each registered style of the fifteen effects is also a frames/2 stage, so twixto
 | `S_TimeWarpRGB` | 1 | temporal | 10 of 22 |
 | `S_Trails` | 1 | temporal | 70 of 120 |
 | `S_WarpPerspective` | 1 | temporal | 10 of 224 |
+| `S_WarpTransform` | 1 | temporal | 61 of 78 |
 
-All 20 stages have kind `temporal`, because the frames/2 convention accepts keyed values only for temporal stages. Only `time_warp_rgb_autogen` and `trails_autogen` read frames other than the current one; the rest are `temporal` so that they accept keyframes. `swishpan` and the `S_DissolveShake` stage are transitions: they also read a second clip, given with `--layer`, and the clip length, given with `--frames` ([transition stages](docs/cli.md#transition-stages)).
+All 24 stages have kind `temporal`, because the frames/2 convention accepts keyed values only for temporal stages. Only `time_warp_rgb_autogen` and `trails_autogen` read frames other than the current one; the rest are `temporal` so that they accept keyframes. `swishpan` and the `S_DissolveShake` stage are transitions: they also read a second clip, given with `--layer`, and the clip length, given with `--frames` ([transition stages](docs/cli.md#transition-stages)).
 
 The first number counts the recorded renders of the parity record that use the stage's fixed host arrangement; each of them is byte identical through `sapphire stage apply` at depth 32 (382 of 382 on the stages of the first ten effects, 24 of 24 on `flicker`, 36 of 36 on `glow`, 32 of 32 on `swishpan`, 54 of 54 on the three `Shake` stages and 27 of 27 on the `S_DissolveShake` stage). On `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage the arrangement follows the Opacity answer (host variants). The other recorded renders use a different host arrangement and are not claimed for the stage. For `Shake` and `S_DissolveShake` the second number counts the counted renders that equal the original ([effects](docs/effects.md)). Each stage's host, parameters, size refusals, timing and claim limits are in [docs/stages.md](docs/stages.md#effects-provider).
 
@@ -163,7 +166,7 @@ The name bank is the source of truth for every name; the code keeps its `f_XXXXX
 | `docs/data/effect_names.tsv` | <!--f:effects_total-->272<!--/f--> | effect names |
 | `docs/data/param_candidates.tsv` | <!--f:params_total-->1,040<!--/f--> | parameter candidate strings, bound to no function |
 
-**Effect names.** The <!--f:effects_total-->272<!--/f--> effect names are strings only: none is mapped to functions, classes, parameters or behaviour, and the fifteen effects of [docs/effects.md](docs/effects.md) are rebuilt separately as native code. They are listed verbatim in [docs/generated/effects.md](docs/generated/effects.md), the parameter candidates in `docs/generated/parameters.md`; a candidate is not a confirmed parameter.
+**Effect names.** The <!--f:effects_total-->272<!--/f--> effect names are strings only: none is mapped to functions, classes, parameters or behaviour, and the eighteen effects of [docs/effects.md](docs/effects.md) are rebuilt separately as native code. They are listed verbatim in [docs/generated/effects.md](docs/generated/effects.md), the parameter candidates in `docs/generated/parameters.md`; a candidate is not a confirmed parameter.
 
 **Origin.** The bank classes <!--f:origin_bundled-->1,983<!--/f--> functions as bundled library code (the class `CNTV2Card` alone has <!--f:cntv2card_fns-->906<!--/f-->), <!--f:origin_std-->514<!--/f--> as std, <!--f:origin_undetermined-->136<!--/f--> as undetermined and <!--f:origin_component-->69<!--/f--> as component, by their class names the section's own display and video output classes ([names: origin](docs/names.md#origin)).
 
@@ -189,7 +192,7 @@ Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, 
 | `crates/neutral-world` | library | The Rust side of the world harness of the function record: the seeded model of everything outside the dump, the `Env` trait every lifted function is written against, world replay and comparison. Only the lift crates depend on it; no effect crate and no command does | `lib.rs` (`Env`, `World`, `check`, `Report`) | <!--f:tests_scan_neutral_world-->17<!--/f-->; `tests/synthetic.rs`, `tests/pin.rs` |
 | `crates/neutral-parity` | library | Replay of oracle vectors against the ported functions of the function record. Only the tests of the lift crates depend on it; no effect crate and no command does | `lib.rs` (`parse`, `check`, `Report`) | <!--f:tests_scan_neutral_parity-->4<!--/f--> |
 | `crates/neutral-ffmpeg` | library | ffmpeg and ffprobe as child processes: decoder, encoder, filter graph, probe, pixel format table | `decoder.rs`, `encoder.rs`, `filter.rs`, `probe.rs`, `pixfmt.rs` with `pixfmt_table.rs`, `locate.rs`, `process.rs` | <!--f:tests_scan_neutral_ffmpeg-->130<!--/f-->; `tests/*_live.rs` need ffmpeg |
-| `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->266<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
+| `crates/neutral-handoff` | library, binaries `sapphire` and `fake-vfx` | The pipeline (decode, stages, encode, verify), the stage provider, the frames/2 contract ([handoff](docs/handoff.md)) | `main.rs`, `plan.rs`, `pipeline.rs`, `stage.rs`, `ffstage.rs`, `geometry.rs`, `verify.rs`, `error.rs`, `bin/fake_vfx.rs` | <!--f:tests_scan_neutral_handoff-->273<!--/f-->; `tests/cross_twixtor.rs` runs against twixtor |
 | `crates/lift-a`, `crates/lift-b`, `crates/lift-1` to `crates/lift-8` | library | The function record: the ported functions of its code section, a reverse-engineering reference that no effect crate and no command depends on. The <!--f:lift_crates-->10<!--/f--> lift crates hold <!--f:lift_defs_total-->5,248<!--/f--> `fn f_` definitions of the <!--f:fn_total-->2,702<!--/f--> ids, and <!--f:lift_ids_multi-->1,605<!--/f--> ids are defined more than once; the per-crate detail is in [lifting](docs/lifting.md#crate-layout) | `p1/`, `p2v/`, `missing.rs` (placeholders), `dup.rs`, `x86rt.rs` (`lift_rt.rs` in `lift-a`); `liftcheck/` in `lift-a` (feature `liftcheck`) | per crate in `docs/generated/crates.md`; `#[ignore]` without the stored vector sets |
 
 The effect crates are under `crates/effects` (the evaluator `fx_eval`, the executor and `fx_run` in `fx_exec`, the kernel crates they call in `crates/effects/kernels`, and the test helpers `effects_vecdir` and `effects_rtdata`); they are workspace members, and the ones whose tests need no stored data are default members ([effects](docs/effects.md)).
@@ -291,7 +294,7 @@ python -I tools/handoff.py doctor --conformance
 ```
 
 - **Default members.** `cargo test` runs `neutral-world`, `neutral-parity`, `neutral-ffmpeg`, `neutral-handoff` and the 61 effect crates whose tests need no stored data. The `lift-*` tests replay stored vector sets that are archived, not in the repository, and are marked `#[ignore]`; running them with the archive: [reproduce](docs/reproduce.md#re-creating-the-evidence).
-- **Effects.** The effect tests are described in [effects](docs/effects.md#tests). `tools/fx_golden.py` renders the 20 stages on synthetic clips and compares the SHA-256 of every output with `tools/fx_golden.tsv`; with `SAPPHIRE_DEVICE=gpu SAPPHIRE_REQUIRE_DEVICE=1` (PoCL or a GPU) it checks the device path against the same hashes.
+- **Effects.** The effect tests are described in [effects](docs/effects.md#tests). `tools/fx_golden.py` renders the 24 stages on synthetic clips and compares the SHA-256 of every output with `tools/fx_golden.tsv`; with `SAPPHIRE_DEVICE=gpu SAPPHIRE_REQUIRE_DEVICE=1` (PoCL or a GPU) it checks the device path against the same hashes.
 - **ffmpeg.** The live tests of `neutral-ffmpeg` and the pipeline tests need ffmpeg and ffprobe and print a `SKIPPED` line without them ([tests that need ffmpeg](docs/ffmpeg.md#tests-that-need-ffmpeg)). One `neutral-ffmpeg` test always prints `SKIPPED`, because the pixel format table generator is not in the repository.
 - **twixtor.** `crates/neutral-handoff/tests/cross_twixtor.rs` runs twixtor's `vfx` as a stage of this pipeline and this crate's `stage apply` inside twixtor's `tools/apply.py`, in every order; it skips with a printed reason when ffmpeg, `vfx`, Python or `apply.py` is missing.
 - **Conformance.** `tools/conformance.py --quick` is the covering subset of about a minute; the other modes are in [Handoff](#handoff).
@@ -332,7 +335,7 @@ python -I tools/handoff.py doctor
 | Stub argument values | <!--f:stub_arity_sites-->48<!--/f--> call sites passed fewer arguments than the bank signatures; those values were never compared |
 | Missing references | data, imports and constants not in the dump; <!--f:missing_refs-->19,563<!--/f--> references are named placeholders |
 | Archived evidence | the dumps, the full disassembly listing and the stored vector sets are archived, and without them the `lift-*` tests stay ignored ([reproduce](docs/reproduce.md#what-needs-the-archive)) |
-| Effect behaviour | only the fifteen effects of [docs/effects.md](docs/effects.md) are rebuilt and rendered, as native code outside the function record; no effect name is mapped to a function, and the other effect names are strings only |
+| Effect behaviour | only the eighteen effects of [docs/effects.md](docs/effects.md) are rebuilt and rendered, as native code outside the function record; no effect name is mapped to a function, and the other effect names are strings only |
 | Name certainty | a name is the bank's assignment for its offset; the `twin` and `stub` levels cannot be decided by the code |
 | ffmpeg versions | 9.0.2 is the measured version; other versions run conformance live and are reported as unverified |
 | POSIX | the process group branches have not run yet; the first Linux or macOS CI run covers them ([known gaps](docs/handoff.md#known-gaps)) |

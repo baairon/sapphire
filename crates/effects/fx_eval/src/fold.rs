@@ -389,6 +389,8 @@ pub fn fold_kind(class: &str) -> Option<(FoldKind, bool)> {
         //, READ: blur slot 30 (constant when the opacity, argument 3, is constant zero and the combo tag is odd or equals [this])
         // and slot 36 (writes zero to every output lane); see can_fold_el
         "blur" => (FoldKind::Special, false),
+        // if+ with a constant condition whose lanes disagree in sign (slot 38 keeps the node): the constant path runs the select per lane
+        "if+" => (FoldKind::Special, false),
         "clamp" | "mag" | "dist" => (FoldKind::Special, false),
         // constant paths of the vector helpers on the Rays/EdgeRays trees and the shake tree. MEASURED values (folded lanes of the original dumps); the fold test is the default slot 30 (all arguments constant)
         "channels_equal" | "element_of" => (FoldKind::Special, true),
@@ -753,6 +755,27 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
             }
         },
         FoldKind::Special => match class {
+            // out[ch] = (cond lane ch > 0) ? x lane ch : y lane ch, the slot 52 body's per-channel rule on constant operands (ops_if: the
+            // channel index clamps to count - 1, a two-lane arm at more than two outputs maps channel c to max(c - 2, 0), channel 3 of an
+            // odd-count arm is 1.0). A NaN condition lane takes the y arm (ordered compare).
+            "if+" => {
+                if a.len() < 3 {
+                    return None;
+                }
+                let pick = |o: &ArgView2, chan: usize| -> f32 {
+                    if chan == 3 && (o.n as i32 - 1) & 1 == 0 {
+                        1.0
+                    } else if n > 2 && o.n == 2 {
+                        o.lanes[chan.saturating_sub(2)]
+                    } else {
+                        o.lanes[chan.min(o.n.max(1) - 1).min(3)]
+                    }
+                };
+                for chan in 0..n {
+                    let c = a[0].lanes[chan.min(a[0].n.max(1) - 1).min(3)];
+                    out[chan] = if c > 0.0 { pick(&a[1], chan) } else { pick(&a[2], chan) };
+                }
+            }
             // a*(1-t) + b*t (INFERRED form; zero and one t collapse before this)
             "interp" => {
                 let (x, y, t) = (a.first()?, a.get(1)?, a.get(2)?);

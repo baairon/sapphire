@@ -128,7 +128,7 @@ fn stage_list_reports_the_contract_and_what_exists() {
     );
     let stages = doc.get("stages").and_then(|v| v.as_array()).unwrap();
     let ids: Vec<&str> = stages.iter().map(|s| s.get("id").and_then(|v| v.as_str()).unwrap()).collect();
-    assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen", "flicker", "glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake"], "the vocabulary is exactly what exists");
+    assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen", "flicker", "glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake", "blur_motion_autogen", "blur_motion_mono_autogen", "warp_transform_autogen", "glow_edges"], "the vocabulary is exactly what exists");
     let invert = &stages[0];
     assert_eq!(invert.get("kind").and_then(|v| v.as_str()), Some("frame"));
     let params = invert.get("params").and_then(|v| v.as_array()).unwrap();
@@ -417,7 +417,7 @@ fn effect_stages_list_no_layers() {
         assert_eq!(s.get("layers").and_then(|v| v.as_array()).map(|a| a.len()), Some(0), "{:?}", s.get("id").and_then(|v| v.as_str()));
         n += 1;
     }
-    assert_eq!(n, 18);
+    assert_eq!(n, 22);
     // the transition stages declare their second input as one optional layer
     for id in ["swishpan", "dissolve_shake"] {
         let st = stages.iter().find(|s| s.get("id").and_then(|v| v.as_str()) == Some(id)).expect(id);
@@ -454,5 +454,21 @@ fn layer_on_an_effect_stage_is_refused_with_exit_3_before_rendering() {
         assert_eq!(ran.code, 3, "{} {}: {}", stage, layer, ran.stderr);
         assert!(ran.stderr.contains("LAYER-INPUT-UNSUPPORTED"), "{}", ran.stderr);
         assert!(ran.stdout.is_empty());
+    }
+}
+
+#[test]
+fn a_plan_with_no_default_xy_writer_is_staged_without_a_phase_list_and_renders() {
+    // warp_transform_autogen's placement holds one phase list per writer count (1 and 2). The default Centre plan has 0 default-xy
+    // writers: the stage drops the list instead of refusing it with XY-BASE-LIST-UNSERVED, and the frame renders. A plan with
+    // writers keeps being served from the placement's lists.
+    let n = 64 * 32 * 16;
+    for extra in [vec![], vec!["--param", "tilt=0.3"]] {
+        let mut a = args(&["stage", "apply", "warp_transform_autogen", "--width", "64", "--height", "32", "--depth", "32", "--fps", "24"]);
+        a.extend(extra.iter().map(|s| s.to_string()));
+        let ran = run_env(&handoff_exe(), &a, &[], Some(vec![0x3fu8; n]), Duration::from_secs(120));
+        assert_eq!(ran.code, 0, "{:?}: {}", extra, ran.stderr);
+        assert_eq!(ran.stdout.len(), n, "{:?}", extra);
+        assert!(!ran.stderr.contains("XY-BASE-LIST-UNSERVED"), "{:?}: {}", extra, ran.stderr);
     }
 }

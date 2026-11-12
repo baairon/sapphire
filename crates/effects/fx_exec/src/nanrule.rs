@@ -24,9 +24,13 @@ pub const ACTIVE: bool = !cfg!(any(target_arch = "x86", target_arch = "x86_64"))
 /// processor, so a `0x7fc00000` in their output is the x86 result (a negated default NaN) and must not be rewritten.
 ///
 /// `edge_aware_sharpen` computes each operation whose operands can both be NaN through `fx_common::nanop` and each other operation that can make a fresh NaN through `fx_common::x86::nx_*`, so a `0x7fc00000` in its output is the x86 result and must not be rewritten.
-pub const NO_OUTPUT_REWRITE: [&str; 12] = [
+///
+/// `tilt` computes every fresh NaN through `fx_common::nanop` (0xffc00000) and flips signs bitwise, so 0x7fc00000 words it writes are x86 words. `tilt_alpha` takes the x86
+/// first operand rule for every NaN pair and canonicalizes its fresh NaN words itself (`fx_common::nanop`), so its bare output
+/// is the same on every processor and a word `0x7fc00000` in it is an operand propagated, not an ARM default NaN.
+pub const NO_OUTPUT_REWRITE: [&str; 14] = [
     "abs", "negate", "diff", "sharpen", "hue_shift", "hue_shift_preserve_luma", "sat_scale", "comp_premult", "rotate", "perspective", "perspective_alpha",
-    "edge_aware_sharpen",
+    "edge_aware_sharpen", "tilt_alpha", "tilt",
 ];
 
 /// `r` with the x86 default NaN for an invalid operation; `operand_has_arm_nan` tells whether an operand holds the ARM
@@ -98,7 +102,7 @@ mod tests {
 
     #[test]
     fn sign_bit_kernels_are_exempt() {
-        for c in ["abs", "negate", "diff", "sharpen", "hue_shift", "hue_shift_preserve_luma", "sat_scale", "comp_premult", "rotate", "perspective", "perspective_alpha", "edge_aware_sharpen"] {
+        for c in ["abs", "negate", "diff", "sharpen", "hue_shift", "hue_shift_preserve_luma", "sat_scale", "comp_premult", "rotate", "perspective", "perspective_alpha", "edge_aware_sharpen", "tilt_alpha", "tilt"] {
             assert!(NO_OUTPUT_REWRITE.contains(&c));
         }
         assert!(!NO_OUTPUT_REWRITE.contains(&"+"));

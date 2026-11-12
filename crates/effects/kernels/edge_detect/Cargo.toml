@@ -1,0 +1,15 @@
+[package]
+name = "edge_detect"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the edge_detect class CPU render: slot 52 (blur, then the gradient magnitude body) and slot 57 (margins)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+blur = { path = "../blur" }
+fx_common = { path = "../../fx_common" }
+
+

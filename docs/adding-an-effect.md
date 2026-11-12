@@ -1,6 +1,6 @@
 # Adding an effect
 
-The conventions every new effect follows, and the parity proof it shows before it is added. The fifteen effects of [Effects](effects.md) follow them.
+The conventions every new effect follows, and the parity proof it shows before it is added. The eighteen effects of [Effects](effects.md) follow them.
 
 ## Crate layout
 

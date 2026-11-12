@@ -1,8 +1,8 @@
 # Effects
 
-Fifteen of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program name, a size and the input planes, with no external data ([Build and run](#build-and-run)). Each registered style of the fifteen effects is also offered as a stage of `sapphire stage apply`, which reads and writes raw video frames ([Adding a provider](stages.md#effects-provider)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)). The effects use no code of the [function record](glossary.md#function-record) ([how the two parts relate](../README.md#effects-and-stages)).
+Eighteen of the plugin's effects are rebuilt in this repository as native Rust code. The effect crates are under `crates/effects`; the command line tool `fx_run` renders an effect from its program name, a size and the input planes, with no external data ([Build and run](#build-and-run)). Each registered style of the eighteen effects is also offered as a stage of `sapphire stage apply`, which reads and writes raw video frames ([Adding a provider](stages.md#effects-provider)). The evidence that each effect matches the original plugin is kept outside the repository (see [Evidence](#evidence)). The effects use no code of the [function record](glossary.md#function-record) ([how the two parts relate](../README.md#effects-and-stages)).
 
-Effects rebuilt: <!--f:effects_rebuilt-->15<!--/f--> of <!--f:effects_listed-->15<!--/f--> listed here: the ten of the first milestone and five of Tier 1 of [the roadmap](roadmap.md). The other effects of the plugin are not rebuilt; their names are strings only ([names](../README.md#names)). A new effect follows the conventions of [Adding an effect](adding-an-effect.md).
+Effects rebuilt: <!--f:effects_rebuilt-->18<!--/f--> of <!--f:effects_listed-->18<!--/f--> listed here: the ten of the first milestone, five of Tier 1 and three of Tier 2 of [the roadmap](roadmap.md). The other effects of the plugin are not rebuilt; their names are strings only ([names](../README.md#names)). A new effect follows the conventions of [Adding an effect](adding-an-effect.md).
 
 ## What rebuilt means
 
@@ -13,12 +13,14 @@ An effect counts as rebuilt when every one of its registered styles passes seven
 |---|---|---|---|---|
 | `S_Blur` | Blur_Color_Autogen, Blur_Mono_Autogen | 7 | 52 | 52 |
 | `BlurMoCurves` | Transform_and_Blur_Autogen, Blur_Motion_Curves_No_Transform_Autogen | 41 | 69 | 69 |
+| `S_BlurMotion` | Blur_Motion_Autogen, Blur_Motion_Mono_Autogen | 88 | 352 | 352 |
 | `S_Diffuse` | Diffuse_Autogen | 31 | 54 | 54 |
 | `S_DissolveShake` | registered without a wrapper program | 38 | 304 | 304 |
 | `S_DistortRGB` | Distort_RGB_Autogen | 30 | 30 | 30 |
 | `S_DropShadow` | registered without a wrapper program | 24 | 26 | 26 |
 | `S_Flicker` | registered without a wrapper program | 24 | 24 | 24 |
 | `S_Glow` | registered without a wrapper program | 36 | 36 | 36 |
+| `S_GlowEdges` | registered without a wrapper program | 68 | 34 | 34 |
 | `S_HueSatBright` | Hue_Sat_Bright_Autogen | 130 | 196 | 196 |
 | `Shake` | Shake_Normal_Autogen, Shake_Twitchy_Autogen, Shake_Jumpy_Autogen | 68 | 2,056 | 2,056 |
 | `S_Sharpen` | Sharpen_Best_Quality_Autogen, Sharpen_Fast_Autogen | 43 | 114 | 114 |
@@ -26,9 +28,10 @@ An effect counts as rebuilt when every one of its registered styles passes seven
 | `S_TimeWarpRGB` | Time_Warp_RGB_Autogen | 22 | 22 | 22 |
 | `S_Trails` | Trails_Autogen | 78 | 170 | 220 |
 | `S_WarpPerspective` | Warp_Perspective_Autogen | 19 | 256 | 256 |
+| `S_WarpTransform` | Warp_Transform_Autogen | 41 | 78 | 78 |
 <!--/gen:effects_status-->
 
-*Verified comparisons* are the comparisons between the original's emulator runs and the native code that count toward the effect: <!--f:effects_counted_rows-->627<!--/f--> in all. Four of them, two of `Shake` and two of `S_DissolveShake`, differ from the original (see those effects). *Recorded renders* are the outputs of the final binary, recorded as the expected result of each case: <!--f:effects_frozen_members-->3,697<!--/f--> in all. Some of them are controls, recorded and not counted; the rest are the *counted* recorded renders. *Re-rendered units* are the same cases rendered again with the binary built from this repository, with a second render for the cases that render twice: <!--f:effects_rerun_units-->3,747<!--/f--> units. Every unit of the first ten effects, `S_Flicker`, `S_Glow` and `S_SwishPan` is byte identical to its recorded render by full SHA-256 in the three output files (`ae32`, `dest` and `src0`), except 24 control units of `S_WarpPerspective`, which changed with the default-xy head form (see that effect). Every unit of `Shake` and `S_DissolveShake` is byte identical to its recorded render by full SHA-256 in `ae32` and `dest`, the two output files recorded for them, except 16 of `Shake`, which changed with the default-xy head form, and 16 of `S_DissolveShake`, which changed with the sine scale of the shake offset; 4 of those 32 are counted units, one for each of the four comparisons that differ from the original, and the other 28 are control units (see those effects). `BlurMoCurves` and `Shake` are listed by the names of their host effects; neither string is in the [name bank](glossary.md#name-bank)'s list of effect names.
+*Verified comparisons* are the comparisons between the original's emulator runs and the native code that count toward the effect: <!--f:effects_counted_rows-->824<!--/f--> in all. 38 of them differ from the original: two of `Shake`, two of `S_DissolveShake` and 34 of `S_GlowEdges` (see those effects). *Recorded renders* are the outputs of the final binary, recorded as the expected result of each case: <!--f:effects_frozen_members-->4,161<!--/f--> in all. Some of them are controls, recorded and not counted; the rest are the *counted* recorded renders. *Re-rendered units* are the same cases rendered again with the binary built from this repository, with a second render for the cases that render twice: <!--f:effects_rerun_units-->4,211<!--/f--> units. Every unit of the first ten effects, `S_Flicker`, `S_Glow` and `S_SwishPan` is byte identical to its recorded render by full SHA-256 in the three output files (`ae32`, `dest` and `src0`), except 24 control units of `S_WarpPerspective`, which changed with the default-xy head form (see that effect). Every unit of `Shake` and `S_DissolveShake` is byte identical to its recorded render by full SHA-256 in `ae32` and `dest`, the two output files recorded for them, except 16 of `Shake`, which changed with the default-xy head form, and 16 of `S_DissolveShake`, which changed with the sine scale of the shake offset; 4 of those 32 are counted units, one for each of the four comparisons that differ from the original, and the other 28 are control units (see those effects). Every unit of `S_BlurMotion`, `S_WarpTransform` and `S_GlowEdges` (352, 78 and 34) is byte identical to its recorded render by full SHA-256, through `fx_run` and through the stages; the 34 comparisons of `S_GlowEdges` that differ from the original have no recorded render (see that effect). `BlurMoCurves` and `Shake` are listed by the names of their host effects; neither string is in the [name bank](glossary.md#name-bank)'s list of effect names.
 
 The *verified render path* of an effect is the host arrangement its verified comparisons used: one band, full-frame geometry, parameters in the compiler's units and constant over time, one thread, the licensed state, 32-bit float images and the effect's own host settings. The stages of `sapphire stage apply` run each style on that path (see [Adding a provider](stages.md#effects-provider)).
 
@@ -47,7 +50,7 @@ The parameter tables list each stage's parameters as `sapphire stage list --json
 
 Parameters whose names contain `mocha` belong to the mask controls of the original. They are offered because verified comparisons set them, but mask tracking data is not part of the rebuild ([Limits common to the effects](#limits-common-to-the-effects)).
 
-Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. On the stages of the first ten effects only Normal (`2`) of the opacity choices renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED), and `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items. `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage render all three answers: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)).
+Popup parameters take the zero-based index of the item, so the first item is `0`. The opacity popups (`cset_opacity`, `cset_input_opacity`, `cset_output_opacity`) are the exception: they take a host answer, a one-based item number. On the stages of the first ten effects only Normal (`2`) of the opacity choices renders on the stages' host arrangement; All_Opaque and As_Premult are refused with exit 3 (MEASURED), and `cset_output_opacity` of `time_warp_rgb_autogen` renders both of its items. `glow`, `swishpan`, the three `Shake` stages, the `S_DissolveShake` stage, the two `S_BlurMotion` stages, `warp_transform_autogen` and the `S_GlowEdges` stage render all three answers: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)).
 
 See [Driving the effect parameters](parameters-guide.md) for every stage parameter, how to write its value and the values verified against recorded renders.
 
@@ -124,6 +127,44 @@ Parity: 41 verified comparisons (24 for Transform_and_Blur and 17 for Blur_Only)
 With the default-xy head form (see `S_WarpPerspective`), `blur_motion_curves_no_transform_autogen` at its default parameters renders differently than before that form at some widths that are not a multiple of 8, where the stage serves the size from its 64x32 entry (`--xy-base 0`). MEASURED against the build before that form, default parameters, a plain 3 frame clip: 1,342 of 5,292 words differ at 49x9, 647 of 2,220 at 37x5 and 144 of 1,872 at 52x3, and the output is identical at 64x32 and 50x7. That the new output is the original's at those sizes is INFERRED.
 
 Device: every node runs on the device (`+`, `-`, `*` on Blur_Only, `blur_warp`, `make_mipmap`, `postdivide`) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows of both stages (MEASURED on PoCL). On input with NaN, `blur_warp` reruns its NaN outputs on the CPU (3 nodes on each special golden row): its NaN words are the compiled CPU instruction's two-NaN picks, which its kernel does not copy.
+
+### `S_BlurMotion`
+
+Motion blur from a camera move. The `from_*` and `to_*` parameters give the rotation, the depth distance and the shift at the start and at the end of the move, about `center`, and the effect averages the image along the path between them. `exposure_bias` weights the samples along the path, `blur_res` takes them at full, half or quarter resolution, `subpixel` turns sub-pixel sampling on or off, and `wrap` chooses, per axis, what fills the area the move brings in from outside the frame. The two styles are the two choices of the effect's Effect popup: a colour blur and a mono blur.
+
+| style | stage |
+|---|---|
+| Blur_Motion_Autogen | `stage apply blur_motion_autogen` |
+| Blur_Motion_Mono_Autogen | `stage apply blur_motion_mono_autogen` |
+
+The original chooses the style from the Effect popup when it renders. Each stage runs one style and has no popup parameter for it; `fx_run` refuses a run of one style's program with the popup set to the other style, with `STYLE-SELECT-MISMATCH`. The mask inputs are not connected and mocha is off: the stage fixes the mask parameters and `show_mocha_mask_only` off, since a host with mocha off supplies no mask to show. The effect is verified at a pixel aspect of 1.0 only, and the stage passes 1.0.
+
+Both stages offer the same parameters:
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param blur_res=V` | int | 1 |
+| `--param wrap=V` | text | 2 |
+| `--param subpixel=V` | checkbox | 1 |
+| `--param center=V` | text | 2 |
+| `--param from_z_dist=V` | float | 1 |
+| `--param from_rotate=V` | float | 1 |
+| `--param from_shift=V` | text | 2 |
+| `--param to_z_dist=V` | float | 1 |
+| `--param to_shift=V` | text | 2 |
+| `--param to_rotate=V` | float | 1 |
+| `--param exposure_bias=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+
+`to_z_dist` and `to_shift` are offered because verified comparisons set them. `cset_opacity` takes all three answers on both stages: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)).
+
+```sh
+target/release/sapphire stage apply blur_motion_autogen --width 64 --height 32 --depth 32 --fps 24/1 --param center=0.5625,-1.0625 < in.raw > out.raw
+```
+
+Parity: 88 verified comparisons, 352 recorded renders and 352 re-rendered units, all equal. Of the comparisons, 46 are of the colour style, 22 at 64x32 and 24 at 50x7, four of them with the Effect popup set to the mono style, which renders through Blur_Motion_Mono_Autogen; 42 are of the mono style, 20 at 64x32 and 22 at 50x7. All 352 counted recorded renders were rendered again and compared through both routes, `fx_run` and the stages, and are equal (MEASURED). At 50x7 with `blur_res` at Half or Quarter, the stage's outputs equal the original's at every recorded placement (16 of 16 counted recorded renders, MEASURED); the placement the stage uses there is the one of 64x32, and that it is the placement of a real host at 50x7 is INFERRED. The counted routes run no approximate reciprocal instruction: the sampler, the rotation, the mono conversion and `postdivide` hold none, and the four in `make_mipmap` sit in a logarithm that its calls at filter 0 do not enter (MEASURED on the code; INFERRED that the calls do not enter it). The opacity answers 1, 2 and 3 are verified for both styles. Of the counted recorded renders, 112 of 168 (Blur_Motion_Autogen) and 120 of 184 (Blur_Motion_Mono_Autogen) match the stage's host arrangement; the others equal `fx_run` at the stage's buffer phases.
+
+Device: every node runs on the device (`*`, `+`, `-`, `blur_warp`, `make_mipmap`, `postdivide`, `rotate`, and `monochrome_a` on the mono style) with the CPU's bytes, `fallback: none` on all 352 counted recorded renders through `fx_run` (MEASURED on PoCL: 1,376 and 1,704 device nodes). `blur_warp`'s NaN words follow the cross-processor statement of [the roadmap](roadmap.md#platform).
 
 ### `S_Diffuse`
 
@@ -357,6 +398,51 @@ target/release/sapphire stage apply glow --width 64 --height 32 --depth 32 --fps
 Parity: 36 verified comparisons (18 at 64x32 and 18 at 50x7), 36 recorded renders and 36 re-rendered units, all equal. No approximate reciprocal instruction runs on the verified render path: the blur's code holds twelve, six that it does not reach at the one to three planes Glow gives it and six in code tiers that do not run, and no other operation of the route holds one (MEASURED by a static scan of the original's code; that this route reaches none of the twelve is INFERRED). The Opacity answers 1, 2 and 3 are each verified at 64x32 and 50x7, with input alpha other than 1. The verified renders have no mask, no matte and no background: a bound mask or matte, the tracker mask, mocha with tracking data and a background layer are not verified, and the stage does not offer `combine_masks`, which has no effect without a mask. Atmosphere is not rendered (above), and no verified render uses it. 36 of 36 counted recorded renders match the stage's host arrangement.
 
 Device: every node runs on the device (`*`, `alpha_from_rgb_max`, `glow`, `postdivide`, `screen_super`, at the fourth Combine item (golden `+c4`) also `diff`, `get_alpha`, `remove_alpha`, `screen`, `v3_to_v4_if4`, and at the fifth (golden `+c5`) `overlay_super`) with the CPU's bytes, `fallback: none` on the plain, threaded and variant golden rows and on all 36 counted recorded renders through `fx_run` (MEASURED on PoCL). On input with NaN, `glow` reruns its NaN outputs on the CPU (3 nodes on the special golden row): its blur passes use the NaN-exact `blur` kernel, but `glow` itself is not on `NAN_EXACT`.
+
+### `S_GlowEdges`
+
+Finds the edges of the image and makes them glow. An edge detector picks out the edges, which `edges_smooth`, `edges_brightness` and `edges_threshold` shape; a blur spreads them, its size set by `width` and scaled per axis (`width_x`, `width_y`) and per colour channel (`width_red`, `width_green`, `width_blue`); `glow_brightness` and `color` set the glow, and `combine` blends it with the source by one of five blend modes. `glow_under_source`, `scale_source`, `scale_background`, `light_bg`, `glow_from_alpha` and `affect_alpha` set how much of the source, the background and the alpha goes into the mix, and `show` outputs either the result or an intermediate image.
+
+| style | stage |
+|---|---|
+| Glow_Edges | `stage apply glow_edges` |
+
+This effect has no wrapper program; the stage runs its registered program, Glow_Edges. The mask inputs are not connected and mocha is off.
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param width=V` | float | 1 |
+| `--param width_x=V` | float | 1 |
+| `--param width_y=V` | float | 1 |
+| `--param width_red=V` | float | 1 |
+| `--param width_green=V` | float | 1 |
+| `--param width_blue=V` | float | 1 |
+| `--param edges_smooth=V` | float | 1 |
+| `--param edges_brightness=V` | float | 1 |
+| `--param edges_threshold=V` | float | 1 |
+| `--param glow_brightness=V` | float | 1 |
+| `--param color=V` | text | 3 |
+| `--param show=V` | int | 1 |
+| `--param combine=V` | int | 1 |
+| `--param affect_alpha=V` | float | 1 |
+| `--param glow_from_alpha=V` | float | 1 |
+| `--param glow_under_source=V` | float | 1 |
+| `--param light_bg=V` | float | 1 |
+| `--param scale_source=V` | float | 1 |
+| `--param scale_background=V` | float | 1 |
+| `--param cset_opacity=V` | int | 1 |
+
+`cset_opacity` takes all three answers on this stage: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)).
+
+```sh
+target/release/sapphire stage apply glow_edges --width 64 --height 32 --depth 32 --fps 24/1 --param affect_alpha=0.2899932861328125 < in.raw > out.raw
+```
+
+Limits: the effect is verified at a pixel aspect of 1.0 only, and the stage passes 1.0. A frame narrower than 2 pixels is refused by the stage, and `fx_run` refuses the edge detector at a width of 1, because the edge detector reads one value past the end of a one-pixel row. With the second item of `show` or with `glow_from_alpha` on, the outputs of the verified comparisons equal the original's, but the compiled plan places two images differently from the original's plan, so these settings are not counted as verified.
+
+Parity: 68 counted comparisons: 34 equal, 34 different (DIFF-FEED-OFF-GRID: slider values fed as decimals off the 16.16 grid; at the host's grid values the output equals the original in every word, measured after the output was seen). The comparisons are 34 at 64x32 and 34 at 50x7, 17 equal and 17 different at each size. The 34 equal comparisons give 34 recorded renders and 34 re-rendered units, all equal, compared through both routes, `fx_run` and the stages (MEASURED). The 34 different ones were run with slider values passed as decimals, for example `width`, where the host passes each slider as its nearest 16.16 fixed-point value, so they stay counted as different. The stage puts every slider value on the host's grid before it runs the effect, and `fx_run` refuses a value off that grid, those commands among them, with `HOST-VALUE-OFF-GRID`. The default parameters are verified through the counted comparisons that leave `width` and other sliders unbound; an unbound `width` is passed as its registered default. The route runs no approximate reciprocal instruction: the edge detector and the channel blur hold none, and the six in the blur driver are not reached on the AVX2 route (MEASURED on the code; INFERRED that they are not reached). 34 of 34 counted recorded renders match the stage's host arrangement.
+
+Device: the edge detector and the channel blur run on the CPU: `edge_detect` and `blur_channels` have no device kernel (CPU-only entries, `fallback: no_kernel`, 34 nodes each on the 34 counted recorded renders through `fx_run`). Every other node (`*`, `+`, `-`, `alpha_from_rgb_max`, `clamp`, `comp_rgba`, `diff`, `get_alpha`, `interp`, `monochrome`, `overlay_super`, `postdivide`, `remove_alpha`, `screen`, `screen_super`, `v3_to_v4_if4`) runs on the device with the CPU's bytes, 262 device nodes, and the 34 outputs are equal to the CPU's (MEASURED on PoCL).
 
 ### `S_HueSatBright`
 
@@ -625,6 +711,42 @@ Parity: 19 verified comparisons, 256 recorded renders and 256 re-rendered units.
 
 Device: every node runs on the device (`*`, `make_mipmap`, `perspective`, `perspective_alpha`, `postdivide`, `warp`) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows (MEASURED on PoCL). On input with NaN, `warp` reruns its NaN outputs on the CPU (3 nodes on the special golden row): its sampler uses the hardware NaN rule, as the CPU sampler does, and has no NaN-exact kernel.
 
+### `S_WarpTransform`
+
+Moves, scales, turns and slants the image in three dimensions. `scale` and `shift` set the size and the position, `rotate` turns the image in its plane, `swivel` and `tilt` turn it about the vertical and the horizontal axis, `z_dist` and `perspective_amount` set how strongly the turned image is foreshortened, `shear` slants it, `filter` turns filtered sampling on or off, and `wrap` chooses, per axis, what fills the area outside the image.
+
+| style | stage |
+|---|---|
+| Warp_Transform_Autogen | `stage apply warp_transform_autogen` |
+
+| parameter | type | lanes |
+|---|---|---|
+| `--param scale=V` | text | 2 |
+| `--param shift=V` | text | 2 |
+| `--param z_dist=V` | float | 1 |
+| `--param rotate=V` | float | 1 |
+| `--param swivel=V` | float | 1 |
+| `--param tilt=V` | float | 1 |
+| `--param perspective_amount=V` | float | 1 |
+| `--param shear=V` | text | 2 |
+| `--param wrap=V` | text | 2 |
+| `--param filter=V` | checkbox | 1 |
+| `--param cset_opacity=V` | int | 1 |
+
+`shift` unset is answered with the registered (50, 50) pixels, as the recorded host does. That shifts the image by (50 - W/2, 50 - H/2) pixels, so at small frame sizes, 64x32 and 50x7 among them, the output is empty (MEASURED); a host that centres an unset point on the layer would render the image in place (INFERRED). Pass `--param shift=0,0`, the layer centre, to render the image in place, as the worked command does.
+
+`wrap` takes one record value per axis, x then y, each 0, 1 or 2 (the host's values 1, 2 and 3). Values 1 and 2 fill the area outside the image from the image itself, each in its own way (INFERRED from the outputs); the verified comparisons set `wrap=1,2` and `wrap=2,1`, at both sizes.
+
+The host's motion blur is off: the stage passes no shutter, and no verified plan holds a motion blur node. The mask, matte and crop inputs are not connected, mocha is off, and the motion blur and shutter parameters are not offered; their effect is INFERRED. Every offered parameter is verified by at least one comparison whose output is not empty (MEASURED). `cset_opacity` takes all three answers on this stage: each answer runs the host arrangement of its own recorded renders ([Host variants](stages.md#effects-provider)).
+
+```sh
+target/release/sapphire stage apply warp_transform_autogen --width 64 --height 32 --depth 32 --fps 24/1 --param shift=0.0,0.0 --param rotate=-22.0 --param shear=-0.149993896484375,0.0 < in.raw > out.raw
+```
+
+Parity: 41 verified comparisons (23 at 64x32 and 18 at 50x7), 78 recorded renders and 78 re-rendered units, all equal. Two of the comparisons, the default parameters at each size, give the empty output described above and verify only that path; they are not among the recorded renders. The other 39 have content, and their 78 counted recorded renders were rendered again and compared through both routes, `fx_run` and the stages, and are equal (MEASURED). A negative `scale` is verified at both sizes: the compile folds a constant condition of mixed sign in the safe scale lane by lane, so the tilt receives a constant depth; that the original folds it per lane is INFERRED from its recorded lanes. The tilt receives `perspective_amount` clamped to its range 0.25 to 4: through `fx_run` an infinite value enters as 4, and negative infinity and 0 enter as 0.25 (MEASURED). The tilt kernel's mutation test gives 150 of 150 non-equivalent mutants killed on route, 7 EQUIVALENT-ON-ROUTE (C61 to C67), raw 150 of 168: the seven differ only when `cos_over_persp` is +-0, which the clamped perspective range 0.25 to 4 and a cosine never +-0 exclude (MEASURED). The tilt and the alpha tilt run no approximate reciprocal instruction (MEASURED on the code), so the bound is 0 ulp. Of the counted recorded renders, 61 of 78 match the stage's host arrangement, and the others equal `fx_run` at the stage's buffer phases; a plan with no default-xy writer, such as the default at the layer centre, takes no writer phase list.
+
+Device: the tilt and the alpha tilt run on the CPU: `tilt` and `tilt_alpha` have no device kernel (CPU-only entries, `fallback: no_kernel`, 74 and 8 nodes on the 78 counted recorded renders through `fx_run`). Every other node (`*`, `make_mipmap`, `postdivide`, `warp`) runs on the device with the CPU's bytes, 232 device nodes, and the 78 outputs are equal to the CPU's (MEASURED on PoCL).
+
 ## Build and run
 
 From the repository root, offline, with a stable Rust toolchain:
@@ -650,8 +772,8 @@ fx_run PROGRAM --size WxH --out PREFIX [--synth SEED] [options]
 
 The effects need no external data. Nothing is read from the original plugin or from a copied file at run time: `fx_run` takes no table argument and reads only the input planes and the output path it is given.
 
-- **Effect graphs.** The programs of the twenty styles are built by Rust constructor code in `fx_eval` (`programs_native`). That code is a tool-made translation of the plugin's program rows into Rust: a development tool produced it from the parsed program structure. It holds no program text and reads no table.
-- **Parameter and class facts.** The registered parameters, ranges, input indices, class flags and combination tables that the twenty styles need are Rust definitions in the crate `effects_rtdata`. A definition is kept only if it is keyed by one of the 35 programs of the styles, by a class they name, or by a builtin they call. A lookup that has no row misses, as it did with the tables.
+- **Effect graphs.** The programs of the twenty-four styles are built by Rust constructor code in `fx_eval` (`programs_native`). That code is a tool-made translation of the plugin's program rows into Rust: a development tool produced it from the parsed program structure. It holds no program text and reads no table.
+- **Parameter and class facts.** The registered parameters, ranges, input indices, class flags and combination tables that the twenty-four styles need are Rust definitions in the crate `effects_rtdata`. A definition is kept only if it is keyed by one of the 42 programs of the styles, by a class they name, or by a builtin they call. A lookup that has no row misses, as it did with the tables.
 - **Sin and cos tables.** The sin and cos routines of the effects need four tables. None is stored; all are computed from their mathematical definition at first use, with a small fixed-point big number (320 bit, written for this repository, no crate):
 
 - The sincosf table has 64 entries: the correctly rounded (sin, cos) of k pi/32, exact 0 and 1 at the axes.

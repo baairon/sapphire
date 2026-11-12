@@ -1,0 +1,13 @@
+[package]
+name = "blur_channels"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Port of the blur_channels class: per channel blur render (slot 52)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+blur = { path = "../blur" }
+fx_common = { path = "../../fx_common" }

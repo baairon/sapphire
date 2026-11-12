@@ -43,3 +43,23 @@ fn matching_declaration_passes_the_style_gate() {
     let (_, e) = run("Blur_Color", &["--effect-answer", "0", "--effect-count", "2"]);
     assert!(!e.contains("STYLE-SELECT"), "{}", e);
 }
+
+#[test]
+fn blur_motion_styles_are_tabled() {
+    // no --size: the run stops later for that reason, never for STYLE-SELECT
+    let (_, e) = run("Blur_Motion_Mono_Autogen", &["--effect-answer", "2", "--effect-count", "2"]);
+    assert!(!e.contains("STYLE-SELECT"), "{}", e);
+    let (_, e) = run("Blur_Motion_Autogen", &["--effect-answer", "1", "--effect-count", "2"]);
+    assert!(!e.contains("STYLE-SELECT"), "{}", e);
+    let (_, e) = run("Blur_Motion_Autogen", &["--effect-answer", "0", "--effect-count", "2"]);
+    assert!(!e.contains("STYLE-SELECT"), "{}", e);
+    let (rc, e) = run("Blur_Motion_Autogen", &["--effect-answer", "3", "--effect-count", "2"]);
+    assert_eq!(rc, 2);
+    assert!(e.contains("STYLE-INDEX-OUT-OF-TABLE"), "{}", e);
+    let (rc, e) = run("Blur_Motion_Mono_Autogen", &["--effect-answer", "1", "--effect-count", "2"]);
+    assert_eq!(rc, 2);
+    assert!(e.contains("STYLE-SELECT-MISMATCH"), "{}", e);
+    let (rc, e) = run("Blur_Motion_Autogen", &["--effect-answer", "1", "--effect-count", "3"]);
+    assert_eq!(rc, 2);
+    assert!(e.contains("STYLE-SELECT-COUNT-MISMATCH"), "{}", e);
+}

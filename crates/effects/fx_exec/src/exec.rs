@@ -586,9 +586,11 @@ fn eval_graph_core(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, hos
                     (v, tag)
                 };
                 // a make_mipmap node whose consumers all read it linewise has the plain image format: its value is the base image
+                // The root is included: the format pass resets a root to the best format its class accepts (listing 0xa12b to 0xa3aa: no
+                // parent, slot 29 tried at 2 first), which is 2 for make_mipmap, so a root make_mipmap is the plain base image.
                 let outval = match outval {
-                    Val::Mip(m) if c == "make_mipmap" && nd.idx != cp.root && fx_eval::cpuplan::node_format(cp, nd.idx) == 2 => Val::Img(Rc::new(m.base.clone())),
-                    Val::DevMip(d) if c == "make_mipmap" && nd.idx != cp.root && fx_eval::cpuplan::node_format(cp, nd.idx) == 2 => Val::Img(Rc::new(d.materialize()?.base.clone())),
+                    Val::Mip(m) if c == "make_mipmap" && fx_eval::cpuplan::node_format(cp, nd.idx) == 2 => Val::Img(Rc::new(m.base.clone())),
+                    Val::DevMip(d) if c == "make_mipmap" && fx_eval::cpuplan::node_format(cp, nd.idx) == 2 => Val::Img(Rc::new(d.materialize()?.base.clone())),
                     other => other,
                 };
                 let out_channels = match &outval {

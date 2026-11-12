@@ -1,13 +1,13 @@
 # Driving the effect parameters
 
-How to run each of the 20 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
+How to run each of the 24 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
 
 The stages themselves (requirements, host arrangement, exits, limits) are described in [Effects provider](stages.md#effects-provider). This page is about the parameters.
 
 ## Conventions on this page
 
 - **INFERRED** marks a description that rests on reading the effect graph (the native program constructors in `crates/effects/fx_eval/src/programs_native.rs` and the parameter definitions in `crates/effects/rtdata`), not on a measurement.
-- **MEASURED** marks a statement checked by running the code. "Verified at these values" lists the parameter values at which the stage output is byte identical to a recorded render of the original (MEASURED at depth 32, full SHA-256: by `crates/neutral-handoff/tests/fx_stage_parity.rs` for 382 recorded renders over the 13 stages of the first ten effects, and for `flicker`, `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage by rendering through `sapphire stage apply` their counted renders that match the stage's host arrangement, 24, 36, 32, 54 and 27; all byte identical). Values outside those lists run through the same code path and are INFERRED.
+- **MEASURED** marks a statement checked by running the code. "Verified at these values" lists the parameter values at which the stage output is byte identical to a recorded render of the original (MEASURED at depth 32, full SHA-256: by `crates/neutral-handoff/tests/fx_stage_parity.rs` for 382 recorded renders over the 13 stages of the first ten effects, and for `flicker`, `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage by rendering through `sapphire stage apply` their counted renders that match the stage's host arrangement, 24, 36, 32, 54 and 27, and for the two `S_BlurMotion` stages, `warp_transform_autogen` and the `S_GlowEdges` stage the same way, 112, 120, 61 and 34; all byte identical). Values outside those lists run through the same code path and are INFERRED.
 - Every worked command below was run on this tree and ended with exit 0 (MEASURED, 64x32 `testsrc` clip, 3 frames, depth 32).
 
 ## Running a stage
@@ -120,6 +120,29 @@ target/release/sapphire stage apply transform_and_blur_autogen --width 64 --heig
   --param shutter_duration=2 --param shutter_shift=0.5 --param exposure_bias=0.25 --param wrap=1,2 --in clip.raw --out out.raw
 target/release/sapphire stage apply blur_motion_curves_no_transform_autogen --width 64 --height 32 --depth 32 --frames 3 \
   --param shutter_duration=2 --param blur_res=1 --param scale_result=0.75 --in clip.raw --out out.raw
+```
+
+## `S_BlurMotion`
+
+Two stages: `blur_motion_autogen` (program `Blur_Motion_Autogen`) and `blur_motion_mono_autogen` (program `Blur_Motion_Mono_Autogen`), the colour and the mono choice of the effect's Effect popup. Each averages the image along a camera move from a start to an end position about a centre (INFERRED). The mask inputs are not connected and mocha is off: the stage fixes the mask parameters and `show_mocha_mask_only` off.
+
+- `center`, two lanes, `--set`. The point the move turns and scales about (INFERRED). Verified at `0.5625,-1.0625` and `1.0,-1.8600000143051147`.
+- `from_z_dist` and `to_z_dist`, scalar, `--set`. The depth distance at the start and at the end of the move (INFERRED). Verified at `1.5`, `2.5` and `3.0` (`from_z_dist`); `1.25` (`to_z_dist`).
+- `from_rotate` and `to_rotate`, scalar, `--set`. The rotation at the start and at the end of the move, in degrees (INFERRED). Verified at `-17.0` and `-25.0`, and `-21.0` on the mono stage (`from_rotate`); `-12.0`, `25.0` and `42.0`, and `13.0` on the mono stage (`to_rotate`).
+- `from_shift` and `to_shift`, two lanes, `--host-param` (host units). The shift at the start and at the end of the move (INFERRED). Verified at `0.5,-0.25` (`from_shift`); `-0.375,0.125` (`to_shift`).
+- `exposure_bias`, scalar, `--set`. Weights the samples along the path (INFERRED). Verified at `0.0`, `0.25`, `0.375`, `0.625`, `0.75` and `1.0`, and `0.125` on the mono stage.
+- `blur_res`, popup, `--set` record value 0 to 2: full, half or quarter resolution (INFERRED). Verified at `1` and `2`.
+- `wrap`, two-lane popup, `--set` record values 0 to 2 per axis. What fills the area the move brings in from outside the frame (INFERRED). Verified at `0.0,1.0`, `0.0,2.0`, `1.0,0.0` and `2.0,0.0`.
+- `subpixel`, checkbox, `--set`. Sub-pixel sampling (INFERRED). Verified at `0`.
+- `cset_opacity`: see the opacity popup. All three answers render on these stages. Verified at `1` and `3`; the renders that leave it unset run the default answer.
+
+`to_z_dist` and `to_shift` are offered because verified comparisons set them. The verified sizes are 64x32 and 50x7, at a pixel aspect of 1.0.
+
+```sh
+target/release/sapphire stage apply blur_motion_autogen --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param center=0.5625,-1.0625 --param from_rotate=-17.0 --param exposure_bias=0.25 --in clip.raw --out out.raw
+target/release/sapphire stage apply blur_motion_mono_autogen --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param center=0.5625,-1.0625 --param blur_res=1 --in clip.raw --out out.raw
 ```
 
 ## `S_Diffuse`
@@ -248,6 +271,34 @@ The verified sizes are 64x32 and 50x7.
 ```sh
 target/release/sapphire stage apply glow --width 64 --height 32 --depth 32 --frames 3 \
   --param combine=1 --param glow_under_source=0.75 --param cset_opacity=3 --in clip.raw --out out.raw
+```
+
+## `S_GlowEdges`
+
+One stage, `stage apply glow_edges`, which runs the registered program itself (no wrapper). It finds the edges of the image, spreads them into a glow and combines the glow with the source (INFERRED). The mask inputs are not connected and mocha is off. A frame narrower than 2 pixels is refused.
+
+- `width`, scalar, `--host-param` (host units). The size of the glow (INFERRED). Unset, it is passed as its registered default. Verified at `20`, `26.57000732421875`, `41.30000305175781`, `62.899993896484375` and `78.39999389648438`.
+- `width_x` and `width_y`, scalar, `--set`. Scale the size per axis (INFERRED). Verified at `0.600006103515625`, `0.899993896484375` and `1.5` (`width_x`); `0.75` and `1.600006103515625` (`width_y`).
+- `width_red`, `width_green` and `width_blue`, scalar, `--set`. Scale the size per colour channel (INFERRED). Verified at `0.8000030517578125` (red); `1.350006103515625` (green); `2.1999969482421875` (blue).
+- `edges_smooth`, scalar, `--host-param` (host units). How much the image is smoothed before its edges are found (INFERRED). Verified at `1.17999267578125`, `1.2100067138671875` and `1.42999267578125`.
+- `edges_brightness`, scalar, `--set`. Scales the edges (INFERRED). Verified at `0.67999267578125`.
+- `edges_threshold`, scalar, `--set`. The level below which an edge does not glow (INFERRED). Verified at `0.17999267578125` and `0.2899932861328125`.
+- `glow_brightness`, scalar, `--set`. Scales the glow (INFERRED). Verified at `0.7100067138671875` and `1.6999969482421875`.
+- `color`, three lanes (red, green, blue), `--set`. The colour of the glow (INFERRED). Verified at `0.501960813999176,0.7529411911964417,0.1882352977991104`.
+- `combine`, popup, `--set` record value. How the glow joins the source, one of five blend modes given by its zero-based index (INFERRED). Verified at `0`, `1`, `3` and `4`.
+- `show`, popup, `--set` record value. `0` outputs the result and `1` an intermediate image (INFERRED). The second item is not counted as verified (see `S_GlowEdges` in [Effects](effects.md)).
+- `glow_from_alpha`, scalar, `--set`. Takes the glow from the alpha (INFERRED). Not counted as verified when on (see `S_GlowEdges` in [Effects](effects.md)).
+- `glow_under_source`, scalar, `--set`. Moves the glow from over the source to under it (INFERRED). Verified at `0.600006103515625`.
+- `scale_source` and `scale_background`, scalar, `--set`. Scale the source and the background in the mix (INFERRED). Verified at `0.350006103515625` and `0.8000030517578125` (`scale_source`); `0.8000030517578125` (`scale_background`).
+- `light_bg`, scalar, `--set`. How much the glow lights the background (INFERRED). Verified at `0.6999969482421875`.
+- `affect_alpha`, scalar, `--set`. How much the glow adds to the alpha (INFERRED). Verified at `0.2899932861328125`, `0.42999267578125` and `0.850006103515625`.
+- `cset_opacity`: see the opacity popup. All three answers render on this stage. Verified at `1` and `3`; the renders that leave it unset run the default answer.
+
+The verified sizes are 64x32 and 50x7, at a pixel aspect of 1.0.
+
+```sh
+target/release/sapphire stage apply glow_edges --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param affect_alpha=0.2899932861328125 --param combine=1 --in clip.raw --out out.raw
 ```
 
 ## `S_HueSatBright`
@@ -399,6 +450,28 @@ One stage, `warp_perspective_autogen` (program `Warp_Perspective_Autogen`). It l
 ```sh
 target/release/sapphire stage apply warp_perspective_autogen --width 64 --height 32 --depth 32 --frames 3 \
   --param latitude=60 --param swing=-12 --param roll=30 --param z_dist=2.5 --param wrap=0,2 --in clip.raw --out out.raw
+```
+
+## `S_WarpTransform`
+
+One stage, `warp_transform_autogen` (program `Warp_Transform_Autogen`). It moves, scales, turns and slants the image in three dimensions (INFERRED). The mask, matte and crop inputs are not connected, mocha is off and the host's motion blur is off.
+
+- `shift`, two lanes, `--set`. The position of the image; `0,0` is the layer centre and renders the image in place. Unset, it is answered with the registered (50, 50) pixels, which moves the image by (50 - W/2, 50 - H/2) pixels and leaves small frames empty (MEASURED, see `S_WarpTransform` in [Effects](effects.md)). Verified at `0.0,0.0`, `0.24,-0.06` and `0.375,0.1875`.
+- `scale`, two lanes, `--set`. The size per axis; a negative lane mirrors the image (INFERRED). Verified at `-0.8000030517578125,1.0`, `-1.5,1.0` and `0.6999969482421875,1.3000030517578125`.
+- `rotate`, scalar, `--set`. Turns the image in its plane, in degrees (INFERRED). Verified at 10 values from `-25.0` to `20.0`.
+- `swivel` and `tilt`, scalar, `--set`. Turn the image about the vertical and the horizontal axis, in degrees (INFERRED). Verified at `3.0`, `4.0`, `6.0` and `12.0` (`swivel`); `-14.0`, `-7.0`, `-6.0` and `-5.0` (`tilt`).
+- `z_dist`, scalar, `--set`. The depth distance of the camera (INFERRED). Verified at `0.600006103515625` and `1.600006103515625`.
+- `perspective_amount`, scalar, `--set`. How strongly the turned image is foreshortened (INFERRED). Verified at `0.5` and `2.0`.
+- `shear`, two lanes, `--set`. Slants the image per axis (INFERRED). Verified at `-0.149993896484375,0.0`, `0.0,0.1199951171875` and `0.25,-0.100006103515625`.
+- `wrap`, two-lane popup, `--set` record values 0 to 2 per axis, x then y (the host's values 1, 2 and 3). What fills the area outside the image; `1` and `2` fill it from the image, each in its own way (INFERRED). Verified at `1.0,2.0` and `2.0,1.0`.
+- `filter`, checkbox, `--set`. Filtered sampling (INFERRED). Verified at `0`.
+- `cset_opacity`: see the opacity popup. All three answers render on this stage. Verified at `1`, `2` and `3`.
+
+The verified sizes are 64x32 and 50x7.
+
+```sh
+target/release/sapphire stage apply warp_transform_autogen --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param shift=0.0,0.0 --param rotate=-22.0 --param shear=-0.149993896484375,0.0 --in clip.raw --out out.raw
 ```
 
 ## Keyframed values

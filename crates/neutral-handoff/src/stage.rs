@@ -516,7 +516,7 @@ mod tests {
     fn the_registry_holds_the_conformance_ffmpeg_and_effect_stages() {
         let defs = definitions();
         let ids: Vec<&str> = defs.iter().map(|d| d.id).collect();
-        assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen", "flicker", "glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake"]);
+        assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen", "flicker", "glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake", "blur_motion_autogen", "blur_motion_mono_autogen", "warp_transform_autogen", "glow_edges"]);
         assert_eq!(defs[0].depths, vec![8, 16, 32]);
         assert_eq!((defs[0].geometry, defs[0].spool), ("preserve", false));
         assert_eq!((defs[1].geometry, defs[1].spool), ("declared", false));
