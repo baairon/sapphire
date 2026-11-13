@@ -673,7 +673,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
     }
     let ranges_off = opt.ranges_off || crate::ranges::ranges_off_env();
     // parameters whose record input is UNBOUND take the copy-default path of (no clamp). The bound-input mask is explicit (`bound_input_mask`default 0; input 0 is not implied);
-    // inputs named in `bound_elnum` are bound too. INFERRED: the input index is the position in the declared input list.
+    // inputs named in `bound_elnum` are bound too. The input index is the position in the registered program's input list (the layout order).
     let mut noclamp: std::collections::HashSet<String> = std::collections::HashSet::new();
     // step a host point parameter fed from the run's point lines (fx_run's block) is the point arm's stored result;
     // the original's plan carries it unclamped (TB_R1's recorded plan: '- xy [ 0.5625 -1.0625 ]' with the record's min 0), so the range
@@ -688,10 +688,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
     if !opt.unbound_exception_off && std::env::var_os("DSW3_UNBOUND_OFF").is_none() {
         for p in &g.params {
             if let Some(k) = crate::ranges::param_input_index(&g.name, &p.name) {
-                // PARAM_INPUTS.tsv is measured in the def's input order; a merged input group is translated by input name (an input the layout row
-                // does not carry has no position: 99, unbound)
-                // a row confirmed by a record's input index cell is already the registered program's index
-                let k = if g.def_input_order.is_empty() || crate::ranges::param_input_recorded(&g.name, &p.name) { k } else { g.def_input_order.get(k).and_then(|n| g.inputs.iter().position(|i| &i.name == n)).unwrap_or(99) };
+                // the input index of a PARAM_INPUTS row is the position in the registered program's input list (the layout order); it is used as given
                 let bm = opt.bound_input_mask; // rule 1: no environment override (DSW5_BOUND_MASK removed)
                 let bound = (k < 32 && (bm >> k) & 1 == 1) || g.inputs.get(k).map(|i| opt.bound_elnum.contains_key(&i.name)).unwrap_or(false);
                 if !bound {

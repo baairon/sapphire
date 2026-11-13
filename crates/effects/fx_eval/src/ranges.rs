@@ -185,14 +185,12 @@ pub fn clamp_param(program: &str, parameter: &str, v: &mut [f32]) -> Option<bool
 
 // ---------------------------------------------------------------- the unbound-input exception
 
-///, MEASURED (Drop_Shadow PREC rows, n3 and n4) and READ : a parameter record whose input index is >= 0 and whose
-/// input is not bound (bit of [ctx] clear) takes the copy-default path of and SKIPS the range clamp. `data/PARAM_INPUTS.tsv` lists
-/// (program, parameter, input_index) read from the records after the original program load; defined in effects_rtdata (field `inputs`).
-
-/// the PARAM_INPUTS rows that a record's input index cell confirms (read from the recorded CTX records). The table rows were written by tools/rec_inputs.py from the def-text parse; Warp_Perspective_Autogen's three rows held the def
-/// order's 0 and take the registered program's 1 by record (D2, L80e).
-/// Defined in effects_rtdata (field `input_records`).
-
+/// A parameter whose PARAM_INPUTS row names an input that is not bound (its bit of the bound-input mask is clear) takes the copy-default path and skips the range clamp
+/// (measured on the Drop_Shadow range rows). `data/PARAM_INPUTS.tsv` lists (program, parameter, input_index); defined in effects_rtdata (field `inputs`).
+///
+/// Contract of the PARAM_INPUTS rows: the input index of each row is the position of the input in the registered program's input list (the layout order),
+/// so the compile uses it as given. For Warp_Perspective_Autogen the three rows blur_mask, invert_mask and mask_use name input 1.
+/// The rows that a record's input index cell confirms are listed in effects_rtdata (field `input_records`); only `host_value_index_check` reads them.
 pub const PARAM_INPUT_INDEX_BY_RECORD: &str = "PARAM-INPUT-INDEX-BY-RECORD (Warp_Perspective_Autogen: blur_mask, invert_mask, mask_use input index 1 from the registered records' input index cell)";
 
 /// True when a record's input index cell confirms the row (exact program name first, then the core name, as param_input_index).
