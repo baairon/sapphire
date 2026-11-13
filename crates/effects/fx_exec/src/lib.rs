@@ -21,12 +21,21 @@ pub mod device_ops_footprint;
 pub mod device_ops_ripmap;
 /// device ops of blur, masked_blur, grad, sharpen, edge_aware_sharpen and static2
 pub mod device_ops_neighbourhood;
+/// launch helpers of the glint row and column box passes
+pub mod device_ops_glint_passes;
 /// device ops of plane assembly (copy_alpha, get_alpha, v3_to_v4_if4_a, append)
 pub mod device_ops_plane;
 /// device ops of screen, overlay_super and alpha_from_rgb_max
 pub mod device_ops_glow_ops;
+/// device op of blur_channels (one blur route launch per plane)
+pub mod device_ops_blur_channels;
 /// device ops of glow (bright pass, then the neighbourhood blur passes)
 pub mod device_ops_glow;
+pub mod device_ops_tilt;
+pub mod device_ops_tilt_alpha;
+pub mod device_ops_edge;
+pub mod device_ops_glint_diag;
+pub mod device_ops_glint;
 pub mod fxrun;
 pub mod cmds;
 pub mod nanrule;

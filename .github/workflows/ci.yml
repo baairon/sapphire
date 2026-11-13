@@ -189,5 +189,5 @@ jobs:
           SAPPHIRE_REQUIRE_DEVICE: "1"
         run: |
           cargo test --release -p fx_exec --lib device -- --test-threads=1
-          cargo test --release -p fx_exec --test device_backend --test device_pointwise --test device_warp --test device_ripmap --test device_neighbourhood --test device_glow --test device_glow_ops --test device_footprint -- --test-threads=1
+          cargo test --release -p fx_exec --test device_backend --test device_pointwise --test device_warp --test device_ripmap --test device_neighbourhood --test device_glow --test device_glow_ops --test device_footprint --test device_edge --test device_edge_mutants --test device_tilt --test device_tilt_alpha --test device_glint --test device_glint_diag --test device_glint_passes -- --test-threads=1
           SAPPHIRE_REQUIRE_DEVICE=1 SAPPHIRE_DEVICE=gpu python -I tools/fx_golden.py

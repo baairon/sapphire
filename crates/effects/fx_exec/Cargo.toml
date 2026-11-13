@@ -27,6 +27,12 @@ format14_write = { path = "../kernels/format14_write" }
 format14_read_b = { path = "../kernels/format14_read_b" }
 plane_service = { path = "../kernels/plane_service" }
 glint_wire = { path = "../kernels/glint_wire" }
+glint_pass_rows = { path = "../kernels/glint_pass_rows" }
+glint_pass_cols = { path = "../kernels/glint_pass_cols" }
+glint_dispatch = { path = "../kernels/glint_dispatch" }
+glint_worker = { path = "../kernels/glint_worker" }
+glint_diag_box = { path = "../kernels/glint_diag_box" }
+diagonal_box_sum = { path = "../kernels/diagonal_box_sum" }
 hue_shift = { path = "../kernels/hue_shift" }
 sat_scale = { path = "../kernels/sat_scale" }
 hue_shift_preserve_luma = { path = "../kernels/hue_shift_preserve_luma" }

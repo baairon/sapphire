@@ -140,10 +140,19 @@ pub static DEVICE_OPS: &[DeviceOp] = &[
     crate::device_ops_glow_ops::ALPHA_FROM_RGB_MAX,
     // glow: bright pass, then the neighbourhood blur passes (device_ops_glow.rs)
     crate::device_ops_glow::GLOW,
+    // tilt (device_ops_tilt.rs)
+    crate::device_ops_tilt::TILT,
+    // tilt_alpha (device_ops_tilt_alpha.rs)
+    crate::device_ops_tilt_alpha::TILT_ALPHA,
+    crate::device_ops_edge::EDGE_DETECT,
+    // blur_channels (device_ops_blur_channels.rs)
+    crate::device_ops_blur_channels::BLUR_CHANNELS,
+    // glint: the CPU's dispatcher and worker on the host, the passes on the device (device_ops_glint.rs)
+    crate::device_ops_glint::GLINT,
 ];
 
 /// Ops allowed to run on a device.
-pub const ALLOWLIST: &[&str] = &["copy", "one_minus", "warp_rel", "warp", "rotate", "perspective", "perspective_alpha", "blur", "masked_blur", "grad", "sharpen", "edge_aware_sharpen", "static2", "+", "-", "*", "/", "max", "min", "diff", "abs", "negate", "if+", "if>", "clamp", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "max_element", "min_element", "screen_super", "interp", "dissolve", "comp_premult", "comp_rgba", "postdivide", "round", "scale_rgb", "add_rgb", "sat_scale", "hue_shift", "hue_shift_preserve_luma", "monochrome", "monochrome_a", "make_mipmap", "blur_warp", "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append", "screen", "overlay_super", "alpha_from_rgb_max", "glow"];
+pub const ALLOWLIST: &[&str] = &["copy", "one_minus", "warp_rel", "warp", "rotate", "perspective", "perspective_alpha", "blur", "masked_blur", "grad", "sharpen", "edge_aware_sharpen", "static2", "+", "-", "*", "/", "max", "min", "diff", "abs", "negate", "if+", "if>", "clamp", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "max_element", "min_element", "screen_super", "interp", "dissolve", "comp_premult", "comp_rgba", "postdivide", "round", "scale_rgb", "add_rgb", "sat_scale", "hue_shift", "hue_shift_preserve_luma", "monochrome", "monochrome_a", "make_mipmap", "blur_warp", "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append", "screen", "overlay_super", "alpha_from_rgb_max", "glow", "tilt", "tilt_alpha", "edge_detect", "blur_channels", "glint"];
 
 /// Allowlisted ops whose device output may hold a NaN: every NaN their kernels write comes from an `isnan` test and a select in
 /// the CPU's operand order (the first NaN operand quieted by OR 0x00400000, a fresh NaN written as 0xffc00000, a min or max
@@ -153,7 +162,7 @@ pub const NAN_EXACT: &[&str] = &[
     "copy", "+", "-", "*", "/", "max", "min", "diff", "screen_super", "dissolve", "postdivide", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to",
     "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of",
     "make_mipmap", "alpha_from_rgb_max", "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append",
-    "blur", "masked_blur", "sharpen", "edge_aware_sharpen",
+    "blur", "masked_blur", "sharpen", "edge_aware_sharpen", "tilt", "tilt_alpha", "edge_detect", "blur_channels", "glint",
 ];
 
 /// The [`NAN_EXACT`] ops whose NaN words follow from the CPU source on every compiler: a two-NaN pick written as `nanop`, an
@@ -163,7 +172,7 @@ pub const NAN_EXACT_WRITTEN: &[&str] = &[
     "copy", "-", "/", "max", "min", "diff", "postdivide", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha",
     "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "alpha_from_rgb_max",
     "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append",
-    "blur", "masked_blur", "sharpen", "edge_aware_sharpen",
+    "blur", "masked_blur", "sharpen", "edge_aware_sharpen", "tilt", "tilt_alpha", "edge_detect", "blur_channels", "glint",
 ];
 
 /// The [`NAN_EXACT`] ops whose NaN words are those of the compiled CPU instruction: a commutative `+` or `*` (the compiler may
@@ -184,11 +193,6 @@ pub const NAN_TWIN_CAP: usize = 600;
 /// Ops with no device kernel, each with the reason. The list shrinks as kernels land. `get_frame`, `get_prev_dest` and
 /// `save_prev_dest` are host data movement (`kernels::HOST_CLASSES`) and are not kernel ops.
 pub const CPU_ONLY: &[(&str, &str)] = &[
-    ("tilt", "data dependent scalar perspective loops with per element branches and a platform sincosf; no OpenCL kernel"),
-    ("tilt_alpha", "the ramp needs the plugin sincos (crate libm_sincos) and a per row 32 byte alignment peel that depends on the destination base address, which the device path does not carry; no OpenCL kernel"),
-    ("edge_detect", "needs the blur-core kernel chained with a neighbour-row gradient pass; no OpenCL kernel"),
-    ("blur_channels", "per channel widths and gains over the blur driver; no OpenCL kernel yet, the blur kernel does not take per channel sigma; a source with fewer planes than the tag (planes at or beyond the source count copy the previous plane) is served here too"),
-    ("glint", "a composition of box passes, diagonal passes and a bright pass whose device kernels do not exist yet"),
 ];
 
 fn copy_calls_are_identity(tag: i32) -> bool {

@@ -1414,7 +1414,7 @@ mod device_nan_exact_neighbourhood_tests {
             "float nf_pick3(float a, float b, float c) {\n    if (b != b) {\n        return as_float(as_uint(b) | 0x400000u);\n    }\n    return nf_pick(a, c);",
             &["sharpen", "masked_blur", "blur"],
         ),
-        ("contracted multiply-add replaced by two roundings", "    float r = fma(d, s2, -s3);", "    float r = d * s2 - s3;", &["sharpen", "blur"]),
+        ("contracted multiply-add replaced by two roundings", "float nf_fms213(float d, float s2, float s3) {\n    float r = fma(d, s2, -s3);", "float nf_fms213(float d, float s2, float s3) {\n    float r = d * s2 - s3;", &["sharpen", "blur"]),
         (
             "window sum order",
             "        y = nf_add(nf_sub(BW_AT(x, i + r + 1), BW_AT(x, i - r)), y);",
