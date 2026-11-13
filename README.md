@@ -6,7 +6,7 @@ sapphire has two parts with different jobs. The **effects** are <!--f:effects_re
 
 ## Status
 
-- **Effects.** Nineteen effects run as native Rust and match the original bit for bit on every compared case, apart from four counted comparisons of `Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner, and 34 of `S_GlowEdges` that were run with slider values passed as decimals, not as the 16.16 fixed-point values a host passes ([effects](docs/effects.md)). They render through `fx_run` and as `sapphire stage` commands, from code in this repository alone, with no external data. The planned effects are ranked in four tiers for YouTube edits; the eight of Tier 1 and four of Tier 2 are done, and the later tiers follow in rank order ([roadmap](docs/roadmap.md)). Effects outside the roadmap are not planned.
+- **Effects.** Nineteen effects run as native Rust and match the original bit for bit on every compared case, apart from four counted comparisons of `S_Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner, and 34 of `S_GlowEdges` that were run with slider values passed as decimals, not as the 16.16 fixed-point values a host passes ([effects](docs/effects.md)). They render through `fx_run` and as `sapphire stage` commands, from code in this repository alone, with no external data. The [roadmap](docs/roadmap.md) lists the effects the rebuild covers: the nineteen that are done and `S_Retime`, which is not yet done.
 - **Speed.** The CPU path renders one 1920x1080 frame of the slowest stage, `blur_motion_curves_no_transform_autogen`, in about 1.1 s where the earlier one process per frame route took about 52 s (MEASURED; [Speed](docs/guide.md#speed)).
 - **Keyframes.** Every effect stage accepts keyed parameter values (`VALUE@FRAME;VALUE@FRAME`) except `trails_autogen`; each frame is a plain run at the value the keys give for it (MEASURED), and the values between keys are INFERRED ([guide](docs/guide.md#running-a-stage-on-a-clip)).
 - **Device path.** `--device gpu|gpu=N|auto` and `SAPPHIRE_DEVICE` run the kernels through OpenCL, byte identical to the CPU path. It is MEASURED on PoCL, an OpenCL runtime on the CPU, only; speed on a real GPU is INFERRED ([guide](docs/guide.md#rendering-on-a-device)).
@@ -73,8 +73,8 @@ The last command decodes `clip.mp4`, shifts its hue with the `S_HueSatBright` st
 - [docs/parameters-guide.md](docs/parameters-guide.md): every stage parameter, how to write its value, and the values verified against recorded renders.
 - [docs/effects.md](docs/effects.md): the nineteen native effects, their status, how to build and run `fx_run`, and their shared limits.
 - [docs/stages.md](docs/stages.md): the stage manifest and apply command, how a new provider joins, and the effects provider.
-- [docs/roadmap.md](docs/roadmap.md): the planned effects, ranked in four tiers for YouTube edits, and the nineteen done.
-- [docs/adding-an-effect.md](docs/adding-an-effect.md): how to add the next effects.
+- [docs/roadmap.md](docs/roadmap.md): the effects the rebuild covers, the nineteen done and the one not yet done, and the work every effect shares.
+- [docs/adding-an-effect.md](docs/adding-an-effect.md): how to add an effect.
 - [docs/glossary.md](docs/glossary.md): the technical terms of the function record.
 - [docs/parity.md](docs/parity.md): what parity means for the function record, the tiers, strict and strictest, the caveats.
 - [docs/harness.md](docs/harness.md): the oracle, worlds, the `Env` trait, vector sets, comparison and replay.
@@ -125,14 +125,14 @@ The two parts of the repository share a method and its tools, but their crates s
 
 The effects' tools build on the function record's. Their kernel comparisons run in a harness that uses the register and error tables of the record's oracle (`archive:tools/oracle.py`); the disassembly listing that the effect crates cite was made by the record's indexing tool (`archive:tools/index_dump.py`); and an adapted copy of the record's lifter has lifted and compared functions of the larger section, none of which is in this repository. The effect crates use no code of the function record: their x86 rules are their own (`crates/effects/fx_common/src/x86.rs` and `crates/effects/fx_common/src/nanop.rs`), and no effect crate and no command depends on a lift crate, `neutral-world` or `neutral-parity` ([Crate map](#crate-map)).
 
-The nineteen native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the planned effects, ranked in four tiers, are in [docs/roadmap.md](docs/roadmap.md). A stage is a program that passes raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
+The nineteen native effects, their status and what each claim covers are in [docs/effects.md](docs/effects.md); the effects the rebuild covers are listed in [docs/roadmap.md](docs/roadmap.md). A stage is a program that passes raw frames through the pipeline; a new provider joins as in [docs/stages.md](docs/stages.md).
 
 Each registered style of the nineteen effects is also a frames/2 stage, so twixtor and any other wrapper can run it as `sapphire stage apply STAGE` (25 stages). They are linked into `sapphire`, are always listed and need no `fx_run` process; `fx_run` is needed only for `--describe-params`. The [guide](docs/guide.md) shows how to run them.
 
 | Effect | Stages | Kind | Byte identical through the stage |
 |---|---|---|---|
 | `S_Blur` | 2 | temporal | 36 of 48 recorded renders |
-| `BlurMoCurves` styles | 2 | temporal | 26 of 67 |
+| `S_BlurMoCurves` styles | 2 | temporal | 26 of 67 |
 | `S_BlurMotion` | 2 | temporal | 232 of 352 |
 | `S_Diffuse` | 1 | temporal | 31 of 42 |
 | `S_DissolveShake` | 1 | temporal | 27 of 36 |
@@ -143,7 +143,7 @@ Each registered style of the nineteen effects is also a frames/2 stage, so twixt
 | `S_Glow` | 1 | temporal | 36 of 36 |
 | `S_GlowEdges` | 1 | temporal | 34 of 34 |
 | `S_HueSatBright` | 1 | temporal | 118 of 130 |
-| `Shake` | 3 | temporal | 54 of 66 |
+| `S_Shake` | 3 | temporal | 54 of 66 |
 | `S_Sharpen` | 2 | temporal | 35 of 78 |
 | `S_SwishPan` | 1 | temporal | 32 of 36 |
 | `S_TimeWarpRGB` | 1 | temporal | 10 of 22 |
@@ -153,7 +153,7 @@ Each registered style of the nineteen effects is also a frames/2 stage, so twixt
 
 All 25 stages have kind `temporal`, because the frames/2 convention accepts keyed values only for temporal stages. Only `time_warp_rgb_autogen` and `trails_autogen` read frames other than the current one; the rest are `temporal` so that they accept keyframes. `swishpan` and the `S_DissolveShake` stage are transitions: they also read a second clip, given with `--layer`, and the clip length, given with `--frames` ([transition stages](docs/cli.md#transition-stages)).
 
-The first number counts the recorded renders of the parity record that use the stage's fixed host arrangement; each of them is byte identical through `sapphire stage apply` at depth 32 (382 of 382 on the stages of the first ten effects, 24 of 24 on `flicker`, 36 of 36 on `glow`, 32 of 32 on `swishpan`, 54 of 54 on the three `Shake` stages and 27 of 27 on the `S_DissolveShake` stage). On `glow`, `swishpan`, the three `Shake` stages and the `S_DissolveShake` stage the arrangement follows the Opacity answer (host variants). The other recorded renders use a different host arrangement and are not claimed for the stage. For `Shake` and `S_DissolveShake` the second number counts the counted renders that equal the original ([effects](docs/effects.md)). Each stage's host, parameters, size refusals, timing and claim limits are in [docs/stages.md](docs/stages.md#effects-provider).
+The first number counts the recorded renders of the parity record that use the stage's fixed host arrangement; each of them is byte identical through `sapphire stage apply` at depth 32 (382 of 382 on the stages of `S_Blur`, `S_BlurMoCurves`, `S_Diffuse`, `S_DistortRGB`, `S_DropShadow`, `S_HueSatBright`, `S_Sharpen`, `S_TimeWarpRGB`, `S_Trails` and `S_WarpPerspective`, 24 of 24 on `flicker`, 36 of 36 on `glow`, 32 of 32 on `swishpan`, 54 of 54 on the three `S_Shake` stages and 27 of 27 on the `S_DissolveShake` stage). On `glow`, `swishpan`, the three `S_Shake` stages and the `S_DissolveShake` stage the arrangement follows the Opacity answer (host variants). The other recorded renders use a different host arrangement and are not claimed for the stage. For `S_Shake` and `S_DissolveShake` the second number counts the counted renders that equal the original ([effects](docs/effects.md)). Each stage's host, parameters, size refusals, timing and claim limits are in [docs/stages.md](docs/stages.md#effects-provider).
 
 ### Names
 

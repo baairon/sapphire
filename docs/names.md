@@ -121,7 +121,7 @@ Evidence against: an argument register count unlike the signature, a kind that c
 | The bank is the source of truth | confirmation work never changes a name; a name that looks wrong is reported with evidence, not renamed |
 | Symbols stay | code symbols remain `f_XXXXXXXX`, the stable ids of tests and vectors; names are never applied as code renames |
 | Bank name first | a page or tool shows the bank name first with the id beside it |
-| Effects and parameters | an effect is named only by its exact bank string in code font (`S_Aurora`), never shortened, described, invented or placed beside a function, class or parameter; a parameter candidate is quoted verbatim |
+| Effects and parameters | an effect is named only by its exact bank string in code font (`S_Aurora`), or for the host effects `S_Shake` and `S_BlurMoCurves`, which have no bank string, by the name of the plugin's documentation, never shortened, described, invented or placed beside a function, class or parameter; a parameter candidate is quoted verbatim |
 | Origin | bundled library and std functions are described by their bank origin, never as component code |
 
 ## Looking up a name
