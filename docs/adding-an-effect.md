@@ -50,7 +50,7 @@ A mathematical table the effect needs is computed from its definition, at build 
 Every operation the executor dispatches (`fx_exec::kernels::SUPPORTED` and `kernels2::WIRED`) is in exactly one of two tables in `crates/effects/fx_exec/src/device_ops.rs`, and the test `every_op_has_a_device_kernel_or_a_cpu_only_entry` fails when an operation is in neither. A new effect that adds an operation therefore adds one of these:
 
 - **A device kernel.** An entry in `DEVICE_OPS` with `accepts` (the tags, operand shapes and parameter values the kernel covers; everything else runs on the CPU for that node), `run` (the launch) and `corpus` (the self-check cases). The OpenCL C source goes in `crates/effects/fx_device/src` and is registered in `kernels::SOURCES` and `PROGRAM_PARTS`. Then add the class to `ALLOWLIST`.
-- **A `CPU_ONLY` entry** with a one-line technical reason the operation has no kernel. Entries are removed when a kernel lands; every operation of the stages of the first ten effects and of `S_BlurMotion`, `S_WarpTransform`, `S_GlowEdges` and `S_Glint` has a kernel.
+- **A `CPU_ONLY` entry** with a one-line technical reason the operation has no kernel. Entries are removed when a kernel lands; every operation of the stages of `S_Blur`, `BlurMoCurves`, `S_Diffuse`, `S_DistortRGB`, `S_DropShadow`, `S_HueSatBright`, `S_Sharpen`, `S_TimeWarpRGB`, `S_Trails`, `S_WarpPerspective`, `S_BlurMotion`, `S_WarpTransform`, `S_GlowEdges` and `S_Glint` has a kernel.
 
 Rules for a kernel:
 
@@ -78,7 +78,7 @@ Add a section to [Effects](effects.md), in the order of the status table, with t
 5. One worked `sapphire stage apply` command on `in.raw`, with values a verified comparison used, run and ending with exit 0.
 6. Parity in plain terms: verified comparisons, recorded renders, re-rendered units, any approximate reciprocal bound, and how many counted recorded renders match the stage's host arrangement. Every figure is labelled MEASURED or INFERRED where it is not a plain count.
 
-Add the effect's row to `docs/data/effects_status.tsv`, run `python -I tools/gen_docs.py`, and move its row from "Next ten" to "Done" in [the roadmap](roadmap.md).
+Add the effect's row to `docs/data/effects_status.tsv`, run `python -I tools/gen_docs.py`, and set the status of its row in [the roadmap](roadmap.md) to done.
 
 ## Parity proof
 
