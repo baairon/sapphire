@@ -10,8 +10,6 @@ pub const LABEL: &str = "ASSUMED";
 pub struct Assumption {
     /// Plan id (C02, U10, G01, A1, ...).
     pub id: &'static str,
-    /// Virtual address in the captured image the real value would live at.
-    pub va: u64,
     /// The stand-in bytes in memory order (little-endian), as lowercase hex.
     pub bytes_hex: &'static str,
     /// Why this value (what the code uses it for, and why the choice).
@@ -21,13 +19,13 @@ pub struct Assumption {
 }
 
 impl Assumption {
-    pub const fn new(id: &'static str, va: u64, bytes_hex: &'static str, basis: &'static str) -> Assumption {
-        Assumption { id, va, bytes_hex, basis, label: LABEL }
+    pub const fn new(id: &'static str, bytes_hex: &'static str, basis: &'static str) -> Assumption {
+        Assumption { id, bytes_hex, basis, label: LABEL }
     }
 
-    /// Markdown table row for a README: `| id | 0xva | bytes | basis | ASSUMED |`.
+    /// Markdown table row for a README: `| id | bytes | basis | ASSUMED |`.
     pub fn to_row(&self) -> String {
-        format!("| {} | 0x{:x} | {} | {} | {} |", self.id, self.va, self.bytes_hex, self.basis, self.label)
+        format!("| {} | {} | {} | {} |", self.id, self.bytes_hex, self.basis, self.label)
     }
 
     /// The bytes as a Vec.
@@ -37,18 +35,19 @@ impl Assumption {
 }
 
 /// A1: the constant ONE of dist_from_screen_edge, not captured. 1.0f32.
-pub const A1_ONE: Assumption = Assumption::new("A1", 0, "0000803f", "compare/subtract constant used as 1.0 by; value not captured");
+/// Image address it stood for: 0.
+pub const A1_ONE: Assumption = Assumption::new("A1", "0000803f", "compare/subtract constant used as 1.0 by; value not captured");
 /// A2: the fabs mask, not captured. 0x7fffffff in every lane (16 byte load in both listings).
+/// Image address it stood for: 0.
 pub const A2_FABS_MASK: Assumption = Assumption::new(
     "A2",
-    0,
     "ffffff7fffffff7fffffff7fffffff7f",
     "andps/vandps abs mask of; value not captured",
 );
 /// A2: the sign mask, not captured. 0x80000000 in every lane (16 byte load in both listings).
+/// Image address it stood for: 0.
 pub const A2_SIGN_MASK: Assumption = Assumption::new(
     "A2",
-    0,
     "00000080000000800000008000000080",
     "xorps/vxorps sign mask of; value not captured",
 );
