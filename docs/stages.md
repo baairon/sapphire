@@ -294,7 +294,7 @@ The `S_DissolveShake` stage is registered as well. Its plan does not always read
 | The `get_frames_per_second` value | at 24/1 and 2997/1 equal to the rate in the recorded Shake and Dissolve_Shake renders, whose host passes a local time step of 1 (MEASURED); at a rate whose denominator is not 1 it follows the original's f32 arithmetic for a host with time scale num and local time step den, and equality with a host's value is INFERRED, because the time scale and local time step a host passes at such a rate are not recorded |
 | Depths 8 and 16 | new conversion, not verified |
 
-**Limits.** The stages render in process, one runner thread per clip, and the parallel-safe kernels use all cores (`SAPPHIRE_THREADS=1` for one). MEASURED wall time of one 1920x1080 frame through `sapphire stage apply` on a 12 core server under shared load (one-minute load average 5.3 to 9.2), two runs per cell after one warm-up run, in seconds. The frame holds random finite values in [0, 1). `swishpan` and the `S_DissolveShake` stage need a clip of at least 3 frames: their cells are the wall time of a 3 frame clip (`--frames 3`) divided by 3. The two `after` columns were measured in one session, CPU and device runs interleaved. The `before` column is the previous build, measured in an earlier session at another load, and was not measured for the seven stages added after it (`-`):
+**Limits.** The stages render in process, one runner thread per clip, and the parallel-safe kernels use all cores (`SAPPHIRE_THREADS=1` for one). MEASURED wall time of one 1920x1080 frame through `sapphire stage apply` on a 12 core server under shared load (one-minute load average 5.3 to 9.2), two runs per cell after one warm-up run, in seconds. The frame holds random finite values in [0, 1). `swishpan` and the `S_DissolveShake` stage need a clip of at least 3 frames: their cells are the wall time of a 3 frame clip (`--frames 3`) divided by 3. The two `after` columns were measured in one session, CPU and device runs interleaved, except the rows of `blur_motion_autogen`, `blur_motion_mono_autogen`, `warp_transform_autogen`, `stage apply glow_edges` and `glint`, which come from a later session (below). The `before` column is the previous build, measured in an earlier session at another load, and was not measured for the twelve stages added after it (`-`):
 
 | stage | before the in-process route (s) | after, CPU (s) | after, PoCL device (s) |
 |---|---|---|---|
@@ -318,6 +318,13 @@ The `S_DissolveShake` stage is registered as well. Its plan does not always read
 | `shake_twitchy_autogen` | - | 1.78 / 1.80 | 0.92 / 0.92 |
 | `shake_jumpy_autogen` | - | 2.03 / 2.17 | 0.67 / 0.76 |
 | `stage apply dissolve_shake` | - | 1.26 / 1.23 | 0.53 / 0.52 |
+| `blur_motion_autogen` | - | 6.35 / 6.93 | 1.34 / 1.43 |
+| `blur_motion_mono_autogen` | - | 3.95 / 3.93 | 1.05 / 1.25 |
+| `warp_transform_autogen` | - | 0.91 / 0.88 | 1.27 / 1.11 |
+| `stage apply glow_edges` | - | 0.89 / 0.91 | 0.77 / 0.79 |
+| `glint` | - | 1.40 / 1.46 | 1.01 / 1.05 |
+
+The rows of `blur_motion_autogen`, `blur_motion_mono_autogen`, `warp_transform_autogen`, `stage apply glow_edges` and `glint` were measured in a later session at a one-minute load of 6.5 to 7.4, CPU and device runs interleaved. In that session `transform_and_blur_autogen` measures 0.99 / 1.02 s on the CPU and 0.77 / 0.77 s on PoCL, and `blur_motion_curves_no_transform_autogen` 1.31 / 1.10 s and 0.79 / 0.83 s: within 0.10 s of their cells above, except the first CPU run of `blur_motion_curves_no_transform_autogen` (1.31 s against 1.09 s). At its default parameters, which the timing uses, the plan of `warp_transform_autogen` holds only `make_mipmap` and `postdivide`: with `rotate` and `shear` set (golden `+tl`) it adds `tilt` and `warp`.
 
 The CPU cells use the default thread count (all 12 cores) and are sensitive to machine load. `distort_rgb_autogen` shows it most: at a one-minute load of 6 to 9 this build and the earlier in-process builds all measure 4.4 to 4.9 s for its frame, most of it system time in the threaded path, and 1.7 to 2.0 s with `SAPPHIRE_THREADS=1`, so its CPU cell is a contention figure and not a slower kernel. `sharpen_best_quality_autogen`'s `after, CPU` cell lies above its `before` cell for the same reason: the build before this table, timed interleaved with it under the same load, measures 2.5 to 3.6 s against 2.8 to 3.3 s, with equal output bytes.
 

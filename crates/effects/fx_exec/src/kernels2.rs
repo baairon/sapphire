@@ -1118,7 +1118,7 @@ fn rows_of_b(w: usize, h: usize, base: usize) -> Vec<(usize, usize, usize)> {
 }
 
 /// `rowbuf` = the destination is one row buffer reused for every row (constant phase `base`), else a plane (base + row x W x 4)
-fn rows_of_p(w: usize, h: usize, base: usize, rowbuf: bool) -> Vec<(usize, usize, usize)> {
+pub(crate) fn rows_of_p(w: usize, h: usize, base: usize, rowbuf: bool) -> Vec<(usize, usize, usize)> {
     if std::env::var("WPG1_PERSP_WHOLE").map(|v| v == "1").unwrap_or(false) {
         return vec![(0, w * h, 0)];
     }

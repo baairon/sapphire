@@ -64,6 +64,10 @@ VARIANTS = [
     ("dissolve_shake", "to", [], True),
     ("hue_sat_bright_autogen", "hs", ["--param", "hue_shift=0.25", "--param", "saturation=1.5", "--param", "brightness=0.75", "--param", "offset_darks=0.125"], False),
     ("hue_sat_bright_autogen", "pl", ["--param", "preserve_luma=1", "--param", "hue_shift=0.25"], False),
+    ("warp_transform_autogen", "tl", ["--param", "shift=0.0,0.0", "--param", "rotate=-22.0", "--param", "shear=-0.149993896484375,0.0"], False),
+    ("warp_transform_autogen", "ta", ["--param", "shift=0.0,0.0", "--param", "tilt=-14.0", "--param", "swivel=12.0"], False),
+    ("glint", "ga", ["--param", "threshold=0.3000030517578125", "--param", "glint_from_alpha=1.0", "--param", "brightness=1.25"], False),
+    ("glint", "hu", ["--param", "threshold=0.3000030517578125", "--param", "hue_shift=-0.5"], False),
 ]
 
 

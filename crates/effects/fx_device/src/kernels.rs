@@ -115,8 +115,14 @@ pub const SOURCES: &[Source] = &[
     Source { name: "kernels_glow_ops::GLOW_OPS_PW", text: crate::kernels_glow_ops::GLOW_OPS_PW, mirrors_mul_add: false },
     Source { name: "kernels_glow_ops::GLOW_OPS_FMA", text: crate::kernels_glow_ops::GLOW_OPS_FMA, mirrors_mul_add: true },
     Source { name: "kernels_glow::GLOW_BRIGHT", text: crate::kernels_glow::GLOW_BRIGHT, mirrors_mul_add: false },
+    Source { name: "kernels_edge::EDGE_GRAD", text: crate::kernels_edge::EDGE_GRAD, mirrors_mul_add: true },
     Source { name: "kernels_footprint::FOOTPRINT_PREFILL", text: crate::kernels_footprint::FOOTPRINT_PREFILL, mirrors_mul_add: true },
     Source { name: "kernels_footprint::FOOTPRINT_WARP", text: crate::kernels_footprint::FOOTPRINT_WARP, mirrors_mul_add: true },
+    Source { name: "kernels_tilt::TILT", text: crate::kernels_tilt::TILT, mirrors_mul_add: true },
+    Source { name: "kernels_tilt_alpha::TILT_ALPHA", text: crate::kernels_tilt_alpha::TILT_ALPHA, mirrors_mul_add: true },
+    Source { name: "kernels_glint_passes::GLINT_PASSES", text: crate::kernels_glint_passes::GLINT_PASSES, mirrors_mul_add: true },
+    Source { name: "kernels_glint_diag::GLINT_DIAG", text: crate::kernels_glint_diag::GLINT_DIAG, mirrors_mul_add: false },
+    Source { name: "kernels_glint::GLINT_BLEND", text: crate::kernels_glint::GLINT_BLEND, mirrors_mul_add: true },
 ];
 
 /// The parts that make up the one device program (every kernel above, after the prelude).
@@ -143,8 +149,14 @@ pub const PROGRAM_PARTS: &[&str] = &[
     crate::kernels_glow_ops::GLOW_OPS_PW,
     crate::kernels_glow_ops::GLOW_OPS_FMA,
     crate::kernels_glow::GLOW_BRIGHT,
+    crate::kernels_edge::EDGE_GRAD,
     crate::kernels_footprint::FOOTPRINT_PREFILL,
     crate::kernels_footprint::FOOTPRINT_WARP,
+    crate::kernels_tilt::TILT,
+    crate::kernels_tilt_alpha::TILT_ALPHA,
+    crate::kernels_glint_passes::GLINT_PASSES,
+    crate::kernels_glint_diag::GLINT_DIAG,
+    crate::kernels_glint::GLINT_BLEND,
 ];
 
 /// One program text: the prelude, then `parts` in order.
