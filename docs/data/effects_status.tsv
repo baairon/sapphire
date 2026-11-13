@@ -1,6 +1,6 @@
 effect	registered_styles	counted_rows	frozen_members	landing_rerun_units	state
 S_Blur	Blur_Color_Autogen; Blur_Mono_Autogen	7	52	52	REBUILT
-BlurMoCurves	Transform_and_Blur_Autogen; Blur_Motion_Curves_No_Transform_Autogen	41	69	69	REBUILT
+S_BlurMoCurves	Transform_and_Blur_Autogen; Blur_Motion_Curves_No_Transform_Autogen	41	69	69	REBUILT
 S_BlurMotion	Blur_Motion_Autogen; Blur_Motion_Mono_Autogen	88	352	352	REBUILT
 S_Diffuse	Diffuse_Autogen	31	54	54	REBUILT
 S_DissolveShake	registered without a wrapper program	38	304	304	REBUILT
@@ -11,7 +11,7 @@ S_Glint	registered without a wrapper program	23	23	23	REBUILT
 S_Glow	registered without a wrapper program	36	36	36	REBUILT
 S_GlowEdges	registered without a wrapper program	68	34	34	REBUILT
 S_HueSatBright	Hue_Sat_Bright_Autogen	130	196	196	REBUILT
-Shake	Shake_Normal_Autogen; Shake_Twitchy_Autogen; Shake_Jumpy_Autogen	68	2056	2056	REBUILT
+S_Shake	Shake_Normal_Autogen; Shake_Twitchy_Autogen; Shake_Jumpy_Autogen	68	2056	2056	REBUILT
 S_Sharpen	Sharpen_Best_Quality_Autogen; Sharpen_Fast_Autogen	43	114	114	REBUILT
 S_SwishPan	registered without a wrapper program	36	288	288	REBUILT
 S_TimeWarpRGB	Time_Warp_RGB_Autogen	22	22	22	REBUILT

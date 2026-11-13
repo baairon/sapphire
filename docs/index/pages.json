@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 39249,
+  "bytes": 39315,
   "generated": false
  },
  {
@@ -38,7 +38,7 @@
   "path": "docs/adding-an-effect.md",
   "title": "Adding an effect",
   "line": "The conventions every new effect follows, and the parity proof it shows before it is added.",
-  "bytes": 16107,
+  "bytes": 16255,
   "generated": false
  },
  {
@@ -52,7 +52,7 @@
   "path": "docs/cli.md",
   "title": "Command-line reference",
   "line": "This page is the exact interface of the `sapphire` executable and of `fx_run --describe-params`, for a program or an AI agent that drives them.",
-  "bytes": 70514,
+  "bytes": 70789,
   "generated": false
  },
  {
@@ -80,7 +80,7 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Nineteen of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 92166,
+  "bytes": 92475,
   "generated": false
  },
  {
@@ -283,7 +283,7 @@
   "path": "docs/guide.md",
   "title": "Using the effects",
   "line": "This page shows how to run the nineteen native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match.",
-  "bytes": 32426,
+  "bytes": 32841,
   "generated": false
  },
  {
@@ -318,14 +318,14 @@
   "path": "docs/names.md",
   "title": "Names",
   "line": "Every function, class, [stub](glossary.md#stub), effect and parameter name comes from the [name bank](glossary.md#name-bank).",
-  "bytes": 9334,
+  "bytes": 9460,
   "generated": false
  },
  {
   "path": "docs/parameters-guide.md",
   "title": "Driving the effect parameters",
   "line": "How to run each of the 25 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.",
-  "bytes": 61991,
+  "bytes": 62411,
   "generated": false
  },
  {
@@ -345,15 +345,15 @@
  {
   "path": "docs/roadmap.md",
   "title": "Roadmap",
-  "line": "The planned effects are ranked by how useful they are in YouTube edits: montages, highlights, music videos and gaming videos.",
-  "bytes": 6720,
+  "line": "The roadmap lists the twenty effects the rebuild covers.",
+  "bytes": 5079,
   "generated": false
  },
  {
   "path": "docs/stages.md",
   "title": "Adding a provider",
   "line": "A provider is a program that offers stages over raw frames; twixtor's `vfx` and `sapphire` are two.",
-  "bytes": 46624,
+  "bytes": 47050,
   "generated": false
  }
 ]

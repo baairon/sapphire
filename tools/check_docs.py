@@ -10,10 +10,13 @@ anchors), paths (inline code paths), ids (every f_XXXXXXXX is in docs/data/FUNCT
 (flag tables against --help, exit code tables against contracts/error.schema.json; active once that schema
 exists), ascii (and control characters but tab, LF and CR), dashes, secrets, person (first person), claims (forbidden claims), ffmpeg (ffmpeg claims cite a
 doc page or a measured command), archive (archive:PATH citations resolve through docs/data/archive_refs.tsv),
-effects (an effect is named only by its exact string from docs/data/effect_names.tsv, in code font), process (no
+effects (an effect is named only by its exact string from docs/data/effect_names.tsv or docs/data/effects_status.tsv,
+in code font), process (no
 words or codes that say how the repository was made: tools/process_terms.py, outside code spans and fenced blocks).
 
-Effects rule scope: an `S_` token must be a bank name, in code font, and never on a line with a function id;
+Effects rule scope: an `S_` token must be a bank name or the name of a documented effect (a row of
+docs/data/effects_status.tsv: `S_Shake` and `S_BlurMoCurves` are host effects with no bank string), in code font, and
+never on a line with a function id;
 a near miss is a token that equals a bank name or its stem (the name without `S_`) once case, spaces, hyphens
 and underscores are ignored, or an `S_` token within a 0.85 spelling ratio of one. Stems are flagged when
 written as names: CamelCase ("AutoPaint"), two to four capitalised words ("Band Pass"), a code span holding
@@ -465,14 +468,17 @@ def ekey(s):
 
 
 class EffectBank:
-    """Effect names and parameter candidates of docs/data/, for the near miss rules."""
+    """Effect names and parameter candidates of docs/data/, for the near miss rules. The effect names of
+    effects_status.tsv count as exact names: a documented host effect has no bank string."""
 
     def __init__(self, root):
         d = os.path.join(root, "docs", "data")
         self.names = [r["name"] for r in read_tsv(os.path.join(d, "effect_names.tsv"))]
         path = os.path.join(d, "param_candidates.tsv")
         self.cands = {r["candidate"] for r in read_tsv(path)} if os.path.exists(path) else set()
-        self.exact = set(self.names)
+        status = os.path.join(d, "effects_status.tsv")
+        documented = [r["effect"] for r in read_tsv(status)] if os.path.exists(status) else []
+        self.exact = set(self.names) | set(documented)
         self.lower = {n.lower(): n for n in self.names}
         self.key = {ekey(n): n for n in self.names}
         self.stem = {ekey(n[2:]): n for n in self.names if n.startswith("S_")}
