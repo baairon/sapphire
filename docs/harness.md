@@ -122,7 +122,7 @@ The tests of each lift crate (`crates/lift-*/tests/`) replay the stored vector s
 | `DBG_SET` | replay one set only: empty for `world`, `2` for `world2`, and so on |
 | `DBG_CASE` | replay one world, by index |
 
-Each test names the sets it replays. The stock list is `world`, `world2` and `world3`; `lift-4` and `lift-5` list sets up to 16 and 12, and the tests of the last seven functions list their later sets per function through a `sets(name)` function (`crates/lift-1/tests/world_b3.rs`: sets 4 to 14; `crates/lift-3/tests/world_u11001.rs` and `crates/lift-3/tests/world_u10001.rs`: sets 4 to 8 and 4 to 7). A set whose file is absent is skipped, so a list that stops short of a stored set ignores it without a message.
+Each test names the sets it replays. The stock list is `world`, `world2` and `world3`; `lift-4` and `lift-5` list sets up to 16 and 12, and the tests of the last seven functions list their later sets per function through a `sets(name)` function (`crates/lift-1/tests/world_b3.rs`: sets 4 to 15; `crates/lift-3/tests/world_u11001.rs`: sets 4 to 8, and 4 to 9 for `f_00056fa6`; `crates/lift-3/tests/world_u10001.rs`: sets 4 to 7; `crates/lift-3/tests/world_u9001.rs`: sets 4 and 5; `crates/lift-b/tests/world_g020.rs`: sets 4 and 5, and 4 to 7 for `f_000b11c0`). A set whose file is absent is skipped, so a list that stops short of a stored set ignores it without a message.
 
 ## Synthetic cross check
 

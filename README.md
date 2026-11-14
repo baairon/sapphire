@@ -49,7 +49,7 @@ On a Windows machine without the MSVC linker the GNU toolchain builds the same c
 | Binary | Path (`.exe` added on Windows) | Used by |
 |---|---|---|
 | `sapphire` | `target/release/sapphire` | the pipeline, the stage provider of `contracts/tool.json`, `tools/handoff.py doctor`, `tools/conformance.py` |
-| `fx_run` | `target/release/fx_run` | the command line of the effect runner; the 20 effect stages use the same library inside `sapphire` and need no `fx_run` process. The executable is needed only to run `fx_run --describe-params` from a shell; `stage list --json` prints the ranges and defaults without it |
+| `fx_run` | `target/release/fx_run` | the command line of the effect runner; the 27 effect stages use the same library inside `sapphire` and need no `fx_run` process. The executable is needed only to run `fx_run --describe-params` from a shell; `stage list --json` prints the ranges and defaults without it |
 | `fake-vfx` | `target/release/fake-vfx` | the pipeline tests, as a stand in for twixtor's `vfx` |
 
 `CARGO_TARGET_DIR` moves the binaries; `SAPPHIRE_PATH` points the Python tools at another build. The pipeline and the `neutral-ffmpeg` tests need ffmpeg and ffprobe ([finding ffmpeg](docs/ffmpeg.md#finding-ffmpeg)).
@@ -187,7 +187,7 @@ A name is the bank's assignment for its offset. As a test of the mapping as a wh
 
 ### Crate map
 
-Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, edition 2021, MIT, unpublished. External crates: none. A plain `cargo test` covers the default members: the four `neutral-*` crates and the 61 effect crates whose tests need no stored data.
+Workspace members of `Cargo.toml`: every folder under `crates/`, version 0.1.0, edition 2021, MIT, unpublished. External crates: none. A plain `cargo test` covers the default members: the four `neutral-*` crates and the 78 effect crates whose tests need no stored data.
 
 | Member | Builds | Owns | Key modules (`src/`) | Tests (`#[test]` lines, scan) |
 |---|---|---|---|---|
@@ -217,7 +217,7 @@ Each program's `--help` lists its flags; the contract in full is `docs/handoff.m
 |---|---|---|
 | `selftest-invert` | frame, preserve | `invert_alpha` (checkbox, default off) |
 | `ffmpeg-filter` | frame, declared | `graph` (an ffmpeg filter graph, default `null`), `expect` (`preserve` or `declared`), `unsafe` (`1` runs filters outside the safe list) ([the ffmpeg filter stage](docs/handoff.md#the-ffmpeg-filter-stage)) |
-| 20 effect stages | temporal, preserve | per stage, see [Effects provider](docs/stages.md#effects-provider) |
+| 27 effect stages | temporal, preserve | per stage, see [Effects provider](docs/stages.md#effects-provider) |
 
 In a pipeline, `--stage @selftest-invert` runs that stage in process and `--stage "@ffmpeg-filter graph=G"` or an effect stage such as `--stage @hue_sat_bright_autogen` runs `sapphire stage apply ...` as a child process of the pipeline (`SAPPHIRE_PATH` or the running executable). That child renders in process through the `fx_exec` library, so no `fx_run` process is started. The pipeline has no `--device` flag; the child inherits the environment, so `SAPPHIRE_DEVICE=gpu` runs a pipeline stage on a device ([guide](docs/guide.md#rendering-on-a-device)). Every flag and variable is in the [Command-line reference](docs/cli.md). The syntax of a filter graph is ffmpeg's own (ffmpeg documentation: ffmpeg-filters.html).
 
@@ -276,7 +276,7 @@ sapphire runs twixtor's `vfx` and the stages of any tool inside its own pipeline
 
 The `shared` list of `contracts/tool.json` is byte equal in both repositories: the schemas in `contracts/`, `contracts/conformance/cases.json`, `docs/handoff.md`, `docs/handoff-bench.tsv`, `tools/handoff.py`, `tools/conformance.py` and their tests. Change one here, then run `sync`.
 
-sapphire's own stages are `selftest-invert`, `ffmpeg-filter` and the 20 effect stages ([Stage commands](#stage-commands), [Effects provider](docs/stages.md#effects-provider)); a new tool joins as in [stages](docs/stages.md).
+sapphire's own stages are `selftest-invert`, `ffmpeg-filter` and the 27 effect stages ([Stage commands](#stage-commands), [Effects provider](docs/stages.md#effects-provider)); a new tool joins as in [stages](docs/stages.md).
 
 ## Tests
 
@@ -295,7 +295,7 @@ python -I tools/conformance.py --quick
 python -I tools/handoff.py doctor --conformance
 ```
 
-- **Default members.** `cargo test` runs `neutral-world`, `neutral-parity`, `neutral-ffmpeg`, `neutral-handoff` and the 61 effect crates whose tests need no stored data. The `lift-*` tests replay stored vector sets that are archived, not in the repository, and are marked `#[ignore]`; running them with the archive: [reproduce](docs/reproduce.md#re-creating-the-evidence).
+- **Default members.** `cargo test` runs `neutral-world`, `neutral-parity`, `neutral-ffmpeg`, `neutral-handoff` and the 78 effect crates whose tests need no stored data. The `lift-*` tests replay stored vector sets that are archived, not in the repository, and are marked `#[ignore]`; running them with the archive: [reproduce](docs/reproduce.md#re-creating-the-evidence).
 - **Effects.** The effect tests are described in [effects](docs/effects.md#tests). `tools/fx_golden.py` renders the 27 stages on synthetic clips and compares the SHA-256 of every output with `tools/fx_golden.tsv`; with `SAPPHIRE_DEVICE=gpu SAPPHIRE_REQUIRE_DEVICE=1` (PoCL or a GPU) it checks the device path against the same hashes.
 - **ffmpeg.** The live tests of `neutral-ffmpeg` and the pipeline tests need ffmpeg and ffprobe and print a `SKIPPED` line without them ([tests that need ffmpeg](docs/ffmpeg.md#tests-that-need-ffmpeg)). One `neutral-ffmpeg` test always prints `SKIPPED`, because the pixel format table generator is not in the repository.
 - **twixtor.** `crates/neutral-handoff/tests/cross_twixtor.rs` runs twixtor's `vfx` as a stage of this pipeline and this crate's `stage apply` inside twixtor's `tools/apply.py`, in every order; it skips with a printed reason when ffmpeg, `vfx`, Python or `apply.py` is missing.
@@ -321,7 +321,7 @@ python -I tools/handoff.py doctor
 
 | Step | Expected |
 |---|---|
-| `stage list --json` | a manifest with `"contract": "frames/2"`, provider id `sapphire` and the stages `selftest-invert`, `ffmpeg-filter` and the 20 effect stages |
+| `stage list --json` | a manifest with `"contract": "frames/2"`, provider id `sapphire` and the stages `selftest-invert`, `ffmpeg-filter` and the 27 effect stages |
 | raw pipe and `cmp` | exit 0 and no output from `cmp`: inverting twice returns the input |
 | `--dry-run` | `[plan] stages on clip.mp4: 160x96, 24.000 fps, 8 bpc (rgba), decode \| pre1 \| encode -> ...`, three `[cmd]` lines, then `[dry-run] nothing was written` |
 | `fn_info.py` | the bank name first with the id beside it, then offset, kind, origin, tier, name check `mismatch` and confirmation `mismatch` |
