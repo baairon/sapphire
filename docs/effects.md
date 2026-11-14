@@ -301,7 +301,7 @@ Host buffer phase: the blur windows of the gradient take their order from the ph
 
 Parity: 30 verified comparisons, 30 recorded renders and 30 re-rendered units, all equal. 28 are byte identical; in 2 the output holds NaN values, which are equal as NaN values while their payload bits are not compared. No approximate reciprocal instruction is used on the verified render path (MEASURED). 26 of 30 counted recorded renders match the stage's host arrangement.
 
-Device: every node runs on the device (`*`, `-`, `element_of`, `grad`, `make_mipmap`, `monochrome`, `postdivide`, `v3`, `warp_rel`) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows (MEASURED on PoCL). The special golden row is refused on both paths: the sampler meets a tap outside the ripmap plane and the run ends with exit 1, `F2(Oob)`.
+Device: every node runs on the device (`*`, `element_of`, `grad`, `make_mipmap`, `monochrome`, `postdivide`, `v3`, `warp_rel`) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows (MEASURED on PoCL). The special golden row is refused on both paths: the sampler meets a tap outside the ripmap plane and the run ends with exit 1, `F2(Oob)`.
 
 ### `S_DropShadow`
 
@@ -462,7 +462,7 @@ Device: every node runs on the device (`*`, `alpha_from_rgb_max`, `glow`, `postd
 
 ### `S_GlowEdges`
 
-Finds the edges of the image and makes them glow. An edge detector picks out the edges, which `edges_smooth`, `edges_brightness` and `edges_threshold` shape; a blur spreads them, its size set by `width` and scaled per axis (`width_x`, `width_y`) and per colour channel (`width_red`, `width_green`, `width_blue`); `glow_brightness` and `color` set the glow, and `combine` blends it with the source by one of five blend modes. `glow_under_source`, `scale_source`, `scale_background`, `light_bg`, `glow_from_alpha` and `affect_alpha` set how much of the source, the background and the alpha goes into the mix, and `show` outputs either the result or an intermediate image.
+Detects the edges of the image and spreads light around them. An edge detector picks out the edges, which `edges_smooth`, `edges_brightness` and `edges_threshold` shape; a blur spreads them, its size set by `width` and scaled per axis (`width_x`, `width_y`) and per colour channel (`width_red`, `width_green`, `width_blue`); `glow_brightness` and `color` set the glow, and `combine` blends it with the source by one of five blend modes. `glow_under_source`, `scale_source`, `scale_background`, `light_bg`, `glow_from_alpha` and `affect_alpha` set how much of the source, the background and the alpha goes into the mix, and `show` outputs either the result or an intermediate image.
 
 | style | stage |
 |---|---|
@@ -571,9 +571,9 @@ Device: every node runs on the device (`dissolve`, `element_of`, `make_mipmap`, 
 
 ### `S_Shake`
 
-Shakes the picture, as a camera does on an impact or in the hand. On every frame the image is moved in x and y, scaled about its centre (the depth axis z) and turned (tilt). The offset of each axis is the sum of a random part, a noise of the frame time, and a wave part, a sine of the frame time. `amplitude` scales every offset and `frequency` sets how fast they change; per axis, a random and a wave amplitude (`x_rand_amp`, `x_wave_amp` and the like), their frequencies and a phase shape the motion, and `phase` shifts the time of all axes. `z_dist` is the scale that the depth offset is added to. With `motion_blur` on, each frame is blurred along the move toward the offset of the next frame, over a length that `motion_blur_length` scales. `wrap` chooses, per axis, what fills the area the move uncovers: nothing, the tiled image or the reflected image. The channel parameters (`red_amplitude`, `green_amplitude` and `blue_amplitude`, the three channel phases, `RGB_randomness` and `RGB_frequency`) shake the red, green and blue channels apart, which splits the colours.
+Moves, scales and turns the image by a per-frame offset. On every frame the image is moved in x and y, scaled about its centre (the depth axis z) and turned (tilt). The offset of each axis is the sum of a random part, a noise of the frame time, and a wave part, a sine of the frame time. `amplitude` scales every offset and `frequency` sets the rate at which they change; per axis, a random and a wave amplitude (`x_rand_amp`, `x_wave_amp` and the like), their frequencies and a phase shape the motion, and `phase` shifts the time of all axes. `z_dist` is the scale that the depth offset is added to. With `motion_blur` on, each frame is blurred along the move toward the offset of the next frame, over a length that `motion_blur_length` scales. `wrap` chooses, per axis, what fills the area the move uncovers: nothing, the tiled image or the reflected image. The channel parameters (`red_amplitude`, `green_amplitude` and `blue_amplitude`, the three channel phases, `RGB_randomness` and `RGB_frequency`) offset the red, green and blue channels by separate amounts, which splits the colours.
 
-The three styles are the three choices of the effect's style popup. Normal is the continuous shake above. Twitchy runs the shake ten times faster and holds it still between short twitches: a random value of the frame time, taken at `twitch_frequency`, switches the shake on where it is above `stillness`, and the switch is averaged over the frame and its two neighbours. Jumpy moves each offset in jumps between random positions instead of smoothly, and `drift` and `center_bias` shape the jumps.
+The three styles are the three choices of the effect's style popup. Normal is the continuous shake above. Twitchy runs the shake ten times faster and holds it still between short twitches: a random value of the frame time, taken at `twitch_frequency`, switches the shake on where it is above `stillness`, and the switch is averaged over the frame and its two neighbours. Jumpy moves each offset in jumps between random positions instead of continuously, and `drift` and `center_bias` shape the jumps.
 
 | style | stage |
 |---|---|
@@ -640,7 +640,7 @@ Where the table search for a position (the phase plus the seed's offset) ends pa
 
 At 50x7 the output depends on the phases of the default xy buffers, an input of each run, while the stages use phase 0 for every buffer at every size (`--xy-base 0`). 9 verified renders were recorded at a phase other than 0, and the three channel renders at 50x7 with their three buffers not all at one phase; these 12 are verified through `fx_run` at their recorded phases, and through the stages each is checked against the runner's render at phase 0 (MEASURED). The other 54 of the 66 verified renders that equal the original are byte identical to it through the stages (17 of 22 Normal, 18 of 22 Twitchy and 19 of 22 Jumpy, MEASURED).
 
-Device: every node runs on the device (`+`, `make_mipmap`, `postdivide`, `warp`, and with channel parameters set `*`, `copy_alpha`, `element_of`, `get_alpha`, `v3`, `v3_to_v4_if4_a`) with the CPU's bytes, `fallback: none` on every golden row of the three stages, the special rows included, and on all 74 counted recorded renders through `fx_run` (MEASURED on PoCL).
+Device: every node runs on the device (`+`, `make_mipmap`, `postdivide`, `warp`, and with channel parameters set `*`, `copy_alpha`, `element_of`, `get_alpha`, `v3`, `v3_to_v4_if4_a`) with the CPU's bytes, `fallback: none` on every golden row of the three stages, the special rows included, and on all 74 counted recorded renders through `fx_run` (MEASURED on PoCL). Other parameters add nodes, which also run on the device with `fallback: none`: `*` with `z_dist` away from 1, `rotate` with `tilt_rand_amp` set, and with `motion_blur` on, `blur_warp` in place of `warp` and `interp` at a `motion_blur_length` of 3 (MEASURED on PoCL on `shake_normal_autogen` at 64x32).
 
 ### `S_Sharpen`
 
@@ -730,7 +730,7 @@ Device: every node runs on the device (`+`, `-`, `blur`, `make_mipmap`, `postdiv
 
 ### `S_TimeWarpRGB`
 
-Shifts the red, green and blue channels in time: each channel is taken from a frame a set number of frames earlier or later, so moving objects get coloured fringes. The chroma clamp (`--param clamp_chroma=V`) limits the colour difference the shift may create.
+Shifts the red, green and blue channels in time: each channel is taken from a frame a set number of frames earlier or later, so the channels separate where the image changes between frames. The chroma clamp (`--param clamp_chroma=V`) limits the colour difference the shift may create.
 
 | style | stage |
 |---|---|
@@ -757,7 +757,7 @@ Device: every node runs on the device (`element_of`, `v3`) with the CPU's bytes,
 
 ### `S_Trails`
 
-Leaves trails behind moving content: each output frame blends the current frame with the previous output, which fades toward a colour and can be blurred and hue shifted on every step. The new frame's colour and opacity, the fade, the fade colour and the way the two are combined set the look.
+Each output frame blends the current frame with the previous output, which fades toward a colour and can be blurred and hue shifted on every step. The new frame's colour and opacity, the fade, the fade colour and the way the two are combined set the result.
 
 | style | stage |
 |---|---|
@@ -841,7 +841,7 @@ Moves, scales, turns and slants the image in three dimensions. `scale` and `shif
 | `--param filter=V` | checkbox | 1 |
 | `--param cset_opacity=V` | int | 1 |
 
-`shift` unset is answered with the registered (50, 50) pixels, as the recorded host does. That shifts the image by (50 - W/2, 50 - H/2) pixels, so at small frame sizes, 64x32 and 50x7 among them, the output is empty (MEASURED); a host that centres an unset point on the layer would render the image in place (INFERRED). Pass `--param shift=0,0`, the layer centre, to render the image in place, as the worked command does.
+`shift` unset renders the same bytes as `--param shift=0,0`, the layer centre, which renders the image in place: `stage list --json` gives `shift` the default `0,0` (MEASURED at 64x32 and 50x7). The worked command passes `shift=0,0` explicitly.
 
 `wrap` takes one record value per axis, x then y, each 0, 1 or 2 (the host's values 1, 2 and 3). Values 1 and 2 fill the area outside the image from the image itself, each in its own way (INFERRED from the outputs); the verified comparisons set `wrap=1,2` and `wrap=2,1`, at both sizes.
 
@@ -882,8 +882,8 @@ fx_run PROGRAM --size WxH --out PREFIX [--synth SEED] [options]
 
 The effects need no external data. Nothing is read from the original plugin or from a copied file at run time: `fx_run` takes no table argument and reads only the input planes and the output path it is given.
 
-- **Effect graphs.** The programs of the twenty-five styles are built by Rust constructor code in `fx_eval` (`programs_native`). That code is a tool-made translation of the plugin's program rows into Rust: a development tool produced it from the parsed program structure. It holds no program text and reads no table.
-- **Parameter and class facts.** The registered parameters, ranges, input indices, class flags and combination tables that the twenty-five styles need are Rust definitions in the crate `effects_rtdata`. A definition is kept only if it is keyed by one of the 43 programs of the styles, by a class they name, or by a builtin they call. A lookup that has no row misses, as it did with the tables.
+- **Effect graphs.** The programs of the 31 styles of the native corpus (the 27 rebuilt styles and four `S_Retime` styles that are not rebuilt) are built by Rust constructor code in `fx_eval` (`programs_native`). That code is a tool-made translation of the plugin's program rows into Rust: a development tool produced it from the parsed program structure. It holds no program text and reads no table.
+- **Parameter and class facts.** The registered parameters, ranges, input indices, class flags and combination tables that the 31 styles need are Rust definitions in the crate `effects_rtdata`. A definition is kept only if it is keyed by one of the 49 programs of the styles, by a class they name, or by a builtin they call. A lookup that has no row misses, as it did with the tables.
 - **Sin and cos tables.** The sin and cos routines of the effects need four tables. None is stored; all are computed from their mathematical definition at first use, with a small fixed-point big number (320 bit, written for this repository, no crate):
 
 - The sincosf table has 64 entries: the correctly rounded (sin, cos) of k pi/32, exact 0 and 1 at the axes.

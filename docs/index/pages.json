@@ -38,21 +38,21 @@
   "path": "docs/adding-an-effect.md",
   "title": "Adding an effect",
   "line": "The conventions every new effect follows, and the parity proof it shows before it is added.",
-  "bytes": 16289,
+  "bytes": 16698,
   "generated": false
  },
  {
   "path": "docs/assumptions.md",
   "title": "Assumptions and limits",
   "line": "What the parity figures rest on, and how many rows depend on each assumption.",
-  "bytes": 13810,
+  "bytes": 13807,
   "generated": false
  },
  {
   "path": "docs/cli.md",
   "title": "Command-line reference",
-  "line": "This page is the exact interface of the `sapphire` executable and of `fx_run --describe-params`, for a program or an AI agent that drives them.",
-  "bytes": 75598,
+  "line": "This page is the exact interface of the `sapphire` executable and of `fx_run --describe-params`, as a calling program sees it.",
+  "bytes": 76730,
   "generated": false
  },
  {
@@ -80,7 +80,7 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Twenty of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 108246,
+  "bytes": 108463,
   "generated": false
  },
  {
@@ -283,7 +283,7 @@
   "path": "docs/guide.md",
   "title": "Using the effects",
   "line": "This page shows how to run the twenty native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match.",
-  "bytes": 35553,
+  "bytes": 35615,
   "generated": false
  },
  {
@@ -297,14 +297,14 @@
   "path": "docs/harness.md",
   "title": "Harness",
   "line": "How a Rust port is compared with the original code it ports.",
-  "bytes": 11071,
+  "bytes": 11231,
   "generated": false
  },
  {
   "path": "docs/lifting.md",
   "title": "Lift crates",
   "line": "The `lift-*` crates hold the function record: a reverse-engineering reference of one small code section of a separate code image, the [dump](glossary.md#dump).",
-  "bytes": 9013,
+  "bytes": 8993,
   "generated": false
  },
  {
@@ -325,14 +325,14 @@
   "path": "docs/parameters-guide.md",
   "title": "Driving the effect parameters",
   "line": "How to run each of the 27 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.",
-  "bytes": 64385,
+  "bytes": 64923,
   "generated": false
  },
  {
   "path": "docs/parity.md",
   "title": "Parity",
   "line": "This page gives the parity figures of the [function record](glossary.md#function-record), a reverse-engineering reference of one small code section of a separate code image, the [dump](glossary.md#...",
-  "bytes": 11406,
+  "bytes": 11393,
   "generated": false
  },
  {
@@ -346,14 +346,14 @@
   "path": "docs/roadmap.md",
   "title": "Roadmap",
   "line": "The roadmap lists the twenty effects the rebuild covers.",
-  "bytes": 5058,
+  "bytes": 5160,
   "generated": false
  },
  {
   "path": "docs/stages.md",
   "title": "Adding a provider",
   "line": "A provider is a program that offers stages over raw frames; twixtor's `vfx` and `sapphire` are two.",
-  "bytes": 48143,
+  "bytes": 49551,
   "generated": false
  }
 ]
