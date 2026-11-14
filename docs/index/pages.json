@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 39441,
+  "bytes": 39895,
   "generated": false
  },
  {
@@ -38,7 +38,7 @@
   "path": "docs/adding-an-effect.md",
   "title": "Adding an effect",
   "line": "The conventions every new effect follows, and the parity proof it shows before it is added.",
-  "bytes": 16698,
+  "bytes": 16994,
   "generated": false
  },
  {
@@ -52,7 +52,7 @@
   "path": "docs/cli.md",
   "title": "Command-line reference",
   "line": "This page is the exact interface of the `sapphire` executable and of `fx_run --describe-params`, as a calling program sees it.",
-  "bytes": 76730,
+  "bytes": 77204,
   "generated": false
  },
  {
@@ -80,7 +80,7 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Twenty of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 108463,
+  "bytes": 109725,
   "generated": false
  },
  {
@@ -298,6 +298,153 @@
   "title": "Harness",
   "line": "How a Rust port is compared with the original code it ports.",
   "bytes": 11231,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/README.md",
+  "title": "Effect internals",
+  "line": "One page per rebuilt effect, for changing, verifying and extending its code from this repository alone.",
+  "bytes": 28947,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/blur-mo-curves.md",
+  "title": "Internals of `stage apply transform_and_blur_autogen` and `stage apply blur_motion_curves_no_transform_autogen`",
+  "line": "This page covers the code of these stages: where each part lives, how a render runs, the checks that run from this repository, the device path and the limits.",
+  "bytes": 39502,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/blur-motion.md",
+  "title": "Internals of `stage apply blur_motion_autogen` and `stage apply blur_motion_mono_autogen`",
+  "line": "This page covers the code of these stages: where each part lives, how a render runs, the checks that run from this repository, the device path and the limits.",
+  "bytes": 41482,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/blur.md",
+  "title": "Internals of `stage apply blur_color_autogen` and `stage apply blur_mono_autogen`",
+  "line": "This page covers the code of these stages: where each part lives, how a render runs, the checks that run from this repository, the device path and the limits.",
+  "bytes": 38992,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/diffuse.md",
+  "title": "Internals of `stage apply diffuse_autogen`",
+  "line": "This page describes how this stage is built, rendered, checked and changed in this repository: its program, its stage row, the kernels and device kernels it reaches, the checks that cover it and it...",
+  "bytes": 29314,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/dissolve-shake.md",
+  "title": "Internals of `stage apply dissolve_shake`",
+  "line": "This page covers the code of this stage: where each part lives, how a render runs, how parity is judged, the checks that run from this repository, the device path and the limits.",
+  "bytes": 35453,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/distort-rgb.md",
+  "title": "Internals of `stage apply distort_rgb_autogen`",
+  "line": "This page describes how this stage is built, rendered, checked and changed in this repository: its program, its stage row, the kernels and device kernels it reaches, the checks that cover it and it...",
+  "bytes": 28826,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/drop-shadow.md",
+  "title": "Internals of `stage apply drop_shadow`",
+  "line": "This page covers the code of this stage: where each part lives, how a render runs, the checks that run from this repository, the device path and the limits.",
+  "bytes": 28923,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/flicker.md",
+  "title": "Internals of `stage apply flicker`",
+  "line": "This page covers the code of this stage: where each part lives, how a render runs, how parity is judged, the checks that run from this repository, the device path and the limits.",
+  "bytes": 24662,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/glint.md",
+  "title": "Internals of `stage apply glint`",
+  "line": "This page covers the code of this stage: where each part lives, how a render runs, the checks that run from this repository, the device path and the limits.",
+  "bytes": 37383,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/glow-edges.md",
+  "title": "Internals of `stage apply glow_edges`",
+  "line": "This page covers the code of this stage: where each part lives, how a render runs, the checks that run from this repository, the device path and the limits.",
+  "bytes": 34573,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/glow.md",
+  "title": "Internals of `stage apply glow`",
+  "line": "This page covers the code of this stage: where each part lives, how a render runs, the checks that run from this repository, the device path and the limits.",
+  "bytes": 38622,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/hue-sat-bright.md",
+  "title": "Internals of `stage apply hue_sat_bright_autogen`",
+  "line": "This page describes how this stage is built, rendered, checked and changed in this repository: its program, its stage row, the kernels and device kernels it reaches, the checks that cover it and it...",
+  "bytes": 28902,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/retime.md",
+  "title": "Internals of `stage apply retime_speed` and `stage apply retime_longer`",
+  "line": "How the code of these stages is built, how a render reaches its kernels, how it is checked and what limits it has.",
+  "bytes": 46472,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/shake.md",
+  "title": "Internals of `stage apply shake_normal_autogen`, `stage apply shake_twitchy_autogen` and `stage apply shake_jumpy_autogen`",
+  "line": "This page covers the code of these stages: where each part lives, how a render runs, how parity is judged, the checks that run from this repository, the device path and the limits.",
+  "bytes": 44785,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/sharpen.md",
+  "title": "Internals of `stage apply sharpen_best_quality_autogen` and `stage apply sharpen_fast_autogen`",
+  "line": "This page covers the code of these stages: where each part lives, how a render runs, the checks that run from this repository, the device path and the limits.",
+  "bytes": 30358,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/swish-pan.md",
+  "title": "Internals of `stage apply swishpan`",
+  "line": "This page covers the code of this stage: where each part lives, how a render runs, how its parity is judged, the checks that run from this repository, the device path and the limits.",
+  "bytes": 38716,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/time-warp-rgb.md",
+  "title": "Internals of `stage apply time_warp_rgb_autogen`",
+  "line": "How the code of this stage is built, how a render reaches its kernels, how it is checked and what limits it has.",
+  "bytes": 26956,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/trails.md",
+  "title": "Internals of `stage apply trails_autogen`",
+  "line": "This page covers the code of this stage: where each part lives, how a render runs, how its parity is judged, the checks that run from this repository, the device path and the limits.",
+  "bytes": 36854,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/warp-perspective.md",
+  "title": "Internals of `stage apply warp_perspective_autogen`",
+  "line": "This page describes how this repository renders the stage `stage apply warp_perspective_autogen`: its compiled plan, the code that runs each node, the stage row, the checks that run from the reposi...",
+  "bytes": 35306,
+  "generated": false
+ },
+ {
+  "path": "docs/internals/warp-transform.md",
+  "title": "Internals of `stage apply warp_transform_autogen`",
+  "line": "This page describes how this repository renders the stage `stage apply warp_transform_autogen`: its compiled plan, the code that runs each node, the stage row, the checks that run from the reposito...",
+  "bytes": 31273,
   "generated": false
  },
  {

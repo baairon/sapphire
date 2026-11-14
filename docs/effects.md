@@ -97,6 +97,8 @@ Parity: 7 verified comparisons, 52 recorded renders and 52 re-rendered units, al
 
 Device: every node runs on the device (`blur`, `postdivide`, and `monochrome_a` on the mono style) with the CPU's bytes, `fallback: none` on the plain, threaded and special golden rows of both stages (MEASURED on PoCL). On input with NaN, `blur` keeps its NaN outputs on the device: it is NaN exact, and its self-check on PoCL reports equal NaN payloads ([NaN outputs](guide.md#rendering-on-a-device)).
 
+Internals: [`S_Blur` internals](internals/blur.md).
+
 ### `S_BlurMoCurves`
 
 Motion blur along a path. The host supplies a motion curve per frame (rotation, shift, depth distance and centre), and the effect averages the image over the shutter interval along that motion. Transform_and_Blur also applies the transform of the curve to the image; Blur_Only blurs along the motion and leaves the image in place. Shutter duration and shift set the interval, exposure bias weights it, and the blur resolution sets how many samples are taken.
@@ -133,6 +135,8 @@ Parity: 41 verified comparisons (24 for Transform_and_Blur and 17 for Blur_Only)
 With the default-xy head form (see `S_WarpPerspective`), `blur_motion_curves_no_transform_autogen` at its default parameters renders differently than before that form at some widths that are not a multiple of 8, where the stage serves the size from its 64x32 entry (`--xy-base 0`). MEASURED against the build before that form, default parameters, a plain 3 frame clip: 1,342 of 5,292 words differ at 49x9, 647 of 2,220 at 37x5 and 144 of 1,872 at 52x3, and the output is identical at 64x32 and 50x7. That the new output is the original's at those sizes is INFERRED.
 
 Device: every node runs on the device (`+`, `-`, `*` on Blur_Only, `blur_warp`, `make_mipmap`, `postdivide`) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows of both stages (MEASURED on PoCL). On input with NaN, `blur_warp` reruns its NaN outputs on the CPU (3 nodes on each special golden row): its NaN words are the compiled CPU instruction's two-NaN picks, which its kernel does not copy.
+
+Internals: [`S_BlurMoCurves` internals](internals/blur-mo-curves.md).
 
 ### `S_BlurMotion`
 
@@ -174,6 +178,8 @@ Parity: 88 verified comparisons, 352 recorded renders and 352 re-rendered units,
 
 Device: every node runs on the device (`*`, `+`, `-`, `blur_warp`, `make_mipmap`, `postdivide`, `rotate`, and `monochrome_a` on the mono style) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows of both stages and on all 352 counted recorded renders through `fx_run` (MEASURED on PoCL: 1,376 and 1,704 device nodes, the same at threads 1, 3 and 12). On input with NaN, `blur_warp` reruns its NaN outputs on the CPU (3 nodes on each special golden row). `blur_warp`'s NaN words follow the cross-processor statement of [the roadmap](roadmap.md#platform).
 
+Internals: [`S_BlurMotion` internals](internals/blur-motion.md).
+
 ### `S_Diffuse`
 
 Scatters the pixels of the image: each output pixel takes its value from a nearby position chosen by a fixed pseudo random pattern, so edges break up into grain. The amount sets how far pixels move, a relative amount per axis stretches the scatter, and the wrap setting chooses what happens at the image border.
@@ -209,6 +215,8 @@ target/release/sapphire stage apply diffuse_autogen --width 64 --height 32 --dep
 Parity: 31 verified comparisons, 54 recorded renders and 54 re-rendered units, all equal. One approximate reciprocal instruction is reached, inside a logarithm; its effect on the output is 0 ulp under the emulator's bound (MEASURED). 31 of 42 counted recorded renders match the stage's host arrangement.
 
 Device: every node runs on the device (`*`, `make_mipmap`, `static2`, `warp_rel`) with the CPU's bytes, `fallback: none` on every golden row, the special row included (MEASURED on PoCL).
+
+Internals: [`S_Diffuse` internals](internals/diffuse.md).
 
 ### `S_DissolveShake`
 
@@ -272,6 +280,8 @@ Parity: 38 verified comparisons (19 at 64x32 and 19 at 50x7), 304 recorded rende
 
 Device: every node runs on the device (`+`, `blur_warp`, `dissolve`, `interp`, `make_mipmap`, `postdivide`, and with channel parameters set (golden `+ch`) `*`, `copy_alpha`, `element_of`, `get_alpha`, `v3`, `v3_to_v4_if4_a`) with the CPU's bytes, `fallback: none` on the plain, threaded and variant golden rows and on all 40 counted recorded renders through `fx_run` (MEASURED on PoCL). On input with NaN, `blur_warp` reruns its NaN outputs on the CPU (2 nodes on the special golden row).
 
+Internals: [`S_DissolveShake` internals](internals/dissolve-shake.md).
+
 ### `S_DistortRGB`
 
 Bends the image through a distortion field, with a different strength for the red, green and blue channels, so colours split apart at the distorted edges. The field comes from a blurred lens image, which is the source itself (the stage takes no extra layer). Amount and its relative amount per axis set the strength, the per-channel warp values set each channel's share, and the warp direction can be rotated.
@@ -302,6 +312,8 @@ Host buffer phase: the blur windows of the gradient take their order from the ph
 Parity: 30 verified comparisons, 30 recorded renders and 30 re-rendered units, all equal. 28 are byte identical; in 2 the output holds NaN values, which are equal as NaN values while their payload bits are not compared. No approximate reciprocal instruction is used on the verified render path (MEASURED). 26 of 30 counted recorded renders match the stage's host arrangement.
 
 Device: every node runs on the device (`*`, `element_of`, `grad`, `make_mipmap`, `monochrome`, `postdivide`, `v3`, `warp_rel`) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows (MEASURED on PoCL). The special golden row is refused on both paths: the sampler meets a tap outside the ripmap plane and the run ends with exit 1, `F2(Oob)`.
+
+Internals: [`S_DistortRGB` internals](internals/distort-rgb.md).
 
 ### `S_DropShadow`
 
@@ -338,6 +350,8 @@ Parity: 24 verified comparisons, 26 recorded renders and 26 re-rendered units, a
 
 Device: every node runs on the device (`*`, `blur`, `coerce_to_alpha`, `coerce_to_v3`, `comp_premult`, `make_mipmap`, `postdivide`, `warp_rel`) with the CPU's bytes, `fallback: none` on every golden row, the special row included (MEASURED on PoCL).
 
+Internals: [`S_DropShadow` internals](internals/drop-shadow.md).
+
 ### `S_Flicker`
 
 Changes the brightness of the image from frame to frame. Every pixel of a frame is multiplied, per colour channel, by one factor: `brightness` plus `amplitude` times the sum of a random part and a wave part. The random part is a noise of the frame time at the random frequency and seed, with one value for all channels (scaled by `rand_luma_amp`) and one value per channel (scaled by `rand_color_amp`). The wave part is a sine of the frame time at the wave frequency, with a phase per channel, scaled by `wave_amp`. `red_amp`, `green_amp` and `blue_amp` weight the factor per channel. The alpha of the input is kept.
@@ -372,6 +386,8 @@ target/release/sapphire stage apply flicker --width 64 --height 32 --depth 32 --
 Parity: 24 verified comparisons (12 at 64x32 and 12 at 50x7), 24 recorded renders and 24 re-rendered units, all equal. No approximate reciprocal instruction is used on the verified render path (MEASURED). The verified times are whole frames from 0 to 29 at 24 frames a second; other rates and times between frames run the same code and are INFERRED. The sine of the wave part follows the original's AVX2 and FMA route on every CPU; on a CPU without AVX2 and FMA the original takes another sine routine, which differs from it on 10.7 percent of argument bit patterns by at most 2 ulp (MEASURED on the original's two routines), and those results are not reproduced. The output alpha is the input alpha, verified with input alpha other than 1 at both sizes. 24 of 24 counted recorded renders match the stage's host arrangement.
 
 Device: every node runs on the device (`*`) with the CPU's bytes, `fallback: none` on every golden row and on all 24 counted recorded renders through `fx_run` (MEASURED on PoCL).
+
+Internals: [`S_Flicker` internals](internals/flicker.md).
 
 ### `S_Glint`
 
@@ -418,6 +434,8 @@ Parity: 23 verified comparisons (12 at 64x32 and 11 at 50x7), 23 recorded render
 
 Device: every node runs on the device (`alpha_from_rgb_max`, `glint`, `postdivide` and `screen_super`, `*` on the counted recorded renders that set `scale_source` and `scale_background` (no golden row sets them), and with `glint_from_alpha` or `hue_shift` set also `coerce_to_alpha`, `interp` and `hue_shift_preserve_luma`) with the CPU's bytes, `fallback: none` on every golden row, the special row and the variant rows `+ga` (`glint_from_alpha` at 1, with `threshold` and `brightness` set) and `+hu` (`hue_shift` at -0.5, with `threshold` set) included, and on all 23 counted recorded renders through `fx_run` (MEASURED on PoCL: 96 device nodes, the same at threads 1, 3 and 12). The `glint` kernel runs the CPU's own dispatcher and worker on the host, so every pass, host scalar and pass order is the CPU's, and launches each pass on the device: the blur, the zero fill, the bright pass, the plane copy, the row and column box passes, the diagonal box sums and the scaled screen blend. On input with NaN, `glint` keeps its NaN outputs on the device: it is NaN exact, and its self-check on PoCL reports equal NaN payloads.
 
+Internals: [`S_Glint` internals](internals/glint.md).
+
 ### `S_Glow`
 
 Adds light around the bright parts of the image. The parts above a threshold are spread out by a wide blur, whose size is set by `width` and scaled per axis (`width_x`, `width_y`) and per colour channel (`width_red`, `width_green`, `width_blue`); the spread light is scaled by the brightness and combined with the source by one of five blend modes (`combine`). `glow_under_source`, `scale_source`, `scale_background`, `light_bg` and `affect_alpha` set how much of the source, the background and the alpha goes into the mix, `show` outputs either the result or the thresholded image the light is made from, and `edge_mode` chooses how the spread treats the border of the frame. Atmosphere is not rendered. The glow stage has no `atmosphere_amp`, and `fx_run` refuses a Glow plan with `atmosphere_amp` other than 0 (`SIMPLEX-GRADIENT-TABLE-ABSENT`): the original's atmosphere noise reads gradient tables that no documented formula reproduces. Its registered default leaves Atmosphere off, so the stage renders without it, and the four parameters that shape the noise are not offered either.
@@ -459,6 +477,8 @@ Host buffer phase: the glow's blur passes run the window of the blur kernel (MEA
 Parity: 36 verified comparisons (18 at 64x32 and 18 at 50x7), 36 recorded renders and 36 re-rendered units, all equal. No approximate reciprocal instruction runs on the verified render path: the blur's code holds twelve, six that it does not reach at the one to three planes Glow gives it and six in code tiers that do not run, and no other operation of the route holds one (MEASURED by a static scan of the original's code; that this route reaches none of the twelve is INFERRED). The Opacity answers 1, 2 and 3 are each verified at 64x32 and 50x7, with input alpha other than 1. The verified renders have no mask, no matte and no background: a bound mask or matte, the tracker mask, mocha with tracking data and a background layer are not verified, and the stage does not offer `combine_masks`, which has no effect without a mask. Atmosphere is not rendered (above), and no verified render uses it. 36 of 36 counted recorded renders match the stage's host arrangement.
 
 Device: every node runs on the device (`*`, `alpha_from_rgb_max`, `glow`, `postdivide`, `screen_super`, at the fourth Combine item (golden `+c4`) also `diff`, `get_alpha`, `remove_alpha`, `screen`, `v3_to_v4_if4`, and at the fifth (golden `+c5`) `overlay_super`) with the CPU's bytes, `fallback: none` on the plain, threaded and variant golden rows and on all 36 counted recorded renders through `fx_run` (MEASURED on PoCL). On input with NaN, `glow` reruns its NaN outputs on the CPU (3 nodes on the special golden row): its blur passes use the NaN-exact `blur` kernel, but `glow` itself is not on `NAN_EXACT`.
+
+Internals: [`S_Glow` internals](internals/glow.md).
 
 ### `S_GlowEdges`
 
@@ -507,6 +527,8 @@ Parity: 68 counted comparisons: 34 equal, 34 different (DIFF-FEED-OFF-GRID: slid
 
 Device: every node runs on the device (`*`, `+`, `-`, `alpha_from_rgb_max`, `blur_channels`, `clamp`, `comp_rgba`, `diff`, `edge_detect`, `get_alpha`, `interp`, `monochrome`, `overlay_super`, `postdivide`, `remove_alpha`, `screen`, `screen_super`, `v3_to_v4_if4`) with the CPU's bytes, `fallback: none` on every golden row, the special row included, and on all 34 counted recorded renders through `fx_run` (MEASURED on PoCL: 330 device nodes, the same at threads 1, 3 and 12). On input with NaN, `edge_detect` and `blur_channels` keep their NaN outputs on the device: both are NaN exact, and their self-check on PoCL reports equal NaN payloads.
 
+Internals: [`S_GlowEdges` internals](internals/glow-edges.md).
+
 ### `S_HueSatBright`
 
 Adjusts colour: rotates the hue, scales the saturation, scales the brightness and offsets the dark values. With `preserve_luma` the hue rotation keeps each pixel's luma. `scale_colors` scales the red, green and blue channels separately.
@@ -533,6 +555,8 @@ target/release/sapphire stage apply hue_sat_bright_autogen --width 64 --height 3
 Parity: 130 verified comparisons, 196 recorded renders and 196 re-rendered units, all equal. The hue rotation with preserved luma uses an approximate reciprocal instruction, so it may differ on real CPUs; the largest change measured stays within Intel's stated bound, 25,244 ulp. The source has three planes and the output alpha is taken from the source. A brightness outside the registered range is not verified. 118 of 130 counted recorded renders match the stage's host arrangement.
 
 Device: at the default parameters (Hue Shift 0, Saturation 1, Brightness 1, Scale Colors 1, 1, 1, Offset Darks 0, Preserve Luma off) the plan folds to the source frame, so it holds no node and the report reads `device: none`; the output equals the input. With a colour parameter set, every node runs on the device (`hue_shift` or `hue_shift_preserve_luma`, `sat_scale`, `*`, `+`) with the CPU's bytes, `fallback: none` on the variant golden rows `+hs` and `+pl` (MEASURED on PoCL).
+
+Internals: [`S_HueSatBright` internals](internals/hue-sat-bright.md).
 
 ### `S_Retime`
 
@@ -568,6 +592,8 @@ The flow solve runs one reciprocal square root estimate instruction. The emulato
 Parity: 37 counted comparisons with the original, 20 of Retime_Speed and 17 of Retime_Longer, 17 at 50x7, 16 at 64x32 and 4 at 72x24, each made on two recording servers of the original, are byte identical to the original's output by full SHA-256 with the native code of this repository (MEASURED). 12 of them (8 at 64x32 and 4 at 72x24) render source frames chosen after the native code was written, and their expected outputs were recorded before the original rendered them. Nine further renders at 64x32, on the optical flow route, differed from the original under the expected outputs recorded before the native code took the host buffer phase as a host value; they are not counted. With that change their outputs equal the original's (MEASURED, information only: the result was obtained after the difference was known). They stay among the recorded renders and the re-rendered units, as controls. The `optical_flow` op was also compared word for word with the original on 208 cases (182,964 output floats): every word of the 205 cases that render is equal, NaN against NaN words aside as above, and on the other 3 the native code stops where the original stops (MEASURED). The 24 recorded renders of the original's own style records, 15 of Retime_Speed and 9 of Retime_Longer, are equal through `fx_run` and through the stages (MEASURED). The output does not depend on the thread count (equal at threads 1, 3 and 12, MEASURED): the tile kernels of `optical_flow_interp_maps` run on one chunk that covers every row at any thread count.
 
 Device: every node runs on the device (`dissolve`, `element_of`, `make_mipmap`, `monochrome`, `optical_flow`, `optical_flow_interp_maps`, `warp_rel`) with the CPU's bytes, `fallback: none` on all 58 runs of both stages through `fx_run`, 24 recorded renders and 34 parameter runs (30 with a value set by `--host-param` or `--set`, 4 at the defaults) (MEASURED on PoCL: 291 device nodes on Retime_Speed and 231 on Retime_Longer, the same at threads 1, 3 and 12). `optical_flow` keeps the crates' own control code on the host (the level table, the range scans and row sums, and the loop tests of the solve, each reading one word from the device); the pyramid levels, the iterated solve, the smoothing passes and the final warp run as device kernels on planes that stay on the device. `xy_to_polar` and `hsv_to_rgb` are not reached by the compiled plans of these runs; with the Result answer that is not rebuilt, `fx_run` refuses `retime_longer` by name on that route, on the CPU and on the forced device alike (`RESULT-NOT-REBUILT`, exit 2, no output; MEASURED on the CPU and on PoCL). On synthetic frames, `device_retime` compares all four operations with the CPU through the executor, and `device_retime_polar` compares `xy_to_polar` and `hsv_to_rgb` with their crates (MEASURED on PoCL: 2 and 6 passed). On input with NaN, `xy_to_polar`, `hsv_to_rgb`, `optical_flow_interp_maps` and `optical_flow` keep their NaN outputs on the device: all four are NaN exact, and their self-check on PoCL reports equal NaN payloads ([NaN outputs](guide.md#rendering-on-a-device)).
+
+Internals: [`S_Retime` internals](internals/retime.md).
 
 ### `S_Shake`
 
@@ -642,6 +668,8 @@ At 50x7 the output depends on the phases of the default xy buffers, an input of 
 
 Device: every node runs on the device (`+`, `make_mipmap`, `postdivide`, `warp`, and with channel parameters set `*`, `copy_alpha`, `element_of`, `get_alpha`, `v3`, `v3_to_v4_if4_a`) with the CPU's bytes, `fallback: none` on every golden row of the three stages, the special rows included, and on all 74 counted recorded renders through `fx_run` (MEASURED on PoCL). Other parameters add nodes, which also run on the device with `fallback: none`: `*` with `z_dist` away from 1, `rotate` with `tilt_rand_amp` set, and with `motion_blur` on, `blur_warp` in place of `warp` and `interp` at a `motion_blur_length` of 3 (MEASURED on PoCL on `shake_normal_autogen` at 64x32).
 
+Internals: [`S_Shake` internals](internals/shake.md).
+
 ### `S_Sharpen`
 
 Sharpens the image. Best Quality separates the image into detail bands (tiny, small, medium and large), scales each band and sharpens along edges, leaving areas below the edge threshold alone. Fast uses a single sharpening width. In both, the amount can be set overall, for luma and chroma, and per channel.
@@ -692,6 +720,8 @@ Parity: 43 verified comparisons, 114 recorded renders and 114 re-rendered units,
 
 Device: every node runs on the device (`sharpen` or `edge_aware_sharpen`, and `postdivide`) with the CPU's bytes, `fallback: none` on the plain, threaded and special golden rows of both stages (MEASURED on PoCL). On input with NaN, `sharpen` and `edge_aware_sharpen` keep their NaN outputs on the device: both are NaN exact, and their self-check on PoCL reports equal NaN payloads.
 
+Internals: [`S_Sharpen` internals](internals/sharpen.md).
+
 ### `S_SwishPan`
 
 A transition between two clips: the first clip moves out of the frame and the second clip follows it in, to the left, right, up or down (`direction`), with a motion blur along the move. `transition_dir` swaps which clip leaves and which arrives. With `auto_trans` on, the move runs over the whole clip given to the stage, from its first frame to its last, eased at the start and the end by `slow_in` and `slow_out`; with it off, the progress is read from a curve of the host (`host_curve_values`). `overlap` changes how far the second clip trails the first, and `blur_amount` scales the blur, which follows the speed of the move.
@@ -728,6 +758,8 @@ Parity: 36 verified comparisons (18 at 64x32 and 18 at 50x7), 288 recorded rende
 
 Device: every node runs on the device (`+`, `-`, `blur`, `make_mipmap`, `postdivide`, `screen_super`, `warp`) with the CPU's bytes, `fallback: none` on the plain, threaded and variant golden rows and on all 36 counted recorded renders through `fx_run` (MEASURED on PoCL). On input with NaN, `warp` reruns its NaN outputs on the CPU (2 nodes on the special golden row): it has no NaN-exact kernel yet; `blur` keeps its NaN outputs on the device.
 
+Internals: [`S_SwishPan` internals](internals/swish-pan.md).
+
 ### `S_TimeWarpRGB`
 
 Shifts the red, green and blue channels in time: each channel is taken from a frame a set number of frames earlier or later, so the channels separate where the image changes between frames. The chroma clamp (`--param clamp_chroma=V`) limits the colour difference the shift may create.
@@ -754,6 +786,8 @@ target/release/sapphire stage apply time_warp_rgb_autogen --width 64 --height 32
 Parity: 22 verified comparisons, 22 recorded renders and 22 re-rendered units, all equal. No approximate reciprocal instruction is used on the verified render path (MEASURED). One effect instance runs per process, with a fresh frame cache per render. 10 of 22 counted recorded renders match the stage's host arrangement.
 
 Device: every node runs on the device (`element_of`, `v3`) with the CPU's bytes, `fallback: none` on every golden row, the special row included (MEASURED on PoCL).
+
+Internals: [`S_TimeWarpRGB` internals](internals/time-warp-rgb.md).
 
 ### `S_Trails`
 
@@ -789,6 +823,8 @@ Parity: 78 verified comparisons, 170 recorded renders and 220 re-rendered units,
 
 Device: every node runs on the device (`*`, `+`, `postdivide`) with the CPU's bytes, `fallback: none` on every golden row, the special row included (MEASURED on PoCL).
 
+Internals: [`S_Trails` internals](internals/trails.md).
+
 ### `S_WarpPerspective`
 
 Places the image on a plane seen in perspective. Swing, roll and latitude turn the plane, the depth distance and the lens width set the camera, and the wrap settings choose what fills the area outside the image and above the horizon.
@@ -818,6 +854,8 @@ Host buffer phase: the default xy writer and the perspective and perspective alp
 Parity: 19 verified comparisons, 256 recorded renders and 256 re-rendered units. 232 units are byte identical in both renders, every counted one among them. The other 24 are control renders at 50x7 of three bindings whose plan writes the default xy inside the first exec block (Swing and Roll set, or wrap_above_horizon 1). Their recorded renders come from the former rule, which wrote the default xy as a per-row plane for every plan with a perspective node; the runner now writes it as one row buffer, as the original's recorded runs of these bindings show, and each changed unit's `ae32` equals the original's render or the counted recorded render of the same binding at the same buffer phases. The perspective uses approximate reciprocals, so it may differ on real CPUs: by up to 6 ulp in its first output and 12,972 ulp in its second, where values near zero cancel. The verified sizes are 64x32 and 50x7. 10 of 224 counted recorded renders match the stage's host arrangement.
 
 Device: every node runs on the device (`*`, `make_mipmap`, `perspective`, `perspective_alpha`, `postdivide`, `warp`) with the CPU's bytes, `fallback: none` on the plain and threaded golden rows (MEASURED on PoCL). On input with NaN, `warp` reruns its NaN outputs on the CPU (3 nodes on the special golden row): its sampler uses the hardware NaN rule, as the CPU sampler does, and has no NaN-exact kernel.
+
+Internals: [`S_WarpPerspective` internals](internals/warp-perspective.md).
 
 ### `S_WarpTransform`
 
@@ -856,6 +894,8 @@ Host buffer phase: the default xy writer and the tilt alpha take their order fro
 Parity: 41 verified comparisons (23 at 64x32 and 18 at 50x7), 78 recorded renders and 78 re-rendered units, all equal. Two of the comparisons, the default parameters at each size, give the empty output described above and verify only that path; they are not among the recorded renders. The other 39 have content, and their 78 counted recorded renders were rendered again and compared through both routes, `fx_run` and the stages, and are equal (MEASURED). A negative `scale` is verified at both sizes: the compile folds a constant condition of mixed sign in the safe scale lane by lane, so the tilt receives a constant depth; that the original folds it per lane is INFERRED from its recorded lanes. The tilt receives `perspective_amount` clamped to its range 0.25 to 4: through `fx_run` an infinite value enters as 4, and negative infinity and 0 enter as 0.25 (MEASURED). The tilt kernel's mutation test gives 150 of 150 non-equivalent mutants killed on route, 7 EQUIVALENT-ON-ROUTE (C61 to C67), raw 150 of 168: the seven differ only when `cos_over_persp` is +-0, which the clamped perspective range 0.25 to 4 and a cosine never +-0 exclude (MEASURED). The tilt and the alpha tilt run no approximate reciprocal instruction (MEASURED on the code), so the bound is 0 ulp. Of the counted recorded renders, 61 of 78 match the stage's host arrangement, and the others equal `fx_run` at the stage's buffer phases; a plan with no default-xy writer, such as the default at the layer centre, takes no writer phase list.
 
 Device: every node runs on the device (`*`, `make_mipmap`, `postdivide`, `tilt`, `tilt_alpha`, `warp`) with the CPU's bytes, `fallback: none` on every golden row, the special row and the variant rows `+tl` (`rotate` and `shear` set) and `+ta` (`tilt` and `swivel` set) included, and on all 78 counted recorded renders through `fx_run` (MEASURED on PoCL: 314 device nodes, the same at threads 1, 3 and 12). On input with NaN, `tilt` and `tilt_alpha` keep their NaN outputs on the device: both are NaN exact, and their self-check on PoCL reports equal NaN payloads; `warp` reruns its NaN outputs on the CPU, as on the other stages.
+
+Internals: [`S_WarpTransform` internals](internals/warp-transform.md).
 
 ## Build and run
 

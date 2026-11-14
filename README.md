@@ -75,6 +75,7 @@ The last command decodes `clip.mp4`, shifts its hue with the `S_HueSatBright` st
 - [docs/stages.md](docs/stages.md): the stage manifest and apply command, how a new provider joins, and the effects provider.
 - [docs/roadmap.md](docs/roadmap.md): the effects the rebuild covers, all twenty done, and the work every effect shares.
 - [docs/adding-an-effect.md](docs/adding-an-effect.md): how to add an effect.
+- [docs/internals/README.md](docs/internals/README.md): one internals page per effect: its code map, render flow, the checks that run from this repository, its device path, limits and how to change it safely.
 - [docs/glossary.md](docs/glossary.md): the technical terms of the function record.
 - [docs/parity.md](docs/parity.md): what parity means for the function record, the tiers, strict and strictest, the caveats.
 - [docs/harness.md](docs/harness.md): the oracle, worlds, the `Env` trait, vector sets, comparison and replay.
@@ -277,6 +278,8 @@ sapphire runs twixtor's `vfx` and the stages of any tool inside its own pipeline
 The `shared` list of `contracts/tool.json` is byte equal in both repositories: the schemas in `contracts/`, `contracts/conformance/cases.json`, `docs/handoff.md`, `docs/handoff-bench.tsv`, `tools/handoff.py`, `tools/conformance.py` and their tests. Change one here, then run `sync`.
 
 sapphire's own stages are `selftest-invert`, `ffmpeg-filter` and the 27 effect stages ([Stage commands](#stage-commands), [Effects provider](docs/stages.md#effects-provider)); a new tool joins as in [stages](docs/stages.md).
+
+This section covers the frame handoff between tools. The code of each effect, from its program constructor to its kernels, device kernels, stage rows and checks, is described one page per effect in [Effect internals](docs/internals/README.md).
 
 ## Tests
 
