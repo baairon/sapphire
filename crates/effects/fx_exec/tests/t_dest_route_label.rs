@@ -19,15 +19,15 @@ fn run_flicker(tag: &str) -> (Option<i32>, String, String) {
         let x = ((k * 7 + 5) % 31) as f32 / 31.0;
         src.extend_from_slice(&x.to_le_bytes());
     }
-    let sp = d.join("src.u32");
-    std::fs::write(&sp, &src).unwrap();
+    let src_path = d.join("src.u32");
+    std::fs::write(&src_path, &src).unwrap();
     let pp = d.join("prior.u32");
     std::fs::write(&pp, vec![0xaau8; 16 * W * H]).unwrap();
     let os = d.join("o").to_str().unwrap().to_string();
     let geom = format!("-0.5,{},1,0,{},0,0", W as f32 - 0.5, (H as f32 - W as f32) / 2.0 - 0.5);
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_fx_run"));
     cmd.args(["Flicker", "--size", &format!("{}x{}", W, H), "--out", &os]);
-    cmd.args(["--ae32-src", &format!("Source={}", sp.display()), "--ae32-prior", pp.to_str().unwrap(), "--ae32-out", &format!("{}.ae32.u32", os)]);
+    cmd.args(["--ae32-src", &format!("Source={}", src_path.display()), "--ae32-prior", pp.to_str().unwrap(), "--ae32-out", &format!("{}.ae32.u32", os)]);
     cmd.args(["--geom", &geom, "--host-frame", "0", "--ctx-time", "0", "--src-planes", "3", "--owner-arm", "0,0,0", "--src-row58", "0", "--src-head", "0x7e91c0"]);
     cmd.args(["--aspect-triple", "0,3f800000,3f800000", "--ae32-dest", "3,2", "--ae32-copier", "0", "--dest-stack-word", "0", "--units-ratio", "1,1", "--bound-mask", "1"]);
     cmd.args(["--ctx-word2", "0", "--ctx-1ae", "4", "--ctx-has-data", "f8", "--ranges", "REAL", "--prerender-late", "0,0,0", "--mode-inputs", "1,2"]);

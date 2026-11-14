@@ -38,8 +38,8 @@ fn one_plane_modes() {
     let n = g.len();
     for (mode, alpha) in [(3i8, 1.0f32), (2, 0.0)] {
         let mut d = vec![f32::from_bits(0xaaaa_aaaa); 4 * n];
-        let (edx, o) = convert_to_dest_line_n12(1, 4, mode, &planes, &mut d, n);
-        assert_eq!((edx, o), (1, Dest12::Written));
+        let (copy_mode, o) = convert_to_dest_line_n12(1, 4, mode, &planes, &mut d, n);
+        assert_eq!((copy_mode, o), (1, Dest12::Written));
         for i in 0..n {
             assert_eq!(d[4 * i].to_bits(), g[i].to_bits());
             assert_eq!(d[4 * i + 1].to_bits(), g[i].to_bits());
@@ -49,13 +49,13 @@ fn one_plane_modes() {
     }
     // mode 1 on one plane becomes mode 3 (0xd00a7)
     let mut d = vec![0f32; 4 * n];
-    let (edx, o) = convert_to_dest_line_n12(1, 4, 1, &planes, &mut d, n);
-    assert_eq!((edx, o), (1, Dest12::Written));
+    let (copy_mode, o) = convert_to_dest_line_n12(1, 4, 1, &planes, &mut d, n);
+    assert_eq!((copy_mode, o), (1, Dest12::Written));
     assert_eq!(d[3], 1.0);
     // mode 0 writes nothing
     let mut d = vec![f32::from_bits(0xaaaa_aaaa); 4 * n];
-    let (edx, o) = convert_to_dest_line_n12(1, 4, 0, &planes, &mut d, n);
-    assert_eq!((edx, o), (1, Dest12::NotWritten));
+    let (copy_mode, o) = convert_to_dest_line_n12(1, 4, 0, &planes, &mut d, n);
+    assert_eq!((copy_mode, o), (1, Dest12::NotWritten));
     assert!(d.iter().all(|x| x.to_bits() == 0xaaaa_aaaa));
 }
 
@@ -67,8 +67,8 @@ fn two_plane_mode1_clamps_alpha_and_copies_gray() {
     let planes = p4(&g, &a);
     let n = g.len();
     let mut d = vec![f32::from_bits(0xaaaa_aaaa); 4 * n];
-    let (edx, o) = convert_to_dest_line_n12(2, 4, 1, &planes, &mut d, n);
-    assert_eq!((edx, o), (2, Dest12::Written));
+    let (copy_mode, o) = convert_to_dest_line_n12(2, 4, 1, &planes, &mut d, n);
+    assert_eq!((copy_mode, o), (2, Dest12::Written));
     for i in 0..n {
         for c in 0..3 {
             assert_eq!(d[4 * i + c].to_bits(), g[i].to_bits());
@@ -84,8 +84,8 @@ fn two_plane_other_modes_use_the_one_plane_arm() {
     let planes = p4(&g, &a);
     for (mode, alpha) in [(3i8, 1.0f32), (2, 0.0)] {
         let mut d = vec![0f32; 8];
-        let (edx, o) = convert_to_dest_line_n12(2, 4, mode, &planes, &mut d, 2);
-        assert_eq!((edx, o), (1, Dest12::Written));
+        let (copy_mode, o) = convert_to_dest_line_n12(2, 4, mode, &planes, &mut d, 2);
+        assert_eq!((copy_mode, o), (1, Dest12::Written));
         assert_eq!(bits(&d), bits(&[0.5, 0.5, 0.5, alpha, 2.0, 2.0, 2.0, alpha]));
     }
 }
@@ -115,8 +115,8 @@ fn one_plane_mode1_reached_through_a_small_ctx64_clamps_the_gray_value() {
     let g = [0.25f32, 2.0, -1.0, f32::NAN, -0.0];
     let planes = p4(&g, &[]);
     let mut d = vec![0f32; 4 * g.len()];
-    let (edx, o) = convert_to_dest_line_n12(4, 1, 1, &planes, &mut d, g.len());
-    assert_eq!((edx, o), (1, Dest12::Written));
+    let (copy_mode, o) = convert_to_dest_line_n12(4, 1, 1, &planes, &mut d, g.len());
+    assert_eq!((copy_mode, o), (1, Dest12::Written));
     let want = [0.25f32, 1.0, 0.0, f32::NAN, -0.0];
     for i in 0..g.len() {
         assert_eq!(d[4 * i].to_bits(), g[i].to_bits());

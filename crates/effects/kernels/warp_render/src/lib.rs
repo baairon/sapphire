@@ -63,8 +63,8 @@ pub struct PerspThis<'a> {
     pub inputs: Option<(&'a [f32], &'a [f32])>,
 }
 
-/// Slot 52 of class perspective. `n` is [args]; `out2_phase_bytes` = (address of out2[0]) & 0x1f (the buffer phase, an explicit input
-/// by design; out1 is not address dependent). Writes out1[..n] and out2[..n].
+/// Slot 52 of class perspective. `n` is [args]; `out2_phase_bytes` = (position of out2[0]) & 0x1f (the buffer phase, an explicit input
+/// by design; out1 does not depend on its position). Writes out1[..n] and out2[..n].
 pub fn slot52_perspective(fw: u64, t: &PerspThis, flag: bool, n: i32, out2_phase_bytes: u32, out1: &mut [f32], out2: &mut [f32]) -> Result<(), Slot52Error> {
     match tier(fw) {
         Tier::Avx2 => {}
@@ -83,7 +83,7 @@ pub fn slot52_perspective(fw: u64, t: &PerspThis, flag: bool, n: i32, out2_phase
 // class perspective_alpha, slot 52 
 
 /// Slot 52 of class perspective_alpha: one alpha ramp plane over `src` (the v array of the input image object), or the ROI zero fill when
-/// the product x8 = r1 * params_a is zero. `dst_phase` = (address of dst[0]) & 0x1f.
+/// the product x8 = r1 * params_a is zero. `dst_phase` = (position of dst[0]) & 0x1f.
 pub fn slot52_perspective_alpha(fw: u64, par: &AlphaParams, info: &AlphaInfo, flag: bool, src: &[f32], dst: &mut [f32], dst_phase: usize) -> Result<AlphaOutcome, Slot52Error> {
     match tier(fw) {
         Tier::Avx2 => {}
@@ -118,11 +118,11 @@ pub struct WarpPrim {
     pub const_a1: f32,
     pub const_a2: f32,
     /// arrays [[P]] and [[P]] (used when const_coords is false; base + 4 * idx)
-    pub a1_arr: Vec<f32>,
-    pub a2_arr: Vec<f32>,
+    pub lanes_a_first: Vec<f32>,
+    pub lanes_a_second: Vec<f32>,
     /// arrays [P], [P] (written by slot 33; base + 4 * idx)
-    pub c1_arr: Vec<f32>,
-    pub c2_arr: Vec<f32>,
+    pub lanes_c_first: Vec<f32>,
+    pub lanes_c_second: Vec<f32>,
     /// byte [P]
     pub flag: u8,
     /// i32 [P], [P]
@@ -199,8 +199,8 @@ fn tail(v: &[f32], idx: i32) -> Result<&[f32], WarpError> {
 /// What the wrapper hands the driver : slices are the arrays offset by the element index `idx` = [rec].
 #[derive(Clone, Debug, PartialEq)]
 pub struct WrapArgs {
-    pub a1: Vec<f32>,
-    pub a2: Vec<f32>,
+    pub coord_x: Vec<f32>,
+    pub coord_y: Vec<f32>,
     pub const_coords: bool,
     pub c1: Vec<f32>,
     pub c2: Vec<f32>,
@@ -216,8 +216,8 @@ pub fn wrapper_args(p: &WarpPrim, idx: i32) -> Result<WrapArgs, WarpError> {
 /// As `wrapper_args`, copying at most `cap` entries of each array tail (a row reads `count` entries).
 pub fn wrapper_args_n(p: &WarpPrim, idx: i32, cap: Option<usize>) -> Result<WrapArgs, WarpError> {
     let capped = |v: &[f32]| -> Vec<f32> { match cap { Some(c) => v[..c.min(v.len())].to_vec(), None => v.to_vec() } };
-    let (a1, a2) = if p.const_coords { (vec![p.const_a1], vec![p.const_a2]) } else { (capped(tail(&p.a1_arr, idx)?), capped(tail(&p.a2_arr, idx)?)) };
-    Ok(WrapArgs { a1, a2, const_coords: p.const_coords, c1: capped(tail(&p.c1_arr, idx)?), c2: capped(tail(&p.c2_arr, idx)?), flag: p.flag as i32, mx: p.mx, my: p.my })
+    let (coord_x, coord_y) = if p.const_coords { (vec![p.const_a1], vec![p.const_a2]) } else { (capped(tail(&p.lanes_a_first, idx)?), capped(tail(&p.lanes_a_second, idx)?)) };
+    Ok(WrapArgs { coord_x, coord_y, const_coords: p.const_coords, c1: capped(tail(&p.lanes_c_first, idx)?), c2: capped(tail(&p.lanes_c_second, idx)?), flag: p.flag as i32, mx: p.mx, my: p.my })
 }
 
 /// True when takes its error path (aspect == 0 in the image geometry block: it logs through and returns).
@@ -235,7 +235,7 @@ pub fn slot53_warp(
     lat: &Lattice,
     out: &mut [Vec<f32>],
 ) -> Result<Vec<DriverRec>, WarpError> {
-    let n = img.f1.n;
+    let n = img.sampler_params.n;
     if n > CONTRACT_MAX_N_BLEND {
         return Err(WarpError::ContractLimit { n });
     }
@@ -245,7 +245,7 @@ pub fn slot53_warp(
     }
     let obj = build_ctx(rec, geom);
     let w = wrapper_args_n(p, rec.idx, Some(rec.count.max(0) as usize))?;
-    let a = DriverArgs { a1: &w.a1, a2: &w.a2, const_coords: w.const_coords, c1: &w.c1, c2: &w.c2, flag: w.flag, mx: w.mx, my: w.my };
+    let a = DriverArgs { coord_x: &w.coord_x, coord_y: &w.coord_y, const_coords: w.const_coords, c1: &w.c1, c2: &w.c2, flag: w.flag, mx: w.mx, my: w.my };
     warp_driver::run(&obj, img, lat, &a, out).map_err(WarpError::Driver)
 }
 
@@ -258,7 +258,7 @@ pub struct Assumption {
 
 pub fn assumptions() -> Vec<Assumption> {
     vec![
-        Assumption { id: "WPG1-A1", basis: "ROUTE AVX2-ONLY for slots 52 (perspective, perspective_alpha): dispatcher mask 0x9d97ff selects the AVX2 body; the AVX middle tier and SSE twin are not ported; the feature word is an explicit input", label: "ROUTE AVX2-ONLY" },
+        Assumption { id: "WPG1-A1", basis: "ROUTE AVX2-ONLY for slots 52 (perspective, perspective_alpha): dispatcher mask selects the AVX2 body; the AVX middle tier and SSE twin are not ported; the feature word is an explicit input", label: "ROUTE AVX2-ONLY" }, // origin: 0x9d97ff
         Assumption { id: "WPG1-A2", basis: "slot 53 of class warp enters the driver whose AVX2 body is ported (warp_driver); ROUTE AVX2-ONLY inherited; the ISA dispatcher is entered in the emulator with the feature word served", label: "ROUTE AVX2-ONLY" },
         Assumption { id: "WPG1-A3", basis: "byte [img] (image geometry present) is an explicit input: None keeps the record's fields (the path the executor feeds, same geometry as warp_rel and blur_warp); Some applies the listing's override and (aspect_block_d = 1/aspect, assumption_e = 0). Which path a real render takes is not measured", label: "PARAM-UNCAPTURED 1" },
         Assumption { id: "WPG1-A4", basis: "slot 33 runs before slot 53 on the flag 0 route (WG, MEASURED order) and writes P, P, P; here c1, c2 and the flag byte are explicit inputs of WarpPrim (as in warp_rel WR1-A2)", label: "SLOT33-INPUTS" },

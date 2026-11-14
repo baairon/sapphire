@@ -88,15 +88,15 @@ fn wired_class_equals_stored_emulator_cases() {
             cst(&[f("g0"), f("g1"), f("g2")]),
             cst(&[1.0]),
         ];
-        let mut kp = KParams::standin();
+        let mut kp = KParams::host_defaults();
         kp.blur_render_scale = m["cw"] as i32;
         kp.host_aspect = f("kcell");
         if n == 4 {
             // outside the claim: the wired class must refuse (NCH-RANGE); the source cannot be built with 4 planes here, so only the refusal is asserted
             let src4 = Image { n: wh, planes: (0..4).map(|k| plane(&mem0, k)).collect() };
-            let mut a4 = args.clone();
-            a4[0] = Arg::Img(&src4);
-            match kernels::run_any("edge_aware_sharpen", 4, &a4, wh, (w, h), &kp) {
+            let mut args_src4 = args.clone();
+            args_src4[0] = Arg::Img(&src4);
+            match kernels::run_any("edge_aware_sharpen", 4, &args_src4, wh, (w, h), &kp) {
                 Err(ExecError::Unsupported { reason, .. }) if reason.contains("NCH-RANGE") => *refused.entry("NCH-RANGE".into()).or_insert(0) += 1,
                 other => first.push(format!("{} n=4 not refused by name: {:?}", cid, other.err())),
             }
@@ -152,7 +152,7 @@ fn wired_arm_refusals_by_name() {
     let src = Image { n: wh, planes: (0..3).map(|k| (0..wh).map(|i| ((i * 7 + k * 13) % 17) as f32 / 17.0).collect()).collect() };
     let run = |levels: f32, tag: i32| {
         let args: Vec<Arg> = vec![Arg::Img(&src), cst(&[1.5]), cst(&[4.0]), cst(&[0.0, 0.0]), cst(&[levels]), cst(&[0.005]), cst(&[0.15]), cst(&[3.0, 1.5, 1.0, 2.0]), cst(&[1.0, 1.0, 1.0]), cst(&[1.0])];
-        let mut kp = KParams::standin();
+        let mut kp = KParams::host_defaults();
         kp.blur_render_scale = 1;
         kernels::run_any("edge_aware_sharpen", tag, &args, wh, (w, h), &kp)
     };

@@ -8,7 +8,7 @@ fn run(w: usize, h: usize) -> Result<Image, fx_exec::types::ExecError> {
     let flow = Image { n, planes: vec![vec![0.25; n], vec![-0.25; n], vec![0.0; n]] };
     let scale = Arg::Const { n: 1, lanes: [0.5f32.to_bits(); 4] };
     let args = [Arg::Img(&col), Arg::Img(&col), Arg::Img(&flow), scale];
-    kernels::run_any("optical_flow_interp_maps", 4, &args, n, (w, h), &KParams::standin()).and_then(|o| o.into_image())
+    kernels::run_any("optical_flow_interp_maps", 4, &args, n, (w, h), &KParams::host_defaults()).and_then(|o| o.into_image())
 }
 
 #[test]

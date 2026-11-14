@@ -5,8 +5,8 @@ use edge_aware_sharpen_jobs::*;
 const F8_NAN: u32 = 0x7fc0_0111;
 const K_NAN: u32 = 0xffc0_0222;
 
-fn ctx(w: i32, s: i32, flag_cell_b: i32, f8: f32, k: f32) -> Ctx {
-    Ctx { w, s, nch: 1, flag_cell_b, f0: 1.0, f4: 0.5, f8, fc: 0.25, esh2_job_ctx_a: 0.5, k }
+fn ctx(w: i32, s: i32, flag_cell_b: i32, e_scale: f32, k: f32) -> Ctx {
+    Ctx { w, s, nch: 1, flag_cell_b, d_scale: 1.0, ca_param: 0.5, e_scale, fc: 0.25, esh2_job_ctx_a: 0.5, k }
 }
 
 fn run(c: &Ctx, ch0: &[f32], cur: &[f32]) -> (Vec<f32>, Vec<f32>) {
@@ -14,7 +14,7 @@ fn run(c: &Ctx, ch0: &[f32], cur: &[f32]) -> (Vec<f32>, Vec<f32>) {
     let zero = vec![0.0f32; total];
     let mut a = vec![0.0f32; total];
     let mut t = vec![0.0f32; total];
-    let mut b = Bufs { ch: [ch0, &zero, &zero, &zero], cur, a: &mut a, t: &mut t };
+    let mut b = Bufs { chan: [ch0, &zero, &zero, &zero], cur, a: &mut a, t: &mut t };
     job_2(c, 0, c.s, &mut b).unwrap();
     (a, t)
 }

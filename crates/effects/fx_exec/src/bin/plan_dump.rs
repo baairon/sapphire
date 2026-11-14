@@ -57,7 +57,7 @@ fn run(a: Vec<String>) -> i32 {
     for n in &cp.nodes {
         println!(
             "N{}\t{}\t{}\tprim={}\tel={}\targs={:?}\tconst={}\tfolded={}\tlanes={:08x},{:08x},{:08x},{:08x}\tparam={:?}",
-            n.idx, n.kind, n.name, n.prim, n.elnum, n.args, n.b160, n.folded, n.lanes[0], n.lanes[1], n.lanes[2], n.lanes[3], n.param
+            n.idx, n.kind, n.name, n.prim, n.elnum, n.args, n.is_const_node, n.folded, n.lanes[0], n.lanes[1], n.lanes[2], n.lanes[3], n.param
         );
     }
     println!("{}", plan_text_mode(&cp, mode));

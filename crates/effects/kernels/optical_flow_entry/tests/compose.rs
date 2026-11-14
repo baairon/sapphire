@@ -32,9 +32,9 @@ fn a_done_run_gives_the_planes() {
 fn two_runs_are_equal() {
     let (w, h) = (40usize, 24usize);
     let (a, b) = (image(w, h, 0.0), image(w, h, 0.3));
-    let r1 = run_flow(&a, &b, w as i32, h as i32, &consts(), || false).unwrap();
+    let flow_out = run_flow(&a, &b, w as i32, h as i32, &consts(), || false).unwrap();
     let r2 = run_flow(&a, &b, w as i32, h as i32, &consts(), || false).unwrap();
-    assert_eq!(bits(&r1), bits(&r2));
+    assert_eq!(bits(&flow_out), bits(&r2));
 }
 
 #[test]

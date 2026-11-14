@@ -26,8 +26,8 @@ pub enum Decision {
 pub struct FrameRecord {
     pub last_t: i32,
     pub restart_t: i32,
-    pub w4: i16,
-    pub w6: i16,
+    pub size_w: i16,
+    pub size_h: i16,
     pub alloc_w: i16,
     pub alloc_h: i16,
     pub depth: u8,
@@ -38,7 +38,7 @@ pub struct FrameRecord {
 impl FrameRecord {
     /// A fresh owner: last time -1,000,000, everything else zero.
     pub fn fresh() -> Self {
-        FrameRecord { last_t: FRESH_LAST, restart_t: 0, w4: 0, w6: 0, alloc_w: 0, alloc_h: 0, depth: 0, buffer: false, flag9: 0 }
+        FrameRecord { last_t: FRESH_LAST, restart_t: 0, size_w: 0, size_h: 0, alloc_w: 0, alloc_h: 0, depth: 0, buffer: false, flag9: 0 }
     }
 
     /// The window limit as f32: fma(step, K, last_t) rounded once to f32 (the fused form of the AVX body; the separate
@@ -67,7 +67,7 @@ impl FrameRecord {
         #[allow(unreachable_code)]
         {
             let lim = Self::window_limit(self.last_t, step);
-            let size_equal = size.0 == self.w4 as i32 && size.1 == self.w6 as i32;
+            let size_equal = size.0 == self.size_w as i32 && size.1 == self.size_h as i32;
             if flag_bit && self.last_t < t && !((t as f32) >= lim) && size_equal {
                 Decision::Keep
             } else {
@@ -101,8 +101,8 @@ impl FrameRecord {
             self.alloc_w = 0;
             self.alloc_h = 0;
         } else {
-            self.w4 = size.0 as i16;
-            self.w6 = size.1 as i16;
+            self.size_w = size.0 as i16;
+            self.size_h = size.1 as i16;
             let depth = n.max(3) as u8;
             let old_area = (self.alloc_w as i32).wrapping_mul(self.alloc_h as i32);
             let new_area = size.0.wrapping_mul(size.1);
@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn first_call_restarts_and_stores_size() {
         let r = after_first((64, 32), 1, 1);
-        assert_eq!((r.last_t, r.restart_t, r.w4, r.w6, r.flag9), (1, 1, 64, 32, 1));
+        assert_eq!((r.last_t, r.restart_t, r.size_w, r.size_h, r.flag9), (1, 1, 64, 32, 1));
     }
 
     #[test]
@@ -179,7 +179,7 @@ mod tests {
         let mut r = after_first((64, 32), 1, 1);
         assert_eq!(r.begin(FLAG, 2, 1, (50, 7)), Decision::Restart);
         r.save(true, (50, 7), 3);
-        assert_eq!((r.w4, r.w6), (50, 7));
+        assert_eq!((r.size_w, r.size_h), (50, 7));
         // shrink: no reallocation, allocation words keep the larger size, flag byte set again
         assert_eq!((r.alloc_w, r.alloc_h), (64, 32));
         assert_eq!(r.begin(FLAG, 3, 1, (50, 7)), Decision::Keep);
@@ -201,7 +201,7 @@ mod tests {
         let mut r = after_first((64, 32), 1, 1);
         r.save(false, (10, 10), 3);
         assert_eq!((r.alloc_w, r.alloc_h, r.buffer), (0, 0, false));
-        assert_eq!((r.w4, r.w6), (64, 32), "size words are not written on the free path");
+        assert_eq!((r.size_w, r.size_h), (64, 32), "size words are not written on the free path");
     }
 
     #[test]
@@ -226,8 +226,8 @@ mod tests {
         assert_eq!(FrameRecord::window_limit(last, step), 16_777_215.0);
         let mut r = FrameRecord::fresh();
         r.last_t = last;
-        r.w4 = 64;
-        r.w6 = 32;
+        r.size_w = 64;
+        r.size_h = 32;
         assert_eq!(r.decide(true, t, step, (64, 32)), Decision::Restart);
     }
 

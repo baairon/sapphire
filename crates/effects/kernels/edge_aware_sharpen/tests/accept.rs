@@ -121,8 +121,8 @@ fn accept_stored_cases() {
             }
             continue;
         }
-        let r0 = run(&cc, &ops, &inp, Scratch::Zero);
-        let o0 = match r0 {
+        let zero_result = run(&cc, &ops, &inp, Scratch::Zero);
+        let zero_out = match zero_result {
             Err(ExecErr::VariantNch1) => {
                 *t.refused.entry("VariantNch1".into()).or_insert(0) += 1;
                 continue;
@@ -136,20 +136,20 @@ fn accept_stored_cases() {
             }
             Ok(o) => o,
         };
-        assert_eq!(o0.plane3_accesses, 0);
-        let o1 = run(&cc, &ops, &inp, Scratch::Poison(0x7fc0_dead)).unwrap();
+        assert_eq!(zero_out.plane3_accesses, 0);
+        let poison_out = run(&cc, &ops, &inp, Scratch::Poison(0x7fc0_dead)).unwrap();
         for k in 0..nu {
             t.floats_emu += wh as u64;
             compared_floats_emu += wh as u64;
-            if let Some((i, a, b)) = cmp(&o0.planes[k], &exp_out[k], &mut t.bad_emu, &mut t.nanpay_emu) {
+            if let Some((i, a, b)) = cmp(&zero_out.planes[k], &exp_out[k], &mut t.bad_emu, &mut t.nanpay_emu) {
                 if t.first.len() < 12 {
                     t.first.push(format!("{} vs emulator plane {} elem {} native {:08x} emu {:08x}", cid, k, i, a, b));
                 }
             }
-            cmp(&o0.planes[k], &ref_out[k], &mut t.bad_ref, &mut t.nanpay_ref);
-            cmp(&o1.planes[k], &o0.planes[k], &mut t.bad_poison, &mut t.nanpay_poison);
+            cmp(&zero_out.planes[k], &ref_out[k], &mut t.bad_ref, &mut t.nanpay_ref);
+            cmp(&poison_out.planes[k], &zero_out.planes[k], &mut t.bad_poison, &mut t.nanpay_poison);
         }
-        assert_eq!(o0.calls.pools, refrun.as_ref().unwrap().pools, "{} pool list", cid);
+        assert_eq!(zero_out.calls.pools, refrun.as_ref().unwrap().pools, "{} pool list", cid);
     }
     let adm = t.cases - t.refused.values().sum::<u64>() - t.trip;
     println!("RESULT cases {} refused {:?} admitted {} compared_floats {} vs_emulator bad {} nanpayload_only {} vs_slot52_port bad {} nanpayload_only {} poison_vs_zero bad {} nanpayload_only {} tripwire_fired {} errors {:?}", t.cases, t.refused, adm, compared_floats_emu, t.bad_emu, t.nanpay_emu, t.bad_ref, t.nanpay_ref, t.bad_poison, t.nanpay_poison, t.trip, t.first);
@@ -199,8 +199,8 @@ fn refusals_and_mask_rule() {
     // variant != 0 at nch 1
     let mut o = base_ops();
     o.deriv_io = [1.0, 0.0];
-    let s1 = &s[..1];
-    let inp3 = Inputs { source: s1, mask: None };
+    let bits_1 = &s[..1];
+    let inp3 = Inputs { source: bits_1, mask: None };
     assert_eq!(run(&base_ctx(1), &o, &inp3, Scratch::Zero).err(), Some(ExecErr::VariantNch1));
     // wrong source count
     assert!(matches!(run(&base_ctx(2), &base_ops(), &inp, Scratch::Zero).err(), Some(ExecErr::Shape(_))));
@@ -214,16 +214,16 @@ fn tripwire_fires_on_absent_plane() {
     let nt = 3 * nu + 5;
     let mut mem = vec![0.25f32; (4 + nt + nu) * wh];
     let th = d::This { n: 3, sig_byte: true, sigma0: 1.5, mode: 4.0, variant: 0.0, bcflag: 0.0, iters: 4.0, scale: 0.005, output_a: 0.15, arr: [3.0, 1.5, 1.0, 2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0] };
-    let cx = d::Cx { cw: 1, w: 8, h: 4, kcell: 1.0 };
+    let centre_x = d::Cx { cw: 1, w: 8, h: 4, kcell: 1.0 };
     let mk = |inp: [usize; 4]| d::Ids { inp, t: (0..nt).map(|k| (4 + k) * wh).collect(), out: (0..nu).map(|k| (4 + nt + k) * wh).collect() };
     // absent plane 3 at n = 3: silent (never read)
-    assert!(d::slot52(&th, &cx, &mk([0, wh, 2 * wh, d::NO_PLANE]), &mut mem.clone(), 0).is_ok());
+    assert!(d::slot52(&th, &centre_x, &mk([0, wh, 2 * wh, d::NO_PLANE]), &mut mem.clone(), 0).is_ok());
     // absent plane 1 at n = 3: fires
-    assert_eq!(d::slot52(&th, &cx, &mk([0, d::NO_PLANE, 2 * wh, d::NO_PLANE]), &mut mem, 0).err(), Some(d::DErr::Tripwire(1)));
+    assert_eq!(d::slot52(&th, &centre_x, &mk([0, d::NO_PLANE, 2 * wh, d::NO_PLANE]), &mut mem, 0).err(), Some(d::DErr::Tripwire(1)));
     // n = 4 with plane 3 absent: the weight job's own length guard stops it (no stand-in plane is read)
     let th4 = d::This { n: 4, ..th.clone() };
     let nt4 = 3 * 4 + 5;
     let mut mem4 = vec![0.25f32; (4 + nt4 + 4) * wh];
     let ids4 = d::Ids { inp: [0, wh, 2 * wh, d::NO_PLANE], t: (0..nt4).map(|k| (4 + k) * wh).collect(), out: (0..4).map(|k| (4 + nt4 + k) * wh).collect() };
-    assert!(d::slot52(&th4, &cx, &ids4, &mut mem4, 0).is_err());
+    assert!(d::slot52(&th4, &centre_x, &ids4, &mut mem4, 0).is_err());
 }

@@ -147,18 +147,18 @@ pub fn render(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]]) -> R
 /// The whole slot-53 AVX2 body .
 pub fn run(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Mutant) -> Result<(), ScreenError> {
     // r14 = (countA == 3 && countB == 4), r12 = (countA == 4 && countB == 3)
-    let (mut r14, mut r12) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
+    let (mut a_rgb_b_rgba, mut a_rgba_b_rgb) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
     if m == Mutant::R14Swap {
-        r14 = a.count == 4 && b.count == 3;
+        a_rgb_b_rgba = a.count == 4 && b.count == 3;
     }
     if m == Mutant::ExtA3Only {
-        r14 = a.count == 3;
+        a_rgb_b_rgba = a.count == 3;
     }
     if m == Mutant::R12Off {
-        r12 = false;
+        a_rgba_b_rgb = false;
     }
     // (r14|r12) != 0 or nout == 3 take the fixed 3-channel loop (no nout <= 0 test); else loop nout channels (: jle skips)
-    let fixed3 = if m == Mutant::Fixed3Off { r14 || r12 } else { r14 || r12 || p.nout == 3 };
+    let fixed3 = if m == Mutant::Fixed3Off { a_rgb_b_rgba || a_rgba_b_rgb } else { a_rgb_b_rgba || a_rgba_b_rgb || p.nout == 3 };
     let mut nch: i32 = if fixed3 {
         3
     } else if p.nout > 0 {
@@ -171,31 +171,31 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Muta
     }
     let n = p.n;
     if n > 0 {
-        for ch in 0..nch {
-            if out.get(ch as usize).map_or(true, |d| d.len() < n as usize) {
+        for chan in 0..nch {
+            if out.get(chan as usize).map_or(true, |d| d.len() < n as usize) {
                 return Err(ScreenError::MissingOut);
             }
         }
-        if (r14 || r12) && out.get(3).map_or(true, |d| d.len() < n as usize) {
+        if (a_rgb_b_rgba || a_rgba_b_rgb) && out.get(3).map_or(true, |d| d.len() < n as usize) {
             return Err(ScreenError::MissingOut);
         }
     }
     let (a_const, b_const) = (a.is_const && m != Mutant::NoConstA, b.is_const && m != Mutant::NoConstB);
-    for ch in 0..nch {
+    for chan in 0..nch {
         // cmp esi,eax ; cmovl : idx = min(ch, count - 1), signed
-        let mut ia = ch.min(a.count - 1);
-        let mut ib = ch.min(b.count - 1);
+        let mut ia = chan.min(a.count - 1);
+        let mut ib = chan.min(b.count - 1);
         if m == Mutant::ClampA {
-            ia = ch.min(a.count);
+            ia = chan.min(a.count);
         }
         if m == Mutant::ClampB {
-            ib = ch.min(b.count);
+            ib = chan.min(b.count);
         }
         if n <= 0 {
             continue; // test r10d; jle next channel
         }
         let n = n as usize;
-        let dst_i = ch as usize;
+        let dst_i = chan as usize;
         if a_const {
             // flag A first; B plane r14 is read even if B is flagged constant
             let ca = a.consts[cidx(ia)?];
@@ -222,10 +222,10 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Muta
         }
     }
     if n > 0 {
-        if r14 {
+        if a_rgb_b_rgba {
             ext(true, p, a, b, out, m)?;
         }
-        if r12 {
+        if a_rgba_b_rgb {
             ext(false, p, a, b, out, m)?;
         }
     }
@@ -325,7 +325,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
         ("SS1-A1", "CAPTURED", "ONE 1.0f : bytes 0000803f read by lookup.py (lookup_ss.tsv)"),
         ("SS1-A2", "SEMANTIC (explicit parameter vec_one)", "vector constant (32 B, uncovered) used by the (3,4) B-side extension kernel; basis: the scalar head and tail of the same loop use captured ONE over the same array; T2 runs 1.0 and 0.75 on both sides"),
-        ("SS1-A3", "ROUTE", "AVX2 route only: feature word 0x9d97ff selects; the AVX body and the SSE body are not ported"),
+        ("SS1-A3", "ROUTE", "AVX2 route only: feature word selects; the AVX body and the SSE body are not ported"), // origin: 0x9d97ff
         ("SS1-A4", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ; the emulator follows the SDM, not silicon"),
         ("SS1-A5", "ALIGN-DEPENDENT", "dst3_phase_bytes = (address of output plane 3) & 0x1f is an explicit input (only the (3,4) B-side kernel splits on it, and only matters when vec_one != 1.0)"),
         ("SS1-A6", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 (: [chosen combo] or -1) is an explicit parameter; the combo table is MEASURED (audit_evt COMBOS.tsv), the choice and the builder are not rebuilt (COMBO-PARITY)"),

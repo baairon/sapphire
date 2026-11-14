@@ -25,7 +25,7 @@ fn text(sx: i32, sy: i32, px: i32, py: i32, list: &str, drop: Option<&str>) -> S
 fn run(t: &str) -> (Option<Vec<f32>>, Vec<String>) {
     let mut h = HostCurveValues::parse(t).unwrap();
     h.time_frames = Some(0.0);
-    h.ae32 = true;
+    h.claim_route = true;
     let mut d = Vec::new();
     let r = fx_eval::hostcurve::fold("Transform_and_Blur_Autogen", "center", 0.5, &[0.0, 0.0], 2, &h, &mut d);
     (r, d)

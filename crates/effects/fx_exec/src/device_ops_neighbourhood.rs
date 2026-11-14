@@ -11,7 +11,7 @@ use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use crate::kernels2::cvt_i32;
 use crate::types::{Image, KParams};
 use blur_coef::{DriverParams, Plan};
-use fx_device::cl::{Arg as ClArg, Buffer};
+use fx_device::ocl::{Arg as ClArg, Buffer};
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
 use fx_common::nanop::NanOps;
@@ -117,25 +117,25 @@ pub(crate) struct BlurJob {
 
 /// The scratch alignment replay of the CPU's vertical pass (`blur_rows_y::pass_y`): for every column and pass, the byte phase of the
 /// input buffer slot (32 column slots, a ping-pong slot, 32 columns per strip).
-fn y_phases(w: usize, h: usize, np: usize, base_phase: usize) -> Vec<u32> {
+fn y_phases(w: usize, h: usize, np: usize, align_phase: usize) -> Vec<u32> {
     let stride_bytes = (4 * h + 15) & !15;
-    let phase = |idx: usize| ((base_phase + idx * stride_bytes) & 31) as u32;
+    let phase = |idx: usize| ((align_phase + idx * stride_bytes) & 31) as u32;
     let mut out = vec![0u32; w * 3];
     let mut slots: [usize; 32] = core::array::from_fn(|j| j);
     let mut pp = 32usize;
     let mut col0 = 0usize;
     while col0 < w {
         let ncols = (w - col0).min(32);
-        let mut r15 = pp;
+        let mut plane_pos = pp;
         for j in 0..ncols {
-            let mut r14 = slots[j];
+            let mut slot_word = slots[j];
             for p in 0..np.min(3) {
-                out[(col0 + j) * 3 + p] = phase(r14);
-                std::mem::swap(&mut r14, &mut r15);
+                out[(col0 + j) * 3 + p] = phase(slot_word);
+                std::mem::swap(&mut slot_word, &mut plane_pos);
             }
-            slots[j] = r14;
+            slots[j] = slot_word;
         }
-        pp = r15;
+        pp = plane_pos;
         col0 += 32;
     }
     out
@@ -286,7 +286,7 @@ fn blur_accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
         return Err("combination tag outside 1..4");
     }
     match plane_channels(&a[0]) {
-        Some(ch) if ch >= c.tag as usize => {}
+        Some(chan) if chan >= c.tag as usize => {}
         Some(_) => return Err("fewer channels than the combination tag"),
         None => return Err("the source is not a plain image"),
     }
@@ -308,7 +308,7 @@ fn blur_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, De
     let shape = cvt_i32(lane(&a[2], 0)?);
     let sc = [lane(&a[3], 0)?, lane(&a[3], 1)?, lane(&a[3], 2)?, lane(&a[3], 3)?];
     let subpixel = cvt_i32(lane(&a[4], 0)?);
-    let bp = blur::BlurParams {
+    let blur_params = blur::BlurParams {
         amount,
         filter_shape: shape,
         scale: sc,
@@ -319,15 +319,15 @@ fn blur_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, De
         render_scale: render_scale(c.kp, w),
         aspect: c.kp.blur_aspect,
     };
-    let edge = edge_of(bp.edge_mode)?;
-    let passes = blur::pass_count(bp.filter_shape);
-    let sx = blur::lane_sigma(bp.amount[0], bp.render_scale);
-    let sy = blur::lane_sigma(bp.amount[1], bp.render_scale);
+    let edge = edge_of(blur_params.edge_mode)?;
+    let passes = blur::pass_count(blur_params.filter_shape);
+    let sx = blur::lane_sigma(blur_params.amount[0], blur_params.render_scale);
+    let sy = blur::lane_sigma(blur_params.amount[1], blur_params.render_scale);
     let out = DevImage::alloc(s, planes, c.n)?;
     let scr = DevImage::alloc(s, 1, 3 * c.n)?;
-    for ch in 0..planes {
-        let job = BlurJob { w, h, sx, sy, gain: blur::plane_gain(&bp, ch), edge, passes, subpixel: bp.subpixel != 0, aspect: bp.aspect };
-        blur_dev(s, &scr, src.plane(ch), out.plane(ch), &job)?;
+    for chan in 0..planes {
+        let job = BlurJob { w, h, sx, sy, gain: blur::plane_gain(&blur_params, chan), edge, passes, subpixel: blur_params.subpixel != 0, aspect: blur_params.aspect };
+        blur_dev(s, &scr, src.plane(chan), out.plane(chan), &job)?;
     }
     Ok(out)
 }
@@ -344,11 +344,11 @@ fn masked_blur_accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str>
         return Err("combination tag outside 1..4");
     }
     match plane_channels(&a[0]) {
-        Some(ch) if ch >= c.tag as usize => {}
+        Some(chan) if chan >= c.tag as usize => {}
         _ => return Err("the source is not an image with the tag's channels"),
     }
     match plane_channels(&a[1]) {
-        Some(ch) if ch >= 1 => {}
+        Some(chan) if chan >= 1 => {}
         _ => return Err("the mask is not an image"),
     }
     if !a[2..].iter().all(is_const) {
@@ -381,15 +381,15 @@ fn masked_blur_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevIm
     let job = BlurJob { w, h, sx, sy, gain: 1.0, edge: 0, passes, subpixel: subpixel != 0, aspect: None };
     s.launch("mb_clamp_f32", n, &[mask.plane(0).arg(), work.plane(0).arg(), ClArg::U32(n as u32)])?;
     blur_dev(s, &scr, work.plane(0), work.plane(1), &job)?;
-    for ch in 0..planes {
+    for chan in 0..planes {
         // t = premultiplied source, blurred into plane 2 through the scratch of the blur (the CPU blurs a copy back into t)
         let t = DevImage::alloc(s, 1, n)?;
-        s.launch("mb_premul_f32", n, &[work.plane(0).arg(), src.plane(ch).arg(), t.plane(0).arg(), ClArg::U32(n as u32)])?;
+        s.launch("mb_premul_f32", n, &[work.plane(0).arg(), src.plane(chan).arg(), t.plane(0).arg(), ClArg::U32(n as u32)])?;
         blur_dev(s, &scr, t.plane(0), work.plane(2), &job)?;
         s.launch(
             "mb_combine_f32",
             n,
-            &[work.plane(0).arg(), work.plane(2).arg(), work.plane(1).arg(), src.plane(ch).arg(), out.plane(ch).arg(), ClArg::U32(n as u32), ClArg::F32(masked_blur::MASK_THRESHOLD)],
+            &[work.plane(0).arg(), work.plane(2).arg(), work.plane(1).arg(), src.plane(chan).arg(), out.plane(chan).arg(), ClArg::U32(n as u32), ClArg::F32(masked_blur::MASK_THRESHOLD)],
         )?;
     }
     Ok(out)
@@ -410,7 +410,7 @@ fn grad_accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
         return Err("width 1: the CPU kernel refuses it");
     }
     match plane_channels(&a[0]) {
-        Some(ch) if ch >= 1 => {}
+        Some(chan) if chan >= 1 => {}
         _ => return Err("the source is not an image"),
     }
     if !a[1..].iter().all(is_const) {
@@ -456,8 +456,8 @@ fn grad_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, De
     let out = DevImage::alloc(s, 2, n)?;
     let job = BlurJob { w, h, sx: sigma, sy: sigma, gain, edge, passes: 3, subpixel: gp.subpixel != 0, aspect: gp.aspect };
     blur_dev(s, &scr, src.plane(0), aux.plane(0), &job)?;
-    let x5 = if gp.info_aspect_set { 1.0f32 } else { 2.0f32 };
-    s.launch("grad_stencil_f32", n, &[aux.plane(0).arg(), out.plane(0).arg(), out.plane(1).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32), ClArg::F32(x5)])?;
+    let pick_5 = if gp.info_aspect_set { 1.0f32 } else { 2.0f32 };
+    s.launch("grad_stencil_f32", n, &[aux.plane(0).arg(), out.plane(0).arg(), out.plane(1).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32), ClArg::F32(pick_5)])?;
     Ok(out)
 }
 
@@ -503,18 +503,18 @@ fn sharpen_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage,
     let n = c.n;
     let out = DevImage::alloc(s, planes, n)?;
     let scr = DevImage::alloc(s, 1, 3 * n)?;
-    for ch in 0..planes {
-        let idx = sharpen::plan::gain_index(ch, planes);
+    for chan in 0..planes {
+        let idx = sharpen::plan::gain_index(chan, planes);
         let Some(g) = gains.get(idx).copied() else { return unsup("gain index outside the four lanes") };
         match sharpen::plan::plane_plan(r, g) {
-            sharpen::plan::PlanePlan::Copy => s.queue.copy(src.plane(ch), out.plane(ch))?,
+            sharpen::plan::PlanePlan::Copy => s.queue.copy(src.plane(chan), out.plane(chan))?,
             sharpen::plan::PlanePlan::Run { radius, gain } => {
                 let job = BlurJob { w, h, sx: radius, sy: radius, gain: sharpen::plan::BLUR_GAIN, edge: sharpen::plan::BLUR_EDGE_MIRROR, passes: sharpen::plan::BLUR_PASSES, subpixel: false, aspect: None };
-                blur_dev(s, &scr, src.plane(ch), out.plane(ch), &job)?;
+                blur_dev(s, &scr, src.plane(chan), out.plane(chan), &job)?;
                 s.launch(
                     "sharpen_combine_f32",
                     n,
-                    &[src.plane(ch).arg(), out.plane(ch).arg(), ClArg::U32(count as u32), ClArg::U32(n as u32), ClArg::F32(gain), ClArg::I32(c.kp.sharpen_alias as i32)],
+                    &[src.plane(chan).arg(), out.plane(chan).arg(), ClArg::U32(count as u32), ClArg::U32(n as u32), ClArg::F32(gain), ClArg::I32(c.kp.sharpen_alias as i32)],
                 )?;
             }
         }
@@ -570,7 +570,7 @@ fn esh_accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
 }
 
 fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, DevError> {
-    use edge_aware_sharpen_jobs as j3;
+    use edge_aware_sharpen_jobs as jobs;
     let src_op = img(s, &a[0], c.n)?;
     let src = src_op.get();
     let (w, h) = c.dims;
@@ -596,16 +596,16 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
     let edge_threshold = lane(&a[6], 0)?;
     let sigmoid = [lane(&a[7], 0)?, lane(&a[7], 1)?, lane(&a[7], 2)?, lane(&a[7], 3)?, f32::from_bits(3), f32::from_bits(1), 0.0f32];
     let rel_chan = [lane(&a[8], 0)?, lane(&a[8], 1)?, lane(&a[8], 2)?];
-    let iters = j3::cvtt32(levels);
+    let iters = jobs::cvtt32(levels);
     if iters > 7 {
         return unsup("more than seven iterations (the CPU reports an error)");
     }
-    let variant = j3::cvtt32(deriv_io[0]);
+    let variant = jobs::cvtt32(deriv_io[0]);
     if variant != 0 {
         return unsup("deriv_io variant other than 0: the second weight job (reciprocal estimate lanes) is not on the device");
     }
-    let bc = j3::cvtt32(deriv_io[1]);
-    if j3::cvtt32(blur_type) != 4 {
+    let bc = jobs::cvtt32(deriv_io[1]);
+    if jobs::cvtt32(blur_type) != 4 {
         return unsup("blur_type other than 4: the CPU driver ports only core arm 4 (it reports an error)");
     }
     let cw = render_scale(c.kp, w);
@@ -642,7 +642,7 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
     let mut pa = in_ids.clone();
     let mut pb: Vec<usize> = (0..nu).map(tid).collect();
     let pd: Vec<usize> = (0..nu).map(|i| tid(2 * nu + i)).collect();
-    let (t0, t1) = (tid(3 * nu), tid(3 * nu + 1));
+    let (wa_out, wt_out) = (tid(3 * nu), tid(3 * nu + 1));
     let (wa, wt) = (tid(3 * nu + 2), tid(3 * nu + 3));
     let c1 = buf(if nu > 1 { 1 } else { 0 });
     let c2 = buf(if nu > 2 { 2 } else { 0 });
@@ -651,24 +651,24 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
     let (wu, hu) = (w as u32, h as u32);
     let nn = n as u32;
     for it in 0..iters.max(0) as usize {
-        let s2 = base.fdiv(dv);
+        let sum_2 = base.fdiv(dv);
         // weight planes
-        let ca = j3::c_a(base);
-        let cb = j3::c_a(base);
+        let ca = jobs::c_a(base);
+        let cb = jobs::c_a(base);
         let kcb = kcell.fmul(cb);
-        let (mut c10, mut c11) = (0.0f32, 0.0f32);
+        let (mut d_const, mut e_const) = (0.0f32, 0.0f32);
         if sig_byte {
-            c10 = ca;
+            d_const = ca;
             let bd = sigma0 as f64;
-            if j3::LOW > bd {
-                c11 = kcell.fmul(cb);
-            } else if bd > j3::HIGH {
-                c10 = j3::ONE;
-                c11 = kcell;
+            if jobs::LOW > bd {
+                e_const = kcell.fmul(cb);
+            } else if bd > jobs::HIGH {
+                d_const = jobs::ONE;
+                e_const = kcell;
             } else {
-                let x = j3::ONE / sigma0;
-                c10 = j3::minss(x, c10);
-                c11 = kcell.fmul(j3::minss(x, cb));
+                let x = jobs::ONE / sigma0;
+                d_const = jobs::minss(x, d_const);
+                e_const = kcell.fmul(jobs::minss(x, cb));
             }
         }
         s.launch(
@@ -685,63 +685,63 @@ fn esh_run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, Dev
                 buf(wt).arg(),
                 ClArg::U32(wu),
                 ClArg::U32(hu),
-                ClArg::F32(s2),
-                ClArg::F32(s2),
+                ClArg::F32(sum_2),
+                ClArg::F32(sum_2),
                 ClArg::F32(kcell),
                 ClArg::F32(ca),
                 ClArg::F32(cb),
                 ClArg::F32(kcb),
-                ClArg::F32(c10),
-                ClArg::F32(c11),
+                ClArg::F32(d_const),
+                ClArg::F32(e_const),
             ],
         )?;
         if bc == 0 {
-            s.launch("esh_cumsum_x_f32", h, &[buf(wa).arg(), buf(t0).arg(), ClArg::U32(wu), ClArg::U32(hu)])?;
-            s.launch("esh_cumsum_y_f32", w, &[buf(wt).arg(), buf(t1).arg(), ClArg::U32(wu), ClArg::U32(hu)])?;
+            s.launch("esh_cumsum_x_f32", h, &[buf(wa).arg(), buf(wa_out).arg(), ClArg::U32(wu), ClArg::U32(hu)])?;
+            s.launch("esh_cumsum_y_f32", w, &[buf(wt).arg(), buf(wt_out).arg(), ClArg::U32(wu), ClArg::U32(hu)])?;
         } else {
-            s.queue.copy(buf(wa), buf(t0))?;
-            s.queue.copy(buf(wt), buf(t1))?;
+            s.queue.copy(buf(wa), buf(wa_out))?;
+            s.queue.copy(buf(wt), buf(wt_out))?;
         }
-        for ch in 0..nu {
-            let zero = j3::LOW > (base as f64) && (base as f64) > -j3::LOW;
+        for chan in 0..nu {
+            let zero = jobs::LOW > (base as f64) && (base as f64) > -jobs::LOW;
             if zero {
-                s.queue.copy(buf(pa[ch]), buf(pb[ch]))?;
+                s.queue.copy(buf(pa[chan]), buf(pb[chan]))?;
             } else {
                 let (hx, hy) = match edge_aware_sharpen_blur_core::radii(base, base, pw, 3) {
                     Ok(v) => v,
                     Err(_) => return unsup("exp2 argument beyond the fast path"),
                 };
-                let mut sp = in_ids[ch];
+                let mut src_id = in_ids[chan];
                 let mut dp = wa;
                 for i in 0..3 {
-                    for (rad, is_x, aux) in [(hx[i], true, t0), (hy[i], false, t1)] {
+                    for (rad, is_x, aux) in [(hx[i], true, wa_out), (hy[i], false, wt_out)] {
                         if rad > 1.0f32 {
                             let p = edge_aware_sharpen_box_filter::cb_cell_a(rad);
                             let name = if is_x { "esh_filter_x_f32" } else { "esh_filter_y_f32" };
-                            s.launch(name, if is_x { h } else { w }, &[buf(sp).arg(), buf(dp).arg(), buf(aux).arg(), ClArg::U32(wu), ClArg::U32(hu), ClArg::F32(p[0]), ClArg::F32(p[1]), ClArg::F32(p[2])])?;
-                            let (ns, nd) = if sp == in_ids[ch] { (wa, pb[ch]) } else { (dp, sp) };
-                            sp = ns;
+                            s.launch(name, if is_x { h } else { w }, &[buf(src_id).arg(), buf(dp).arg(), buf(aux).arg(), ClArg::U32(wu), ClArg::U32(hu), ClArg::F32(p[0]), ClArg::F32(p[1]), ClArg::F32(p[2])])?;
+                            let (ns, nd) = if src_id == in_ids[chan] { (wa, pb[chan]) } else { (dp, src_id) };
+                            src_id = ns;
                             dp = nd;
                         }
                     }
                 }
-                if pb[ch] != sp {
-                    s.queue.copy(buf(sp), buf(pb[ch]))?;
+                if pb[chan] != src_id {
+                    s.queue.copy(buf(src_id), buf(pb[chan]))?;
                 }
             }
-            let m = fx_common::nanop::fma132(arr[it].mul_add(edge_aware_sharpen_render::MIX_C, -edge_aware_sharpen_render::MIX_C), edge_aware_sharpen_render::MIX_C, arr[7 + ch]);
-            s.launch("esh_level_f32", n, &[buf(pb[ch]).arg(), buf(pa[ch]).arg(), out.plane(ch).arg(), ClArg::U32(nn), ClArg::F32(m)])?;
-            if pa[ch] == in_ids[ch] {
-                pa[ch] = pb[ch];
-                pb[ch] = pd[ch];
+            let m = fx_common::nanop::fma132(arr[it].mul_add(edge_aware_sharpen_render::MIX_C, -edge_aware_sharpen_render::MIX_C), edge_aware_sharpen_render::MIX_C, arr[7 + chan]);
+            s.launch("esh_level_f32", n, &[buf(pb[chan]).arg(), buf(pa[chan]).arg(), out.plane(chan).arg(), ClArg::U32(nn), ClArg::F32(m)])?;
+            if pa[chan] == in_ids[chan] {
+                pa[chan] = pb[chan];
+                pb[chan] = pd[chan];
             } else {
-                std::mem::swap(&mut pa[ch], &mut pb[ch]);
+                std::mem::swap(&mut pa[chan], &mut pb[chan]);
             }
         }
         base += base;
     }
-    for ch in 0..nu {
-        s.launch("esh_add_f32", n, &[buf(pa[ch]).arg(), out.plane(ch).arg(), ClArg::U32(nn)])?;
+    for chan in 0..nu {
+        s.launch("esh_add_f32", n, &[buf(pa[chan]).arg(), out.plane(chan).arg(), ClArg::U32(nn)])?;
     }
     Ok(out)
 }
@@ -777,12 +777,12 @@ fn plane_values(n: usize, seed: usize, plain: bool) -> Vec<f32> {
     }
 }
 
-fn image_of(ch: usize, n: usize, seed: usize, plain: bool) -> Image {
-    Image { n, planes: (0..ch).map(|p| plane_values(n, seed * 5 + p, plain)).collect() }
+fn image_of(chan: usize, n: usize, seed: usize, plain: bool) -> Image {
+    Image { n, planes: (0..chan).map(|p| plane_values(n, seed * 5 + p, plain)).collect() }
 }
 
 pub(crate) fn kp_blur(edge: i32, rs: i32) -> KParams {
-    let mut kp = KParams::standin();
+    let mut kp = KParams::host_defaults();
     kp.blur_edge = edge;
     kp.blur_render_scale = rs;
     kp
@@ -802,18 +802,18 @@ fn blur_corpus() -> Vec<SelfCase> {
         (5.9, 8.0, -1.0, [1.0, 1.0, 1.0, 1.0], 4, 0.0, 0, 400, None),
     ];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
+    for (dim_idx, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for tag in [1usize, 2, 3, 4] {
-                if (di + si + tag) % 2 == 1 && n > 2000 {
+                if (dim_idx + set_idx + tag) % 2 == 1 && n > 2000 {
                     continue;
                 }
                 let mut kp = kp_blur(p.6, p.7);
                 kp.blur_aspect = p.8;
-                let src = image_of(tag + (di % 2), n, di * 17 + si, si % 2 == 0);
+                let src = image_of(tag + (dim_idx % 2), n, dim_idx * 17 + set_idx, set_idx % 2 == 0);
                 out.push(SelfCase {
-                    name: format!("{w}x{h} set {si} tag {tag}"),
+                    name: format!("{w}x{h} set {set_idx} tag {tag}"),
                     dims: (w, h),
                     tag: tag as i32,
                     args: vec![src],
@@ -851,9 +851,9 @@ pub fn blur_nan_pair_cases() -> Vec<SelfCase> {
     let mut out = Vec::new();
     for &(w, h) in &[(5usize, 7usize), (16, 16), (45, 23), (130, 3), (3, 130)] {
         let n = w * h;
-        for (si, &(ax, ay, shape, edge)) in sets.iter().enumerate() {
+        for (set_idx, &(amount_x, ay, shape, edge)) in sets.iter().enumerate() {
             for density in [3usize, 7, 1] {
-                let mut s = 0x2545_f491_4f6c_dd1du64 ^ ((w * 131 + h * 7 + si) as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+                let mut s = 0x2545_f491_4f6c_dd1du64 ^ ((w * 131 + h * 7 + set_idx) as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
                 let plane: Vec<f32> = (0..n)
                     .map(|i| {
                         s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
@@ -870,11 +870,11 @@ pub fn blur_nan_pair_cases() -> Vec<SelfCase> {
                 let mut kp = kp_blur(edge, 0);
                 kp.blur_aspect = None;
                 out.push(SelfCase {
-                    name: format!("{w}x{h} nan pairs set {si} density {density}"),
+                    name: format!("{w}x{h} nan pairs set {set_idx} density {density}"),
                     dims: (w, h),
                     tag: 1,
                     args: vec![Image { n, planes: vec![plane] }],
-                    consts: vec![cst(1, &[ax, ay]), cst(2, &[shape]), cst(3, &[1.0]), cst(4, &[if si % 2 == 0 { 0.0 } else { 1.0 }])],
+                    consts: vec![cst(1, &[amount_x, ay]), cst(2, &[shape]), cst(3, &[1.0]), cst(4, &[if set_idx % 2 == 0 { 0.0 } else { 1.0 }])],
                     kp: Some(kp),
                 });
             }
@@ -913,16 +913,16 @@ pub fn masked_blur_nan_pair_cases() -> Vec<SelfCase> {
     let mut out = Vec::new();
     for &(w, h) in &[(5usize, 7usize), (16, 16), (45, 23), (130, 3)] {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for density in [3usize, 7, 1] {
                 for tag in [1usize, 3] {
-                    let seed = (w * 131 + h * 7 + si * 3 + density) as u64;
+                    let seed = (w * 131 + h * 7 + set_idx * 3 + density) as u64;
                     let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 17 * c as u64, density, -0.25, 1.25)).collect() };
                     let mask = Image { n, planes: vec![pair_plane(n, seed ^ 0x55, density + 1, -0.1, 1.2)] };
-                    let mut kp = KParams::standin();
+                    let mut kp = KParams::host_defaults();
                     kp.blur_render_scale = 0;
                     out.push(SelfCase {
-                        name: format!("{w}x{h} nan pairs set {si} density {density} tag {tag}"),
+                        name: format!("{w}x{h} nan pairs set {set_idx} density {density} tag {tag}"),
                         dims: (w, h),
                         tag: tag as i32,
                         args: vec![src, mask],
@@ -950,16 +950,16 @@ pub fn sharpen_nan_pair_cases() -> Vec<SelfCase> {
     let mut out = Vec::new();
     for &(w, h) in &[(5usize, 7usize), (16, 16), (45, 23), (130, 3)] {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for density in [3usize, 7, 1] {
                 for tag in [1usize, 3] {
-                    let seed = (w * 131 + h * 7 + si * 3 + density) as u64;
+                    let seed = (w * 131 + h * 7 + set_idx * 3 + density) as u64;
                     let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 17 * c as u64, density, -0.25, 1.25)).collect() };
-                    let mut kp = KParams::standin();
+                    let mut kp = KParams::host_defaults();
                     kp.sharpen_count = Some(n);
                     kp.sharpen_alias = p.2;
                     out.push(SelfCase {
-                        name: format!("{w}x{h} nan pairs set {si} density {density} tag {tag}"),
+                        name: format!("{w}x{h} nan pairs set {set_idx} density {density} tag {tag}"),
                         dims: (w, h),
                         tag: tag as i32,
                         args: vec![src],
@@ -993,15 +993,15 @@ pub fn blur_nan_wide_cases() -> Vec<SelfCase> {
     let mut out = Vec::new();
     for &(w, h) in &[(200usize, 5usize), (5, 200), (257, 3), (96, 40)] {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for density in [5usize, 1] {
                 for tag in [1usize, 3] {
-                    let seed = (w * 31 + h * 17 + si * 5 + density) as u64;
+                    let seed = (w * 31 + h * 17 + set_idx * 5 + density) as u64;
                     let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 23 * c as u64, density, -0.25, 1.25)).collect() };
                     let mut kp = kp_blur(p.4, 400);
                     kp.blur_aspect = p.5;
                     out.push(SelfCase {
-                        name: format!("{w}x{h} wide nan set {si} density {density} tag {tag}"),
+                        name: format!("{w}x{h} wide nan set {set_idx} density {density} tag {tag}"),
                         dims: (w, h),
                         tag: tag as i32,
                         args: vec![src],
@@ -1022,16 +1022,16 @@ pub fn masked_blur_nan_wide_cases() -> Vec<SelfCase> {
     let mut out = Vec::new();
     for &(w, h) in &[(200usize, 5usize), (5, 200), (96, 40)] {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for density in [5usize, 1] {
                 for tag in [1usize, 3] {
-                    let seed = (w * 37 + h * 11 + si * 7 + density) as u64;
+                    let seed = (w * 37 + h * 11 + set_idx * 7 + density) as u64;
                     let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 19 * c as u64, density, -0.25, 1.25)).collect() };
                     let mask = Image { n, planes: vec![pair_plane(n, seed ^ 0x3c, density + 2, -0.1, 1.2)] };
-                    let mut kp = KParams::standin();
+                    let mut kp = KParams::host_defaults();
                     kp.blur_render_scale = 400;
                     out.push(SelfCase {
-                        name: format!("{w}x{h} wide nan set {si} density {density} tag {tag}"),
+                        name: format!("{w}x{h} wide nan set {set_idx} density {density} tag {tag}"),
                         dims: (w, h),
                         tag: tag as i32,
                         args: vec![src, mask],
@@ -1052,17 +1052,17 @@ pub fn sharpen_nan_wide_cases() -> Vec<SelfCase> {
     let mut out = Vec::new();
     for &(w, h) in &[(200usize, 5usize), (5, 200), (96, 40)] {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for density in [5usize, 1] {
                 for tag in [1usize, 3] {
-                    let seed = (w * 41 + h * 13 + si * 3 + density) as u64;
+                    let seed = (w * 41 + h * 13 + set_idx * 3 + density) as u64;
                     let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 29 * c as u64, density, -0.25, 1.25)).collect() };
-                    let mut kp = KParams::standin();
-                    kp.sharpen_count = Some(if si == 1 { n / 2 } else { n });
+                    let mut kp = KParams::host_defaults();
+                    kp.sharpen_count = Some(if set_idx == 1 { n / 2 } else { n });
                     kp.sharpen_alias = p.2;
                     kp.blur_render_scale = 400;
                     out.push(SelfCase {
-                        name: format!("{w}x{h} wide nan set {si} density {density} tag {tag}"),
+                        name: format!("{w}x{h} wide nan set {set_idx} density {density} tag {tag}"),
                         dims: (w, h),
                         tag: tag as i32,
                         args: vec![src],
@@ -1093,10 +1093,10 @@ pub fn esh_nan_cases() -> Vec<SelfCase> {
     let mut out = Vec::new();
     for &(w, h) in &[(3usize, 5usize), (16, 16), (45, 23), (70, 9), (9, 70)] {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for density in [5usize, 1] {
                 for tag in [1usize, 2, 3] {
-                    let seed = (w * 43 + h * 19 + si * 11 + density) as u64;
+                    let seed = (w * 43 + h * 19 + set_idx * 11 + density) as u64;
                     let src = Image { n, planes: (0..tag).map(|c| pair_plane(n, seed + 31 * c as u64, density, -0.25, 1.25)).collect() };
                     let mut args = vec![src];
                     let mut consts = vec![];
@@ -1113,9 +1113,9 @@ pub fn esh_nan_cases() -> Vec<SelfCase> {
                     consts.push(cst(7, &p.5));
                     consts.push(cst(8, &p.6));
                     consts.push(cst(9, &[1.0]));
-                    let mut kp = KParams::standin();
-                    kp.host_aspect = if si % 2 == 0 { 1.0 } else { 0.5 };
-                    out.push(SelfCase { name: format!("{w}x{h} nan set {si} density {density} tag {tag}"), dims: (w, h), tag: tag as i32, args, consts, kp: Some(kp) });
+                    let mut kp = KParams::host_defaults();
+                    kp.host_aspect = if set_idx % 2 == 0 { 1.0 } else { 0.5 };
+                    out.push(SelfCase { name: format!("{w}x{h} nan set {set_idx} density {density} tag {tag}"), dims: (w, h), tag: tag as i32, args, consts, kp: Some(kp) });
                 }
             }
         }
@@ -1126,20 +1126,20 @@ pub fn esh_nan_cases() -> Vec<SelfCase> {
 fn masked_blur_corpus() -> Vec<SelfCase> {
     let sets: [(f32, f32, f32, f32, i32); 5] = [(0.5, 0.5, 2.0, 0.0, 0), (0.3, 0.8, 0.0, 1.0, 0), (1.3, 0.2, 1.0, 1.0, 0), (0.0, 0.0, 2.0, 0.0, 0), (8.0, 6.0, 2.0, 1.0, 400)];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
+    for (dim_idx, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for tag in [1usize, 3, 4] {
-                if (di + si + tag) % 2 == 1 && n > 2000 {
+                if (dim_idx + set_idx + tag) % 2 == 1 && n > 2000 {
                     continue;
                 }
-                let plain = (si + di) % 2 == 0;
-                let src = image_of(tag, n, di * 3 + si, plain);
-                let mask = image_of(1, n, di * 11 + si + 1, plain || si == 3);
-                let mut kp = KParams::standin();
+                let plain = (set_idx + dim_idx) % 2 == 0;
+                let src = image_of(tag, n, dim_idx * 3 + set_idx, plain);
+                let mask = image_of(1, n, dim_idx * 11 + set_idx + 1, plain || set_idx == 3);
+                let mut kp = KParams::host_defaults();
                 kp.blur_render_scale = p.4;
                 out.push(SelfCase {
-                    name: format!("{w}x{h} set {si} tag {tag}"),
+                    name: format!("{w}x{h} set {set_idx} tag {tag}"),
                     dims: (w, h),
                     tag: tag as i32,
                     args: vec![src, mask],
@@ -1156,7 +1156,7 @@ fn masked_blur_corpus() -> Vec<SelfCase> {
             tag: 1,
             args: vec![image_of(1, w * h, 99, true)],
             consts: vec![cst(0, &[0.75]), cst(2, &[0.8]), cst(3, &[0.4]), cst(4, &[1.0])],
-            kp: Some(KParams::standin()),
+            kp: Some(KParams::host_defaults()),
         });
     }
     out.extend(masked_blur_nan_pair_cases());
@@ -1174,20 +1174,20 @@ fn grad_corpus() -> Vec<SelfCase> {
         (3.0, 1.5, 1.0, 1.0, 0, 400),
     ];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
+    for (dim_idx, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
         if w < 2 {
             continue;
         }
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
-            if (di + si) % 2 == 1 && n > 2000 {
+        for (set_idx, p) in sets.iter().enumerate() {
+            if (dim_idx + set_idx) % 2 == 1 && n > 2000 {
                 continue;
             }
-            let src = image_of(1 + (si % 2), n, di * 7 + si, si % 2 == 0);
+            let src = image_of(1 + (set_idx % 2), n, dim_idx * 7 + set_idx, set_idx % 2 == 0);
             let mut kp = kp_blur(p.4, p.5);
             kp.host_aspect = p.3;
             out.push(SelfCase {
-                name: format!("{w}x{h} set {si}"),
+                name: format!("{w}x{h} set {set_idx}"),
                 dims: (w, h),
                 tag: 2,
                 args: vec![src],
@@ -1203,7 +1203,7 @@ fn grad_corpus() -> Vec<SelfCase> {
             tag: 2,
             args: vec![],
             consts: vec![cst(0, &[0.6]), cst(1, &[0.5]), cst(2, &[1.0]), cst(3, &[1.0])],
-            kp: Some(KParams::standin()),
+            kp: Some(KParams::host_defaults()),
         });
     }
     out
@@ -1220,22 +1220,22 @@ fn sharpen_corpus() -> Vec<SelfCase> {
         (6.0, [1.0, 2.0, 0.5, 1.0], 0, false),
     ];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
+    for (dim_idx, &(w, h)) in DIMS_NEIGHBOURHOOD.iter().enumerate() {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for tag in [1usize, 2, 3, 4] {
-                if (di + si + tag) % 2 == 1 && n > 2000 {
+                if (dim_idx + set_idx + tag) % 2 == 1 && n > 2000 {
                     continue;
                 }
-                let src = image_of(tag, n, di * 9 + si, (si + di) % 2 == 0);
-                let mut kp = KParams::standin();
+                let src = image_of(tag, n, dim_idx * 9 + set_idx, (set_idx + dim_idx) % 2 == 0);
+                let mut kp = KParams::host_defaults();
                 kp.sharpen_count = Some(if p.2 == 0 { n } else { n / 2 });
                 kp.sharpen_alias = p.3;
-                if si == 5 {
+                if set_idx == 5 {
                     kp.blur_render_scale = 400;
                 }
                 out.push(SelfCase {
-                    name: format!("{w}x{h} set {si} tag {tag}"),
+                    name: format!("{w}x{h} set {set_idx} tag {tag}"),
                     dims: (w, h),
                     tag: tag as i32,
                     args: vec![src],
@@ -1246,7 +1246,7 @@ fn sharpen_corpus() -> Vec<SelfCase> {
         }
     }
     for &(w, h) in &[(3usize, 5usize), (16, 16)] {
-        let mut kp = KParams::standin();
+        let mut kp = KParams::host_defaults();
         kp.sharpen_count = Some(w * h);
         out.push(SelfCase { name: format!("{w}x{h} constant source"), dims: (w, h), tag: 3, args: vec![], consts: vec![cst(0, &[0.5, 0.25, 0.75]), cst(1, &[2.0, 2.0, 2.0, 2.0]), cst(2, &[0.4])], kp: Some(kp) });
     }
@@ -1259,7 +1259,7 @@ fn static2_corpus() -> Vec<SelfCase> {
     let mut out = Vec::new();
     for &(w, h) in DIMS_NEIGHBOURHOOD {
         for (i, seed) in [0i32, 1, -1, 4096, 0x7fff_ffff, i32::MIN, 123_456_789].iter().enumerate() {
-            let mut kp = KParams::standin();
+            let mut kp = KParams::host_defaults();
             kp.static2_seed_a = *seed;
             out.push(SelfCase { name: format!("{w}x{h} seed {seed}"), dims: (w, h), tag: 2 - (i as i32 % 2), args: vec![], consts: vec![], kp: Some(kp) });
         }
@@ -1281,19 +1281,19 @@ fn esh_corpus() -> Vec<SelfCase> {
     ];
     let dims: &[(usize, usize)] = &[(1, 1), (2, 1), (1, 3), (3, 5), (7, 1), (16, 16), (45, 23), (70, 9), (129, 3)];
     let mut out = Vec::new();
-    for (di, &(w, h)) in dims.iter().enumerate() {
+    for (dim_idx, &(w, h)) in dims.iter().enumerate() {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             for tag in [1usize, 2, 3] {
-                if (di + si + tag) % 3 == 0 && n > 100 {
+                if (dim_idx + set_idx + tag) % 3 == 0 && n > 100 {
                     continue;
                 }
-                let plain = si % 3 != 2;
-                let src = image_of(tag, n, di * 13 + si, plain);
+                let plain = set_idx % 3 != 2;
+                let src = image_of(tag, n, dim_idx * 13 + set_idx, plain);
                 let mut args = vec![src];
                 let mut consts = vec![];
                 if p.0 == 0 {
-                    let mut m = image_of(1, n, di * 29 + si, true);
+                    let mut m = image_of(1, n, dim_idx * 29 + set_idx, true);
                     for v in m.planes[0].iter_mut() {
                         *v = v.abs().min(1.0);
                     }
@@ -1309,9 +1309,9 @@ fn esh_corpus() -> Vec<SelfCase> {
                 consts.push(cst(7, &p.7));
                 consts.push(cst(8, &p.8));
                 consts.push(cst(9, &[1.0]));
-                let mut kp = KParams::standin();
-                kp.host_aspect = if si % 2 == 0 { 1.0 } else { 0.5 };
-                out.push(SelfCase { name: format!("{w}x{h} set {si} tag {tag}"), dims: (w, h), tag: tag as i32, args, consts, kp: Some(kp) });
+                let mut kp = KParams::host_defaults();
+                kp.host_aspect = if set_idx % 2 == 0 { 1.0 } else { 0.5 };
+                out.push(SelfCase { name: format!("{w}x{h} set {set_idx} tag {tag}"), dims: (w, h), tag: tag as i32, args, consts, kp: Some(kp) });
             }
         }
     }
@@ -1337,7 +1337,7 @@ fn esh_corpus() -> Vec<SelfCase> {
             tag: 3,
             args: vec![image_of(3, n, 12, true), m],
             consts: vec![cst(2, &[4.0]), cst(3, &[0.0, 0.0]), cst(4, &[3.0]), cst(5, &[0.5]), cst(6, &[1.0]), cst(7, &[1.0, 0.75, 0.5, 0.25]), cst(8, &[1.0, 1.0, 1.0]), cst(9, &[1.0])],
-            kp: Some(KParams::standin()),
+            kp: Some(KParams::host_defaults()),
         });
     }
     // a constant source with a plane mask
@@ -1353,7 +1353,7 @@ fn esh_corpus() -> Vec<SelfCase> {
             tag: 3,
             args: vec![m],
             consts: vec![cst(0, &[0.5, 0.25, 0.75]), cst(2, &[4.0]), cst(3, &[0.0, 0.0]), cst(4, &[3.0]), cst(5, &[0.5]), cst(6, &[1.0]), cst(7, &[1.0, 0.75, 0.5, 0.25]), cst(8, &[1.0, 1.0, 1.0]), cst(9, &[1.0])],
-            kp: Some(KParams::standin()),
+            kp: Some(KParams::host_defaults()),
         });
     }
     out.extend(esh_nan_cases());
@@ -1414,7 +1414,7 @@ mod device_nan_exact_neighbourhood_tests {
             "float nf_pick3(float a, float b, float c) {\n    if (b != b) {\n        return as_float(as_uint(b) | 0x400000u);\n    }\n    return nf_pick(a, c);",
             &["sharpen", "masked_blur", "blur"],
         ),
-        ("contracted multiply-add replaced by two roundings", "float nf_fms213(float d, float s2, float s3) {\n    float r = fma(d, s2, -s3);", "float nf_fms213(float d, float s2, float s3) {\n    float r = d * s2 - s3;", &["sharpen", "blur"]),
+        ("contracted multiply-add replaced by two roundings", "float nf_fms213(float d, float factor, float subtrahend) {\n    float r = fma(d, factor, -subtrahend);", "float nf_fms213(float d, float factor, float subtrahend) {\n    float r = d * factor - subtrahend;", &["sharpen", "blur"]),
         (
             "window sum order",
             "        y = nf_add(nf_sub(BW_AT(x, i + r + 1), BW_AT(x, i - r)), y);",
@@ -1433,8 +1433,8 @@ mod device_nan_exact_neighbourhood_tests {
         ("box filter sum operand order", "            sum = nf_add(sum, a[(size_t)hh * ast]);", "            sum = nf_add(a[(size_t)hh * ast], sum);", &["edge_aware_sharpen"]),
         (
             "gain 1 lone NaN subtrahend negated",
-            "    float r = fma(d, s2, -s3);\n    return (r == r) ? r : nf_pick3(d, s2, s3);",
-            "    float r = fma(d, s2, -s3);\n    return (r == r) ? r : nf_pick3(d, s2, -s3);",
+            "    float r = fma(d, factor, -subtrahend);\n    return (r == r) ? r : nf_pick3(d, factor, subtrahend);",
+            "    float r = fma(d, factor, -subtrahend);\n    return (r == r) ? r : nf_pick3(d, factor, -subtrahend);",
             &["sharpen"],
         ),
         ("masked division replaced", "            b = nf_div(b, mb_min_x86(wv, 0x1p+0f));", "            b = nf_mul(b, mb_min_x86(wv, 0x1p+0f));", &["masked_blur"]),

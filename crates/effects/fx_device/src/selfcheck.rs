@@ -16,7 +16,7 @@
 //! output that holds a NaN from the device only for an op whose kernels are written NaN exact and whose check reported
 //! equal payloads on that device, so a payload difference is never visible.
 
-use crate::cl::{Arg, Buffer};
+use crate::ocl::{Arg, Buffer};
 use crate::image::Session;
 use crate::kernels;
 use crate::probe;
@@ -197,7 +197,7 @@ pub fn check_base(session: &Session) -> Result<Tally, Refusal> {
     Ok(tally)
 }
 
-type Check = Result<Result<Tally, Mismatch>, crate::cl::ClError>;
+type Check = Result<Result<Tally, Mismatch>, crate::ocl::ClError>;
 
 fn cycle<T: Copy>(v: &[T], n: usize) -> Vec<T> {
     (0..n).map(|i| v[i % v.len()]).collect()
@@ -264,7 +264,7 @@ fn check_chain(s: &Session) -> Check {
 
 /// Runs `chain_f32` alone and reports whether it matched the unfused Rust loop. The test that a contracting build is
 /// caught passes a session built from a source with `FP_CONTRACT ON`.
-pub fn chain_matches(session: &Session) -> Result<bool, crate::cl::ClError> {
+pub fn chain_matches(session: &Session) -> Result<bool, crate::ocl::ClError> {
     Ok(check_chain(session)?.is_ok())
 }
 

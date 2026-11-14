@@ -67,12 +67,12 @@ pub struct GradParams {
 
 /// Dense-plane CPU render (flag 0). `src` is the source plane (w*h), `aux` receives the blurred plane (the original's scratch
 /// output this[0x28][0]), `dx` and `dy` receive the two outputs. All dense, length at least w*h.
-pub fn render(p: &GradParams, src: &[f32], w: usize, h: usize, aux: &mut [f32], dx: &mut [f32], dy: &mut [f32]) -> Result<(), FxError> {
+pub fn render(p: &GradParams, src: &[f32], w: usize, h: usize, aux: &mut [f32], delta_x: &mut [f32], dy: &mut [f32]) -> Result<(), FxError> {
     let n = w.checked_mul(h).ok_or(FxError::Geometry)?;
     if w > i32::MAX as usize || h > i32::MAX as usize || n > i32::MAX as usize {
         return Err(FxError::Geometry);
     }
-    if src.len() < n || aux.len() < n || dx.len() < n || dy.len() < n {
+    if src.len() < n || aux.len() < n || delta_x.len() < n || dy.len() < n {
         return Err(FxError::Stride);
     }
     if n == 0 {
@@ -82,7 +82,7 @@ pub fn render(p: &GradParams, src: &[f32], w: usize, h: usize, aux: &mut [f32], 
     let (sigma, gain) = sigma_gain(p);
     let passes = if mu(8) { 2 } else { 3 };
     blur_core(&src[..n], &mut aux[..n], w, h, sigma, sigma, gain, edge, passes, if mu(9) { p.subpixel == 0 } else { p.subpixel != 0 }, p.aspect)?;
-    gradient(p, &aux[..n], w, h, &mut dx[..n], &mut dy[..n]);
+    gradient(p, &aux[..n], w, h, &mut delta_x[..n], &mut dy[..n]);
     Ok(())
 }
 
@@ -101,64 +101,64 @@ pub fn sigma_gain(p: &GradParams) -> (f32, f32) {
 /// dy[x] = (up - down) * (0.5 * xmm3) for interior columns; dy[0] and dy[w-1] = ((up - down) * 0.5) * xmm3, with up = row y-1 (own row
 /// when y == 0) and down = row y+1 (own row when y == h-1). For w == 1 the original reads p[1] one float past the row (the next row, or
 /// past the buffer on the last row): modelled with `past_end`.
-pub fn gradient(p: &GradParams, b: &[f32], w: usize, h: usize, dx: &mut [f32], dy: &mut [f32]) {
+pub fn gradient(p: &GradParams, b: &[f32], w: usize, h: usize, delta_x: &mut [f32], dy: &mut [f32]) {
     let two = 2.0f32; // xmm6 = 
     let half = 0.5f32; // xmm4 = 
-    let mut x5 = two;
+    let mut aspect_sel = two;
     if p.flag_1 != 0 {
-        x5 = 1.0f32; // 
+        aspect_sel = 1.0f32; // 
         if !p.info_aspect_set && !mu(4) {
-            x5 = two;
+            aspect_sel = two;
         }
     }
-    let x1 = x5 + x5;
+    let sum_1 = aspect_sel + aspect_sel;
     let at = |i: usize| -> f32 { if i < b.len() { b[i] } else { p.past_end } };
     for y in 0..h {
         let cur = y * w;
         let up = if y == 0 { cur } else { cur - w };
         let down = if y + 1 == h || (mu(12) && y + 2 == h) { cur } else { cur + w };
-        let mut x3 = x1;
+        let mut aspect_scale = sum_1;
         if y != 0 && !mu(17) {
-            x3 = x5;
+            aspect_scale = aspect_sel;
         }
         if y + 1 == h && !mu(15) {
-            x3 = x1;
+            aspect_scale = sum_1;
         }
         if mu(5) {
-            x3 = x5;
+            aspect_scale = aspect_sel;
         }
         // column 0
         let p0 = b[cur];
-        let p1 = at(cur + 1);
-        let mut v7 = p1 - p0;
-        let mut v8 = b[up] - b[down];
-        v7 *= two;
-        v8 *= half;
-        v8 *= x3;
-        dx[cur] = if mu(1) { p1 - p0 } else { v7 };
-        dy[cur] = if mu(11) { (b[up] - b[down]) * x3 } else if mu(16) { (b[up] - b[down]) * (half * x3) } else { v8 };
+        let next_sample = at(cur + 1);
+        let mut diff_7 = next_sample - p0;
+        let mut diff_8 = b[up] - b[down];
+        diff_7 *= two;
+        diff_8 *= half;
+        diff_8 *= aspect_scale;
+        delta_x[cur] = if mu(1) { next_sample - p0 } else { diff_7 };
+        dy[cur] = if mu(11) { (b[up] - b[down]) * aspect_scale } else if mu(16) { (b[up] - b[down]) * (half * aspect_scale) } else { diff_8 };
         if mu(2) {
-            dy[cur] = (b[down] - b[up]) * (half * x3);
+            dy[cur] = (b[down] - b[up]) * (half * aspect_scale);
         }
         if w > 2 {
-            let f = if mu(18) { half * x5 } else { half * x3 };
+            let f = if mu(18) { half * aspect_sel } else { half * aspect_scale };
             for x in 1..w - 1 {
                 let d = if mu(3) { b[cur + x + 1] - b[cur + x] } else { b[cur + x + 1] - b[cur + x - 1] };
-                dx[cur + x] = d;
+                delta_x[cur + x] = d;
                 let v = b[up + x] - b[down + x];
                 dy[cur + x] = v * f;
             }
         }
         // last column (also column 0 again when w == 1: same value)
         let lo = if w >= 2 { b[cur + w - 2] } else { p0 };
-        let hi = if w >= 2 { b[cur + w - 1] } else { p1 };
-        let mut l7 = if mu(19) { b[down + w - 1] - b[up + w - 1] } else { b[up + w - 1] - b[down + w - 1] };
-        let mut l0 = hi - lo;
-        l7 *= half;
-        l0 *= if mu(10) { 1.0f32 } else { two };
-        l7 *= x3;
-        dx[cur + w - 1] = l0;
-        dy[cur + w - 1] = l7;
+        let hi = if w >= 2 { b[cur + w - 1] } else { next_sample };
+        let mut pick_7 = if mu(19) { b[down + w - 1] - b[up + w - 1] } else { b[up + w - 1] - b[down + w - 1] };
+        let mut diff_0 = hi - lo;
+        pick_7 *= half;
+        diff_0 *= if mu(10) { 1.0f32 } else { two };
+        pick_7 *= aspect_scale;
+        delta_x[cur + w - 1] = diff_0;
+        dy[cur + w - 1] = pick_7;
     }
 }
 
@@ -167,12 +167,12 @@ pub fn gradient(p: &GradParams, b: &[f32], w: usize, h: usize, dx: &mut [f32], d
 /// floorf or ceilf: the caller passes it, no stand-in is baked.
 pub fn margins(p: &GradParams, floor_like: impl Fn(f32) -> f32) -> (i32, i32) {
     let k = p.render_scale as f32;
-    let x0 = (k * p.amount) * 0.125f32; // cvtsi2ss k; mulss this[0x6c]; mulss 0.125 (operand order: k * amount)
-    let x1 = match p.aspect {
-        Some(asp) => asp * x0,
-        None => x0,
+    let amount_k = (k * p.amount) * 0.125f32; // cvtsi2ss k; mulss this[0x6c]; mulss 0.125 (operand order: k * amount)
+    let sum_1 = match p.aspect {
+        Some(asp) => asp * amount_k,
+        None => amount_k,
     };
-    (floor_like(x0) as i32 + 1, floor_like(x1) as i32 + 1)
+    (floor_like(amount_k) as i32 + 1, floor_like(sum_1) as i32 + 1)
 }
 
 /// One stand-in or decision record (S7).
@@ -193,6 +193,6 @@ pub fn assumptions() -> Vec<Assumption> {
         Assumption { id: "GR-A5", what: "cancel poll returns 0 (as B-A1 of class blur)", tier: "SEMANTIC", label: "ASSUMED" },
         Assumption { id: "GR-A6", what: "render flag != 0 (GPU launcher) is not rebuilt; round trip through blur uses edge mode cell (U03), passes 3, half 0", tier: "ROUTE", label: "NOT REBUILT" },
         Assumption { id: "GR-A7", what: "blur ROI record via with info field == 0 only: dense planes {w,h,c=w,d=0,e=4} (B-A2); info field != 0 (the branch) not entered", tier: "ROUTE", label: "ASSUMED" },
-        Assumption { id: "GR-A8", what: "blur_core feature route AVX2 only (word 0x9d97ff), scratch phase 0 (inherits B-A4 and ROUTE AVX2-ONLY from crate blur)", tier: "ROUTE", label: "ROUTE AVX2-ONLY, ALIGN-DEPENDENT" },
+        Assumption { id: "GR-A8", what: "blur_core feature route AVX2 only (word), scratch phase 0 (inherits B-A4 and ROUTE AVX2-ONLY from crate blur)", tier: "ROUTE", label: "ROUTE AVX2-ONLY, ALIGN-DEPENDENT" }, // origin: 0x9d97ff
     ]
 }

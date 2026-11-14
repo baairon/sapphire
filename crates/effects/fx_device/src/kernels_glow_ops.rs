@@ -20,18 +20,18 @@ __kernel void glow_afrm_mul_f32(__global const float* c2, __global float* out, u
     out[i] = nanx_mul(as_float(sbits), c2[i]);
 }
 
-/* alpha_from_rgb_max: m = imax(imax(c0, c1), c2) over the copied channels; out3 = m, or imul(scale, m) when use_scale. */
-__kernel void glow_afrm_max_f32(__global const float* c0, __global const float* c1, __global const float* c2, __global float* out,
+/* alpha_from_rgb_max: m = imax(imax(src_ch0, c1), c2) over the copied channels; out3 = m, or imul(scale, m) when use_scale. */
+__kernel void glow_afrm_max_f32(__global const float* src_ch0, __global const float* c1, __global const float* c2, __global float* out,
                                 uint n, uint sbits, uint use_scale) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
     }
-    float x0 = c0[i];
-    float x1 = c1[i];
-    float x2 = c2[i];
-    float m = (x0 > x1) ? x0 : x1;
-    m = (m > x2) ? m : x2;
+    float first_sample = src_ch0[i];
+    float sum_1 = c1[i];
+    float third_sample = c2[i];
+    float m = (first_sample > sum_1) ? first_sample : sum_1;
+    m = (m > third_sample) ? m : third_sample;
     out[i] = (use_scale != 0u) ? nanx_mul(as_float(sbits), m) : m;
 }
 "#;

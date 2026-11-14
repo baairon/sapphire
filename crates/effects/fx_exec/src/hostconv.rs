@@ -21,7 +21,7 @@ pub struct HostConvert {
     pub margin: usize,
     /// the 'ae32' route (memory A,R,G,B f32, format 14 in) with the recorded reader head and plane count per source;
     /// None = the format-16 state A route above. Some: convert-from-source reads `ae32.sources`, convert-to-dest is refused until.
-    pub ae32: Option<crate::hostconv14::Ae32Route>,
+    pub claim_route: Option<crate::hostconv14::Ae32Route>,
 }
 
 impl HostConvert {
@@ -89,7 +89,7 @@ pub fn image_to_host(img: &Image, w: usize, h: usize, mode: AlphaMode, prefill: 
                 Vec::new(),
                 Vec::new(),
             ];
-            let (_edx, o) = convert_to_dest_line_n12(img.channels() as i32, 4, mode_byte, &rows, &mut dest[4 * w * y..4 * w * (y + 1)], w);
+            let (_line_mode, o) = convert_to_dest_line_n12(img.channels() as i32, 4, mode_byte, &rows, &mut dest[4 * w * y..4 * w * (y + 1)], w);
             match o {
                 Dest12::Written => {}
                 Dest12::NotWritten => wrote = false,

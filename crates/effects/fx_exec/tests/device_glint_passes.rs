@@ -3,7 +3,7 @@
 //! must refuse, and single-edit mutants of the kernel source, each of which the compare must refuse. Prints NOT RUN without an OpenCL
 //! device (run with --test-threads=1: platform discovery is not thread safe).
 
-use fx_device::cl::Buffer;
+use fx_device::ocl::Buffer;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{Backend as Handle, DevImage, DeviceKind, Session};
 use fx_exec::device_ops_glint_passes::{glint_cols_dev, glint_rows_dev};
@@ -86,24 +86,24 @@ fn cases() -> Vec<Case> {
     for cols in [false, true] {
         for &l in &sizes {
             let max = ((l - 1) / 2) as i32;
-            let cl = |r: i32| r.min(max);
+            let clamp_max = |r: i32| r.min(max);
             let mut sets: Vec<Vec<i32>> = vec![
                 vec![],
                 vec![0],
-                vec![-1, cl(2)],
-                vec![cl(1)],
-                vec![cl(2)],
-                vec![cl(1), cl(2)],
-                vec![cl(3), cl(1), 0, cl(2)],
+                vec![-1, clamp_max(2)],
+                vec![clamp_max(1)],
+                vec![clamp_max(2)],
+                vec![clamp_max(1), clamp_max(2)],
+                vec![clamp_max(3), clamp_max(1), 0, clamp_max(2)],
                 vec![max],
-                vec![max, cl(1), max],
-                (0..20).map(|i| cl(1 + (i % 5)) * (i % 7 != 3) as i32).collect(),
-                (0..60).map(|i| cl(1 + (i * 3 % 7))).collect(),
+                vec![max, clamp_max(1), max],
+                (0..20).map(|i| clamp_max(1 + (i % 5)) * (i % 7 != 3) as i32).collect(),
+                (0..60).map(|i| clamp_max(1 + (i * 3 % 7))).collect(),
             ];
             for r in [63, 64, 70, 127] {
                 if r <= max {
                     sets.push(vec![r]);
-                    sets.push(vec![r, cl(2)]);
+                    sets.push(vec![r, clamp_max(2)]);
                 }
             }
             for radii in &sets {
@@ -132,7 +132,7 @@ fn cases() -> Vec<Case> {
             if l >= 3 {
                 out.push(base.clone());
             }
-            out.push(Case { edge: 2, radii: vec![0, cl(1).max(1)], ..base.clone() });
+            out.push(Case { edge: 2, radii: vec![0, clamp_max(1).max(1)], ..base.clone() });
             out.push(Case { edge: 2, radii: vec![0, -3], ..base.clone() });
             out.push(Case { radii: vec![1, l as i32], ..base.clone() });
             out.push(Case { radii: vec![l as i32], edge: 5, ..base.clone() });
@@ -271,14 +271,14 @@ const MUTANTS: &[(&str, &str, &str)] = &[
     ("compare direction of the vector threshold", "(n >= 64 && peel >= 0 && n >= peel + 64)", "(n > 64 && peel >= 0 && n >= peel + 64)"),
     ("contracted multiply-add in the blend", "dst[i] = gp_mul(hv, gp_add(buf[i + m], buf[i - m]));", "dst[i] = fma(hv, buf[i + m], hv * buf[i - m]);"),
     ("sum order of the mode 0 blocks", "float u = gp_add(p, q);", "float u = gp_add(p, r);"),
-    ("select arm of the blend buffers", "gp_blend(b0, b1, w, (int)shift);", "gp_blend(b1, b0, w, (int)shift);"),
+    ("select arm of the blend buffers", "gp_blend(scratch0, scratch1, w, (int)shift);", "gp_blend(scratch1, scratch0, w, (int)shift);"),
     ("edge index of the mirrored right edge", "gp_sub(src[w - 1 - 2 * k], src[nmid + 2 * k])", "gp_sub(src[w - 1 - 2 * k], src[nmid + 2 * k + 1])"),
     ("alignment arm of the peel", "return (32 - a) / 4;", "return (31 - a) / 4;"),
     ("edge mode select", "    if (mode == 1) {\n        float s = gp_sum(src, r + 1, align, 1);", "    if (mode == 0) {\n        float s = gp_sum(src, r + 1, align, 1);"),
     ("buffer parity of the next line", "int cur = (int)((j * (size_t)flip) & 1u);", "int cur = (int)(j & 1u);"),
-    ("reduction order", "float lo = gp_add(q0, q2);", "float lo = gp_add(q0, q1);"),
+    ("reduction order", "float lo = gp_add(zsum0, zsum2);", "float lo = gp_add(zsum0, zsum1);"),
     ("tail threshold of the line sum", "if (rest >= 8) {", "if (rest > 8) {"),
-    ("fused start without the fusion", "float r = fma(d, s2, -s3);\n    if (r == r) {\n        return r;\n    }\n    if (d != d) {", "float r = d * s2 - s3;\n    if (r == r) {\n        return r;\n    }\n    if (d != d) {"),
+    ("fused start without the fusion", "float r = fma(d, second, -third);\n    if (r == r) {\n        return r;\n    }\n    if (d != d) {", "float r = d * second - third;\n    if (r == r) {\n        return r;\n    }\n    if (d != d) {"),
 ];
 
 #[test]

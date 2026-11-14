@@ -156,7 +156,7 @@ fn render_impl(p: &Params, m: Mutant, srcs: &[&[f32]], outs: &mut [&mut [f32]]) 
         return Ok(()); //  test rcx,rcx; jle 
     }
     let count = p.count as usize;
-    let n_le0 = if m == Mutant::ZeroN { p.n < 0 } else { p.n <= 0 };
+    let n_not_positive = if m == Mutant::ZeroN { p.n < 0 } else { p.n <= 0 };
     if srcs.len() < count || outs.len() < count {
         return Err(Error::PlaneCount { need: count, have_src: srcs.len(), have_out: outs.len() });
     }
@@ -164,7 +164,7 @@ fn render_impl(p: &Params, m: Mutant, srcs: &[&[f32]], outs: &mut [&mut [f32]]) 
     let kv = if m == Mutant::VecOneIgnored { 1.0 } else { p.vec_one };
     let nch = if m == Mutant::ChannelMinusOne { count - 1 } else { count };
     for c in 0..nch {
-        if n_le0 {
+        if n_not_positive {
             continue; //  test rdi,rdi; jle 
         }
         let n = p.n.max(0) as usize;
@@ -230,7 +230,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str)> {
     vec![
         ("ON1-A1", "ONE = 1.0f CAPTURED (lookup_om.tsv, 0000803f); scalar head and tail"),
         ("ON1-A2", "vector constant (32 B) is UNCOVERED (lookup_om.tsv U32): SEMANTIC 1.0f per lane, basis: scalar head and tail of the same function over the same array subtract captured 1.0f, so the vector core must too. ASSUMED-SEMANTIC; explicit parameter vec_one with no default; T2 runs 1.0 and 0.75 on both sides"),
-        ("ON1-A3", "route AVX2-ONLY: the slot function tests the feature word (cell CAPTURED, value served by the harness cell = 0x9d97ff) and jumps to; the AVX tier and the SSE tier are not ported"),
+        ("ON1-A3", "route AVX2-ONLY: the slot function tests the feature word (cell CAPTURED, value served by the harness cell =) and jumps to; the AVX tier and the SSE tier are not ported"), // origin: 0x9d97ff
         ("ON1-A4", "HOST-FP-ASSUMED: MXCSR round to nearest, no FTZ, no DAZ"),
         ("ON1-A5", "ALIGN-DEPENDENT when vec_one != ONE: head/core/tail split depends on n and on the destination address & 0x1f, an explicit input defaulting to 0; output-neutral when vec_one == 1.0"),
         ("ON1-A6", "the body has no callee and no host service; count (this) is read as given; combos 1..4 of the descriptor builder are INFERRED to be channel counts"),

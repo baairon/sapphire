@@ -40,10 +40,10 @@ fn skip_path_history_minus_zero_then_default_plus_zero_keeps_minus_zero() {
         return;
     }
     // locate invert_matte's cell by a unique value, then plant -0 as the previous compile's cell
-    let (b0, h0) = run(&ds(), "Drop_Shadow", None, "invert_matte", Some(0.75));
-    assert_eq!(b0, 0.75f32.to_bits());
-    let key = *h0.iter().find(|(_, v)| v.first() == Some(&0.75f32.to_bits())).map(|(k, _)| k).unwrap();
-    let mut h = h0.clone();
+    let (out_bits, store) = run(&ds(), "Drop_Shadow", None, "invert_matte", Some(0.75));
+    assert_eq!(out_bits, 0.75f32.to_bits());
+    let key = *store.iter().find(|(_, v)| v.first() == Some(&0.75f32.to_bits())).map(|(k, _)| k).unwrap();
+    let mut h = store.clone();
     h.insert(key, vec![NZ]);
     let (b, _) = run(&ds(), "Drop_Shadow", Some(h), "invert_matte", None);
     assert_eq!(b, NZ, "skip-path record: +0 == -0 as floats, the old cell -0 is kept");

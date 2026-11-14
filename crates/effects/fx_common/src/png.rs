@@ -109,7 +109,7 @@ pub fn verify(png: &[u8]) -> Result<Decoded, String> {
         return Err("bad signature".into());
     }
     let mut pos = 8;
-    let (mut w, mut h, mut ch) = (0u32, 0u32, 0usize);
+    let (mut w, mut h, mut chan) = (0u32, 0u32, 0usize);
     let mut idat = Vec::new();
     let mut ended = false;
     while pos + 12 <= png.len() {
@@ -127,7 +127,7 @@ pub fn verify(png: &[u8]) -> Result<Decoded, String> {
             b"IHDR" => {
                 w = u32::from_be_bytes([body[0], body[1], body[2], body[3]]);
                 h = u32::from_be_bytes([body[4], body[5], body[6], body[7]]);
-                ch = match body[9] {
+                chan = match body[9] {
                     0 => 1,
                     2 => 3,
                     t => return Err(format!("unsupported colour type {}", t)),
@@ -167,7 +167,7 @@ pub fn verify(png: &[u8]) -> Result<Decoded, String> {
     if adler32(&raw) != ad {
         return Err("bad adler32".into());
     }
-    let row = w as usize * ch;
+    let row = w as usize * chan;
     if raw.len() != (row + 1) * h as usize {
         return Err("raw size mismatch".into());
     }
@@ -178,7 +178,7 @@ pub fn verify(png: &[u8]) -> Result<Decoded, String> {
         }
         px.extend_from_slice(&raw[y * (row + 1) + 1..(y + 1) * (row + 1)]);
     }
-    Ok((w, h, ch, px))
+    Ok((w, h, chan, px))
 }
 
 #[cfg(test)]

@@ -57,15 +57,15 @@ fn presence_args() -> Result<(Option<u8>, BTreeMap<String, i32>, bool), String> 
         Some(p) => Some(u8::from_str_radix(a.get(p + 1).ok_or("--presence-mask needs a value")?.trim_start_matches("0x"), 16).map_err(|_| "--presence-mask must be one hex byte".to_string())?),
         None => None,
     };
-    let mut ch = BTreeMap::new();
+    let mut channel_map = BTreeMap::new();
     for (i, x) in a.iter().enumerate() {
         if x == "--input-chan" {
             let v = a.get(i + 1).ok_or("--input-chan needs NAME=N")?;
             let (n, c) = v.split_once('=').ok_or("--input-chan needs NAME=N")?;
-            ch.insert(n.to_string(), c.parse::<i32>().map_err(|_| "--input-chan count must be an integer".to_string())?);
+            channel_map.insert(n.to_string(), c.parse::<i32>().map_err(|_| "--input-chan count must be an integer".to_string())?);
         }
     }
-    Ok((pm, ch, a.iter().any(|x| x == "--mixed-mask")))
+    Ok((pm, channel_map, a.iter().any(|x| x == "--mixed-mask")))
 }
 
 /// the bit-order table of the INPUT-PRESENCE-MASK for every effect of the corpus (program, position, input, default, bind-pass node index, bind bit, range bit).
@@ -359,7 +359,7 @@ fn compile_all(programs: &str, forms: &str, combos: &str, outdir: &str) -> i32 {
                 continue;
             }
         };
-        let (bp, _) = fx_eval::branch_params(&g);
+        let (branch_list, _) = fx_eval::branch_params(&g);
         let sets = fx_eval::enumerate_branches_opt(&g, &ct, &BTreeMap::new(), std::env::args().any(|x| x == "--hc-zero-legacy"));
         let opt = fx_eval::CompileOptions { paramset: "default".into(), hc_zero_legacy: std::env::args().any(|x| x == "--hc-zero-legacy"), ..Default::default() };
         match fx_eval::compile(&g, &ct, &opt) {
@@ -367,7 +367,7 @@ fn compile_all(programs: &str, forms: &str, combos: &str, outdir: &str) -> i32 {
                 let mut uk: Vec<String> = cp.diagnostics.iter().filter(|d| d.starts_with("UNKNOWN-CLASS")).map(|d| d.split(' ').nth(1).unwrap_or("").to_string()).collect();
                 uk.sort();
                 uk.dedup();
-                summary.push_str(&format!("{}\t{}\tOK\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n", name, va, bp.join(","), sets.len(), cp.nodes.len(), cp.count("func"), cp.pruned.len(), cp.diagnostics.len(), uk.join(",")));
+                summary.push_str(&format!("{}\t{}\tOK\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n", name, va, branch_list.join(","), sets.len(), cp.nodes.len(), cp.count("func"), cp.pruned.len(), cp.diagnostics.len(), uk.join(",")));
             }
             Err(e) => summary.push_str(&format!("{}\t{}\tCOMPILE_FAIL {}\t\t\t\t\t\t\t\n", name, va, e)),
         }
@@ -501,7 +501,7 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
     // keyed host curve answers, TSV rows tag, curve name, time bits (hex), lanes (hex words, comma separated); one E1 run's own hostcurve_calls
     let keyed_rows: Option<Vec<Vec<String>>> = hck.map(|p| fs::read_to_string(p).unwrap_or_default().lines().filter(|l| !l.starts_with("tag\t") && !l.is_empty()).map(|l| l.split('\t').map(|x| x.to_string()).collect()).collect());
     let mut summary = String::from("program\ttag\tsets\tstatus\tfirst_difference\n");
-    let mut w113 = String::from("program\ttag\truns\tbits\tlayout\tw113\tfirst_layout_difference\n");
+    let mut route_label = String::from("program\ttag\truns\tbits\tlayout\tw113\tfirst_layout_difference\n");
     // `--argcol` writes ARGCOL.tsv (report-only; the existing tables are unchanged)
     let argcol_on = std::env::args().any(|x| x == "--argcol");
     let mut argcol_rows = String::from("program\ttag\targcol\trunprims_orig\trunprims_native\tdetail\n");
@@ -530,7 +530,7 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
         };
         let mut bound_elnum = BTreeMap::new();
         if let Some(r) = tag.strip_prefix("mk") {
-            if let Some(c) = r.chars().next().and_then(|ch| ch.to_digit(10)) {
+            if let Some(c) = r.chars().next().and_then(|channel_map| channel_map.to_digit(10)) {
                 bound_elnum.insert("Mask".to_string(), c as i32);
             }
         }
@@ -590,8 +590,8 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
         }
         let mine = fx_eval::plan::canon_mine_mode(&cp, mode);
         let hexl = |l: &[u32; 4]| l.iter().map(|b| b.to_le_bytes().iter().map(|x| format!("{:02x}", x)).collect::<String>()).collect::<String>();
-        let mut mine_l: Vec<String> = cp.node_state.iter().filter(|s| s.b160 && s.folded).map(|s| hexl(&s.lanes)).collect();
-        for c in cp.clones.iter().filter(|c| c.b160 && c.folded) {
+        let mut mine_l: Vec<String> = cp.node_state.iter().filter(|s| s.is_const_node && s.folded).map(|s| hexl(&s.lanes)).collect();
+        for c in cp.clones.iter().filter(|c| c.is_const_node && c.folded) {
             mine_l.push(hexl(&c.lanes));
         }
         if std::env::var_os("FLD1_NO_COPIES").is_none() {
@@ -628,7 +628,7 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
             let first = lm.iter().zip(lo.iter()).position(|(a, b)| a != b).map(|i| format!("cmd {}: mine `{}` vs original `{}`", i, lm[i], lo[i])).unwrap_or_else(|| if lm.len() != lo.len() { format!("command count mine {} vs original {}", lm.len(), lo.len()) } else { String::new() });
             let bits_ok = hit == tot;
             let w = d.is_empty() && bits_ok && lay_eq;
-            w113.push_str(&format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\n", prog, tag, if d.is_empty() { "RUNS-EQUAL" } else { "RUNS-DIFF" }, if bits_ok { "BITS-EQUAL" } else { "BITS-DIFF" }, if lay_eq { "LAYOUT-EQUAL" } else { "LAYOUT-DIFF" }, if w { "PLAN-PARITY" } else { "PLAN-MISS" }, first));
+            route_label.push_str(&format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\n", prog, tag, if d.is_empty() { "RUNS-EQUAL" } else { "RUNS-DIFF" }, if bits_ok { "BITS-EQUAL" } else { "BITS-DIFF" }, if lay_eq { "LAYOUT-EQUAL" } else { "LAYOUT-DIFF" }, if w { "PLAN-PARITY" } else { "PLAN-MISS" }, first));
         }
         let _ = fs::write(format!("{}/MINE_{}_{}.txt", outdir, prog, tag), fx_eval::cpuplan::plan_text_mode(&cp, mode));
         if argcol_on {
@@ -641,7 +641,7 @@ fn plancmp(dir: &str, programs: &str, combos: &str, outdir: &str, hc: bool, hck:
         let _ = fs::write(format!("{}/DIFF_{}_{}.txt", outdir, prog, tag), d.join("\n") + "\n");
     }
     let _ = fs::write(format!("{}/PLANCMP_NV3.tsv", outdir), &summary);
-    let _ = fs::write(format!("{}/PLAN_PARITY.tsv", outdir), &w113);
+    let _ = fs::write(format!("{}/PLAN_PARITY.tsv", outdir), &route_label);
     if argcol_on {
         let _ = fs::write(format!("{}/ARGCOL.tsv", outdir), &argcol_rows);
     }
@@ -692,7 +692,7 @@ pub fn layout_canon(text: &str) -> Vec<String> {
 }
 
 /// Feed the r8 = 1 eval order (EVL_r1) through the ported linewise pass and compare order and lg with the original r8 = 0 eval list (EVL_r0).
-fn lgtest(r1: &str, r0: &str) -> i32 {
+fn lgtest(lhs_text: &str, rhs_text: &str) -> i32 {
     fn parse(path: &str) -> Vec<(String, Vec<(usize, bool, String, i32, Vec<usize>, i32)>)> {
         let t = fs::read_to_string(path).unwrap_or_default();
         let mut out: Vec<(String, Vec<(usize, bool, String, i32, Vec<usize>, i32)>)> = Vec::new();
@@ -711,8 +711,8 @@ fn lgtest(r1: &str, r0: &str) -> i32 {
         }
         out
     }
-    let a = parse(r1);
-    let b = parse(r0);
+    let a = parse(lhs_text);
+    let b = parse(rhs_text);
     let (mut ok, mut tot) = (0, 0);
     for (name, rows) in &a {
         let Some((_, orows)) = b.iter().find(|(n, _)| *n == format!("{}_r0", name) || n == name) else { continue };

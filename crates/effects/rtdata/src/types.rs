@@ -97,7 +97,7 @@ pub struct Style {
 
 /// One entry of a compiler combination table: the operand element counts it matches and the result count.
 #[derive(Debug, Clone, Copy)]
-pub struct ComboEntry {
+pub struct ComboRow {
     pub vals: &'static [i32],
     pub tag: i32,
 }
@@ -106,12 +106,12 @@ pub struct ComboEntry {
 #[derive(Debug, Clone, Copy)]
 pub struct ComboClass {
     pub class: &'static str,
-    pub entries: &'static [ComboEntry],
+    pub entries: &'static [ComboRow],
 }
 
 /// One entry of the selector's table.
 #[derive(Debug, Clone, Copy)]
-pub struct ExecEntry {
+pub struct ExecRow {
     pub vals: &'static [i32],
     pub tag: i32,
     pub len: i32,
@@ -121,5 +121,5 @@ pub struct ExecEntry {
 #[derive(Debug, Clone, Copy)]
 pub struct ExecClass {
     pub class: &'static str,
-    pub entries: &'static [ExecEntry],
+    pub entries: &'static [ExecRow],
 }

@@ -89,19 +89,19 @@ fn abs_ss(a: u32) -> u32 {
     a & ABS
 }
 /// vfmadd213ss / vfmsub213ss dst, s2, s3: s2 * dst (+|-) s3, NaN priority (dst, s2, s3) (INFERRED order), one rounding.
-pub fn fma213(dst: u32, s2: u32, s3: u32, sub: bool) -> u32 {
-    if let Some(x) = first([dst, s2, s3]) {
+pub fn fma213(dst: u32, factor: u32, addend: u32, sub: bool) -> u32 {
+    if let Some(x) = first([dst, factor, addend]) {
         return x;
     }
-    let c = if sub { -f(s3) } else { f(s3) };
-    fix(f(s2).mul_add(f(dst), c))
+    let c = if sub { -f(addend) } else { f(addend) };
+    fix(f(factor).mul_add(f(dst), c))
 }
 /// vfmsub231ss dst, s2, s3: s2 * s3 - dst (the only 231 single form in the body).
-pub fn fmsub231(dst: u32, s2: u32, s3: u32) -> u32 {
-    if let Some(x) = first([dst, s2, s3]) {
+pub fn fmsub231(dst: u32, factor: u32, addend: u32) -> u32 {
+    if let Some(x) = first([dst, factor, addend]) {
         return x;
     }
-    fix(f(s2).mul_add(f(s3), -f(dst)))
+    fix(f(factor).mul_add(f(addend), -f(dst)))
 }
 fn cvtss2sd(b: u32) -> u64 {
     if isn(b) {
@@ -116,12 +116,12 @@ fn cvtsd2ss(b: u64) -> u32 {
     fix(f64::from_bits(b) as f32)
 }
 /// vfmadd231sd dst, s2, s3 = s2 * s3 + dst
-fn fma231_sd(dst: u64, s2: u64, s3: u64) -> u64 {
-    first64([dst, s2, s3]).unwrap_or_else(|| fix64(f64::from_bits(s2).mul_add(f64::from_bits(s3), f64::from_bits(dst))))
+fn fma231_sd(dst: u64, factor: u64, addend: u64) -> u64 {
+    first64([dst, factor, addend]).unwrap_or_else(|| fix64(f64::from_bits(factor).mul_add(f64::from_bits(addend), f64::from_bits(dst))))
 }
 /// vfmadd213sd dst, s2, s3 = s2 * dst + s3
-fn fma213_sd(dst: u64, s2: u64, s3: u64) -> u64 {
-    first64([dst, s2, s3]).unwrap_or_else(|| fix64(f64::from_bits(s2).mul_add(f64::from_bits(dst), f64::from_bits(s3))))
+fn fma213_sd(dst: u64, factor: u64, addend: u64) -> u64 {
+    first64([dst, factor, addend]).unwrap_or_else(|| fix64(f64::from_bits(factor).mul_add(f64::from_bits(dst), f64::from_bits(addend))))
 }
 
 /// Shared tail of every pixel (and its copies): compare xa with d in double, combine, round to f32, pseudo log2.
@@ -131,13 +131,13 @@ fn finish(xa: u64, d: u64) -> u32 {
     } else {
         fma213_sd(xa, KMIX, d) // k * xa + d
     };
-    let m32 = cvtsd2ss(r);
-    let pos = f(m32) > 0.0;
+    let narrowed = cvtsd2ss(r);
+    let pos = f(narrowed) > 0.0;
     if !pos {
         return 0;
     }
-    let e = ((m32 >> 23) & 0xff) as i32 - 128;
-    let mant = (m32 & 0x807f_ffff).wrapping_add(0x3f80_0000);
+    let e = ((narrowed >> 23) & 0xff) as i32 - 128;
+    let mant = (narrowed & 0x807f_ffff).wrapping_add(0x3f80_0000);
     add_ss(fix(e as f32), mant)
 }
 
@@ -164,8 +164,8 @@ pub fn run_body(p: &Params, input: &[u32], output: &mut [u32]) -> Result<(), Bod
     if input.len() < w * h || output.len() < w * h {
         return Err(BodyError::Short);
     }
-    let hb0 = mul_ss(HALF, p.pre_cell_a_bits); //  chain: xmm2 = 0.5 * pre_cell_a_bits, spilled to [rbp]
-    let hb8 = mul_ss(HALF, p.pre_cell_b_bits); // xmm4 = 0.5 * pre_cell_b_bits, spilled to [rbp]
+    let pre_a_halved = mul_ss(HALF, p.pre_cell_a_bits); //  chain: xmm2 = 0.5 * pre_cell_a_bits, spilled to [rbp]
+    let pre_b_halved = mul_ss(HALF, p.pre_cell_b_bits); // xmm4 = 0.5 * pre_cell_b_bits, spilled to [rbp]
     let two_v = mul_ss(TWO, p.v); // xmm12 
     let flag = p.flag != 0;
     let wi = w as i32;
@@ -185,14 +185,14 @@ pub fn run_body(p: &Params, input: &[u32], output: &mut [u32]) -> Result<(), Bod
         let sy = mul_ss(p.v, s); // 
         let o = &mut output[yu * w..yu * w + w];
         // ---- x = 0 
-        let c0 = avec(0, cur);
+        let cur_vec = avec(0, cur);
         let c1 = avec(1, cur);
-        let a = sub_ss(c0, avec(0, prev));
-        let d1 = sub_ss(c1, c0);
-        let up = fmsub231(hb8, a, sy);
-        let vx0 = fma213(two_v, d1, p.pre_cell_a_bits, false);
-        let dn0 = sub_ss(avec(0, next), c0);
-        let down = fmsub231(hb8, dn0, sy);
+        let a = sub_ss(cur_vec, avec(0, prev));
+        let fp33_sub_1 = sub_ss(c1, cur_vec);
+        let up = fmsub231(pre_b_halved, a, sy);
+        let vx0 = fma213(two_v, fp33_sub_1, p.pre_cell_a_bits, false);
+        let dn0 = sub_ss(avec(0, next), cur_vec);
+        let down = fmsub231(pre_b_halved, dn0, sy);
         let xa = cvtss2sd(abs_ss(vx0));
         let ua = abs_ss(up);
         let da = abs_ss(down);
@@ -204,20 +204,20 @@ pub fn run_body(p: &Params, input: &[u32], output: &mut [u32]) -> Result<(), Bod
         };
         o[0] = finish(xa, d);
         // ---- middle x = 1..w-2
-        let mut dr_last = d1;
+        let mut dr_last = fp33_sub_1;
         let mut cn_last = c1;
         for x in 1..(wi - 1) {
-            let cx = avec(x, cur);
+            let centre_x = avec(x, cur);
             let cp = avec(x - 1, cur);
             let cn = avec(x + 1, cur);
-            let dl = sub_ss(cx, cp);
-            let dr = sub_ss(cn, cx);
-            let dn = sub_ss(avec(x, next), cx);
-            let dp = sub_ss(cx, avec(x, prev));
-            let lv = abs_ss(fma213(dl, p.v, hb0, false));
-            let rv = abs_ss(fma213(p.v, dr, hb0, false));
-            let nv = abs_ss(fma213(dn, sy, hb8, true));
-            let pv = abs_ss(fma213(dp, sy, hb8, true));
+            let diff_x = sub_ss(centre_x, cp);
+            let dr = sub_ss(cn, centre_x);
+            let dn = sub_ss(avec(x, next), centre_x);
+            let dp = sub_ss(centre_x, avec(x, prev));
+            let lv = abs_ss(fma213(diff_x, p.v, pre_a_halved, false));
+            let rv = abs_ss(fma213(p.v, dr, pre_a_halved, false));
+            let nv = abs_ss(fma213(dn, sy, pre_b_halved, true));
+            let pv = abs_ss(fma213(dp, sy, pre_b_halved, true));
             let (xa, d) = if flag {
                 let mx = min_ss(lv, rv);
                 let my = min_ss(pv, nv);
@@ -232,11 +232,11 @@ pub fn run_body(p: &Params, input: &[u32], output: &mut [u32]) -> Result<(), Bod
         // ---- x = w-1 
         let vxl = abs_ss(fma213(dr_last, two_v, p.pre_cell_a_bits, false));
         let xa = cvtss2sd(vxl);
-        let cl = cn_last;
-        let dn = sub_ss(avec(wi - 1, next), cl);
-        let dp = sub_ss(cl, avec(wi - 1, prev));
-        let pv = abs_ss(fma213(dp, sy, hb8, true));
-        let nv = abs_ss(fma213(sy, dn, hb8, true));
+        let last_count = cn_last;
+        let dn = sub_ss(avec(wi - 1, next), last_count);
+        let dp = sub_ss(last_count, avec(wi - 1, prev));
+        let pv = abs_ss(fma213(dp, sy, pre_b_halved, true));
+        let nv = abs_ss(fma213(sy, dn, pre_b_halved, true));
         let d = if flag {
             let mn = min_ss(pv, nv);
             cvtss2sd(add_ss(mn, mn))

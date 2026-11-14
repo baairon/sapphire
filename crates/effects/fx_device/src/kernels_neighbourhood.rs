@@ -49,25 +49,25 @@ float nf_div(float a, float b) {
     float r = a / b;
     return (r == r) ? r : nf_pick(a, b);
 }
-/* vfmsub213ss d, s2, s3: d * s2 - s3, one rounding; NaN priority d, s2, s3. */
-float nf_fms213(float d, float s2, float s3) {
-    float r = fma(d, s2, -s3);
-    return (r == r) ? r : nf_pick3(d, s2, s3);
+/* vfmsub213ss d, factor, subtrahend: d * factor - subtrahend, one rounding; NaN priority d, factor, subtrahend. */
+float nf_fms213(float d, float factor, float subtrahend) {
+    float r = fma(d, factor, -subtrahend);
+    return (r == r) ? r : nf_pick3(d, factor, subtrahend);
 }
-/* vfmadd231ss d, s2, s3: s2 * s3 + d, one rounding; NaN priority d, s2, s3. */
-float nf_fma231(float d, float s2, float s3) {
-    float r = fma(s2, s3, d);
-    return (r == r) ? r : nf_pick3(d, s2, s3);
+/* vfmadd231ss d, factor, subtrahend: factor * subtrahend + d, one rounding; NaN priority d, factor, subtrahend. */
+float nf_fma231(float d, float factor, float subtrahend) {
+    float r = fma(factor, subtrahend, d);
+    return (r == r) ? r : nf_pick3(d, factor, subtrahend);
 }
 
 float bw_hred(float* v) {
-    float t0 = nf_add(v[0], v[4]);
-    float t1 = nf_add(v[1], v[5]);
-    float t2 = nf_add(v[2], v[6]);
-    float t3 = nf_add(v[3], v[7]);
-    float u0 = nf_add(t0, t2);
-    float u1 = nf_add(t1, t3);
-    return nf_add(u0, u1);
+    float acc_a = nf_add(v[0], v[4]);
+    float acc_b = nf_add(v[1], v[5]);
+    float sum_2 = nf_add(v[2], v[6]);
+    float nf_add_3 = nf_add(v[3], v[7]);
+    float nf_add_0 = nf_add(acc_a, sum_2);
+    float nf_add_1 = nf_add(acc_b, nf_add_3);
+    return nf_add(nf_add_0, nf_add_1);
 }
 
 /* Initial window sum of x[0..len): the CPU's s0 / prefix_sum, grouping included. */
@@ -106,7 +106,7 @@ float bw_prefix(__global const float* x, size_t st, int len, int edge, uint phas
     int nb = (len - peel) / 64;
     int end = peel + 64 * nb;
     int rem = len - end;
-    int n8 = rem / 8;
+    int quot_8 = rem / 8;
     float total;
     if (edge == 1) {
         float pp[8];
@@ -136,7 +136,7 @@ float bw_prefix(__global const float* x, size_t st, int len, int edge, uint phas
             }
         }
         for (int k = 0; k < 8; k++) {
-            if (k >= n8) {
+            if (k >= quot_8) {
                 break;
             }
             for (int l = 0; l < 8; l++) {
@@ -166,16 +166,16 @@ float bw_prefix(__global const float* x, size_t st, int len, int edge, uint phas
         }
         float v[8];
         for (int l = 0; l < 8; l++) {
-            float c01 = nf_add(a[l], a[8 + l]);
-            float c23 = nf_add(a[16 + l], a[24 + l]);
-            float c45 = nf_add(a[32 + l], a[40 + l]);
-            float c67 = nf_add(a[48 + l], a[56 + l]);
-            float lh = nf_add(c01, c23);
-            float rh = nf_add(c45, c67);
+            float nf_add_01 = nf_add(a[l], a[8 + l]);
+            float nf_add_23 = nf_add(a[16 + l], a[24 + l]);
+            float nf_add_45 = nf_add(a[32 + l], a[40 + l]);
+            float nf_add_67 = nf_add(a[48 + l], a[56 + l]);
+            float lh = nf_add(nf_add_01, nf_add_23);
+            float rh = nf_add(nf_add_45, nf_add_67);
             v[l] = nf_add(lh, rh);
         }
         for (int k = 0; k < 8; k++) {
-            if (k >= n8) {
+            if (k >= quot_8) {
                 break;
             }
             for (int l = 0; l < 8; l++) {
@@ -185,7 +185,7 @@ float bw_prefix(__global const float* x, size_t st, int len, int edge, uint phas
         total = bw_hred(v);
     }
     for (int i = 0; i < 8; i++) {
-        int ii = end + 8 * n8 + i;
+        int ii = end + 8 * quot_8 + i;
         if (ii >= len) {
             break;
         }
@@ -270,8 +270,8 @@ void bw_window(__global const float* x, __global float* out, size_t st, int n, i
    scr holds three planes (two ping-pong, one blend). ph0 / ph1 are the scratch alignment phases of buffer 0 / 1. */
 __kernel void blur_x_f32(__global const float* src, __global float* dst, __global float* scr,
                          uint w, uint h, int np, int edge, int sub, float frac,
-                         int a0, int a1, int a2, int b0, int b1, int b2,
-                         float c0, float c1, float c2, uint ph0, uint ph1) {
+                         int ra_pass0, int ra_pass1, int ra_pass2, int rb_pass0, int rb_pass1, int rb_pass2,
+                         float cc_pass0, float c1, float c2, uint ph0, uint ph1) {
     size_t row = get_global_id(0);
     if (row >= h) {
         return;
@@ -286,9 +286,9 @@ __kernel void blur_x_f32(__global const float* src, __global float* dst, __globa
         if (p >= np) {
             break;
         }
-        int ra = (p == 0) ? a0 : ((p == 1) ? a1 : a2);
-        int rb = (p == 0) ? b0 : ((p == 1) ? b1 : b2);
-        float cc = (p == 0) ? c0 : ((p == 1) ? c1 : c2);
+        int ra = (p == 0) ? ra_pass0 : ((p == 1) ? ra_pass1 : ra_pass2);
+        int rb = (p == 0) ? rb_pass0 : ((p == 1) ? rb_pass1 : rb_pass2);
+        float cc = (p == 0) ? cc_pass0 : ((p == 1) ? c1 : c2);
         uint phase = ((p & 1) != 0) ? ph1 : ph0;
         __global float* outp = ((p & 1) != 0) ? buf_b : buf_a;
         int blend = (sub != 0 && ra != rb) ? 1 : 0;
@@ -316,12 +316,12 @@ __kernel void blur_x_f32(__global const float* src, __global float* dst, __globa
 }
 
 /* Vertical pass, one work item per column; phs holds the scratch alignment phase of the input buffer of each pass
-   of each column (w x 3, from the host replay of the CPU's buffer slots). The scratch planes are laid out so that
+   of each column (w x 3, computed on the host from the CPU's buffer slots). The scratch planes are laid out so that
    neighbouring columns are neighbouring words. dst may be src: every read of src happens in pass 0, before the copy back. */
 __kernel void blur_y_f32(__global const float* src, __global float* dst, __global float* scr, __global const uint* phs,
                          uint w, uint h, int np, int edge, int sub, float frac,
-                         int a0, int a1, int a2, int b0, int b1, int b2,
-                         float c0, float c1, float c2) {
+                         int ra_pass0, int ra_pass1, int ra_pass2, int rb_pass0, int rb_pass1, int rb_pass2,
+                         float cc_pass0, float c1, float c2) {
     size_t col = get_global_id(0);
     if (col >= w) {
         return;
@@ -336,9 +336,9 @@ __kernel void blur_y_f32(__global const float* src, __global float* dst, __globa
         if (p >= np) {
             break;
         }
-        int ra = (p == 0) ? a0 : ((p == 1) ? a1 : a2);
-        int rb = (p == 0) ? b0 : ((p == 1) ? b1 : b2);
-        float cc = (p == 0) ? c0 : ((p == 1) ? c1 : c2);
+        int ra = (p == 0) ? ra_pass0 : ((p == 1) ? ra_pass1 : ra_pass2);
+        int rb = (p == 0) ? rb_pass0 : ((p == 1) ? rb_pass1 : rb_pass2);
+        float cc = (p == 0) ? cc_pass0 : ((p == 1) ? c1 : c2);
         uint phase = phs[col * 3 + (size_t)p];
         __global float* outp = ((p & 1) != 0) ? buf_b : buf_a;
         int blend = (sub != 0 && ra != rb) ? 1 : 0;
@@ -429,8 +429,8 @@ __kernel void mb_combine_f32(__global const float* m, __global const float* bb, 
         if (wv > 0x0p+0f) {
             b = nf_div(b, mb_min_x86(wv, 0x1p+0f));
         }
-        float m1 = mb_min_x86(mv, 0x1p+0f);
-        r = nf_fma231(sv, nf_sub(b, sv), m1);
+        float bits_1 = mb_min_x86(mv, 0x1p+0f);
+        r = nf_fma231(sv, nf_sub(b, sv), bits_1);
     }
     out[i] = r;
 }
@@ -438,8 +438,8 @@ __kernel void mb_combine_f32(__global const float* m, __global const float* bb, 
 
 /// grad: the gradient stencil over the blurred plane (flag_1 = 1 route).
 pub const NEIGHBOURHOOD_GRAD: &str = r#"
-/* x5 is 1.0 when the info aspect cell is set, else 2.0 (the mutants of the CPU crate are not reachable here). */
-__kernel void grad_stencil_f32(__global const float* b, __global float* dx, __global float* dy, uint w, uint h, float x5) {
+/* info_aspect is 1.0 when the info aspect cell is set, else 2.0 (the mutants of the CPU crate are not reachable here). */
+__kernel void grad_stencil_f32(__global const float* b, __global float* delta_x, __global float* dy, uint w, uint h, float info_aspect) {
     size_t gid = get_global_id(0);
     size_t n = (size_t)w * (size_t)h;
     if (gid >= n) {
@@ -448,41 +448,41 @@ __kernel void grad_stencil_f32(__global const float* b, __global float* dx, __gl
     size_t y = gid / (size_t)w;
     size_t x = gid % (size_t)w;
     size_t cur = y * (size_t)w;
-    float x1 = x5 + x5;
+    float sum_1 = info_aspect + info_aspect;
     size_t up = (y == 0) ? cur : (cur - (size_t)w);
     size_t down = (y + 1 == (size_t)h) ? cur : (cur + (size_t)w);
-    float x3 = x1;
+    float aspect_scale = sum_1;
     if (y != 0) {
-        x3 = x5;
+        aspect_scale = info_aspect;
     }
     if (y + 1 == (size_t)h) {
-        x3 = x1;
+        aspect_scale = sum_1;
     }
     float two = 0x1p+1f;
     float hlf = 0x1p-1f;
     if (x == 0) {
         float p0 = b[cur];
-        float p1 = b[cur + 1];
-        float v7 = p1 - p0;
-        float v8 = b[up] - b[down];
-        v7 = v7 * two;
-        v8 = v8 * hlf;
-        v8 = v8 * x3;
-        dx[gid] = v7;
-        dy[gid] = v8;
+        float y_value = b[cur + 1];
+        float diff_7 = y_value - p0;
+        float diff_8 = b[up] - b[down];
+        diff_7 = diff_7 * two;
+        diff_8 = diff_8 * hlf;
+        diff_8 = diff_8 * aspect_scale;
+        delta_x[gid] = diff_7;
+        dy[gid] = diff_8;
     } else if (x == (size_t)w - 1) {
         float lo = b[cur + (size_t)w - 2];
         float hi = b[cur + (size_t)w - 1];
-        float l7 = b[up + (size_t)w - 1] - b[down + (size_t)w - 1];
-        float l0 = hi - lo;
-        l7 = l7 * hlf;
-        l0 = l0 * two;
-        l7 = l7 * x3;
-        dx[gid] = l0;
-        dy[gid] = l7;
+        float sum_7 = b[up + (size_t)w - 1] - b[down + (size_t)w - 1];
+        float diff_0 = hi - lo;
+        sum_7 = sum_7 * hlf;
+        diff_0 = diff_0 * two;
+        sum_7 = sum_7 * aspect_scale;
+        delta_x[gid] = diff_0;
+        dy[gid] = sum_7;
     } else {
-        float f = hlf * x3;
-        dx[gid] = b[cur + x + 1] - b[cur + x - 1];
+        float f = hlf * aspect_scale;
+        delta_x[gid] = b[cur + x + 1] - b[cur + x - 1];
         float v = b[up + x] - b[down + x];
         dy[gid] = v * f;
     }
@@ -516,7 +516,7 @@ __kernel void sharpen_combine_f32(__global const float* x, __global float* out, 
 
 /// static2: the integer hash noise, two planes.
 pub const NEIGHBOURHOOD_STATIC2: &str = r#"
-__kernel void static2_f32(__global const uint* tab, __global float* o0, __global float* o1, uint n, uint base) {
+__kernel void static2_f32(__global const uint* tab, __global float* out_x, __global float* out_y, uint n, uint base) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
@@ -527,8 +527,8 @@ __kernel void static2_f32(__global const uint* tab, __global float* o0, __global
     }
     int xi = (int)(v & 4095u) - 2048;
     int yi = (int)((v >> 16) & 4095u) - 2048;
-    o0[i] = (float)xi * 0x1p-12f;
-    o1[i] = (float)yi * 0x1p-12f;
+    out_x[i] = (float)xi * 0x1p-12f;
+    out_y[i] = (float)yi * 0x1p-12f;
 }
 "#;
 
@@ -536,10 +536,10 @@ __kernel void static2_f32(__global const uint* tab, __global float* o0, __global
 /// tanh-like transform. The driver (iterations, plane bookkeeping, radii) runs on the host with the CPU functions.
 pub const NEIGHBOURHOOD_ESH: &str = r#"
 /* MIRRORS_MUL_ADD: edge_aware_sharpen_jobs::job_2, edge_aware_sharpen_jobs::exp_tanh_elem, edge_aware_sharpen_box_filter::filter3, edge_aware_sharpen_render::slot52 */
-/* vfmadd213ss d, s2, s3: d * s2 + s3, one rounding; NaN priority d, s2, s3. */
-float nf_fma213(float d, float s2, float s3) {
-    float r = fma(d, s2, s3);
-    return (r == r) ? r : nf_pick3(d, s2, s3);
+/* vfmadd213ss d, factor, subtrahend: d * factor + subtrahend, one rounding; NaN priority d, factor, subtrahend. */
+float nf_fma213(float d, float factor, float subtrahend) {
+    float r = fma(d, factor, subtrahend);
+    return (r == r) ? r : nf_pick3(d, factor, subtrahend);
 }
 
 float esh_minss(float a, float b) {
@@ -568,9 +568,9 @@ float esh_g_t(float m, float k, float cb, float kcb) {
     return nf_mul(k, esh_minss(nf_div(0x1p+0f, m), cb));
 }
 
-float esh_l1(__global const float* c0, __global const float* c1, __global const float* c2, int nch, size_t i, size_t j) {
+float esh_l1(__global const float* cc_pass0, __global const float* c1, __global const float* c2, int nch, size_t i, size_t j) {
     float acc = 0x0p+0f;
-    acc = nf_add(acc, fabs(nf_sub(c0[i], c0[j])));
+    acc = nf_add(acc, fabs(nf_sub(cc_pass0[i], cc_pass0[j])));
     if (nch > 1) {
         acc = nf_add(acc, fabs(nf_sub(c1[i], c1[j])));
     }
@@ -580,10 +580,10 @@ float esh_l1(__global const float* c0, __global const float* c1, __global const 
     return acc;
 }
 
-/* Weight planes a (line major) and t (transposed), one work item per sample. c10 / c11 are the constant mode values. */
-__kernel void esh_weights_f32(__global const float* c0, __global const float* c1, __global const float* c2, int nch,
+/* Weight planes a (line major) and t (transposed), one work item per sample. d_const / e_const are the constant mode values. */
+__kernel void esh_weights_f32(__global const float* cc_pass0, __global const float* c1, __global const float* c2, int nch,
                               __global const float* cur, int mode_b, __global float* wa, __global float* wt,
-                              uint w, uint s, float d, float e, float k, float ca, float cb, float kcb, float c10, float c11) {
+                              uint w, uint s, float d, float e, float k, float ca, float cb, float kcb, float d_const, float e_const) {
     size_t gid = get_global_id(0);
     size_t total = (size_t)w * (size_t)s;
     if (gid >= total) {
@@ -598,19 +598,19 @@ __kernel void esh_weights_f32(__global const float* c0, __global const float* c1
             wt[0] = 0x1p+0f;
         } else {
             size_t prev = base - (size_t)w;
-            float s0 = esh_l1(c0, c1, c2, nch, base, prev);
-            float g0 = c11;
+            float s0 = esh_l1(cc_pass0, c1, c2, nch, base, prev);
+            float e_weight = e_const;
             if (mode_b != 0) {
-                g0 = esh_g_t(esh_minss(cur[prev], cur[base]), k, cb, kcb);
-                wt[line] = nf_fma231(g0, s0, e);
+                e_weight = esh_g_t(esh_minss(cur[prev], cur[base]), k, cb, kcb);
+                wt[line] = nf_fma231(e_weight, s0, e);
             } else {
-                wt[line] = nf_fma213(s0, e, g0);
+                wt[line] = nf_fma213(s0, e, e_weight);
             }
         }
         return;
     }
-    float sa = esh_l1(c0, c1, c2, nch, base + j, base + j - 1);
-    float hh = c10;
+    float sa = esh_l1(cc_pass0, c1, c2, nch, base + j, base + j - 1);
+    float hh = d_const;
     if (mode_b != 0) {
         hh = esh_h_a(esh_minss(cur[base + j - 1], cur[base + j]), ca);
     }
@@ -623,8 +623,8 @@ __kernel void esh_weights_f32(__global const float* c0, __global const float* c1
         wt[j * (size_t)s] = 0x1p+0f;
     } else {
         size_t prev = base - (size_t)w;
-        float sv = esh_l1(c0, c1, c2, nch, base + j, prev + j);
-        float gg = c11;
+        float sv = esh_l1(cc_pass0, c1, c2, nch, base + j, prev + j);
+        float gg = e_const;
         if (mode_b != 0) {
             gg = esh_g_t(esh_minss(cur[prev + j], cur[base + j]), k, cb, kcb);
         }
@@ -654,7 +654,7 @@ __kernel void esh_cumsum_x_f32(__global const float* a, __global float* p0, uint
 }
 
 /* Running sum along each column of the transposed plane (one work item per column; columns have s elements). */
-__kernel void esh_cumsum_y_f32(__global const float* t, __global float* p1, uint w, uint s) {
+__kernel void esh_cumsum_y_f32(__global const float* t, __global float* y_value, uint w, uint s) {
     size_t col = get_global_id(0);
     if (col >= w) {
         return;
@@ -666,13 +666,13 @@ __kernel void esh_cumsum_y_f32(__global const float* t, __global float* p1, uint
             break;
         }
         acc = nf_add(acc, t[base + (size_t)j]);
-        p1[base + (size_t)j] = acc;
+        y_value[base + (size_t)j] = acc;
     }
 }
 
 /* The variable window box filter over n elements; a and out have strides ast / ost, the guide b has stride bst. */
 void esh_filter3(__global const float* a, size_t ast, __global float* out, size_t ost, __global const float* b, size_t bst,
-                 int n, float r, float p1, float p2) {
+                 int n, float r, float y_value, float p2) {
     if (n <= 0) {
         return;
     }
@@ -714,76 +714,76 @@ void esh_filter3(__global const float* a, size_t ast, __global float* out, size_
             hh = hh + 1;
         }
         hi = hh;
-        float v9;
-        if (p1 > one) {
+        float window_out;
+        if (y_value > one) {
             float v = a[(size_t)i * ast];
             if (r > two) {
-                float s8 = sum;
-                int c8 = cnt;
+                float win_sum = sum;
+                int win_count = cnt;
                 float t = g - rm1;
                 if (t > b[(size_t)lo * bst]) {
-                    s8 = nf_sub(sum, a[(size_t)lo * ast]);
-                    c8 = cnt - 1;
+                    win_sum = nf_sub(sum, a[(size_t)lo * ast]);
+                    win_count = cnt - 1;
                 }
-                float t2 = b[(size_t)(hh - 1) * bst];
+                float sum_2 = b[(size_t)(hh - 1) * bst];
                 float u = rm1 + g;
-                if (t2 > u) {
-                    c8 = c8 - 1;
-                    s8 = nf_sub(s8, a[(size_t)(hh - 1) * ast]);
+                if (sum_2 > u) {
+                    win_count = win_count - 1;
+                    win_sum = nf_sub(win_sum, a[(size_t)(hh - 1) * ast]);
                 }
-                if (c8 > 0) {
-                    v = nf_div(s8, (float)c8);
+                if (win_count > 0) {
+                    v = nf_div(win_sum, (float)win_count);
                 }
             }
             float mean = nf_div(sum, (float)cnt);
             float dd = nf_sub(mean, v);
-            v9 = nf_fma231(v, dd, p2);
+            window_out = nf_fma231(v, dd, p2);
         } else {
-            v9 = nf_div(sum, (float)cnt);
+            window_out = nf_div(sum, (float)cnt);
         }
-        out[(size_t)i * ost] = v9;
+        out[(size_t)i * ost] = window_out;
     }
 }
 
 /* Pass job x: one work item per row. aux is the running sum plane of the weights (guide). */
 __kernel void esh_filter_x_f32(__global const float* src, __global float* dst, __global const float* aux,
-                               uint w, uint h, float p0, float p1, float p2) {
+                               uint w, uint h, float p0, float y_value, float p2) {
     size_t row = get_global_id(0);
     if (row >= h) {
         return;
     }
     size_t o = row * (size_t)w;
-    esh_filter3(src + o, 1, dst + o, 1, aux + o, 1, (int)w, p0, p1, p2);
+    esh_filter3(src + o, 1, dst + o, 1, aux + o, 1, (int)w, p0, y_value, p2);
 }
 
 /* Pass job y: one work item per column; the guide is column major. */
 __kernel void esh_filter_y_f32(__global const float* src, __global float* dst, __global const float* aux,
-                               uint w, uint h, float p0, float p1, float p2) {
+                               uint w, uint h, float p0, float y_value, float p2) {
     size_t col = get_global_id(0);
     if (col >= w) {
         return;
     }
-    esh_filter3(src + col, (size_t)w, dst + col, (size_t)w, aux + col * (size_t)h, 1, (int)h, p0, p1, p2);
+    esh_filter3(src + col, (size_t)w, dst + col, (size_t)w, aux + col * (size_t)h, 1, (int)h, p0, y_value, p2);
 }
 
 float esh_tanh_elem(float s0, float x) {
-    float t1 = nf_mul(s0, x);
-    t1 = nf_mul(as_float(0x3fb8aa3bu), t1);
-    float p = as_float(as_uint(t1) ^ 0x80000000u);
+    float acc_b = nf_mul(s0, x);
+    acc_b = nf_mul(as_float(0x3fb8aa3bu), acc_b);
+    float p = as_float(as_uint(acc_b) ^ 0x80000000u);
     float off = (0x0p+0f > p) ? 0x1p+0f : 0x0p+0f;
     float c_floor = as_float(0xc2fc0000u);
     float clipp = (c_floor > p) ? c_floor : p;
     int wi = cvtt_i32_f(clipp);
     float wf = (float)wi;
     float u = nf_sub(clipp, wf);
-    float a1 = nf_add(as_float(0x42f28c51u), clipp);
-    float z0 = nf_add(u, off);
+    float ra_pass1 = nf_add(as_float(0x42f28c51u), clipp);
+    float sum_0 = nf_add(u, off);
     float r = nf_sub(as_float(0x409af5f8u), clipp);
-    float x3 = nf_add(r, wf);
-    float x4 = nf_sub(x3, off);
-    float q = nf_div(as_float(0x41ddd2feu), x4);
-    float v = nf_add(a1, q);
-    v = nf_fma231(v, -z0, as_float(0x3fbebc8du));
+    float aspect_scale = nf_add(r, wf);
+    float nf_sub_4 = nf_sub(aspect_scale, off);
+    float q = nf_div(as_float(0x41ddd2feu), nf_sub_4);
+    float v = nf_add(ra_pass1, q);
+    v = nf_fma231(v, -sum_0, as_float(0x3fbebc8du));
     float m = nf_mul(0x1p+23f, v);
     long l = cvtt_i64_f(m);
     uint lo = (uint)((ulong)l);

@@ -16,7 +16,7 @@ use crate::device_ops::{ArgShape, DevArg, DeviceOp};
 use crate::kernels;
 use crate::kernels2::{cvt_i32, geom_of, Out};
 use crate::types::{Arg, DevMipVal, Image, KParams, MipImage};
-use fx_device::cl::{Access, Arg as ClArg, Buffer};
+use fx_device::ocl::{Access, Arg as ClArg, Buffer};
 use fx_device::selfcheck::{adversarial_f32, compare_f32, Mismatch, NanPayloads, Tally};
 use fx_device::sim::Rng;
 use fx_device::{DevError, DevImage, Session};
@@ -109,18 +109,18 @@ fn mm_plan(c: &NodeCall, args: &[DevArg]) -> Result<MmPlan, DevError> {
     if w == 0 || h == 0 || w * h != c.n || w >= (1 << 24) || h >= (1 << 24) {
         return Err(unsup("frame outside the kernel's range"));
     }
-    let ch = match &args[0] {
+    let chan = match &args[0] {
         DevArg::Img(d) if d.n == c.n => d.channels(),
         DevArg::Const { n, .. } => (*n).max(1),
         _ => return Err(unsup("the source is not an image of the frame size")),
     };
-    if !(1..=4).contains(&ch) {
+    if !(1..=4).contains(&chan) {
         return Err(unsup("channel count outside 1..4"));
     }
     let wx = cvt_i32(lane(&args[1], 0).ok_or_else(|| unsup("wrap is not a constant"))?);
     let wy = cvt_i32(lane(&args[1], 1).ok_or_else(|| unsup("wrap is not a constant"))?);
     let filter = cvt_i32(lane(&args[2], 0).ok_or_else(|| unsup("filter is not a constant"))?);
-    let o = make_mipmap::mm2::ObjParams { w: w as i32, h: h as i32, c: ch, d0: 1 };
+    let o = make_mipmap::mm2::ObjParams { w: w as i32, h: h as i32, c: chan, obj_scale: 1 };
     let a = make_mipmap::mm2::alloc(&o, filter, make_mipmap::mm2::Mut2::None).map_err(|_| unsup("allocator refused (the CPU reports it)"))?;
     if a.widths.iter().chain(a.heights.iter()).any(|&v| v <= 0) {
         return Err(unsup("non positive level extent (the CPU reports it)"));
@@ -140,26 +140,26 @@ fn mm_plan(c: &NodeCall, args: &[DevArg]) -> Result<MmPlan, DevError> {
         }
     }
     let mut pad = [0u32; 4];
-    for (k, p) in pad.iter_mut().enumerate().take(ch) {
+    for (k, p) in pad.iter_mut().enumerate().take(chan) {
         *p = c.kp.pad_pixel[k].to_bits();
     }
-    let total: u64 = widths.iter().map(|&wl| heights.iter().map(|&hj| ((hj + make_mipmap::EXTRA_ROWS) * (wl + 3) * ch) as u64).sum::<u64>()).sum();
+    let total: u64 = widths.iter().map(|&wl| heights.iter().map(|&hj| ((hj + make_mipmap::EXTRA_ROWS) * (wl + 3) * chan) as u64).sum::<u64>()).sum();
     if total == 0 || total >= (1u64 << 31) {
         return Err(unsup("ripmap larger than the kernel's index range"));
     }
-    Ok(MmPlan { w, h, c: ch, wx, wy, filter, widths, heights, scale: a.scale, pad })
+    Ok(MmPlan { w, h, c: chan, wx, wy, filter, widths, heights, scale: a.scale, pad })
 }
 
 pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage, DevError> {
     let p = mm_plan(c, args)?;
-    let (nl, np, ch) = (p.widths.len(), p.heights.len(), p.c);
-    let stride = |l: usize| ((p.widths[l] + 3) * ch) as u32;
+    let (nl, np, chan) = (p.widths.len(), p.heights.len(), p.c);
+    let stride = |l: usize| ((p.widths[l] + 3) * chan) as u32;
     let mut offs = Vec::with_capacity(nl * np);
     let mut at = 0u32;
     for l in 0..nl {
         for j in 0..np {
             offs.push(at);
-            at += ((p.heights[j] + make_mipmap::EXTRA_ROWS) * (p.widths[l] + 3) * ch) as u32;
+            at += ((p.heights[j] + make_mipmap::EXTRA_ROWS) * (p.widths[l] + 3) * chan) as u32;
         }
     }
     let total = at as usize;
@@ -168,7 +168,7 @@ pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
     let src: &DevImage = match &args[0] {
         DevArg::Img(d) => d,
         DevArg::Const { lanes, .. } => {
-            let im = Image::from_const(lanes, ch, c.n);
+            let im = Image::from_const(lanes, chan, c.n);
             bcast = DevImage::upload(s, &im.planes.iter().map(|p| p.as_slice()).collect::<Vec<_>>())?;
             &bcast
         }
@@ -177,15 +177,15 @@ pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
     let rip = DevImage::alloc(s, 1, total)?;
     let rb = rip.plane(0);
     let padb = Buffer::from_slice(&s.context, &p.pad[..], Access::ReadOnly)?;
-    let zero = (0..ch).all(|k| f32::from_bits(p.pad[k]) == 0.0);
-    let sp = |k: usize| src.plane(k.min(ch - 1)).arg();
+    let zero = (0..chan).all(|k| f32::from_bits(p.pad[k]) == 0.0);
+    let src_arg = |k: usize| src.plane(k.min(chan - 1)).arg();
     s.launch("ripmap_mm_fill", total, &[rb.arg(), ClArg::U32(total as u32)])?;
-    s.launch("ripmap_mm_base", c.n, &[sp(0), sp(1), sp(2), sp(3), rb.arg(), ClArg::I32(p.w as i32), ClArg::I32(p.h as i32), ClArg::I32(ch as i32), ClArg::U32(stride(0))])?;
+    s.launch("ripmap_mm_base", c.n, &[src_arg(0), src_arg(1), src_arg(2), src_arg(3), rb.arg(), ClArg::I32(p.w as i32), ClArg::I32(p.h as i32), ClArg::I32(chan as i32), ClArg::U32(stride(0))])?;
     let padcols = |l: usize, j: usize, rows: usize| -> Result<(), DevError> {
         s.launch(
             "ripmap_mm_padcols",
-            rows * ch,
-            &[rb.arg(), ClArg::U32(offs[l * np + j]), ClArg::I32(p.widths[l] as i32), ClArg::I32(ch as i32), ClArg::U32(stride(l)), ClArg::I32(rows as i32), ClArg::I32(p.wx), padb.arg()],
+            rows * chan,
+            &[rb.arg(), ClArg::U32(offs[l * np + j]), ClArg::I32(p.widths[l] as i32), ClArg::I32(chan as i32), ClArg::U32(stride(l)), ClArg::I32(rows as i32), ClArg::I32(p.wx), padb.arg()],
         )?;
         Ok(())
     };
@@ -193,7 +193,7 @@ pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
         s.launch(
             "ripmap_mm_padrows",
             3 * stride(l) as usize,
-            &[rb.arg(), ClArg::U32(offs[l * np + j]), ClArg::I32(p.heights[j] as i32), ClArg::I32(ch as i32), ClArg::U32(stride(l)), ClArg::I32(p.wy), ClArg::I32(zero as i32), padb.arg()],
+            &[rb.arg(), ClArg::U32(offs[l * np + j]), ClArg::I32(p.heights[j] as i32), ClArg::I32(chan as i32), ClArg::U32(stride(l)), ClArg::I32(p.wy), ClArg::I32(zero as i32), padb.arg()],
         )?;
         Ok(())
     };
@@ -203,8 +203,8 @@ pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
         for l in 1..nl {
             s.launch(
                 "ripmap_mm_hor",
-                p.widths[l] * ch * p.heights[0],
-                &[rb.arg(), ClArg::U32(offs[(l - 1) * np]), ClArg::U32(stride(l - 1)), ClArg::U32(offs[l * np]), ClArg::U32(stride(l)), ClArg::I32(p.widths[l] as i32), ClArg::I32(p.heights[0] as i32), ClArg::I32(ch as i32)],
+                p.widths[l] * chan * p.heights[0],
+                &[rb.arg(), ClArg::U32(offs[(l - 1) * np]), ClArg::U32(stride(l - 1)), ClArg::U32(offs[l * np]), ClArg::U32(stride(l)), ClArg::I32(p.widths[l] as i32), ClArg::I32(p.heights[0] as i32), ClArg::I32(chan as i32)],
             )?;
             padcols(l, 0, p.heights[0])?;
             padrows(l, 0)?;
@@ -213,8 +213,8 @@ pub fn make_mipmap_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
             for l in 0..nl {
                 s.launch(
                     "ripmap_mm_ver",
-                    p.widths[l] * ch * p.heights[j],
-                    &[rb.arg(), ClArg::U32(offs[l * np + j - 1]), ClArg::U32(offs[l * np + j]), ClArg::U32(stride(l)), ClArg::I32(p.widths[l] as i32), ClArg::I32(p.heights[j] as i32), ClArg::I32(ch as i32)],
+                    p.widths[l] * chan * p.heights[j],
+                    &[rb.arg(), ClArg::U32(offs[l * np + j - 1]), ClArg::U32(offs[l * np + j]), ClArg::U32(stride(l)), ClArg::I32(p.widths[l] as i32), ClArg::I32(p.heights[j] as i32), ClArg::I32(chan as i32)],
                 )?;
                 padcols(l, j, p.heights[j])?;
             }
@@ -270,12 +270,12 @@ pub fn blur_warp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<
     if mipref.width() != w || mipref.height() != h || w * h != n || w == 0 || h == 0 || n >= u32::MAX as usize {
         return Err(unsup("ripmap built for another frame size"));
     }
-    let ch = mipref.channels();
-    if !(1..=4).contains(&ch) || ch as i32 != c.tag {
+    let chan = mipref.channels();
+    if !(1..=4).contains(&chan) || chan as i32 != c.tag {
         return Err(unsup("tag differs from the ripmap channels"));
     }
-    let (plane_len, w0, h0) = mipref.plane0_shape().ok_or_else(|| unsup("ripmap without level 0"))?;
-    if plane_len == 0 || plane_len >= i32::MAX as usize || w >= (1 << 24) || h >= (1 << 24) || w0 >= (1 << 24) || h0 >= (1 << 24) {
+    let (plane_len, plane_w, plane_h) = mipref.plane0_shape().ok_or_else(|| unsup("ripmap without level 0"))?;
+    if plane_len == 0 || plane_len >= i32::MAX as usize || w >= (1 << 24) || h >= (1 << 24) || plane_w >= (1 << 24) || plane_h >= (1 << 24) {
         return Err(unsup("frame or ripmap plane outside the kernel's index range"));
     }
     let l = |i: usize, k: usize| lane(&args[i], k).ok_or_else(|| unsup("a parameter operand is not a constant"));
@@ -293,12 +293,12 @@ pub fn blur_warp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<
             _ => Err(unsup("endpoint operand must be a constant or a 2 channel image of the frame size")),
         }
     };
-    let (p1c, p1x0, p1y0, _) = endpoint(&args[1])?;
-    let (p2c, p2x0, p2y0, _) = endpoint(&args[2])?;
+    let (first_is_const, p1x0, p1y0, _) = endpoint(&args[1])?;
+    let (second_is_const, p2x0, p2y0, _) = endpoint(&args[2])?;
     let g = geom_of(c.kp, w, h);
-    let cw = ch as i32;
-    let stride = cw.wrapping_mul((w0 as i32).wrapping_add(3));
-    let origin = cw as i64 + cw as i64 * (w0 as i64 + 3);
+    let cw = chan as i32;
+    let stride = cw.wrapping_mul((plane_w as i32).wrapping_add(3));
+    let origin = cw as i64 + cw as i64 * (plane_w as i64 + 3);
     let ip: Vec<i32> = vec![
         cw,
         plane_len as i32,
@@ -306,8 +306,8 @@ pub fn blur_warp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<
         stride,
         w as i32,
         h as i32,
-        w0 as i32,
-        h0 as i32,
+        plane_w as i32,
+        plane_h as i32,
         mode_x,
         mode_y,
         flag_cell_a,
@@ -315,8 +315,8 @@ pub fn blur_warp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<
         (mode_y == 2) as i32,
         (mode_x == 1) as i32,
         (mode_y == 1) as i32,
-        p1c as i32,
-        p2c as i32,
+        first_is_const as i32,
+        second_is_const as i32,
         g.roi_x,
         g.roi_y,
         n as i32,
@@ -343,9 +343,9 @@ pub fn blur_warp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<
             _ => dm.arg(),
         }
     }
-    let out = DevImage::alloc(s, ch, n)?;
+    let out = DevImage::alloc(s, chan, n)?;
     let err = ErrCell::new(s)?;
-    let o = |k: usize| out.plane(k.min(ch - 1)).arg();
+    let o = |k: usize| out.plane(k.min(chan - 1)).arg();
     s.launch(
         "ripmap_blur_warp_f32",
         n,
@@ -405,14 +405,14 @@ fn call_cpu(class: &str, tag: i32, args: &[Kb], dims: (usize, usize), kp: &KPara
     kernels::run_any(class, tag, &cpu, dims.0 * dims.1, dims, kp)
 }
 
-fn src_image(r: &mut Rng, ch: usize, n: usize, dirty: bool) -> Image {
-    let sp = adversarial_f32(40, r.next_u64());
-    let planes = (0..ch)
+fn src_image(r: &mut Rng, chan: usize, n: usize, dirty: bool) -> Image {
+    let src_arg = adversarial_f32(40, r.next_u64());
+    let planes = (0..chan)
         .map(|_| {
             (0..n)
                 .map(|_| {
                     if dirty && r.below(7) == 0 {
-                        sp[r.next_u32() as usize % sp.len()]
+                        src_arg[r.next_u32() as usize % src_arg.len()]
                     } else {
                         span(r, -0.5, 1.5)
                     }
@@ -426,9 +426,9 @@ fn src_image(r: &mut Rng, ch: usize, n: usize, dirty: bool) -> Image {
 /// A source whose words come from the NaN pool (NaN of both signs, quiet and signalling, several payloads, both infinities,
 /// both zeros, subnormals) on `num` of `den` samples and from [-0.5, 1.5) elsewhere, so that NaN meets NaN, a finite value
 /// and an infinity in every operand position of the 2:1 sums and of the sampler's taps.
-fn nan_src(r: &mut Rng, ch: usize, n: usize, num: u64, den: u64) -> Image {
+fn nan_src(r: &mut Rng, chan: usize, n: usize, num: u64, den: u64) -> Image {
     let pool = &crate::device_ops_pointwise::NAN_POOL;
-    let planes = (0..ch).map(|_| (0..n).map(|_| if r.below(den) < num { f32::from_bits(pool[r.next_u32() as usize % pool.len()]) } else { span(r, -0.5, 1.5) }).collect()).collect();
+    let planes = (0..chan).map(|_| (0..n).map(|_| if r.below(den) < num { f32::from_bits(pool[r.next_u32() as usize % pool.len()]) } else { span(r, -0.5, 1.5) }).collect()).collect();
     Image { n, planes }
 }
 
@@ -442,23 +442,23 @@ fn mm_nan_cases() -> Vec<KbCase> {
     let pads: [[f32; 4]; 3] = [[0.25, -0.5, 2.0, 1.0], [0.0, 0.0, 0.0, 0.0], [f32::from_bits(0x7fc0_0123), f32::from_bits(0xff80_0001), -0.0, f32::INFINITY]];
     let mut k = 0usize;
     for &(w, h) in &frames {
-        for ch in 1..=4usize {
+        for chan in 1..=4usize {
             for &(wx, wy) in &wraps {
                 k += 1;
                 let filter = [1.0f32, 0.0, 1.0][k % 3];
-                let mut kp = KParams::standin();
+                let mut kp = KParams::host_defaults();
                 kp.pad_pixel = pads[k % pads.len()];
                 let (num, den) = [(1, 1), (1, 2), (1, 5)][k % 3];
-                let src = nan_src(&mut r, ch, w * h, num, den);
+                let src = nan_src(&mut r, chan, w * h, num, den);
                 let args = vec![Kb::Img(src), cst(&[wx as f32, wy as f32]), cst(&[filter])];
-                out.push(KbCase { name: format!("make_mipmap nan {w}x{h} ch{ch} wrap({wx},{wy}) filter{filter} density {num}/{den}"), dims: (w, h), tag: ch as i32, args, kp, strict: true });
+                out.push(KbCase { name: format!("make_mipmap nan {w}x{h} ch{chan} wrap({wx},{wy}) filter{filter} density {num}/{den}"), dims: (w, h), tag: chan as i32, args, kp, strict: true });
             }
         }
     }
     // constant NaN sources (the broadcast image) of every lane count
-    for ch in 1..=4usize {
-        let lanes: Vec<f32> = [0x7f80_0001u32, 0xffc0_beef, 0x7fc0_0000, 0xff80_0000][..ch].iter().map(|b| f32::from_bits(*b)).collect();
-        out.push(KbCase { name: format!("make_mipmap nan constant ch{ch}"), dims: (5, 3), tag: ch as i32, args: vec![cst(&lanes), cst(&[1.0, 2.0]), cst(&[1.0])], kp: KParams::standin(), strict: true });
+    for chan in 1..=4usize {
+        let lanes: Vec<f32> = [0x7f80_0001u32, 0xffc0_beef, 0x7fc0_0000, 0xff80_0000][..chan].iter().map(|b| f32::from_bits(*b)).collect();
+        out.push(KbCase { name: format!("make_mipmap nan constant ch{chan}"), dims: (5, 3), tag: chan as i32, args: vec![cst(&lanes), cst(&[1.0, 2.0]), cst(&[1.0])], kp: KParams::host_defaults(), strict: true });
     }
     out
 }
@@ -474,28 +474,28 @@ fn mm_cases() -> Vec<KbCase> {
     let mut k = 0usize;
     for &(w, h) in MM_FRAMES {
         let n = w * h;
-        for ch in 1..=4usize {
+        for chan in 1..=4usize {
             for &(wx, wy) in &wraps {
                 k += 1;
-                if (k + ch) % 3 != 0 && w * h > 60 {
+                if (k + chan) % 3 != 0 && w * h > 60 {
                     continue;
                 }
                 let filter = [1.0f32, 0.0, 1.0, 2.0, 1.0][k % 5];
-                let mut kp = KParams::standin();
+                let mut kp = KParams::host_defaults();
                 kp.pad_pixel = pads[k % pads.len()];
                 let dirty = k % 4 == 3;
-                let src = src_image(&mut r, ch, n, dirty);
-                let args = if k % 11 == 10 { vec![cst(&[0.375, 2.0, -1.0, 4.0][..ch]), cst(&[wx as f32, wy as f32]), cst(&[filter])] } else { vec![Kb::Img(src), cst(&[wx as f32, wy as f32]), cst(&[filter])] };
-                out.push(KbCase { name: format!("make_mipmap {w}x{h} ch{ch} wrap({wx},{wy}) filter{filter} pad{}", k % pads.len()), dims: (w, h), tag: ch as i32, args, kp, strict: !dirty });
+                let src = src_image(&mut r, chan, n, dirty);
+                let args = if k % 11 == 10 { vec![cst(&[0.375, 2.0, -1.0, 4.0][..chan]), cst(&[wx as f32, wy as f32]), cst(&[filter])] } else { vec![Kb::Img(src), cst(&[wx as f32, wy as f32]), cst(&[filter])] };
+                out.push(KbCase { name: format!("make_mipmap {w}x{h} ch{chan} wrap({wx},{wy}) filter{filter} pad{}", k % pads.len()), dims: (w, h), tag: chan as i32, args, kp, strict: !dirty });
             }
         }
     }
     out
 }
 
-fn mip_of(src: &Image, ch: usize, wrap: (i32, i32), dims: (usize, usize), kp: &KParams) -> Option<MipImage> {
+fn mip_of(src: &Image, chan: usize, wrap: (i32, i32), dims: (usize, usize), kp: &KParams) -> Option<MipImage> {
     let args = [Kb::Img(src.clone()), cst(&[wrap.0 as f32, wrap.1 as f32]), cst(&[0.0])];
-    match call_cpu("make_mipmap", ch as i32, &args, dims, kp) {
+    match call_cpu("make_mipmap", chan as i32, &args, dims, kp) {
         Ok(Out::Mip(m)) => Some(m),
         _ => None,
     }
@@ -518,13 +518,13 @@ fn bw_cases() -> Vec<KbCase> {
     let mut k = 0usize;
     for &(w, h) in BW_FRAMES {
         let n = w * h;
-        for ch in 1..=4usize {
+        for chan in 1..=4usize {
             for &(mx, my) in &modes {
                 k += 1;
                 if w * h > 200 && k % 2 == 1 {
                     continue;
                 }
-                let mut kp = KParams::standin();
+                let mut kp = KParams::host_defaults();
                 kp.geom = geom_variant(k, w);
                 kp.pad_pixel = [0.25, -0.5, 2.0, 1.0];
                 let wrap = (mx.clamp(0, 2), my.clamp(0, 2));
@@ -532,41 +532,41 @@ fn bw_cases() -> Vec<KbCase> {
                     // kind 0: image endpoints near the frame, 1: constant endpoints, 2: long segments, 3: image p1 and constant p2,
                     // 4: p2 equal to p1 on some samples (zero length), 5: adversarial values
                     let dirty = kind == 5;
-                    let src = src_image(&mut r, ch, n, dirty && k % 2 == 0);
-                    let Some(mip) = mip_of(&src, ch, wrap, (w, h), &kp) else { continue };
-                    let sp = adversarial_f32(30, r.next_u64());
+                    let src = src_image(&mut r, chan, n, dirty && k % 2 == 0);
+                    let Some(mip) = mip_of(&src, chan, wrap, (w, h), &kp) else { continue };
+                    let src_arg = adversarial_f32(30, r.next_u64());
                     let coord = |r: &mut Rng, lo: f32, hi: f32| -> f32 {
                         if kind == 5 && r.below(3) == 0 {
-                            sp[r.next_u32() as usize % sp.len()]
+                            src_arg[r.next_u32() as usize % src_arg.len()]
                         } else {
                             span(r, lo, hi)
                         }
                     };
                     let range = if kind == 2 { 3.0 } else { 1.3 };
-                    let p1 = Image { n, planes: vec![plane_of(&mut r, n, &mut |r| coord(r, -range, range)), plane_of(&mut r, n, &mut |r| coord(r, -range, range))] };
+                    let coord_img = Image { n, planes: vec![plane_of(&mut r, n, &mut |r| coord(r, -range, range)), plane_of(&mut r, n, &mut |r| coord(r, -range, range))] };
                     let mut p2 = Image { n, planes: vec![plane_of(&mut r, n, &mut |r| coord(r, -range, range)), plane_of(&mut r, n, &mut |r| coord(r, -range, range))] };
                     if kind == 4 {
                         for i in 0..n {
                             if r.below(3) == 0 {
-                                p2.planes[0][i] = p1.planes[0][i];
-                                p2.planes[1][i] = p1.planes[1][i];
+                                p2.planes[0][i] = coord_img.planes[0][i];
+                                p2.planes[1][i] = coord_img.planes[1][i];
                             } else if r.below(3) == 0 {
                                 // nearly equal: sub-pixel segment
-                                p2.planes[0][i] = p1.planes[0][i] + span(&mut r, -1.0e-3, 1.0e-3);
-                                p2.planes[1][i] = p1.planes[1][i] + span(&mut r, -1.0e-3, 1.0e-3);
+                                p2.planes[0][i] = coord_img.planes[0][i] + span(&mut r, -1.0e-3, 1.0e-3);
+                                p2.planes[1][i] = coord_img.planes[1][i] + span(&mut r, -1.0e-3, 1.0e-3);
                             }
                         }
                     }
-                    let (e1, e2) = match kind {
+                    let (arg_u, arg_v) = match kind {
                         1 => (cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)]), cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)])),
-                        3 => (Kb::Img(p1), cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)])),
-                        _ => (Kb::Img(p1), Kb::Img(p2)),
+                        3 => (Kb::Img(coord_img), cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)])),
+                        _ => (Kb::Img(coord_img), Kb::Img(p2)),
                     };
-                    let (a0, a1) = ramps[(k + kind) % ramps.len()];
+                    let (ramp_lo, ramp_hi) = ramps[(k + kind) % ramps.len()];
                     let flag = [1.0f32, 0.0, 2.0, 1.0][(k + kind) % 4];
                     let scale = [1.0f32, 0.5, 2.0][k % 3];
-                    let args = vec![Kb::Mip(Box::new(mip)), e1, e2, cst(&[a0, a1]), cst(&[scale]), cst(&[mx as f32, my as f32]), cst(&[flag]), cst(&[0.0])];
-                    out.push(KbCase { name: format!("blur_warp {w}x{h} ch{ch} mode({mx},{my}) kind{kind} flag{flag} ramp({a0},{a1}) scale{scale}"), dims: (w, h), tag: ch as i32, args, kp, strict: kind < 2 && mx <= 2 && my <= 2 });
+                    let args = vec![Kb::Mip(Box::new(mip)), arg_u, arg_v, cst(&[ramp_lo, ramp_hi]), cst(&[scale]), cst(&[mx as f32, my as f32]), cst(&[flag]), cst(&[0.0])];
+                    out.push(KbCase { name: format!("blur_warp {w}x{h} ch{chan} mode({mx},{my}) kind{kind} flag{flag} ramp({ramp_lo},{ramp_hi}) scale{scale}"), dims: (w, h), tag: chan as i32, args, kp, strict: kind < 2 && mx <= 2 && my <= 2 });
                 }
             }
         }
@@ -585,34 +585,34 @@ fn bw_nan_cases() -> Vec<KbCase> {
     let mut k = 0usize;
     for &(w, h) in &frames {
         let n = w * h;
-        for ch in 1..=4usize {
+        for chan in 1..=4usize {
             for &(mx, my) in &modes {
                 for kind in 0..4 {
                     k += 1;
-                    let mut kp = KParams::standin();
+                    let mut kp = KParams::host_defaults();
                     kp.geom = geom_variant(k, w);
                     kp.pad_pixel = [0.25, -0.5, 2.0, 1.0];
                     let (num, den) = [(1, 1), (1, 3), (1, 12)][k % 3];
-                    let src = nan_src(&mut r, ch, n, num, den);
-                    let Some(mip) = mip_of(&src, ch, (mx, my), (w, h), &kp) else { continue };
+                    let src = nan_src(&mut r, chan, n, num, den);
+                    let Some(mip) = mip_of(&src, chan, (mx, my), (w, h), &kp) else { continue };
                     let range = if kind == 2 { 3.0 } else { 1.3 };
-                    let p1 = Image { n, planes: vec![plane_of(&mut r, n, &mut |r| span(r, -range, range)), plane_of(&mut r, n, &mut |r| span(r, -range, range))] };
+                    let coord_img = Image { n, planes: vec![plane_of(&mut r, n, &mut |r| span(r, -range, range)), plane_of(&mut r, n, &mut |r| span(r, -range, range))] };
                     let mut p2 = Image { n, planes: vec![plane_of(&mut r, n, &mut |r| span(r, -range, range)), plane_of(&mut r, n, &mut |r| span(r, -range, range))] };
                     if kind == 3 {
                         for i in 0..n {
                             if r.below(2) == 0 {
-                                p2.planes[0][i] = p1.planes[0][i];
-                                p2.planes[1][i] = p1.planes[1][i];
+                                p2.planes[0][i] = coord_img.planes[0][i];
+                                p2.planes[1][i] = coord_img.planes[1][i];
                             }
                         }
                     }
-                    let (e1, e2) = if kind == 1 { (cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)]), cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)])) } else { (Kb::Img(p1), Kb::Img(p2)) };
+                    let (arg_u, arg_v) = if kind == 1 { (cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)]), cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)])) } else { (Kb::Img(coord_img), Kb::Img(p2)) };
                     let ramps: [(f32, f32); 4] = [(1.0, 1.0), (0.5, 1.0), (0.0, 1.0), (2.0, 0.25)];
-                    let (a0, a1) = ramps[k % ramps.len()];
+                    let (ramp_lo, ramp_hi) = ramps[k % ramps.len()];
                     let flag = [1.0f32, 0.0, 2.0][k % 3];
                     let scale = [1.0f32, 0.5, 2.0][(k / 3) % 3];
-                    let args = vec![Kb::Mip(Box::new(mip)), e1, e2, cst(&[a0, a1]), cst(&[scale]), cst(&[mx as f32, my as f32]), cst(&[flag]), cst(&[0.0])];
-                    out.push(KbCase { name: format!("blur_warp nan {w}x{h} ch{ch} mode({mx},{my}) kind{kind} flag{flag} ramp({a0},{a1}) scale{scale} density {num}/{den}"), dims: (w, h), tag: ch as i32, args, kp, strict: false });
+                    let args = vec![Kb::Mip(Box::new(mip)), arg_u, arg_v, cst(&[ramp_lo, ramp_hi]), cst(&[scale]), cst(&[mx as f32, my as f32]), cst(&[flag]), cst(&[0.0])];
+                    out.push(KbCase { name: format!("blur_warp nan {w}x{h} ch{chan} mode({mx},{my}) kind{kind} flag{flag} ramp({ramp_lo},{ramp_hi}) scale{scale} density {num}/{den}"), dims: (w, h), tag: chan as i32, args, kp, strict: false });
                 }
             }
         }

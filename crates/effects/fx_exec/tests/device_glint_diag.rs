@@ -251,7 +251,7 @@ fn the_glint_diagonal_helpers_equal_the_cpu_crates() {
 
 const STUB: &str = r#"
 __kernel void glint_diag_band_f32(__global const float* src, __global float* dst, __global float* scratch, __global const uint* phases,
-    __global uint* err, int w, int h, long slen, long dlen, int mirrored, int band_start, long first, long nitems, int r0, int r1, int r2,
+    __global uint* err, int w, int h, long slen, long dlen, int mirrored, int band_start, long first, long nitems, int radius0, int radius1, int radius2,
     long dd, uint fbits, long cap) {
     long g = (long)get_global_id(0);
     if (g < nitems && g < dlen) { dst[g] = 0.0f; }
@@ -260,7 +260,7 @@ __kernel void glint_diag_edge_f32(__global const float* src, __global float* dst
     int mirrored) {
 }
 __kernel void diag_box_sum_f32(__global float* img, __global float* scratch, __global const uint* phases, int w, int h, int m, int kind,
-    int base_t, long a, int r0, int r1, int r2, int shift_nz, uint sbits, int rcl, long first, long nitems) {
+    int base_t, long a, int radius0, int radius1, int radius2, int shift_nz, uint sbits, int rcl, long first, long nitems) {
     long g = (long)get_global_id(0);
     if (g < nitems) { img[g] = 0.0f; }
 }
@@ -294,7 +294,7 @@ const MUTANTS: &[(&str, &str, &str)] = &[
     ("compare direction of the lower tap", "int lo = lo_i >= 0;", "int lo = lo_i > 0;"),
     ("index of the shrink step subtrahend", "s = nanx_sub(s, x[mid_start + j]);", "s = nanx_sub(s, x[mid_start + j + 1]);"),
     ("compare direction of the bottom edge test", "if (b_ + (l >> 1) < (long)h - 1) {", "if (b_ + (l >> 1) <= (long)h - 1) {"),
-    ("NaN operand order of the first mirrored word", "rb[0] = nanx_mul(0x1p-1f, nanx_add(x0, x1));", "rb[0] = nanx_mul(0x1p-1f, nanx_add(x1, x0));"),
+    ("NaN operand order of the first mirrored word", "rb[0] = nanx_mul(0x1p-1f, nanx_add(sample_first, sample_second));", "rb[0] = nanx_mul(0x1p-1f, nanx_add(sample_second, sample_first));"),
     ("NaN operand order of the odd step", "ra[2 * k + 1] = nanx_mul(0x1p-1f, nanx_add(x, y));", "ra[2 * k + 1] = nanx_mul(0x1p-1f, nanx_add(y, x));"),
 ];
 

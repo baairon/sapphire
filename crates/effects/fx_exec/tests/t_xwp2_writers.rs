@@ -17,20 +17,20 @@ fn writers_keep_their_consumers_and_bases_and_the_preserve_writer_is_reused() {
     // render 1: every writer runs at its listed base with the head form of its placement
     *XY_LIST.lock().unwrap() = Some((vec![(5, false), (9, false), (11, false)], 1));
     compile_for(&g, &b).expect("render 1");
-    let w1 = XY_WRITERS.lock().unwrap().clone();
-    assert_eq!(w1.len(), 3, "one entry per writer, no merge of the consumers");
-    assert_eq!(w1[0].0, vec![(87usize, 0usize), (87, 1)]);
-    assert_eq!(w1[1].0, vec![(98usize, 0usize)]);
-    assert_eq!(w1[2].0, vec![(95usize, 0usize)]);
-    assert_eq!(w1.iter().map(|w| w.1).collect::<Vec<_>>(), vec![5, 9, 11]);
-    assert_eq!(w1.iter().map(|w| w.2).collect::<Vec<_>>(), vec![XyHeadMode::PerRow, XyHeadMode::PerRow, XyHeadMode::OneHead]);
-    assert_eq!(w1.iter().map(|w| w.3).collect::<Vec<_>>(), vec![false, false, true]);
+    let diff_1 = XY_WRITERS.lock().unwrap().clone();
+    assert_eq!(diff_1.len(), 3, "one entry per writer, no merge of the consumers");
+    assert_eq!(diff_1[0].0, vec![(87usize, 0usize), (87, 1)]);
+    assert_eq!(diff_1[1].0, vec![(98usize, 0usize)]);
+    assert_eq!(diff_1[2].0, vec![(95usize, 0usize)]);
+    assert_eq!(diff_1.iter().map(|w| w.1).collect::<Vec<_>>(), vec![5, 9, 11]);
+    assert_eq!(diff_1.iter().map(|w| w.2).collect::<Vec<_>>(), vec![XyHeadMode::PerRow, XyHeadMode::PerRow, XyHeadMode::OneHead]);
+    assert_eq!(diff_1.iter().map(|w| w.3).collect::<Vec<_>>(), vec![false, false, true]);
     // render 2: the preserve writer carries its render 1 base, marked reused
     *XY_LIST.lock().unwrap() = Some((vec![(5, false), (9, false), (11, true)], 2));
     compile_for(&g, &b).expect("render 2");
-    let w2 = XY_WRITERS.lock().unwrap().clone();
-    assert_eq!(w2.len(), 3);
-    assert_eq!(w2.iter().map(|w| w.1).collect::<Vec<_>>(), vec![5, 9, 11], "the preserve writer keeps the render 1 base in render 2");
+    let writers = XY_WRITERS.lock().unwrap().clone();
+    assert_eq!(writers.len(), 3);
+    assert_eq!(writers.iter().map(|w| w.1).collect::<Vec<_>>(), vec![5, 9, 11], "the preserve writer keeps the render 1 base in render 2");
     // render 2 with the preserve entry not marked reused is refused
     *XY_LIST.lock().unwrap() = Some((vec![(5, false), (9, false), (11, false)], 2));
     let e = compile_for(&g, &b).err().expect("refused");

@@ -15,7 +15,7 @@
 //! `unsafe` code is confined to [`cl`]; `tests/no_unsafe.rs` scans every other file for it.
 
 #[allow(unsafe_code)]
-pub mod cl;
+pub mod ocl;
 pub mod checkcache;
 pub mod device;
 pub mod devcheck;

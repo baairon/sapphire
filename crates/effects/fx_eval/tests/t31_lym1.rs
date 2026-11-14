@@ -80,6 +80,6 @@ fn lym2_layout_order_matches_recorded_host_lists() {
     let po = sh.iter().position(|n| n == "opacity").unwrap();
     let pm = sh.iter().position(|n| n == "mask_use").unwrap();
     assert!(po < pm, "opacity before mask_use (host ids 52 then 540)");
-    let bl = order("Blur_Color_Autogen");
-    assert_eq!(&bl[bl.len() - 3..], ["mask_use", "soft_borders", "opacity"]);
+    let order_list = order("Blur_Color_Autogen");
+    assert_eq!(&order_list[order_list.len() - 3..], ["mask_use", "soft_borders", "opacity"]);
 }

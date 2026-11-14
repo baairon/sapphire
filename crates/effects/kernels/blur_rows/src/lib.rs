@@ -68,14 +68,14 @@ fn vadd(a: &V8, b: &V8) -> V8 {
 #[inline]
 fn hred(v: &V8) -> f32 {
     let t = [v[0].fadd(v[4]), v[1].fadd(v[5]), v[2].fadd(v[6]), v[3].fadd(v[7])];
-    let u0 = t[0].fadd(t[2]);
-    let u1 = t[1].fadd(t[3]);
-    u0.fadd(u1)
+    let nf_add_0 = t[0].fadd(t[2]);
+    let nf_add_1 = t[1].fadd(t[3]);
+    nf_add_0.fadd(nf_add_1)
 }
 
 /// Initial window sum S0 = sum of x[0..len] (len = r + 1), exact groupings of the listing.
-/// `phase` is the byte address of x modulo 32 (B-A4).
-/// len < 64, or an address that is not 4-byte aligned, or len < peel + 64: sequential scalar from +0.0 (.).
+/// `phase` is the byte position of x modulo 32 (B-A4).
+/// len < 64, or a start that is not 4-byte aligned, or len < peel + 64: sequential scalar from +0.0 (.).
 /// Otherwise: peel scalar elements up to 32-byte alignment, blocks of 64 floats, 8-float blocks, scalar tail, horizontal reduction.
 fn s0(x: &[f32], len: usize, edge: i32, phase: usize) -> f32 {
     let ph = phase & 31;
@@ -110,7 +110,7 @@ fn s0(x: &[f32], len: usize, edge: i32, phase: usize) -> f32 {
     let nb = (len - p) / 64;
     let end = p + 64 * nb;
     let rem = len - end;
-    let n8 = rem / 8;
+    let quot_8 = rem / 8;
     if edge == EDGE_MIRROR {
         // two chains: P over even 8-blocks (b0,b2,b4,b6), Q over odd 8-blocks 
         let mut pp = [0f32; 8];
@@ -121,10 +121,10 @@ fn s0(x: &[f32], len: usize, edge: i32, phase: usize) -> f32 {
             pp = vadd(&vadd(&vadd(&vadd(&pp, &blk(0)), &blk(2)), &blk(4)), &blk(6));
             qq = vadd(&vadd(&vadd(&vadd(&qq, &blk(1)), &blk(3)), &blk(5)), &blk(7));
         }
-        for k in 0..n8 {
+        for k in 0..quot_8 {
             pp = vadd(&pp, &vload(x, end + 8 * k));
         }
-        for i in (end + 8 * n8)..len {
+        for i in (end + 8 * quot_8)..len {
             acc = acc.fadd(x[i]);
         }
         let v = vadd(&pp, &qq);
@@ -138,15 +138,15 @@ fn s0(x: &[f32], len: usize, edge: i32, phase: usize) -> f32 {
                 a[j] = vadd(&a[j], &vload(x, b + 8 * j));
             }
         }
-        let c01 = vadd(&a[0], &a[1]);
-        let c23 = vadd(&a[2], &a[3]);
-        let c45 = vadd(&a[4], &a[5]);
-        let c67 = vadd(&a[6], &a[7]);
-        let mut v = vadd(&vadd(&c01, &c23), &vadd(&c45, &c67));
-        for k in 0..n8 {
+        let pair_sum_01 = vadd(&a[0], &a[1]);
+        let pair_sum_23 = vadd(&a[2], &a[3]);
+        let pair_sum_45 = vadd(&a[4], &a[5]);
+        let pair_sum_67 = vadd(&a[6], &a[7]);
+        let mut v = vadd(&vadd(&pair_sum_01, &pair_sum_23), &vadd(&pair_sum_45, &pair_sum_67));
+        for k in 0..quot_8 {
             v = vadd(&v, &vload(x, end + 8 * k));
         }
-        for i in (end + 8 * n8)..len {
+        for i in (end + 8 * quot_8)..len {
             acc = acc.fadd(x[i]);
         }
         hred(&v).fadd(acc)
@@ -154,7 +154,7 @@ fn s0(x: &[f32], len: usize, edge: i32, phase: usize) -> f32 {
 }
 
 /// Window sum: out[i] = sum of x over [i-r, i+r] with the edge rule, as a sliding sum with the listing's pair groupings.
-/// `in_phase` = byte address of `x` modulo 32 (B-A4), only used for r + 1 >= 64.
+/// `in_phase` = byte position of `x` modulo 32 (B-A4), only used for r + 1 >= 64.
 /// Listing: mode 1 head, middle, tail; mode 0 head, middle same, tail .
 pub fn box_row(x: &[f32], out: &mut [f32], r: i32, edge: i32, in_phase: usize) -> Result<(), RowsError> {
     let n = x.len();
@@ -261,7 +261,7 @@ pub struct JobX<'a> {
     pub b: &'a [i32],
     /// Blend coefficient per pass.
     pub c: &'a [f32],
-    /// Scratch base address modulo 32 in bytes (B-A4). Buffer idx lives at (base_phase + idx * stride) mod 32 with stride (4*width+15)&!15.
+    /// Scratch start position modulo 32 in bytes (B-A4). Buffer idx lives at (base_phase + idx * stride) mod 32 with stride (4*width+15)&!15.
     pub base_phase: usize,
 }
 

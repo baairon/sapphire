@@ -46,7 +46,7 @@ fn run(seed: u64) -> Vec<u32> {
         k(3, [0xbdab_1aa4, 0xc0a4_0000, 0xef92_db27, 0xbdab_1aa4]),
         k(1, [0; 4]),
     ];
-    let mut kp = KParams::standin();
+    let mut kp = KParams::host_defaults();
     kp.sharpen_count = Some(n);
     let Out::Img(out) = run_any("edge_aware_sharpen", 2, &args, n, (w, h), &kp).unwrap() else { panic!("not an image") };
     out.planes.iter().flat_map(|p| p.iter().map(|x| x.to_bits())).collect()

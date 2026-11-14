@@ -40,17 +40,17 @@ fn t1_known_three_plane() {
     assert_eq!((o[0][2], o[1][2], o[2][2]), (0.0, 0.0, 0.0)); // E = 0 -> zero
     // th = [0, 0, 0.9]: m = 0, k = 1. pixel (1, 1, 0.5): E = 2, S = 2.5, t = 2 -> scaled by 2/2.5
     let p2 = BrightParams { thresholds: [0.0, 0.0, 0.9] };
-    let o2 = run(&p2, &[vec![1.0], vec![1.0], vec![0.5]], 1, 1);
+    let small_out = run(&p2, &[vec![1.0], vec![1.0], vec![0.5]], 1, 1);
     let f = 2.0f32 / 2.5f32;
-    assert_eq!((o2[0][0], o2[1][0], o2[2][0]), (1.0 * f, f * 1.0, f * 0.5));
+    assert_eq!((small_out[0][0], small_out[1][0], small_out[2][0]), (1.0 * f, f * 1.0, f * 0.5));
 }
 #[test]
 fn t1_noop_when_thresholds_zero() {
     let src = mk(8, 3, 5);
     let o = run(&BrightParams { thresholds: [0.0, 5.0, 5.0] }, &[src.clone()], 8, 3);
     assert_eq!(o[0], src, "one plane reads only th0; th0 == 0 returns early");
-    let o3 = run(&BrightParams { thresholds: [0.0; 3] }, &[src.clone(), src.clone(), src.clone()], 8, 3);
-    assert!(o3.iter().all(|p| *p == src));
+    let pass_out = run(&BrightParams { thresholds: [0.0; 3] }, &[src.clone(), src.clone(), src.clone()], 8, 3);
+    assert!(pass_out.iter().all(|p| *p == src));
     let on = run(&BrightParams { thresholds: [-0.0, 0.0, 0.0] }, &[src.clone(), src.clone(), src.clone()], 8, 3);
     assert!(on.iter().all(|p| *p == src));
 }
@@ -73,8 +73,8 @@ fn t3_determinism_and_finite() {
     let a = run(&p, &planes, w, h);
     assert_eq!(a, run(&p, &planes, w, h));
     assert!(a.iter().all(|pl| pl.iter().all(|v| v.is_finite())));
-    let a1 = run(&p, &planes[..1], w, h);
-    assert!(a1[0].iter().all(|v| v.is_finite()));
+    let two_plane_out = run(&p, &planes[..1], w, h);
+    assert!(two_plane_out[0].iter().all(|v| v.is_finite()));
 }
 #[test]
 fn t3_all_below_threshold() {
@@ -82,8 +82,8 @@ fn t3_all_below_threshold() {
     let low = vec![0.25f32; w * h];
     let o = run(&BrightParams { thresholds: [0.5; 3] }, &[low.clone()], w, h);
     assert!(o[0].iter().all(|v| v.to_bits() == 0));
-    let o3 = run(&BrightParams { thresholds: [0.5; 3] }, &[low.clone(), low.clone(), low.clone()], w, h);
-    assert!(o3.iter().all(|p| p.iter().all(|v| v.to_bits() == 0)));
+    let pass_out = run(&BrightParams { thresholds: [0.5; 3] }, &[low.clone(), low.clone(), low.clone()], w, h);
+    assert!(pass_out.iter().all(|p| p.iter().all(|v| v.to_bits() == 0)));
 }
 #[test]
 fn t3_strided_padding_untouched() {

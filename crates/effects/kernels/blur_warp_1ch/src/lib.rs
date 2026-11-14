@@ -15,11 +15,11 @@ pub enum Rec {
     /// (xmm0 = x as f64 bits, xmm1 = y as f64 bits)
     Fmod { x: u64, y: u64 },
     /// (rdi = image, esi, edx)
-    ImgCellA { esi: u32, edx: u32 },
+    ImgCellA { tap_b: u32, copy_mode: u32 },
     /// (rdi = image, esi)
-    ImgCellB { esi: u32 },
+    ImgCellB { tap_b: u32 },
     /// (rdi = out object, esi = sample, rdx = image, ecx = mode x, r8d = mode y, xmm0 = x, xmm1 = y as f32 bits)
-    P1 { esi: u32, ecx: u32, r8: u32, x: u32, y: u32 },
+    P1 { tap_b: u32, x_mode: u32, y_mode: u32, x: u32, y: u32 },
 }
 
 /// this-object fields (offsets MEASURED) and image fields.
@@ -59,16 +59,16 @@ pub struct Inputs {
     pub p2x: Vec<f32>,
     pub p2y: Vec<f32>,
     /// r9b: p1 is constant (arrays only read at index 0)
-    pub p1_const: bool,
+    pub first_end_const: bool,
     /// stack byte: p2 is constant
-    pub p2_const: bool,
+    pub second_end_const: bool,
     /// stack (consumed by S6, carried)
     pub flag_cell_a: u32,
     /// stack edge modes (0 none, 1 wrap, 2 mirror)
     pub mode_x: i32,
     pub mode_y: i32,
     /// stand-ins for (data pointer) and (stride), see assumptions B2
-    pub acc_ptr: u64,
+    pub acc_buf_handle: u64,
     pub acc_stride: i32,
 }
 
@@ -93,21 +93,21 @@ pub struct S5State {
     pub p2y: f32,
     pub e2x: f32,
     pub e2y: f32,
-    pub dx: f32,
+    pub delta_x: f32,
     pub dy: f32,
     pub adx: f32,
     pub ady: f32,
     /// vcomiss adx, ady; jb: true goes to the Y-major sections 
     pub y_major: bool,
-    pub data_ptr: u64,
+    pub data_buf_handle: u64,
     pub width: i32,
     pub height: i32,
     pub stride: i32,
     pub scx: f32,
     pub scy: f32,
-    pub k_a1_a0: f32,
-    pub k_a2_a1: f32,
-    pub k_1_a3: f32,
+    pub a_gap_first: f32,
+    pub a_gap_second: f32,
+    pub one_minus_a_last: f32,
     pub scale: f32,
     pub flag_cell_a: u32,
     pub mode_x: i32,
@@ -120,7 +120,7 @@ pub struct Output {
     /// indexes of samples that took the zero-length P1 stub
     pub stub_samples: Vec<usize>,
     /// Some when a non-degenerate sample reached the end of S5 (the port stops there)
-    pub s5: Option<S5State>,
+    pub stage5_state: Option<S5State>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -213,9 +213,9 @@ pub fn wrap(recs: &mut Vec<Rec>, v: f32, dim: i32, mode: i32) -> Result<f32, Uns
 /// S0 scale constants: (scx = rbp, scy = rbp)
 pub fn s0_scales(p: &Params) -> (f32, f32) {
     let half = 0.5f32;
-    let x12 = half * p.aspect_block_d;
-    let x13 = p.assumption_g - p.assumption_f;
-    (half * x13, x12 * x13)
+    let prod_12 = half * p.aspect_block_d;
+    let diff_13 = p.assumption_g - p.assumption_f;
+    (half * diff_13, prod_12 * diff_13)
 }
 
 /// S2: wrapped x from the raw p1 x
@@ -235,29 +235,29 @@ pub fn s3_y(recs: &mut Vec<Rec>, p: &Params, inp: &Inputs, scy: f32, p1y: f32) -
     wrap(recs, y, p.img_h, inp.mode_y)
 }
 
-pub fn run(p: &Params, inp: &Inputs, mut p1: Option<&mut P1Env>) -> Result<Output, Unsupported> {
+pub fn run(p: &Params, inp: &Inputs, mut pass1_env: Option<&mut P1Env>) -> Result<Output, Unsupported> {
     let mut recs = Vec::new();
     let mut stubs = Vec::new();
     let (scx, scy) = s0_scales(p);
     recs.push(Rec::ScratchCellA); // 
-    let mut out = Output { recs: Vec::new(), stub_samples: Vec::new(), s5: None };
+    let mut out = Output { recs: Vec::new(), stub_samples: Vec::new(), stage5_state: None };
     if p.count <= 0 {
         out.recs = recs;
         return Ok(out);
     }
     let g = |v: &Vec<f32>, i: usize| v.get(i).copied().unwrap_or(0.0);
     let (mut l_p1x, mut l_p1y, mut l_p2x, mut l_p2y) = (g(&inp.p1x, 0), g(&inp.p1y, 0), g(&inp.p2x, 0), g(&inp.p2y, 0));
-    let k_1_a3 = 1.0f32 - inp.a[3];
-    let k_a1_a0 = inp.a[1] - inp.a[0];
-    let k_a2_a1 = inp.a[2] - inp.a[1];
+    let one_minus_a_last = 1.0f32 - inp.a[3];
+    let a_gap_first = inp.a[1] - inp.a[0];
+    let a_gap_second = inp.a[2] - inp.a[1];
     let mut i: usize = 0;
     loop {
         // S1
-        if !inp.p1_const {
+        if !inp.first_end_const {
             l_p1x = g(&inp.p1x, i);
             l_p1y = g(&inp.p1y, i);
         }
-        if !inp.p2_const {
+        if !inp.second_end_const {
             l_p2x = g(&inp.p2x, i);
             l_p2y = g(&inp.p2y, i);
         }
@@ -271,28 +271,28 @@ pub fn run(p: &Params, inp: &Inputs, mut p1: Option<&mut P1Env>) -> Result<Outpu
         let degenerate = x == e2x && y == e2y;
         if degenerate {
             // stub 
-            recs.push(Rec::P1 { esi: i as u32, ecx: inp.mode_x as u32, r8: inp.mode_y as u32, x: x.to_bits(), y: y.to_bits() });
-            if let Some(env) = p1.as_deref_mut() {
+            recs.push(Rec::P1 { tap_b: i as u32, x_mode: inp.mode_x as u32, y_mode: inp.mode_y as u32, x: x.to_bits(), y: y.to_bits() });
+            if let Some(env) = pass1_env.as_deref_mut() {
                 let mut refs: Vec<&mut [f32]> = env.out.iter_mut().map(|v| v.as_mut_slice()).collect();
                 blur_warp_point::render_point(&env.p, &env.g, &env.src, x, y, i, &mut refs);
                 drop(refs);
-                if let Some(o0) = env.out.get_mut(0) {
-                    o0[i] = inp.a[4] * o0[i];
+                if let Some(out_plane) = env.out.get_mut(0) {
+                    out_plane[i] = inp.a[4] * out_plane[i];
                 }
             }
             stubs.push(i);
         } else {
             // S5
-            recs.push(Rec::ImgCellA { esi: 0, edx: 0 });
-            recs.push(Rec::ImgCellB { esi: 0 });
-            let dx = e2x - x;
+            recs.push(Rec::ImgCellA { tap_b: 0, copy_mode: 0 });
+            recs.push(Rec::ImgCellB { tap_b: 0 });
+            let delta_x = e2x - x;
             let dy = e2y - y;
-            let adx = dx.abs();
+            let adx = delta_x.abs();
             let ady = dy.abs();
-            out.s5 = Some(S5State {
-                sample: i, x, y, p1x: l_p1x, p1y: l_p1y, p2x: l_p2x, p2y: l_p2y, e2x, e2y, dx, dy, adx, ady,
-                y_major: !(adx >= ady), data_ptr: inp.acc_ptr, width: p.img_w, height: p.img_h, stride: inp.acc_stride,
-                scx, scy, k_a1_a0, k_a2_a1, k_1_a3, scale: inp.a[4], flag_cell_a: inp.flag_cell_a, mode_x: inp.mode_x, mode_y: inp.mode_y,
+            out.stage5_state = Some(S5State {
+                sample: i, x, y, p1x: l_p1x, p1y: l_p1y, p2x: l_p2x, p2y: l_p2y, e2x, e2y, delta_x, dy, adx, ady,
+                y_major: !(adx >= ady), data_buf_handle: inp.acc_buf_handle, width: p.img_w, height: p.img_h, stride: inp.acc_stride,
+                scx, scy, a_gap_first, a_gap_second, one_minus_a_last, scale: inp.a[4], flag_cell_a: inp.flag_cell_a, mode_x: inp.mode_x, mode_y: inp.mode_y,
             });
             break;
         }
@@ -316,7 +316,7 @@ mod tests {
         let p = Params { count: 1, aspect_block_d: 2.0, assumption_e: 7.0, assumption_c: 0, assumption_d: 0, assumption_f: 0.0, assumption_g: 10.0, assumption_h: 0.0, img_w: 8, img_h: 6 };
         let inp = Inputs {
             a: [0.0, 1.0, 3.0, 0.5, 2.0], p1x: vec![0.25], p1y: vec![3.0], p2x: vec![0.25], p2y: vec![3.0],
-            p1_const: true, p2_const: true, flag_cell_a: 0, mode_x: 0, mode_y: 0, acc_ptr: 0x1000, acc_stride: 68,
+            first_end_const: true, second_end_const: true, flag_cell_a: 0, mode_x: 0, mode_y: 0, acc_buf_handle: 0x1000, acc_stride: 68,
         };
         (p, inp)
     }
@@ -360,9 +360,9 @@ mod tests {
         let (p, inp) = base();
         let o = run(&p, &inp, None).unwrap();
         assert_eq!(o.stub_samples, vec![0]);
-        assert!(o.s5.is_none());
+        assert!(o.stage5_state.is_none());
         assert!(matches!(o.recs[0], Rec::ScratchCellA));
-        assert!(matches!(o.recs[1], Rec::P1 { esi: 0, .. }));
+        assert!(matches!(o.recs[1], Rec::P1 { tap_b: 0, .. }));
     }
 
     #[test]
@@ -370,9 +370,9 @@ mod tests {
         let (p, mut inp) = base();
         inp.p2x = vec![1.25];
         let o = run(&p, &inp, None).unwrap();
-        let s = o.s5.unwrap();
+        let s = o.stage5_state.unwrap();
         assert_eq!(s.e2x, 11.25);
-        assert_eq!(s.dx, 5.0);
+        assert_eq!(s.delta_x, 5.0);
         assert!(!s.y_major);
         assert_eq!(o.recs.len(), 3);
     }
@@ -386,7 +386,7 @@ mod tests {
         let a = run(&p, &inp, None).unwrap();
         let b = run(&p, &inp, None).unwrap();
         assert_eq!(a.recs, b.recs);
-        let s = a.s5.unwrap();
+        let s = a.stage5_state.unwrap();
         assert!(s.x.is_finite() && s.y.is_finite() && s.e2x.is_finite() && s.e2y.is_finite());
     }
 
@@ -396,12 +396,12 @@ mod tests {
         inp.p1x = vec![f32::NAN];
         inp.p2x = vec![f32::NAN];
         let o = run(&p, &inp, None).unwrap();
-        assert!(o.s5.is_some());
+        assert!(o.stage5_state.is_some());
         inp.p1x = vec![f32::INFINITY];
         inp.p2x = vec![f32::INFINITY];
         inp.mode_x = 1;
         let o = run(&p, &inp, None).unwrap();
-        assert!(o.s5.is_some() || !o.stub_samples.is_empty());
+        assert!(o.stage5_state.is_some() || !o.stub_samples.is_empty());
         let mut r = vec![];
         assert!(wrap(&mut r, f32::NAN, 8, 1).unwrap().is_nan());
     }
@@ -418,8 +418,8 @@ mod tests {
     fn two_samples_both_stub() {
         let (mut p, mut inp) = base();
         p.count = 2;
-        inp.p1_const = false;
-        inp.p2_const = false;
+        inp.first_end_const = false;
+        inp.second_end_const = false;
         inp.p1x = vec![0.25, 0.5];
         inp.p1y = vec![3.0, 2.0];
         inp.p2x = vec![0.25, 0.5];

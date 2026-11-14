@@ -58,25 +58,25 @@ fn warp_fetch_integer_and_half_positions() {
     let (w, h) = (4usize, 4usize);
     let src = plane(w, h, |x, y| (x + 10 * y) as f32);
     let mut out = vec![9.0f32; w * h];
-    let dx = vec![0.0f32; w * h];
+    let delta_x = vec![0.0f32; w * h];
     let dy = vec![0.0f32; w * h];
     let c = FetchConsts { lo: 1e-4, margin: 1.0 };
-    warp_fetch(&dx, &dy, &src, &mut out, w as i32, h as i32, w as i32, 0, h as i32, &c);
+    warp_fetch(&delta_x, &dy, &src, &mut out, w as i32, h as i32, w as i32, 0, h as i32, &c);
     // pixel (1,1): inside, exact; row 0 and column 0 are at or below the lower bound: zero
     assert_eq!(out[1 * w + 1], 11.0);
     assert_eq!(out[0], 0.0);
-    let dx = vec![0.5f32; w * h];
-    warp_fetch(&dx, &dy, &src, &mut out, w as i32, h as i32, w as i32, 0, h as i32, &c);
+    let delta_x = vec![0.5f32; w * h];
+    warp_fetch(&delta_x, &dy, &src, &mut out, w as i32, h as i32, w as i32, 0, h as i32, &c);
     assert_eq!(out[1 * w + 1], 11.5);
 }
 
 #[test]
 fn warp_fetch_nan_position_clamps_to_corner_tap() {
     let src = vec![5.0f32; 16];
-    let dx = vec![f32::NAN; 16];
+    let delta_x = vec![f32::NAN; 16];
     let dy = vec![0.5f32; 16];
     let mut out = vec![0.0f32; 16];
-    warp_fetch(&dx, &dy, &src, &mut out, 4, 4, 4, 1, 1, &FetchConsts { lo: 1e-4, margin: 1.0 });
+    warp_fetch(&delta_x, &dy, &src, &mut out, 4, 4, 4, 1, 1, &FetchConsts { lo: 1e-4, margin: 1.0 });
     assert!(out[4..8].iter().all(|v| v.is_nan()), "{:?}", &out[4..8]);
 }
 

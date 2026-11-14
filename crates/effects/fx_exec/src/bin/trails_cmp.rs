@@ -28,16 +28,16 @@ struct Cmp {
     nan_vs_num: usize,
     max_ulp: i64,
     first: Option<String>,
-    per_ch: Vec<usize>,
+    per_chan: Vec<usize>,
     list: Vec<String>,
 }
 
 fn compare(native: &Image, orig: &[f32], n: usize, w: usize, inp: &[f32], prev: &[f32]) -> Cmp {
-    let mut c = Cmp { samples: 0, bit_equal: 0, nan_payload: 0, different: 0, nan_vs_num: 0, max_ulp: 0, first: None, per_ch: vec![0; native.channels()], list: vec![] };
-    for ch in 0..native.channels() {
+    let mut c = Cmp { samples: 0, bit_equal: 0, nan_payload: 0, different: 0, nan_vs_num: 0, max_ulp: 0, first: None, per_chan: vec![0; native.channels()], list: vec![] };
+    for chan in 0..native.channels() {
         for i in 0..n {
-            let a = native.planes[ch][i];
-            let b = orig[ch * n + i];
+            let a = native.planes[chan][i];
+            let b = orig[chan * n + i];
             c.samples += 1;
             if a.to_bits() == b.to_bits() {
                 c.bit_equal += 1;
@@ -45,7 +45,7 @@ fn compare(native: &Image, orig: &[f32], n: usize, w: usize, inp: &[f32], prev: 
                 c.nan_payload += 1;
             } else {
                 c.different += 1;
-                c.per_ch[ch] += 1;
+                c.per_chan[chan] += 1;
                 if a.is_nan() != b.is_nan() {
                     c.nan_vs_num += 1;
                 } else if a.is_finite() && b.is_finite() || (a.is_infinite() && b.is_infinite()) {
@@ -53,10 +53,10 @@ fn compare(native: &Image, orig: &[f32], n: usize, w: usize, inp: &[f32], prev: 
                 }
                 let d = format!(
                     "c{} i{} (x{} y{}) native {:08x} original {:08x} src=[{:08x} {:08x} {:08x} {:08x}] prev=[{:08x} {:08x} {:08x} {:08x}] (src {:e} prev {:e} -> native {:e} orig {:e})",
-                    ch, i, i % w, i / w, a.to_bits(), b.to_bits(),
+                    chan, i, i % w, i / w, a.to_bits(), b.to_bits(),
                     inp[i].to_bits(), inp[n + i].to_bits(), inp[2 * n + i].to_bits(), inp[3 * n + i].to_bits(),
                     prev[i].to_bits(), prev[n + i].to_bits(), prev[2 * n + i].to_bits(), prev[3 * n + i].to_bits(),
-                    inp[ch * n + i], prev[ch * n + i], a, b
+                    inp[chan * n + i], prev[chan * n + i], a, b
                 );
                 if c.first.is_none() {
                     c.first = Some(d.clone());
@@ -155,7 +155,7 @@ fn run(a: Vec<String>) -> i32 {
     if let Some(s) = blur_scale {
         b.kp.blur_render_scale = s;
     }
-    let planes = |s: &[f32]| Image::from_planes((0..4).map(|ch| s[ch * n..(ch + 1) * n].to_vec()).collect()).unwrap();
+    let planes = |s: &[f32]| Image::from_planes((0..4).map(|chan| s[chan * n..(chan + 1) * n].to_vec()).collect()).unwrap();
     let src = if zerosrc { Image::from_planes((0..4).map(|_| vec![0.0f32; n]).collect()).unwrap() } else { planes(inp) };
     let prev_img = planes(prev);
     let mut images = BTreeMap::new();
@@ -176,7 +176,7 @@ fn run(a: Vec<String>) -> i32 {
     let saved_eq = o.saved_prev_dest.as_ref().map(|s| s.planes.iter().zip(o.dest.planes.iter()).all(|(p, q)| p.iter().zip(q.iter()).all(|(x, y)| x.to_bits() == y.to_bits()))).unwrap_or(false);
     println!(
         "{}\t{}\tdest_ch={}\truns=[{}]\tsamples={}\tbit_equal={}\tnan_payload_only={}\tdifferent={}\tnan_vs_number={}\tmax_ulp_finite={}\tper_channel_diff={:?}\tsaved_eq_dest={}\t{}",
-        file, sets_txt, o.dest.channels(), classes.join(" "), cm.samples, cm.bit_equal, cm.nan_payload, cm.different, cm.nan_vs_num, cm.max_ulp, cm.per_ch, saved_eq, verdict
+        file, sets_txt, o.dest.channels(), classes.join(" "), cm.samples, cm.bit_equal, cm.nan_payload, cm.different, cm.nan_vs_num, cm.max_ulp, cm.per_chan, saved_eq, verdict
     );
     for d in &cm.list {
         println!("  DIFF {}", d);
@@ -184,14 +184,14 @@ fn run(a: Vec<String>) -> i32 {
     if consts {
         let cp = compile_for(&g, &b).unwrap();
         for nd in &cp.nodes {
-            if nd.b160 || nd.folded || nd.kind == "func" || nd.kind == "auto" {
+            if nd.is_const_node || nd.folded || nd.kind == "func" || nd.kind == "auto" {
                 println!(
                     "  NODE {} {} {} {}={} folded={} lanes=[{:?}]",
                     nd.idx,
                     nd.kind,
                     nd.prim,
                     fx_eval::judge_keys::PLAN_KEY_NODE_FLAG,
-                    nd.b160,
+                    nd.is_const_node,
                     nd.folded,
                     nd.lanes.iter().map(|l| format!("{:e}", f32::from_bits(*l))).collect::<Vec<_>>()
                 );

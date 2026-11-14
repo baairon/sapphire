@@ -13,7 +13,7 @@ use crate::backend::NodeCall;
 use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use crate::device_ops_pointwise::{const_image, gen_cases, Od, DIMS_SMALL, PW_DIMS};
 use crate::types::Image;
-use fx_device::cl::Arg as ClArg;
+use fx_device::ocl::Arg as ClArg;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::sim::Rng;
 use fx_device::{DevError, DevImage, Session};
@@ -109,13 +109,13 @@ fn bin_plan(c: &NodeCall, args: &[ArgShape], needs_vec_one: bool) -> Result<BinP
     if a_const && b_const {
         return Err("both operands constant: the CPU kernel reads a plane of a constant");
     }
-    let r13 = ca == 3 && cb == 4;
-    let rbx = ca == 4 && cb == 3;
-    let nch = if r13 || rbx || tag == 3 { 3 } else { tag };
-    if nch > tag || ((r13 || rbx) && tag < 4) {
+    let a_rgb_b_rgba = ca == 3 && cb == 4;
+    let a_rgba_b_rgb = ca == 4 && cb == 3;
+    let nch = if a_rgb_b_rgba || a_rgba_b_rgb || tag == 3 { 3 } else { tag };
+    if nch > tag || ((a_rgb_b_rgba || a_rgba_b_rgb) && tag < 4) {
         return Err("fewer output planes than the kernel writes");
     }
-    Ok(BinPlan { nch, ext_b_side: if r13 { Some(true) } else if rbx { Some(false) } else { None } })
+    Ok(BinPlan { nch, ext_b_side: if a_rgb_b_rgba { Some(true) } else if a_rgba_b_rgb { Some(false) } else { None } })
 }
 
 /// The two operand route: `kmain` per output channel (mode 1 A constant, 2 B constant, 0 two planes), `kext` for channel 3
@@ -129,10 +129,10 @@ fn bin_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], needs_vec_one: bool,
     let (ca, cb) = (count_of(&shapes[0]).map_err(unsup)?.0, count_of(&shapes[1]).map_err(unsup)?.0);
     let tag = c.tag as usize;
     let out = DevImage::alloc(s, tag, c.n)?;
-    for ch in 0..plan.nch {
-        let ia = ch.min(ca - 1);
-        let ib = ch.min(cb - 1);
-        let o = out.plane(ch).arg();
+    for chan in 0..plan.nch {
+        let ia = chan.min(ca - 1);
+        let ib = chan.min(cb - 1);
+        let o = out.plane(chan).arg();
         if is_const(a) {
             s.launch(kmain, c.n, &[plane(b, ib)?, plane(b, ib)?, o, ClArg::U32(n), ClArg::U32(1), ClArg::U32(lanes(a)[ia]), ClArg::U32(0)])?;
         } else if is_const(b) {
@@ -144,8 +144,8 @@ fn bin_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], needs_vec_one: bool,
     if let Some(b_side) = plan.ext_b_side {
         let src = if b_side { b } else { a };
         let (cbits, cflag) = if is_const(src) { (lanes(src)[3], 1) } else { (0, 0) };
-        let sp = if is_const(src) { plane(if b_side { a } else { b }, 0)? } else { plane(src, 3)? };
-        s.launch(kext, c.n, &[sp, out.plane(3).arg(), ClArg::U32(n), ClArg::U32(u32::from(b_side)), ClArg::U32(cflag), ClArg::U32(cbits)])?;
+        let src_arg = if is_const(src) { plane(if b_side { a } else { b }, 0)? } else { plane(src, 3)? };
+        s.launch(kext, c.n, &[src_arg, out.plane(3).arg(), ClArg::U32(n), ClArg::U32(u32::from(b_side)), ClArg::U32(cflag), ClArg::U32(cbits)])?;
     }
     let written = if plan.ext_b_side.is_some() { 4 } else { plan.nch };
     for p in written..tag {
@@ -197,11 +197,11 @@ fn afrm_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage,
     let scale = f32::from_bits(lanes(&args[1])[0]);
     let out = DevImage::alloc(s, 4, c.n)?;
     for i in 0..3 {
-        let ch = i.min(nch - 1);
+        let chan = i.min(nch - 1);
         if is_const(src) {
-            fill(s, &out, i, lanes(src)[ch], n)?;
+            fill(s, &out, i, lanes(src)[chan], n)?;
         } else {
-            s.launch("copy_f32", c.n, &[plane(src, ch)?, out.plane(i).arg(), ClArg::U32(n)])?;
+            s.launch("copy_f32", c.n, &[plane(src, chan)?, out.plane(i).arg(), ClArg::U32(n)])?;
         }
     }
     if scale == 0.0 {
@@ -242,9 +242,9 @@ fn case(name: String, dims: (usize, usize), tag: i32, args: Vec<Image>) -> SelfC
 }
 
 /// The planes of an operand: channel p takes `vals` rotated by `7 * p`, so equal counts keep the pairs of `vals`.
-fn rot_planes(vals: &[f32], ch: usize) -> Image {
+fn rot_planes(vals: &[f32], chan: usize) -> Image {
     let n = vals.len();
-    Image { n, planes: (0..ch).map(|p| (0..n).map(|i| vals[(i + 7 * p) % n]).collect()).collect() }
+    Image { n, planes: (0..chan).map(|p| (0..n).map(|i| vals[(i + 7 * p) % n]).collect()).collect() }
 }
 
 /// Four constant lanes taken from `vals` from position `at`.
@@ -318,7 +318,7 @@ fn edge_cases(class: &'static str, accepts: fn(&NodeCall, &[ArgShape]) -> Result
     let (av, bv) = pair_planes(extra);
     let e = edge_values();
     let n = av.len();
-    let kp = crate::types::KParams::standin();
+    let kp = crate::types::KParams::host_defaults();
     let mut out = Vec::new();
     for t in templates2() {
         let shapes: Vec<ArgShape> = t.iter().map(|o| match *o { Od::Img(c) => ArgShape::Img { channels: c }, Od::Const(c) => ArgShape::Const { n: c } }).collect();
@@ -335,7 +335,7 @@ fn edge_cases(class: &'static str, accepts: fn(&NodeCall, &[ArgShape]) -> Result
                     .iter()
                     .enumerate()
                     .map(|(k, od)| match *od {
-                        Od::Img(ch) => rot_planes(if k == 0 { &av } else { &bv }, ch),
+                        Od::Img(chan) => rot_planes(if k == 0 { &av } else { &bv }, chan),
                         Od::Const(nl) => const_image(nl, lanes_from(&e, r)),
                     })
                     .collect();
@@ -397,27 +397,27 @@ fn afrm_corpus() -> Vec<SelfCase> {
     let n = trip.len();
     let vals = adversarial_f32(1500, 91);
     let e = edge_values();
-    let recorded_out = const_image(4, [(-999.0f32).to_bits(); 4]);
-    for (si, &sb) in afrm_scales().iter().enumerate() {
+    let const_fill = const_image(4, [(-999.0f32).to_bits(); 4]);
+    for (set_idx, &sb) in afrm_scales().iter().enumerate() {
         let scale = const_image(1, [sb, 0, 0, 0]);
-        for ch in 1..=4usize {
+        for chan in 1..=4usize {
             // the triples on channels 0..3 (channel 3 rotated), every scale
-            let planes: Vec<Vec<f32>> = (0..ch).map(|p| (0..n).map(|i| if p < 3 { trip[i][p] } else { trip[(i + 5) % n][0] }).collect()).collect();
-            out.push(case(format!("alpha_from_rgb_max triples {ch}ch scale 0x{sb:08x}"), (n, 1), 4, vec![Image { n, planes }, scale.clone(), recorded_out.clone()]));
+            let planes: Vec<Vec<f32>> = (0..chan).map(|p| (0..n).map(|i| if p < 3 { trip[i][p] } else { trip[(i + 5) % n][0] }).collect()).collect();
+            out.push(case(format!("alpha_from_rgb_max triples {chan}ch scale 0x{sb:08x}"), (n, 1), 4, vec![Image { n, planes }, scale.clone(), const_fill.clone()]));
             // adversarial values on the small frames
-            for (di, &(w, h)) in DIMS_SMALL.iter().enumerate() {
+            for (dim_idx, &(w, h)) in DIMS_SMALL.iter().enumerate() {
                 let m = w * h;
-                let planes: Vec<Vec<f32>> = (0..ch).map(|p| (0..m).map(|i| vals[(i * 7 + p * 13 + si * 31 + di * 3) % vals.len()]).collect()).collect();
-                let third = if di % 2 == 0 { recorded_out.clone() } else { Image { n: m, planes: vec![vec![0.0; m]] } };
-                out.push(case(format!("alpha_from_rgb_max {w}x{h} {ch}ch scale 0x{sb:08x}"), (w, h), 4, vec![Image { n: m, planes }, scale.clone(), third]));
+                let planes: Vec<Vec<f32>> = (0..chan).map(|p| (0..m).map(|i| vals[(i * 7 + p * 13 + set_idx * 31 + dim_idx * 3) % vals.len()]).collect()).collect();
+                let third = if dim_idx % 2 == 0 { const_fill.clone() } else { Image { n: m, planes: vec![vec![0.0; m]] } };
+                out.push(case(format!("alpha_from_rgb_max {w}x{h} {chan}ch scale 0x{sb:08x}"), (w, h), 4, vec![Image { n: m, planes }, scale.clone(), third]));
             }
             // a constant source, its lanes cycling through the edge values
             for r in (0..e.len()).step_by(3) {
                 out.push(case(
-                    format!("alpha_from_rgb_max const {ch} lanes round {r} scale 0x{sb:08x}"),
+                    format!("alpha_from_rgb_max const {chan} lanes round {r} scale 0x{sb:08x}"),
                     (7, 1),
                     4,
-                    vec![const_image(ch, lanes_from(&e, r)), scale.clone(), recorded_out.clone()],
+                    vec![const_image(chan, lanes_from(&e, r)), scale.clone(), const_fill.clone()],
                 ));
             }
         }
@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn the_recorded_glow_calls_are_accepted() {
-        let kp = KParams::standin();
+        let kp = KParams::host_defaults();
         let img = |c| ArgShape::Img { channels: c };
         let k = |n| ArgShape::Const { n };
         assert_eq!(screen_accepts(&call("screen", 1, &kp), &[img(1), img(1)]), Ok(()));
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn overlay_ignores_the_vector_constant_and_screen_needs_one() {
-        let mut kp = KParams::standin();
+        let mut kp = KParams::host_defaults();
         kp.vec_one = 0.75;
         let img = |c| ArgShape::Img { channels: c };
         assert_eq!(overlay_accepts(&call("overlay_super", 4, &kp), &[img(3), img(4)]), Ok(()));

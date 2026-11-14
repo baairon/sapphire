@@ -23,11 +23,11 @@ fn t36_c7_noted_c6_not() {
     if !effects_vecdir::have_all(&["fx_eval"]) {
         return;
     }
-    let (n6, ids6) = noted("c6");
-    assert!(n6 > 0);
+    let (count6, ids6) = noted("c6");
+    assert!(count6 > 0);
     assert!(ids6.is_empty(), "c6 (argument 0 = x, argument 1 constant) must not be noted: {:?}", ids6);
-    let (n7, ids7) = noted("c7");
-    assert!(n7 > 0);
+    let (count7, ids7) = noted("c7");
+    assert!(count7 > 0);
     assert!(!ids7.is_empty(), "c7 (argument 1 = x) must be noted for IFNEQ-CONST-ARG1-NONCONST");
     let (_, ids2) = noted("c2");
     assert!(ids2.is_empty(), "c2 (both constant) must not be noted: {:?}", ids2);

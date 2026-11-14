@@ -2,7 +2,7 @@
 //! this repository's own output (as the golden table's are). The inputs of the first test are the ones where a fused multiply-add of the first
 //! stage (`x13 * x10 + x12`, route A) and the same product rounded twice give different bits, so a change of that rounding fails here.
 //! Stage 1 is a call with the guard word 0 (it builds the table); stage 2 is a call on the built table.
-use shake_shift::body::{shake_shift_body, Config, Frame, Globals, Params, TAB_LEN};
+use shake_shift::body::{shake_shift_body, Config, Globals, Params, TAB_LEN};
 use shake_shift::weights;
 use shake_shift::RefServices;
 
@@ -16,29 +16,29 @@ fn globals() -> Globals {
 }
 
 fn run(p: &Params, g: &mut Globals) -> u32 {
-    shake_shift_body(p, &Config::default(), g, &mut RefServices::new(), &mut Frame::new()).to_bits()
+    shake_shift_body(p, &Config::default(), g, &mut RefServices::new()).to_bits()
 }
 
 /// An ordinary binding with the route selector `sel` (0 is route A, 1 is route B).
 fn plain(sel: f32) -> Params {
-    Params { p4c: 0.37, p7c: 1.25, pac: 0.8, pdc: 2.5, p10c: 1.5, p13c: 0.6, p16c: 0.9, p19c: 3.0, p1cc: 0.11, p1fc: sel, p22c: 0.4, p25c: 0.7 }
+    Params { seed_x: 0.37, time: 1.25, amp_x: 0.8, rate_x: 2.5, sine_amp: 1.5, sine_freq: 0.6, amp_y: 0.9, rate_y: 3.0, seed_y: 0.11, route: sel, limit_gap: 0.4, gain: 0.7 }
 }
 
 /// Route A binding whose first-stage product and sum differ between one and two roundings; `d` is parameters 3 and 7 (equal).
 fn fused_site(d: u32) -> Params {
     Params {
-        p4c: f(0),
-        p7c: f(0x3f00_0000),
-        pac: f(0x3f4c_cccd),
-        pdc: f(d),
-        p10c: f(0x3fc0_0000),
-        p13c: f(0x3f19_999a),
-        p16c: f(0x3f66_6666),
-        p19c: f(d),
-        p1cc: f(0),
-        p1fc: f(0),
-        p22c: f(0x3ecc_cccd),
-        p25c: f(0x3f33_3333),
+        seed_x: f(0),
+        time: f(0x3f00_0000),
+        amp_x: f(0x3f4c_cccd),
+        rate_x: f(d),
+        sine_amp: f(0x3fc0_0000),
+        sine_freq: f(0x3f19_999a),
+        amp_y: f(0x3f66_6666),
+        rate_y: f(d),
+        seed_y: f(0),
+        route: f(0),
+        limit_gap: f(0x3ecc_cccd),
+        gain: f(0x3f33_3333),
     }
 }
 
@@ -61,12 +61,12 @@ fn route_a_bits_at_the_fused_sites_of_the_second_stage() {
 
 #[test]
 fn bits_of_each_route_and_stage_on_an_ordinary_binding() {
-    let a1 = run(&plain(0.0), &mut globals());
-    let b1 = run(&plain(1.0), &mut globals());
-    let b2 = run(&plain(1.0), &mut built());
-    let a2 = run(&plain(0.0), &mut built());
-    assert_eq!(a1, 0xbfc8_b309);
-    assert_eq!(b1, 0xbfad_eb79);
-    assert_eq!(b2, 0xbfad_eb79);
-    assert_eq!(a2, 0xbfc8_b309);
+    let plain_a = run(&plain(0.0), &mut globals());
+    let plain_b = run(&plain(1.0), &mut globals());
+    let built_a = run(&plain(1.0), &mut built());
+    let built_b = run(&plain(0.0), &mut built());
+    assert_eq!(plain_a, 0xbfc8_b309);
+    assert_eq!(plain_b, 0xbfad_eb79);
+    assert_eq!(built_a, 0xbfad_eb79);
+    assert_eq!(built_b, 0xbfc8_b309);
 }

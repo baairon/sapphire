@@ -63,8 +63,8 @@ fn run(root: &str, part: bool) -> Tot {
         let (rr, gg, aflag, aspect, pcount): (f32, f32, i32, f32, Option<usize>) = if part {
             (radius_tok(tok[1]), gain_tok(tok[2]), 0, 1.0, Some(tok[0][1..].parse().unwrap()))
         } else {
-            let a1 = tok[0] == "a1";
-            (radius_tok(tok[1]), gain_tok(tok[2]), a1 as i32, if a1 { 1.5 } else { 1.0 }, None)
+            let flag_tok = tok[0] == "a1";
+            (radius_tok(tok[1]), gain_tok(tok[2]), flag_tok as i32, if flag_tok { 1.5 } else { 1.0 }, None)
         };
         let text = std::fs::read_to_string(d.join("manifest.json")).unwrap().replace("NaN", "null").replace("Infinity", "null");
         let j = parse_json(&text).unwrap();

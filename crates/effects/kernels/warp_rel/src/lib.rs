@@ -20,11 +20,11 @@ pub struct Prim {
     pub const_a1: f32,
     pub const_a2: f32,
     /// arrays [[P]] and [[P]] (used when const_coords is false; the wrapper adds 4*idx to the base)
-    pub a1_arr: Vec<f32>,
-    pub a2_arr: Vec<f32>,
+    pub lanes_a_first: Vec<f32>,
+    pub lanes_a_second: Vec<f32>,
     /// arrays [P], [P] (the wrapper adds 4*idx; written by slot 33)
-    pub c1_arr: Vec<f32>,
-    pub c2_arr: Vec<f32>,
+    pub lanes_c_first: Vec<f32>,
+    pub lanes_c_second: Vec<f32>,
     /// byte [P] (slot 33 writes it: ([P] != 0 and [P] == 0))
     pub flag: u8,
     /// i32 [P], [P]
@@ -52,8 +52,8 @@ pub enum RelError {
 /// What the wrapper hands F2 : slices are the arrays offset by the element index.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WrapArgs {
-    pub a1: Vec<f32>,
-    pub a2: Vec<f32>,
+    pub coord_x: Vec<f32>,
+    pub coord_y: Vec<f32>,
     pub const_coords: bool,
     pub c1: Vec<f32>,
     pub c2: Vec<f32>,
@@ -82,17 +82,17 @@ pub fn wrapper_args(p: &Prim, idx: i32) -> Result<WrapArgs, RelError> {
 /// As `wrapper_args`, copying at most `cap` entries of each array tail (a row reads `count` entries).
 pub fn wrapper_args_n(p: &Prim, idx: i32, cap: Option<usize>) -> Result<WrapArgs, RelError> {
     // const_coords picks &P[0x6c], &P[0x70]; else the base from [P] plus 4*idx
-    let (a1, a2) = if p.const_coords {
+    let (coord_x, coord_y) = if p.const_coords {
         (vec![p.const_a1], vec![p.const_a2])
     } else {
-        (tail(&p.a1_arr, idx, cap)?, tail(&p.a2_arr, idx, cap)?)
+        (tail(&p.lanes_a_first, idx, cap)?, tail(&p.lanes_a_second, idx, cap)?)
     };
     Ok(WrapArgs {
-        a1,
-        a2,
+        coord_x,
+        coord_y,
         const_coords: p.const_coords,
-        c1: tail(&p.c1_arr, idx, cap)?, // 
-        c2: tail(&p.c2_arr, idx, cap)?, // 
+        c1: tail(&p.lanes_c_first, idx, cap)?, // 
+        c2: tail(&p.lanes_c_second, idx, cap)?, // 
         flag: p.flag as i32,       // movzx eax, byte [P] 
         mx: p.mx,                  // [P] 
         my: p.my,                  // [P] 
@@ -102,12 +102,12 @@ pub fn wrapper_args_n(p: &Prim, idx: i32, cap: Option<usize>) -> Result<WrapArgs
 /// S3 style render entry: slot 53 of class warp_rel, host services explicit. `img` is [P] (the planar image object),
 /// `out` the plane array (one Vec per plane, count entries each). Returns F2's call record.
 pub fn render(p: &Prim, fr: &Frame, img: &mut Image, lat: &Lattice, out: &mut [Vec<f32>]) -> Result<Vec<Rec>, RelError> {
-    let n = img.f1.n;
+    let n = img.sampler_params.n;
     if n > CONTRACT_MAX_N {
         return Err(RelError::ContractLimit { n });
     }
     let w = wrapper_args_n(p, fr.idx, Some(fr.obj.count.max(0) as usize))?;
-    let a = F2Args { a1: &w.a1, a2: &w.a2, const_coords: w.const_coords, c1: &w.c1, c2: &w.c2, flag: w.flag, mx: w.mx, my: w.my };
+    let a = F2Args { coord_x: &w.coord_x, coord_y: &w.coord_y, const_coords: w.const_coords, c1: &w.c1, c2: &w.c2, flag: w.flag, mx: w.mx, my: w.my };
     warp_rel_sampler::run(&fr.obj, img, lat, &a, out, warp_rel_sampler::TEMP_PHASE_BYTES).map_err(RelError::F2)
 }
 
@@ -120,11 +120,11 @@ pub struct Assumption {
 
 pub fn assumptions() -> Vec<Assumption> {
     vec![
-        Assumption { id: "WR1-A1", basis: "ROUTE AVX2-ONLY: F2 dispatcher mask test 0x9d97ff selects; the SSE twin and tier are not ported (inherited from FX2-A1)", label: "MEASURED listing, ROUTE AVX2-ONLY" },
+        Assumption { id: "WR1-A1", basis: "ROUTE AVX2-ONLY: F2 dispatcher mask test selects; the SSE twin and tier are not ported (inherited from FX2-A1)", label: "MEASURED listing, ROUTE AVX2-ONLY" }, // origin: 0x9d97ff
         Assumption { id: "WR1-A2", basis: "slot 33 (shared with class warp) writes P, P and P before slot 53 and calls prefill; here those P fields and the image object [P] are explicit inputs, the prefill callback is not rebuilt", label: "HOST-HOOKED (explicit inputs), NOT REBUILT: slot 33 chain" },
         Assumption { id: "WR1-A3", basis: "image channel count n = [[P]]: no store to P exists in the warp_rel constructor (base) or in slots 3,6,22,23,33,38,40,49,53,54,55,56,57 (listing read), so the binder is outside the class; n range of real callers UNKNOWN. Image constructor immediate n: 0, 1 and 3 (NTRACE.md); the port refuses n > 8", label: "UNKNOWN range; CONTRACT-LIMIT n <= 8 (measured by the end-to-end probes)" },
         Assumption { id: "WR1-A4", basis: "wrapper reads only P and Q fields listed in lib.rs; element index [Q] is an explicit input; the a1/a2/c1/c2 arrays are explicit slices (no pointer values are read by the port)", label: "ALIGN-INDEPENDENT" },
-        Assumption { id: "WR1-A5", basis: "F2's inherited stand-ins: CPU word 0x9d97ff (route selector, PARAM-UNCAPTURED 1), assert helper and empty-image fills recorded only (CALLEE-MODELLED); fmod and F1 run as real code in the emulator and are the finished natives in Rust (no hook on fmod in this T2)", label: "inherited FX2-A2" },
+        Assumption { id: "WR1-A5", basis: "F2's inherited stand-ins: CPU word (route selector, PARAM-UNCAPTURED 1), assert helper and empty-image fills recorded only (CALLEE-MODELLED); fmod and F1 run as real code in the emulator and are the finished natives in Rust (no hook on fmod in this T2)", label: "inherited FX2-A2" }, // origin: 0x9d97ff
         Assumption { id: "WR1-A6", basis: "MXCSR round to nearest, no FTZ, no DAZ", label: "HOST-FP-ASSUMED" },
     ]
 }

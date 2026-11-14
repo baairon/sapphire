@@ -124,9 +124,9 @@ pub struct VCells {
 
 impl VCells {
     /// The old stand-ins (identity vpermd index); history and mutants only.
-    pub const STANDIN: VCells = VCells { one: 1.0, sixth: SIXTH, six: 6.0, three_i: 3, one_i: 1, four_i: 4, w_r: W_R, half: W_G, w_b: W_B, two: 2.0, four: 4.0, perm: PERM_OLD };
+    pub const IDENTITY_PERM: VCells = VCells { one: 1.0, sixth: SIXTH, six: 6.0, three_i: 3, one_i: 1, four_i: 4, w_r: W_R, half: W_G, w_b: W_B, two: 2.0, four: 4.0, perm: PERM_OLD };
     /// The cells as read from the file (MEASURED-DYLIB): equal to STANDIN except the vpermd index.
-    pub const FILE: VCells = VCells { perm: PERM_FILE, ..VCells::STANDIN };
+    pub const FILE: VCells = VCells { perm: PERM_FILE, ..VCells::IDENTITY_PERM };
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -137,7 +137,7 @@ pub struct Cells {
 
 impl Cells {
     /// Old stand-ins (before/after comparison only).
-    pub const STANDIN: Cells = Cells { ymm: VCells::STANDIN, xmm: VCells::STANDIN };
+    pub const IDENTITY_PERM: Cells = Cells { ymm: VCells::IDENTITY_PERM, xmm: VCells::IDENTITY_PERM };
     /// MEASURED-DYLIB cells (what `render` uses).
     pub const FILE: Cells = Cells { ymm: VCells::FILE, xmm: VCells::FILE };
 }
@@ -264,23 +264,23 @@ fn red_kept(k: &VCells, wide: bool, operand: [u32; 8]) -> bool {
 /// sector select shared by both flavours: returns (R, G, B) from V, C, f, 1 - f computed by the caller
 fn sector(i: i32, three: i32, one_i: i32, four: i32, v: f32, cc: f32, f: f32, one: f32) -> [f32; 3] {
     let om = nx_sub(one, f);
-    let a1 = if mu(6) { nx_sub(v, nx_mul(om, cc)) } else { nx_fma(-om, cc, v) };
-    let a2 = nx_sub(v, cc);
-    let a3 = nx_fma(-f, cc, v);
+    let fused_om = if mu(6) { nx_sub(v, nx_mul(om, cc)) } else { nx_fma(-om, cc, v) };
+    let diff_vc = nx_sub(v, cc);
+    let fused_f = nx_fma(-f, cc, v);
     if three > i {
         if i == 0 {
-            [v, a1, a2]
+            [v, fused_om, diff_vc]
         } else if i == one_i {
-            if mu(18) { [a3, v, a1] } else { [a3, v, a2] }
+            if mu(18) { [fused_f, v, fused_om] } else { [fused_f, v, diff_vc] }
         } else {
-            [a2, v, a1]
+            [diff_vc, v, fused_om]
         }
     } else if i == three {
-        [a2, a3, v]
+        [diff_vc, fused_f, v]
     } else if i == four {
-        [a1, a2, v]
+        [fused_om, diff_vc, v]
     } else {
-        [v, a2, a3]
+        [v, diff_vc, fused_f]
     }
 }
 
@@ -317,9 +317,9 @@ fn scalar_pixel(c: [f32; 3], shift: f32) -> [f32; 3] {
         } else {
             nx_sub(x, x.floor())
         };
-        let t6 = nx_mul(SIX, frac);
+        let prod_6 = nx_mul(SIX, frac);
         // vcomiss t6, 6.0 / jb: below or unordered (NaN) keeps t6
-        let t = if (!(t6 >= SIX) && !mu(11)) || (mu(11) && !(t6 > SIX)) { t6 } else { 0.0 };
+        let t = if (!(prod_6 >= SIX) && !mu(11)) || (mu(11) && !(prod_6 > SIX)) { prod_6 } else { 0.0 };
         let i = cvtt(t);
         let f = nx_sub(t, i as f32);
         let cc = nx_mul(v, s);
@@ -368,8 +368,8 @@ fn vec_pixel(k: &VCells, wide: bool, c: [f32; 3], shift: f32, force: Option<[u32
         } else {
             nx_sub(x, x.floor())
         };
-        let t6 = nx_mul(k.six, frac);
-        let t = if t6 >= k.six { 0.0 } else { t6 };
+        let prod_6 = nx_mul(k.six, frac);
+        let t = if prod_6 >= k.six { 0.0 } else { prod_6 };
         let i = cvtt(t);
         let f = nx_sub(t, i as f32);
         let cc = nx_mul(v, s);
@@ -407,24 +407,24 @@ pub fn render_forced(p: &Params, src: Option<[&[f32]; 3]>, mask: Option<&[f32]>,
             outs[2][i] = v[2];
         };
         if p.const_colour && p.scalar_shift {
-            let (t8, t4) = (if mu(9) { 9 } else { 8 }, if mu(10) { 5 } else { 4 });
-            let m8 = if p.n >= t8 { n & !7 } else { 0 };
-            if m8 > 0 {
+            let (pick_8, pick_4) = (if mu(9) { 9 } else { 8 }, if mu(10) { 5 } else { 4 });
+            let bits_8 = if p.n >= pick_8 { n & !7 } else { 0 };
+            if bits_8 > 0 {
                 let v = vec_pixel(&cells.ymm, true, p.colour, p.shift, force.and_then(|f| f.ymm));
-                for i in 0..m8 {
+                for i in 0..bits_8 {
                     put(outs, i, v);
                 }
             }
-            let mut idx = m8;
-            if n > m8 {
-                let rest = (n - m8) as i32;
-                if rest >= t4 {
-                    let m4 = (rest as usize) & !3;
+            let mut idx = bits_8;
+            if n > bits_8 {
+                let rest = (n - bits_8) as i32;
+                if rest >= pick_4 {
+                    let bits_4 = (rest as usize) & !3;
                     let v = vec_pixel(&cells.xmm, false, p.colour, p.shift, force.and_then(|f| f.xmm));
-                    for i in idx..idx + m4 {
+                    for i in idx..idx + bits_4 {
                         put(outs, i, v);
                     }
-                    idx += m4;
+                    idx += bits_4;
                 }
                 if idx < n {
                     let v = scalar_pixel(p.colour, p.shift);
@@ -434,9 +434,9 @@ pub fn render_forced(p: &Params, src: Option<[&[f32]; 3]>, mask: Option<&[f32]>,
                 }
             }
         } else {
-            let sp: Option<[&[f32]; 3]> = if p.const_colour { None } else { Some(src.ok_or(HpError::MissingSource)?) };
+            let src_planes: Option<[&[f32]; 3]> = if p.const_colour { None } else { Some(src.ok_or(HpError::MissingSource)?) };
             let mk: Option<&[f32]> = if p.scalar_shift { None } else { Some(mask.ok_or(HpError::MissingMask)?) };
-            if let Some(pl) = &sp {
+            if let Some(pl) = &src_planes {
                 if pl.iter().any(|q| q.len() < n) {
                     return Err(HpError::ShortPlane);
                 }
@@ -447,7 +447,7 @@ pub fn render_forced(p: &Params, src: Option<[&[f32]; 3]>, mask: Option<&[f32]>,
                 }
             }
             for i in 0..n {
-                let c = match &sp {
+                let c = match &src_planes {
                     Some(pl) => [pl[0][i], pl[1][i], pl[2][i]],
                     None => p.colour,
                 };
@@ -485,7 +485,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str)> {
         ("HP1-V15", "vpermd index cell, =, used (xmm section): MEASURED-DYLIB words 0,2,4,6,0,0,0,0 (same words as V14). Operand ymm10 is a lane-uniform full ymm mask on every path (listing proof)."),
         ("HP1-X01..X11", "xmm numeric cells 1.0, 2.0, 1/6, 6.0, int 3, int 1, int 4, 0.3125, 0.5, 0.1875, 4.0 : MEASURED-DYLIB (equal)."),
         ("HP1-X12..X13", "xmm structural cells: all-ones, sign mask : MEASURED-DYLIB (equal)."),
-        ("HP1-A1", "feature word served as 0x9d97ff (ROUTE AVX2-ONLY; AVX tier and SSE tier not rebuilt)."),
+        ("HP1-A1", "feature word served as (ROUTE AVX2-ONLY; AVX tier and SSE tier not rebuilt)."), // origin: 0x9d97ff
         ("HP1-A2", "plane count getter [vtable] is a host service (fixed integer per call)."),
         ("HP1-A3", " (plane service) and (generic flag path) are record-only hooks (HOST-HOOKED); PAD-UNVERIFIED."),
         ("HP1-A4", "vrcpps modelled as exact 1/x (APPROX-MODEL); the Newton step is the code's own."),
@@ -650,7 +650,7 @@ mod tests {
     #[test]
     fn file_cells_are_pack_of_even_dwords() {
         assert_eq!(VCells::FILE.perm, [0, 2, 4, 6, 0, 0, 0, 0]);
-        assert_eq!(VCells::FILE, VCells { perm: PERM_FILE, ..VCells::STANDIN });
+        assert_eq!(VCells::FILE, VCells { perm: PERM_FILE, ..VCells::IDENTITY_PERM });
         assert_eq!(Cells::FILE.ymm.perm, Cells::FILE.xmm.perm);
     }
     #[test]
@@ -677,18 +677,18 @@ mod tests {
         let even = [!0, 0, !0, 0, !0, 0, !0, 0];
         for wide in [true, false] {
             assert!(red_kept(&VCells::FILE, wide, even));
-            assert!(!red_kept(&VCells::STANDIN, wide, even));
+            assert!(!red_kept(&VCells::IDENTITY_PERM, wide, even));
         }
         // lane 1 zero only: file index skips lane 1 (kept), identity reads it (not kept)
         let l1 = [!0, 0, !0, !0, !0, !0, !0, !0];
-        assert!(red_kept(&VCells::FILE, true, l1) && !red_kept(&VCells::STANDIN, true, l1));
+        assert!(red_kept(&VCells::FILE, true, l1) && !red_kept(&VCells::IDENTITY_PERM, true, l1));
         // lanes 0..3 ones, 4..7 zero: identity keeps, file does not (idx 4 and 6 read zeros)
         let low = [!0, !0, !0, !0, 0, 0, 0, 0];
-        assert!(!red_kept(&VCells::FILE, false, low) && red_kept(&VCells::STANDIN, false, low));
+        assert!(!red_kept(&VCells::FILE, false, low) && red_kept(&VCells::IDENTITY_PERM, false, low));
         // a forced operand changes the pixel: colour with r > 0, operand even-ones: kept (file) vs dropped (identity)
         let col = [0.8, 0.3, 0.2];
         let a = vec_pixel(&VCells::FILE, true, col, 0.2, Some(even));
-        let b = vec_pixel(&VCells::STANDIN, true, col, 0.2, Some(even));
+        let b = vec_pixel(&VCells::IDENTITY_PERM, true, col, 0.2, Some(even));
         let nat = vec_pixel(&VCells::FILE, true, col, 0.2, None);
         assert_eq!(a, nat);
         assert_ne!(a, b);
@@ -705,7 +705,7 @@ mod tests {
             let sh = rnd() * 2.0 - 1.0;
             for wide in [true, false] {
                 let a = vec_pixel(&VCells::FILE, wide, col, sh, None);
-                let b = vec_pixel(&VCells::STANDIN, wide, col, sh, None);
+                let b = vec_pixel(&VCells::IDENTITY_PERM, wide, col, sh, None);
                 for k in 0..3 {
                     assert_eq!(a[k].to_bits(), b[k].to_bits());
                 }

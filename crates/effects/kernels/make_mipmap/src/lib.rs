@@ -73,9 +73,9 @@ impl RipMap {
     pub fn plane_len(&self, l: usize, j: usize) -> usize {
         (self.heights[j] + EXTRA_ROWS) * self.stride(l)
     }
-    /// float index of pixel (x, y) channel ch, interior coordinates (0-based); x = -1, w, w+1 and y = -1, h, h+1 address the pads
-    pub fn at(&self, l: usize, x: isize, y: isize, ch: usize) -> usize {
-        ((1 + y) as usize) * self.stride(l) + ((1 + x) as usize) * self.c + ch
+    /// float index of pixel (x, y) channel ch, interior coordinates (0-based); x = -1, w, w+1 and y = -1, h, h+1 reach the pads
+    pub fn at(&self, l: usize, x: isize, y: isize, chan: usize) -> usize {
+        ((1 + y) as usize) * self.stride(l) + ((1 + x) as usize) * self.c + chan
     }
 }
 
@@ -109,7 +109,7 @@ pub enum Mut {
 pub fn assumptions() -> Vec<(&'static str, &'static str)> {
     vec![
         ("MM1-A1", "CAPTURED 0.5f scalar and 8 x 0.5f ymm constant (32 B), both read from the captured image; the vector path is output-identical to the scalar path"),
-        ("MM1-A2", "ROUTE AVX2-ONLY: feature word 0x9d97ff served through the cell (captured pointer); AVX (.) and SSE tiers are not ported"),
+        ("MM1-A2", "ROUTE AVX2-ONLY: feature word served through the cell (captured pointer); AVX (.) and SSE tiers are not ported"), // origin: 0x9d97ff
         ("MM1-A3", "HOST-FP-ASSUMED: MXCSR round to nearest, no FTZ, no DAZ; the VEX engine follows the SDM, not silicon"),
         ("MM1-A4", "the image object (grid NL x NP, widths at, heights at, plane tables at, channel count at) is built by the host allocator (slot 33, vtable calls); here it is an explicit input, NOT REBUILT"),
         ("MM1-A5", "CALLEE-MODELLED / HOST-HOOKED: the launcher runs the kernel once on one thread (serial_for) and the tile partition returns (0, total); memcpy and memset are modelled; accessors are real emulated code"),
@@ -210,13 +210,13 @@ fn pad_rows(rm: &mut RipMap, l: usize, j: usize, p: &Params, m: Mut) {
         }
         1 => {
             let top_src = if m == Mut::TileTopRow1 { 1 } else { h };
-            let b2_src = if m == Mut::TileBottom2Row2 { 2.min(h) } else { 1 };
+            let bottom_src_rows = if m == Mut::TileBottom2Row2 { 2.min(h) } else { 1 };
             let t: Vec<u32> = pl[row(top_src)].to_vec();
             let b: Vec<u32> = pl[row(1)].to_vec();
-            let b2: Vec<u32> = pl[row(b2_src)].to_vec();
+            let bottom_rows: Vec<u32> = pl[row(bottom_src_rows)].to_vec();
             pl[row(0)].copy_from_slice(&t);
             pl[row(h + 1)].copy_from_slice(&b);
-            pl[row(h + 2)].copy_from_slice(&b2);
+            pl[row(h + 2)].copy_from_slice(&bottom_rows);
         }
         2 => {
             let top_src = if m == Mut::ClampTopRowH { h } else { 1 };
@@ -239,39 +239,39 @@ fn pad_cols(rm: &mut RipMap, l: usize, j: usize, y: usize, p: &Params, m: Mut) {
     let id = rm.idx(l, j);
     let base = (1 + y) * s;
     let pl = &mut rm.planes[id];
-    for ch in 0..c {
-        let first = pl[base + c + ch];
-        let last = pl[base + w * c + ch];
-        let (left, r1, r2) = match p.wrap_x {
-            1 => (last, first, if m == Mut::ColTileRight2Col2 { pl[base + (2.min(w)) * c + ch] } else { first }),
+    for chan in 0..c {
+        let first = pl[base + c + chan];
+        let last = pl[base + w * c + chan];
+        let (left, right_edge, r2) = match p.wrap_x {
+            1 => (last, first, if m == Mut::ColTileRight2Col2 { pl[base + (2.min(w)) * c + chan] } else { first }),
             2 => (if m == Mut::ColClampLeftLast { last } else { first }, last, last),
             _ => {
-                let v = if m == Mut::ConstColsZero { 0 } else { p.pad_pixel[ch] };
+                let v = if m == Mut::ConstColsZero { 0 } else { p.pad_pixel[chan] };
                 (v, v, v)
             }
         };
-        pl[base + ch] = left;
-        pl[base + (w + 1) * c + ch] = r1;
-        pl[base + (w + 2) * c + ch] = r2;
+        pl[base + chan] = left;
+        pl[base + (w + 1) * c + chan] = right_edge;
+        pl[base + (w + 2) * c + chan] = r2;
     }
 }
 
 /// kernel : horizontal 2:1 for level l of row-level 0
 fn kernel_a(rm: &mut RipMap, l: usize, p: &Params, m: Mut) {
     let c = rm.c;
-    let h0 = rm.heights[0];
+    let level0_h = rm.heights[0];
     let wl = rm.widths[l];
-    let sp = rm.stride(l - 1);
+    let src_stride = rm.stride(l - 1);
     let sd = rm.stride(l);
     let src = rm.planes[rm.idx(l - 1, 0)].clone();
     let did = rm.idx(l, 0);
     let shift = if m == Mut::KernelAColShift { 1 } else { 0 };
-    for y in 0..h0 {
+    for y in 0..level0_h {
         for x in 0..wl {
-            for ch in 0..c {
-                let a = src[(1 + y) * sp + (1 + 2 * x + shift) * c + ch];
-                let b = src[(1 + y) * sp + (2 + 2 * x + shift) * c + ch];
-                rm.planes[did][(1 + y) * sd + (1 + x) * c + ch] = avg_order(a, b, m, true);
+            for chan in 0..c {
+                let a = src[(1 + y) * src_stride + (1 + 2 * x + shift) * c + chan];
+                let b = src[(1 + y) * src_stride + (2 + 2 * x + shift) * c + chan];
+                rm.planes[did][(1 + y) * sd + (1 + x) * c + chan] = avg_order(a, b, m, true);
             }
         }
         pad_cols(rm, l, 0, y, p, m);
@@ -289,8 +289,8 @@ fn kernel_b(rm: &mut RipMap, l: usize, j: usize, p: &Params, m: Mut) {
     let shift = if m == Mut::KernelBRowShift { 1 } else { 0 };
     for y in 0..hj {
         for x in 0..wl {
-            for ch in 0..c {
-                let k = (1 + x) * c + ch;
+            for chan in 0..c {
+                let k = (1 + x) * c + chan;
                 let a = src[(1 + 2 * y + shift) * s + k];
                 let b = src[(2 + 2 * y + shift) * s + k];
                 rm.planes[did][(1 + y) * s + k] = avg_order(a, b, m, false);
@@ -385,8 +385,8 @@ mod tests {
     fn fb(x: f32) -> u32 {
         x.to_bits()
     }
-    fn gf(rm: &RipMap, l: usize, j: usize, x: isize, y: isize, ch: usize) -> f32 {
-        f32::from_bits(rm.planes[rm.idx(l, j)][rm.at(l, x, y, ch)])
+    fn gf(rm: &RipMap, l: usize, j: usize, x: isize, y: isize, chan: usize) -> f32 {
+        f32::from_bits(rm.planes[rm.idx(l, j)][rm.at(l, x, y, chan)])
     }
     /// base 5 x 4, C = 1: interior 100 y + 10 x + 1, left pad 5000 + 10 y + 1, right pads 6000 / 7000 + 10 y + 1 (as in the probe)
     fn base(wx: i32, wy: i32, filter: i32, pad: f32) -> (Params, RipMap) {

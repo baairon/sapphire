@@ -334,7 +334,7 @@ impl<'a> Parser<'a> {
                         b't' => out.push(b'\t'),
                         b'u' => {
                             let first = self.hex4()?;
-                            let ch = if (0xD800..0xDC00).contains(&first) {
+                            let chan = if (0xD800..0xDC00).contains(&first) {
                                 if self.s[self.i..].starts_with(b"\\u") {
                                     let save = self.i;
                                     self.i += 2;
@@ -355,7 +355,7 @@ impl<'a> Parser<'a> {
                                 char::from_u32(first).unwrap_or('\u{FFFD}')
                             };
                             let mut buf = [0u8; 4];
-                            out.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+                            out.extend_from_slice(chan.encode_utf8(&mut buf).as_bytes());
                         }
                         _ => {
                             self.i -= 1;

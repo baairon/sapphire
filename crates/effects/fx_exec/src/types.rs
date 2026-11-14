@@ -102,15 +102,15 @@ impl DevMipVal {
         }
         let rm = make_mipmap::RipMap { c, widths: self.widths.clone(), heights: self.heights.clone(), planes };
         let n = self.width * self.height;
-        let mut bp = vec![vec![0.0f32; n]; c];
+        let mut b_planes = vec![vec![0.0f32; n]; c];
         for y in 0..self.height {
             for x in 0..self.width {
                 for k in 0..c {
-                    bp[k][y * self.width + x] = f32::from_bits(rm.planes[0][rm.at(0, x as isize, y as isize, k)]);
+                    b_planes[k][y * self.width + x] = f32::from_bits(rm.planes[0][rm.at(0, x as isize, y as isize, k)]);
                 }
             }
         }
-        let m = MipImage { width: self.width, height: self.height, channels: c, filter: self.filter, wrap: self.wrap, ripmap: rm, scale: self.scale.clone(), base: Image { n, planes: bp } };
+        let m = MipImage { width: self.width, height: self.height, channels: c, filter: self.filter, wrap: self.wrap, ripmap: rm, scale: self.scale.clone(), base: Image { n, planes: b_planes } };
         let _ = self.host.set(m);
         Ok(self.host.get().expect("just set"))
     }
@@ -308,7 +308,7 @@ pub struct KParams {
 }
 
 impl KParams {
-    pub fn standin() -> KParams {
+    pub fn host_defaults() -> KParams {
         KParams { vec_one: 1.0, dst3_phase_bytes: 0, in_pool: false, geom: None, geom_mode: GeomMode::Dump, host_aspect: 1.0, static2_seed_a: 0, polar_mag_phase: 0, pad_pixel: [0.0; 4], blur_edge: 1, blur_render_scale: if std::env::var("NV9_BLUR_SCALE_OLD").map(|v| v == "1").unwrap_or(false) { 1 } else { 0 }, xy_head: 0, xy_head_mode: XyHeadMode::OneHead, persp_base: -1, palpha_base: -1, persp_rowbuf: false, palpha_rowbuf: false, xy_base: -1, palpha_cells: None, ds_dst_phase: 0, flow_host_phase: optical_flow_entry::placement::HOST_PHASE_DEFAULT, ds_off: std::env::var("DS1_OFF").map(|v| v == "1").unwrap_or(false), kparams_a: None, sharpen_count: None, sharpen_alias: false, blur_aspect: None, glint_align: glint_wire::host::Align::default() }
     }
 }
@@ -363,14 +363,14 @@ impl Geom {
 /// position (0.0 = integer pixel centres as the bilinear sampler uses them). NV9-A3.
 pub fn xy_grid(w: usize, h: usize, g: &Geom, centre: f32) -> Image {
     let (scx, scy) = (g.scx(), g.scy());
-    let x0 = g.left + scx - g.roi_x as f32;
-    let y0 = g.assumption_e + scy + g.assumption_h - g.roi_y as f32;
+    let origin_x = g.left + scx - g.roi_x as f32;
+    let sum_0 = g.assumption_e + scy + g.assumption_h - g.roi_y as f32;
     let mut px = Vec::with_capacity(w * h);
     let mut py = Vec::with_capacity(w * h);
     for y in 0..h {
         for x in 0..w {
-            px.push((x as f32 + centre - x0) / scx);
-            py.push((y0 - (y as f32 + centre)) / scy);
+            px.push((x as f32 + centre - origin_x) / scx);
+            py.push((sum_0 - (y as f32 + centre)) / scy);
         }
     }
     Image { n: w * h, planes: vec![px, py] }
@@ -422,76 +422,76 @@ pub fn xy_pixel_centre(w: usize, h: usize) -> Image {
 
 /// the x ramp of the original `variable 2` command (branch ecx == 2), one row of `cnt` floats.
 /// Source: start s = [ctx], step d = [ctx]; `head` = number of scalar head elements the code stores before its 32 byte aligned
-/// vector body ((32 - (dest & 31)) / 4, 0 when the destination is 32 byte aligned: ALIGN-ASSUMED, the allocator address is a host value).
+/// vector body ((32 - (dest & 31)) / 4, 0 when the destination is 32 byte aligned: ALIGN-ASSUMED, the allocator position is a host value).
 /// Order of operations as in the listing: scalar head accumulates, 16 wide body = broadcast(base) + d * lane (lane table 0..7, constants
 /// 16.0, 8.0, 1.0 measured in the emulator), the scalar accumulator runs in step, the 8 wide
 /// block, then the scalar tail. cnt < 29 or cnt < head + 16 take other branches (NOT READ): there a plain
 /// accumulating scalar loop is used (ASSUMED).
 pub fn x_ramp(cnt: usize, head: usize, s: f32, d: f32) -> Vec<f32> {
     let mut out = vec![0.0f32; cnt];
-    let mut x4 = s;
+    let mut pos = s;
     // (READ): cnt < 16 takes the plain scalar loop; 16 <= cnt < 29 skips the alignment peel
     // (head = 0) and takes the 16 wide body, the 8 wide block and the scalar tail; cnt >= 29 keeps the head (an earlier model assumed the plain loop for every cnt < 29).
     let head = if cnt >= 16 && cnt < 29 { 0 } else { head };
     if cnt < 16 || cnt < head + 16 {
         for o in out.iter_mut() {
-            *o = x4;
-            x4 += d;
+            *o = pos;
+            pos += d;
         }
         return out;
     }
     for o in out.iter_mut().take(head) {
-        *o = x4;
-        x4 += d;
+        *o = pos;
+        pos += d;
     }
-    let r10f = head as f32;
-    let x1 = d * 16.0;
-    let x10 = (d + s) - d;
-    let a5 = d.mul_add(r10f, x10);
-    let a11 = (r10f + 8.0).mul_add(d, x10);
-    let dl: Vec<f32> = (0..8).map(|l| d * l as f32).collect();
-    let mut v6: Vec<f32> = dl.iter().map(|t| a5 + t).collect();
-    let mut v5: Vec<f32> = dl.iter().map(|t| a11 + t).collect();
-    let r9 = cnt - ((cnt - head) & 0xf);
-    let mut r11 = head;
+    let head_f = head as f32;
+    let sum_1 = d * 16.0;
+    let sum_10 = (d + s) - d;
+    let fused_5 = d.mul_add(head_f, sum_10);
+    let fused_11 = (head_f + 8.0).mul_add(d, sum_10);
+    let level_steps: Vec<f32> = (0..8).map(|l| d * l as f32).collect();
+    let mut sum_6: Vec<f32> = level_steps.iter().map(|t| fused_5 + t).collect();
+    let mut sum_5: Vec<f32> = level_steps.iter().map(|t| fused_11 + t).collect();
+    let tap_a = cnt - ((cnt - head) & 0xf);
+    let mut tap_c = head;
     loop {
-        out[r11..r11 + 8].copy_from_slice(&v6);
-        out[r11 + 8..r11 + 16].copy_from_slice(&v5);
-        x4 += x1;
-        for t in v6.iter_mut() {
-            *t += x1;
+        out[tap_c..tap_c + 8].copy_from_slice(&sum_6);
+        out[tap_c + 8..tap_c + 16].copy_from_slice(&sum_5);
+        pos += sum_1;
+        for t in sum_6.iter_mut() {
+            *t += sum_1;
         }
-        for t in v5.iter_mut() {
-            *t += x1;
+        for t in sum_5.iter_mut() {
+            *t += sum_1;
         }
-        r11 += 16;
-        if r11 >= r9 {
+        tap_c += 16;
+        if tap_c >= tap_a {
             break;
         }
     }
-    if cnt > r9 {
-        let rcx = cnt - r9;
+    if cnt > tap_a {
+        let tail_len = cnt - tap_a;
         let mut k = 0usize;
-        if rcx >= 8 {
-            let x3 = d - s;
-            let x5 = d * 8.0;
-            let x6 = (r9 as f32 + 1.0).mul_add(d, -x3);
-            let mut v0: Vec<f32> = dl.iter().map(|t| x6 + t).collect();
-            k = rcx & !7;
-            let mut r10 = 0;
-            while r10 < k {
-                out[r9 + r10..r9 + r10 + 8].copy_from_slice(&v0);
-                x4 += x5;
-                for t in v0.iter_mut() {
-                    *t += x5;
+        if tail_len >= 8 {
+            let step_len = d - s;
+            let prod_5 = d * 8.0;
+            let fused_6 = (tap_a as f32 + 1.0).mul_add(d, -step_len);
+            let mut level_pos: Vec<f32> = level_steps.iter().map(|t| fused_6 + t).collect();
+            k = tail_len & !7;
+            let mut peel = 0;
+            while peel < k {
+                out[tap_a + peel..tap_a + peel + 8].copy_from_slice(&level_pos);
+                pos += prod_5;
+                for t in level_pos.iter_mut() {
+                    *t += prod_5;
                 }
-                r10 += 8;
+                peel += 8;
             }
         }
-        while k < rcx {
-            out[r9 + k] = x4;
+        while k < tail_len {
+            out[tap_a + k] = pos;
             k += 1;
-            x4 += d;
+            pos += d;
         }
     }
     out
@@ -518,7 +518,7 @@ pub fn xy_ramp_mode(w: usize, h: usize, head: usize, mode: XyHeadMode) -> Image 
     let g = Geom::dump(w, h, 1.0);
     let d = 2.0f32 / w as f32;
     let s = -1.0f32 + 1.0f32 / w as f32;
-    let y0 = g.assumption_h.mul_add(d, 1.0);
+    let sum_0 = g.assumption_h.mul_add(d, 1.0);
     // (PerRow; MEASURED by the record, XY_PHASE.md): the original writes the xy image one row per `variable 2` call into the
     // image plane at (plane base + row * W * 4); the x writer takes the head from THAT row pointer's offset mod 32, so the head changes
     // from row to row whenever W * 4 is not a multiple of 32 (W = 33: rows 0..4 have heads 0,7,6,5,4). `head` is the row 0 head; the
@@ -540,16 +540,16 @@ pub fn xy_ramp_mode(w: usize, h: usize, head: usize, mode: XyHeadMode) -> Image 
                 px.extend_from_slice(rows[hd].as_ref().unwrap());
             }
         }
-        let yv = (-(y as f32)).mul_add(d, y0);
+        let yv = (-(y as f32)).mul_add(d, sum_0);
         py.extend(std::iter::repeat(yv).take(w));
     }
     Image { n: w * h, planes: vec![px, py] }
 }
 
 /// the x writer's head count for a destination pointer with byte offset `off` (mod 32 used) from a 32 byte boundary:
-/// r10 = 0 when (ptr & 31) == 0, else (32 - (ptr & 31)) / 4 (the ptr & 3 != 0 plain loop cannot occur for f32 rows).
-pub fn row_head(off: usize) -> usize {
-    let p = off & 31;
+/// r10 = 0 when (row_phase & 31) == 0, else (32 - (row_phase & 31)) / 4 (the row_phase & 3 != 0 plain loop cannot occur for f32 rows).
+pub fn row_head(row_phase: usize) -> usize {
+    let p = row_phase & 31;
     if p == 0 {
         0
     } else {

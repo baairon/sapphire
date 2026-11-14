@@ -7,22 +7,21 @@ fn globals() -> Globals {
     let wt = weights::build_avx();
     Globals { guard: 0, tab: vec![[0; 3]; TAB_LEN], tail: [0; 3], weights: wt.float.clone(), scale: weights::scale_from_cutoff(9074) }
 }
-fn params(p1fc: f32) -> Params {
-    Params { p4c: 0.37, p7c: 1.25, pac: 0.8, pdc: 2.5, p10c: 1.5, p13c: 0.6, p16c: 0.9, p19c: 3.0, p1cc: 0.11, p1fc, p22c: 0.4, p25c: 0.7 }
+fn params(route: f32) -> Params {
+    Params { seed_x: 0.37, time: 1.25, amp_x: 0.8, rate_x: 2.5, sine_amp: 1.5, sine_freq: 0.6, amp_y: 0.9, rate_y: 3.0, seed_y: 0.11, route, limit_gap: 0.4, gain: 0.7 }
 }
 fn run(p: &Params, g: &mut Globals) -> f32 {
     let mut sv = RefServices::new();
-    let mut fr = Frame::new();
-    shake_shift_body(p, &Config::default(), g, &mut sv, &mut fr)
+    shake_shift_body(p, &Config::default(), g, &mut sv)
 }
 
 #[test]
 fn deterministic_both_routes() {
-    for p1fc in [0.0f32, 1.0] {
-        let a = run(&params(p1fc), &mut globals());
-        let b = run(&params(p1fc), &mut globals());
+    for route in [0.0f32, 1.0] {
+        let a = run(&params(route), &mut globals());
+        let b = run(&params(route), &mut globals());
         assert_eq!(a.to_bits(), b.to_bits());
-        assert!(a.is_finite(), "route {} gave {}", p1fc, a);
+        assert!(a.is_finite(), "route {} gave {}", route, a);
     }
 }
 
@@ -35,9 +34,9 @@ fn signed_zero_selects_the_same_route() {
 
 #[test]
 fn nan_flows_to_the_output() {
-    for p1fc in [0.0f32, 1.0] {
-        let mut p = params(p1fc);
-        p.p25c = f32::NAN;
+    for route in [0.0f32, 1.0] {
+        let mut p = params(route);
+        p.gain = f32::NAN;
         assert!(run(&p, &mut globals()).is_nan());
     }
 }
@@ -86,17 +85,17 @@ fn k_sine_is_the_measured_cell() {
 #[test]
 fn wave_has_one_cycle_per_reciprocal_frequency() {
     let mut p = params(0.0);
-    p.pac = 0.0;
-    p.p10c = 1.0;
-    p.p13c = 0.5;
-    p.p16c = 0.0;
-    p.p7c = 0.5; // 0.25 cycle
+    p.amp_x = 0.0;
+    p.sine_amp = 1.0;
+    p.sine_freq = 0.5;
+    p.amp_y = 0.0;
+    p.time = 0.5; // 0.25 cycle
     let quarter = run(&p, &mut globals());
     assert!((quarter - 1.0).abs() < 1e-5, "quarter cycle gave {}", quarter);
-    p.p7c = 1.0; // 0.5 cycle
+    p.time = 1.0; // 0.5 cycle
     let half = run(&p, &mut globals());
     assert!(half.abs() < 1e-5, "half cycle gave {}", half);
-    p.p7c = 1.5; // 0.75 cycle
+    p.time = 1.5; // 0.75 cycle
     let three_q = run(&p, &mut globals());
     assert!((three_q + 1.0).abs() < 1e-5, "three quarter cycle gave {}", three_q);
 }

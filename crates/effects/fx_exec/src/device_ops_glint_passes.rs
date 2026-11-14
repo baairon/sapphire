@@ -5,7 +5,7 @@
 //! same text as the column crate's scale), the active radii (radius <= 0 skipped), the parity of the two scratch buffers from line
 //! to line, and the refusals. A configuration the crate refuses returns the crate's own `Error` value before any launch.
 
-use fx_device::cl::Arg as ClArg;
+use fx_device::ocl::Arg as ClArg;
 use fx_device::{DevError, DevImage, Session};
 use std::sync::Arc;
 
@@ -52,8 +52,8 @@ fn plan(edge: i32, radii: &[i32], shift: i32, radii_align: u8, len: usize) -> Re
 #[allow(clippy::too_many_arguments)]
 fn launch(
     s: &Arc<Session>,
-    src: &fx_device::cl::Buffer<f32>,
-    dst: &fx_device::cl::Buffer<f32>,
+    src: &fx_device::ocl::Buffer<f32>,
+    dst: &fx_device::ocl::Buffer<f32>,
     p: &Plan,
     edge: i32,
     scratch_phase: [u8; 2],
@@ -98,8 +98,8 @@ pub fn glint_rows_dev(
     s: &Arc<Session>,
     cfg: &glint_pass_rows::Config,
     ph: &glint_pass_rows::Alignment,
-    src: &fx_device::cl::Buffer<f32>,
-    dst: &fx_device::cl::Buffer<f32>,
+    src: &fx_device::ocl::Buffer<f32>,
+    dst: &fx_device::ocl::Buffer<f32>,
     width: usize,
     rows: usize,
 ) -> Result<Result<(), glint_pass_rows::Error>, DevError> {
@@ -125,8 +125,8 @@ pub fn glint_cols_dev(
     s: &Arc<Session>,
     cfg: &glint_pass_cols::pass_b::Config,
     ph: &glint_pass_cols::pass_b::Alignment,
-    src: &fx_device::cl::Buffer<f32>,
-    dst: &fx_device::cl::Buffer<f32>,
+    src: &fx_device::ocl::Buffer<f32>,
+    dst: &fx_device::ocl::Buffer<f32>,
     width: usize,
     height: usize,
 ) -> Result<Result<(), glint_pass_cols::pass_b::Error>, DevError> {

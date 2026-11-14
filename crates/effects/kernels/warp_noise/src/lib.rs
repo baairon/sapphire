@@ -93,23 +93,23 @@ pub fn noise1(t: &Tables, oct: i32, seed: i32, x: f32, y: f32, persist: f32, out
     if last >= 0 {
         for i in 0..=last {
             let s = ((1u32 << (i as u32)) as i32) as f32;
-            let cx = cell_of(x * s);
+            let centre_x = cell_of(x * s);
             let cy = cell_of(y * s);
-            let cxf = cx as f32;
+            let cxf = centre_x as f32;
             let cyf = cy as f32;
-            let (dx, dy) = (s.mul_add(x, -cxf), y.mul_add(s, -cyf));
+            let (delta_x, dy) = (s.mul_add(x, -cxf), y.mul_add(s, -cyf));
             let two_dy = dy + dy;
             let dy2 = dy * dy;
-            let dx2 = dx * dx;
-            let two_dx = dx + dx;
-            let (p_dy, m_dy, p_dx, m_dx) = (dy.mul_add(dy, two_dy), dy.mul_add(dy, -two_dy), dx.mul_add(dx, two_dx), dx.mul_add(dx, -two_dx));
-            let ax = [p_dx + 1.0, dx2, m_dx + 1.0];
+            let dx2 = delta_x * delta_x;
+            let twice_delta_x = delta_x + delta_x;
+            let (p_dy, m_dy, p_delta_x, m_delta_x) = (dy.mul_add(dy, two_dy), dy.mul_add(dy, -two_dy), delta_x.mul_add(delta_x, twice_delta_x), delta_x.mul_add(delta_x, -twice_delta_x));
+            let x_terms = [p_delta_x + 1.0, dx2, m_delta_x + 1.0];
             let ay = [p_dy + 1.0, dy2, m_dy + 1.0];
             let mut sumw = 0.0f32;
             let mut acc = 0.0f32;
             for jy in 0..3usize {
                 for ix in 0..3usize {
-                    let d2 = ay[jy] + ax[ix];
+                    let d2 = ay[jy] + x_terms[ix];
                     let in_range = t.limit > d2;
                     if !in_range {
                         continue;
@@ -117,7 +117,7 @@ pub fn noise1(t: &Tables, oct: i32, seed: i32, x: f32, y: f32, persist: f32, out
                     let q = cvtt(d2 * F4096);
                     let wi = q >> 1;
                     let w = if wi >= 0 && (wi as usize) < t.weights.len() { t.weights[wi as usize] } else { return Err(Oob { index: wi }) };
-                    let cell_x = cx.wrapping_sub(1).wrapping_add(ix as i32);
+                    let cell_x = centre_x.wrapping_sub(1).wrapping_add(ix as i32);
                     let cell_y = cy.wrapping_sub(1).wrapping_add(jy as i32);
                     let shift = 4;
                     let salt = i ^ seed;
@@ -198,39 +198,39 @@ pub fn noise3(t: &Tables, oct: i32, seed: i32, x: f32, y: f32, persist: f32, out
     if last >= 0 {
         for i in 0..=last {
             let s = ((1u32 << (i as u32)) as i32) as f32;
-            let cx = cell_of(x * s);
+            let centre_x = cell_of(x * s);
             let cy = cell_of(y * s);
-            let dx = s.mul_add(x, -(cx as f32));
+            let delta_x = s.mul_add(x, -(centre_x as f32));
             let dy = y.mul_add(s, -(cy as f32));
-            let dx2 = dx * dx;
+            let dx2 = delta_x * delta_x;
             let dy2 = dy * dy;
-            let tx = dx + dx;
+            let tx = delta_x + delta_x;
             let ty = dy + dy;
             let xp = (1.0 + tx) + dx2;
             let xm = (1.0 - tx) + dx2;
             let yp = (1.0 + ty) + dy2;
             let ym = (1.0 - ty) + dy2;
-            let ax = [xp, dx2, xm];
+            let x_terms = [xp, dx2, xm];
             let ay = [yp, dy2, ym];
             let mut sumw = 0.0f32;
             let mut acc = [0.0f32; 3];
             for jy in 0..3usize {
                 for ix in 0..3usize {
-                    let d2 = ax[ix] + ay[jy];
+                    let d2 = x_terms[ix] + ay[jy];
                     if !(t.limit > d2) {
                         continue;
                     }
                     let q = cvtt(d2 * F4096);
                     let wi = q >> 1;
                     let w = if wi >= 0 && (wi as usize) < t.weights.len() { t.weights[wi as usize] } else { return Err(Oob { index: wi }) };
-                    let cell_x = cx.wrapping_sub(1).wrapping_add(ix as i32);
+                    let cell_x = centre_x.wrapping_sub(1).wrapping_add(ix as i32);
                     let cell_y = cy.wrapping_sub(1).wrapping_add(jy as i32);
                     let hv = hash_2(&t.hash, ((cell_y as u32) << 4) ^ ((i ^ seed) as u32), cell_x as u32);
-                    let e0 = ((hv & 0x1fff) as i32).wrapping_add(-4096);
-                    let e1 = (((hv >> 16) & 0x1fff) as i32).wrapping_add(-4096);
-                    let h2 = hv.wrapping_add(t.hash[(hv & 0xff) as usize]);
-                    let e2 = (((h2 >> 8) & 0x1fff) as i32).wrapping_add(-4096);
-                    let v = [(e0 as f32) * Q12, (e1 as f32) * Q12, (e2 as f32) * Q12];
+                    let grad_x = ((hv & 0x1fff) as i32).wrapping_add(-4096);
+                    let flag_1 = (((hv >> 16) & 0x1fff) as i32).wrapping_add(-4096);
+                    let hash_next = hv.wrapping_add(t.hash[(hv & 0xff) as usize]);
+                    let flag_2 = (((hash_next >> 8) & 0x1fff) as i32).wrapping_add(-4096);
+                    let v = [(grad_x as f32) * Q12, (flag_1 as f32) * Q12, (flag_2 as f32) * Q12];
                     sumw += w;
                     for c in 0..3 {
                         acc[c] = w * v[c] + acc[c];

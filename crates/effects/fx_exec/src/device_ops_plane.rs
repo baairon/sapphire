@@ -63,13 +63,13 @@ fn copy_alpha_plan(c: &NodeCall, args: &[ArgShape]) -> Result<(Vec<(usize, Src)>
     let cnt = if flag { c.tag - 1 } else { c.tag };
     let mut r = Vec::new();
     for i in 0..cnt {
-        let ch = if last0 < i { last0 } else { i };
-        r.push((i as usize, Src::Chan { arg: 0, chan: ch }));
+        let src_chan = if last0 < i { last0 } else { i };
+        r.push((i as usize, Src::Chan { arg: 0, chan: src_chan }));
     }
     if flag {
         let want = mode - 1;
-        let ch = if last1 < want { last1 } else { want };
-        r.push((tag - 1, Src::Chan { arg: 1, chan: ch }));
+        let src_chan = if last1 < want { last1 } else { want };
+        r.push((tag - 1, Src::Chan { arg: 1, chan: src_chan }));
     }
     Ok((r, tag))
 }
@@ -111,20 +111,20 @@ fn v3a_plan(c: &NodeCall, args: &[ArgShape]) -> Result<(Vec<(usize, Src)>, usize
     match row.pass {
         P::A => {
             let mx = k[0].wrapping_sub(1);
-            for ch in 0..3i32 {
-                let chan = if ch >= mx { mx } else { ch };
-                r.push((ch as usize, Src::Chan { arg: 0, chan }));
+            for src_chan in 0..3i32 {
+                let chan = if src_chan >= mx { mx } else { src_chan };
+                r.push((src_chan as usize, Src::Chan { arg: 0, chan }));
             }
             r.push((3, Src::Chan { arg: 1, chan: 0 }));
         }
         P::B => {
-            for ch in 0..row.out {
-                r.push((ch, Src::Chan { arg: 0, chan: ch as i32 }));
+            for src_chan in 0..row.out {
+                r.push((src_chan, Src::Chan { arg: 0, chan: src_chan as i32 }));
             }
         }
         P::C => {
-            for ch in 0..row.out {
-                r.push((ch, Src::Chan { arg: 0, chan: 0 }));
+            for src_chan in 0..row.out {
+                r.push((src_chan, Src::Chan { arg: 0, chan: 0 }));
             }
         }
         P::D => {
@@ -133,10 +133,10 @@ fn v3a_plan(c: &NodeCall, args: &[ArgShape]) -> Result<(Vec<(usize, Src)>, usize
         }
         P::F => {
             let mx = this_nch.wrapping_sub(1);
-            for ch in 0..row.out {
-                let ci = ch as i32;
+            for src_chan in 0..row.out {
+                let ci = src_chan as i32;
                 let chan = if ci < mx { ci } else { mx };
-                r.push((ch, Src::Chan { arg: 1, chan }));
+                r.push((src_chan, Src::Chan { arg: 1, chan }));
             }
         }
     }
@@ -154,8 +154,8 @@ fn append_plan(c: &NodeCall, args: &[ArgShape]) -> Result<(Vec<(usize, Src)>, us
     let k = counts(args)?;
     let (first, second) = (k[0] as usize, k[1] as usize);
     let mut r = Vec::new();
-    for ch in 0..first {
-        r.push((ch, Src::Chan { arg: 0, chan: ch as i32 }));
+    for src_chan in 0..first {
+        r.push((src_chan, Src::Chan { arg: 0, chan: src_chan as i32 }));
     }
     if first < 4 {
         let mut j = 0;
@@ -214,7 +214,7 @@ fn pool_cases(class: &'static str, accepts: fn(&NodeCall, &[ArgShape]) -> Result
         for &tag in tags {
             let runs: &[(usize, bool, usize)] = if has_const { &POOL_RUNS } else { &POOL_RUNS_IMG };
             for &(n, pool, rot) in runs {
-                let mut kp = KParams::standin();
+                let mut kp = KParams::host_defaults();
                 kp.in_pool = pool;
                 let call = NodeCall { idx: 0, class, tag, n, dims: (n, 1), kp: &kp };
                 if accepts(&call, &shapes).is_err() {
@@ -225,7 +225,7 @@ fn pool_cases(class: &'static str, accepts: fn(&NodeCall, &[ArgShape]) -> Result
                     .iter()
                     .enumerate()
                     .map(|(k, od)| match *od {
-                        Od::Img(ch) => Image { n, planes: (0..ch).map(|p| (0..n).map(|i| vals[(i * 5 + k * 97 + p * 31 + salt * 7) % vals.len()]).collect()).collect() },
+                        Od::Img(src_chan) => Image { n, planes: (0..src_chan).map(|p| (0..n).map(|i| vals[(i * 5 + k * 97 + p * 31 + salt * 7) % vals.len()]).collect()).collect() },
                         Od::Const(nl) => {
                             let mut l = [0u32; 4];
                             for (j, w) in l.iter_mut().enumerate() {
@@ -277,7 +277,7 @@ mod tests {
     /// accepts takes exactly the shapes on which the CPU wrapper runs: every operand count, kind and tag, compared with the CPU kernel.
     #[test]
     fn plane_ops_accept_exactly_what_the_cpu_wrapper_runs() {
-        let kp = KParams::standin();
+        let kp = KParams::host_defaults();
         let n = 6usize;
         for (op, nargs_list) in [(&COPY_ALPHA, vec![1usize, 2, 3]), (&GET_ALPHA, vec![1, 2]), (&V3_TO_V4_IF4_A, vec![2, 3]), (&APPEND, vec![1, 2, 3])] {
             let mut accepted = 0;

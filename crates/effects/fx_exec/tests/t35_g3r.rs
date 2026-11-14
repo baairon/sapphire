@@ -13,7 +13,7 @@ fn fx() -> &'static str { effects_vecdir::path_str("fixtures/g3r_dr2h") }
 
 #[test]
 fn t35_distort_cells_give_class3_planes3_head_r3() {
-    let cells = ClassCells { ae32_ready_c: 1, ae32_ready_d: 0, prog_mode_word: 2, prog_class_byte: Some(0), prog_flag_byte: Some(0x80), flag_2: None };
+    let cells = ClassCells { claim_setup_first: 1, claim_setup_second: 0, prog_mode_word: 2, prog_class_byte: Some(0), prog_flag_byte: Some(0x80), flag_2: None };
     let rows = RowCells { fmt_cell_a: 0, b_cell_o: 0, word_cell_a: 0 };
     let c = guard_one("Distort_RGB_Autogen", 0, "Source", &cells, &rows);
     assert_eq!(c, Ok(3), "class of Distort's Source");
@@ -51,7 +51,7 @@ fn t35_r3_dr2h_rows() {
         }
     }
     assert_eq!(n, 384, "2 calls x 3 planes x 64 words");
-    assert_eq!(bad, 0, "R3 on the route differs from dumped 0x7e9cc0 rows in {} of {} words", bad, n);
+    assert_eq!(bad, 0, "R3 on the route differs from dumped rows in {} of {} words", bad, n); // origin: 0x7e9cc0
 }
 
 #[test]
@@ -68,15 +68,15 @@ fn t35_variant_b_line_equals_read3b() {
         }
     }
     let n = mem.len() / 4;
-    let mut g3 = Vec::new();
-    convert_pair::convert_from_source_line_3_b(&mem, &mut g3, n);
-    let (mut p0, mut p1, mut p2) = (vec![0u32; n], vec![0u32; n], vec![0u32; n]);
+    let mut late_in = Vec::new();
+    convert_pair::convert_from_source_line_3_b(&mem, &mut late_in, n);
+    let (mut p0, mut plane_p1, mut p2) = (vec![0u32; n], vec![0u32; n], vec![0u32; n]);
     {
-        let mut p: [&mut [u32]; 3] = [&mut p0, &mut p1, &mut p2];
+        let mut p: [&mut [u32]; 3] = [&mut p0, &mut plane_p1, &mut p2];
         format14_read_b::read3b(&mem, &mut p, 0, n as i32, false).unwrap();
     }
-    assert_eq!(g3.len(), 3);
-    assert_eq!(g3[0], p0, "plane 0");
-    assert_eq!(g3[1], p1, "plane 1");
-    assert_eq!(g3[2], p2, "plane 2");
+    assert_eq!(late_in.len(), 3);
+    assert_eq!(late_in[0], p0, "plane 0");
+    assert_eq!(late_in[1], plane_p1, "plane 1");
+    assert_eq!(late_in[2], p2, "plane 2");
 }

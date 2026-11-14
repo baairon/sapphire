@@ -158,7 +158,7 @@ pub fn canon_orig(text: &str) -> Canon {
     }
     let mut val: HashMap<String, String> = HashMap::new();
     let mut c = Canon::default();
-    let is_input_name = |n: &str| n.chars().next().map(|ch| ch.is_ascii_uppercase()).unwrap_or(false) || n == "xy";
+    let is_input_name = |n: &str| n.chars().next().map(|chan| chan.is_ascii_uppercase()).unwrap_or(false) || n == "xy";
     let get = |val: &HashMap<String, String>, r: &str| val.get(r).cloned().unwrap_or_else(|| format!("?{}", r));
     for cmd in &cmds {
         let prefixes = ["(convert-from-source ", "(variable ", "(constant ", "(copy-images ", "(convert-to-dest ", "(run-primitive "];
@@ -263,7 +263,7 @@ pub fn plan_text(cp: &CompiledProgram) -> String {
     }
     for n in &cp.nodes {
         let lanes: Vec<String> = n.lanes.iter().map(|b| format!("{:08x}", b)).collect();
-        s.push_str(&format!("NODE\t{}\t{}\tkind={}\tprim={}\tout_ch={}\targs={}\tlanes={}\tb160={}\tfolded={}\n", n.idx, n.name, n.kind, if n.prim == "-" { "" } else { &n.prim }, n.elnum, n.args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(","), lanes.join(""), n.b160 as u8, n.folded as u8));
+        s.push_str(&format!("NODE\t{}\t{}\tkind={}\tprim={}\tout_ch={}\targs={}\tlanes={}\tb160={}\tfolded={}\n", n.idx, n.name, n.kind, if n.prim == "-" { "" } else { &n.prim }, n.elnum, n.args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(","), lanes.join(""), n.is_const_node as u8, n.folded as u8));
     }
     s.push_str(&format!("EVALTEXT\tEval list:\\n{}\n", eval.join("\\n")));
     s
@@ -330,7 +330,7 @@ pub fn plan_text_runlevel(cp: &CompiledProgram) -> String {
     }
     for n in &cp.nodes {
         let lanes: Vec<String> = n.lanes.iter().map(|b| format!("{:08x}", b)).collect();
-        s.push_str(&format!("NODE\t{}\t{}\tkind={}\tprim={}\tout_ch={}\targs={}\tlanes={}\tb160={}\tfolded={}\n", n.idx, n.name, n.kind, if n.prim == "-" { "" } else { &n.prim }, n.elnum, n.args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(","), lanes.join(""), n.b160 as u8, n.folded as u8));
+        s.push_str(&format!("NODE\t{}\t{}\tkind={}\tprim={}\tout_ch={}\targs={}\tlanes={}\tb160={}\tfolded={}\n", n.idx, n.name, n.kind, if n.prim == "-" { "" } else { &n.prim }, n.elnum, n.args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(","), lanes.join(""), n.is_const_node as u8, n.folded as u8));
     }
     s.push_str(&format!("EVALTEXT\tEval list:\\n{}\n", eval.join("\\n")));
     s

@@ -12,7 +12,7 @@
 use crate::backend::NodeCall;
 use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use fx_common::nanop::NanOps;
-use fx_device::cl::Arg as ClArg;
+use fx_device::ocl::Arg as ClArg;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
 use std::sync::Arc;
@@ -90,7 +90,7 @@ pub fn params_of(st: &tilt::State) -> [u32; 26] {
 }
 
 /// One launch of `tilt_f32` on the two input planes with the given parameter words.
-pub fn tilt_launch(s: &Arc<Session>, x: &fx_device::cl::Buffer<f32>, y: &fx_device::cl::Buffer<f32>, params: &[u32; 26], n: usize) -> Result<DevImage, DevError> {
+pub fn tilt_launch(s: &Arc<Session>, x: &fx_device::ocl::Buffer<f32>, y: &fx_device::ocl::Buffer<f32>, params: &[u32; 26], n: usize) -> Result<DevImage, DevError> {
     let out = DevImage::alloc(s, 2, n)?;
     let pr = s.input(&params[..])?;
     s.launch("tilt_f32", n, &[x.arg(), y.arg(), out.plane(0).arg(), out.plane(1).arg(), pr.arg(), ClArg::U32(n as u32)])?;
@@ -163,12 +163,12 @@ fn tilt_corpus() -> Vec<SelfCase> {
     let vals = adversarial_f32(300, 91);
     let mut out = Vec::new();
     let mut idx = 0usize;
-    for (si, set) in param_sets().iter().enumerate() {
+    for (set_idx, set) in param_sets().iter().enumerate() {
         let lanes = lanes_of(set);
         for &(w, h) in &[(1usize, 1usize), (9, 1), (45, 23)] {
             let n = w * h;
             let pick = |k: usize, i: usize| -> f32 {
-                match (si + k) % 3 {
+                match (set_idx + k) % 3 {
                     0 => vals[(i * 7 + k * 13 + idx) % vals.len()],
                     1 => ((i as f32) * 0.37 - (n as f32) * 0.18) * if k == 0 { 1.0 } else { -0.8 },
                     _ => {
@@ -183,7 +183,7 @@ fn tilt_corpus() -> Vec<SelfCase> {
             let x: Vec<f32> = (0..n).map(|i| pick(0, i)).collect();
             let y: Vec<f32> = (0..n).map(|i| pick(1, i)).collect();
             out.push(SelfCase {
-                name: format!("tilt set{si} {w}x{h}"),
+                name: format!("tilt set{set_idx} {w}x{h}"),
                 dims: (w, h),
                 tag: 2,
                 args: vec![crate::types::Image { n, planes: vec![x, y] }],

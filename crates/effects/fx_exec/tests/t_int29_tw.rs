@@ -52,7 +52,7 @@ fn run(by: &[((i32, f32), f32)]) -> Result<fx_exec::exec::ExecOutput, fx_exec::t
     images.insert("Source".to_string(), img(n, 0.5));
     let inp = Inputs { width: w, height: h, images };
     let mut host = HostFrames::default();
-    host.tw_route = Some(TwRoute { big_f: 2.5, dur_frames: 240.0, limit_cell: 0, step: 2, kind: 0, f4: 0, r8: 0, r9: 1 });
+    host.tw_route = Some(TwRoute { big_f: 2.5, dur_frames: 240.0, limit_cell: 0, step: 2, kind: 0, ctx_cell: 0, route_step: 0, tap_a: 1 });
     for &((fr, st), seed) in by {
         host.by_request.insert((fr, st.to_bits()), img(n, seed));
     }

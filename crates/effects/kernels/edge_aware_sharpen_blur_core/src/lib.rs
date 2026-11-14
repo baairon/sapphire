@@ -49,13 +49,13 @@ pub struct Args {
 pub trait Host {
     fn powf(&mut self, x: f32, y: f32) -> f32;
     /// returns the handle written to [rdi]. `hxhy` are the written frame values (for the record only).
-    fn scratch_init(&mut self, this: u64, bytes: i64, ecx: u32, r8d: u32, g0: u64, g1: u64, hx: &[f32], hy: &[f32]) -> u64;
+    fn scratch_init(&mut self, this: u64, bytes: i64, init_flags: u32, fill_flags: u32, tag_lo: u64, tag_hi: u64, hx: &[f32], hy: &[f32]) -> u64;
     ///  with job pointer `job`struct fields radius (bits), source, destination, aux.
     fn pool_run(&mut self, this: u64, job: u32, radius: u32, src: u64, dst: u64, aux: u64);
     /// (dst, src, edx = 0, ROI qword 0, ROI qword 1, p_f).
-    fn copy(&mut self, dst: u64, src: u64, edx: u32, w0: u64, w1: u64, w2: u64);
+    fn copy(&mut self, dst: u64, src: u64, copy_mode: u32, roi_xy: u64, roi_wh: u64, aux_handle: u64);
     /// (handle) after the two globals were cleared.
-    fn scratch_free(&mut self, handle: u64, g0: u64, g1: u64);
+    fn scratch_free(&mut self, handle: u64, tag_lo: u64, tag_hi: u64);
 }
 
 /// vrsqrtss under APPROX-MODEL: the emulator (Unicorn/QEMU legacy rsqrtss) computes 1 / sqrt(x) with both operations rounded to f32. MEASURED
@@ -84,21 +84,21 @@ pub fn exp2_lane(x: f32) -> Result<f32, CoreError> {
 
 /// Radii of the n passes (frame layout of the original: hx and hy in the frame, one value per pass i; both inside one 10 float window).
 pub fn radii(sx: f32, sy: f32, pw: f32, n: i32) -> Result<(Vec<f32>, Vec<f32>), CoreError> {
-    let x13 = pw - 1.0f32;
-    let r = rsqrt_ss(x13);
-    let x2 = x13 * r;
-    let x5 = r * -0.5f32;
-    let x3 = x2 * r;
-    let x6 = x3 - 3.0f32;
-    let x10 = x5 * x6;
-    let cx = (3.0f32 * sx) * x10;
-    let cy = (3.0f32 * sy) * x10;
+    let diff_13 = pw - 1.0f32;
+    let r = rsqrt_ss(diff_13);
+    let prod_2 = diff_13 * r;
+    let prod_5 = r * -0.5f32;
+    let prod_3 = prod_2 * r;
+    let diff_6 = prod_3 - 3.0f32;
+    let prod_10 = prod_5 * diff_6;
+    let centre_x = (3.0f32 * sx) * prod_10;
+    let cy = (3.0f32 * sy) * prod_10;
     let mut hx = Vec::new();
     let mut hy = Vec::new();
     for i in 0..n.max(0) {
         let e = exp2_lane((n - 1 - i) as f32)?;
         hy.push(cy * e);
-        hx.push(cx * e);
+        hx.push(centre_x * e);
     }
     Ok((hx, hy))
 }
@@ -132,9 +132,9 @@ pub fn core_mode4<H: Host>(a: &Args, h: &mut H) -> Result<(), CoreError> {
         }
     }
     if a.p_c != s {
-        let w0 = (a.roi[0] as u32 as u64) | ((a.roi[1] as u32 as u64) << 32);
-        let w1 = (a.roi[2] as u32 as u64) | ((a.roi[3] as u32 as u64) << 32);
-        h.copy(a.p_c, s, 0, w0, w1, a.p_f);
+        let roi_xy = (a.roi[0] as u32 as u64) | ((a.roi[1] as u32 as u64) << 32);
+        let roi_wh = (a.roi[2] as u32 as u64) | ((a.roi[3] as u32 as u64) << 32);
+        h.copy(a.p_c, s, 0, roi_xy, roi_wh, a.p_f);
     }
     if handle != 0 {
         h.scratch_free(handle, 0, 0);

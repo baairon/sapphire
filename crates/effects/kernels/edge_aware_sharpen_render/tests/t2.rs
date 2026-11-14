@@ -44,7 +44,7 @@ fn t2_all() {
         }
         let th = This { n, sig_byte: m["sig_byte"] != 0, sigma0: f("sigma0"), mode: f("mode"), variant: f("variant"), bcflag: f("bcflag"), iters: f("iters"), scale: f("scale"), output_a: f("f10c"), arr };
         let (w, h) = (m["w"] as i32, m["h"] as i32);
-        let cx = Cx { cw: m["cw"] as i32, w, h, kcell: f("kcell") };
+        let centre_x = Cx { cw: m["cw"] as i32, w, h, kcell: f("kcell") };
         let wh = (w * h) as usize;
         let nu = n as usize;
         let nt = 3 * nu + 5;
@@ -54,7 +54,7 @@ fn t2_all() {
         let ids = Ids { inp: [0, wh, 2 * wh, 3 * wh], t: (0..nt).map(|k| (4 + k) * wh).collect(), out: (0..nu).map(|k| (4 + nt + k) * wh).collect() };
         cases += 1;
         let pools_exp: Vec<u32> = fs::read_to_string(format!("{}/{}.pools", dir, cid)).unwrap().split_whitespace().map(|s| u32::from_str_radix(s, 16).unwrap()).collect();
-        match slot52(&th, &cx, &ids, &mut mem, 0) {
+        match slot52(&th, &centre_x, &ids, &mut mem, 0) {
             Err(e) => {
                 errs += 1;
                 first.push(format!("{} native error {:?}", cid, e));

@@ -51,7 +51,7 @@ fn planes_against_emulator() {
                     port_blk_a: g("f28") as i32,
                     port_blk_b: g("f2c") as i32,
                     port_blk_c: g("f44") as i32,
-                    s8: g("s8") as i32,
+                    alpha_cells: g("s8") as i32,
                     port_info_b: g("s48") as i32,
                     port_info_a: f64::from_bits((g("s30lo") as u64) | ((g("s30hi") as u64) << 32)),
                 };
@@ -152,7 +152,7 @@ fn planes_against_emulator() {
         }
     }
     println!(
-        "ENTRY T2 planes (slot 52 0x548e00): sets {} compared {} floats {} (written {}) differing {} max_ulp {} | outside contract {} (port Err on {}) | written ramp samples: interior {} at 1.0 {} at rmax(<1, vector part) {} at 0 {} nan {} | fill cases {} ({} floats) | destination phases {:?} | sections {:?} | input sensitivity {}/{} missed {:?} | first: {}",
+        "ENTRY T2 planes (slot 52): sets {} compared {} floats {} (written {}) differing {} max_ulp {} | outside contract {} (port Err on {}) | written ramp samples: interior {} at 1.0 {} at rmax(<1, vector part) {} at 0 {} nan {} | fill cases {} ({} floats) | destination phases {:?} | sections {:?} | input sensitivity {}/{} missed {:?} | first: {}", // origin: 0x548e00
         sets, compared, floats, written, diff, maxulp, outc, outc_ok, interior, at_one, at_rmax_vec, zeros, nans, fills, fill_floats, phs, sec, killed.len(), killed.len() + missed.len(), missed, first
     );
     assert_eq!(outc, outc_ok);

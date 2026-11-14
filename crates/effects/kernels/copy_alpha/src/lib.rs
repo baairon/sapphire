@@ -72,11 +72,11 @@ fn int_to_f32(bits: u32) -> f32 {
     (bits as i32) as f32
 }
 
-fn take_channel(src: &Source, ch: i32, out: &mut [f32], n: usize, pool_idle: bool) -> Result<(), Error> {
+fn take_channel(src: &Source, chan: i32, out: &mut [f32], n: usize, pool_idle: bool) -> Result<(), Error> {
     let last = match src {
         Source::Scalar { last, .. } | Source::Planes { last, .. } => *last,
     };
-    let c = if last < ch { last } else { ch };
+    let c = if last < chan { last } else { chan };
     if c < 0 {
         return Err(Error::ChannelRange);
     }

@@ -71,34 +71,34 @@ fn per_element_callbacks_are_partition_free() {
                     flow_stencil_rows(&mut st, &b, &c, &d, w, rows, stride, s, 0, rows, phase);
                     let mut ac = a.clone();
                     add_const(&mut ac, n as i64, s);
-                    let mut bl = vec![0.0f32; n];
-                    blend3(&a, &b, &c, &mut bl, n as i64, phase);
+                    let mut blend = vec![0.0f32; n];
+                    blend3(&a, &b, &c, &mut blend, n as i64, phase);
                     for t in 2..=6 {
-                        let mut aff2 = a.clone();
+                        let mut aff_out = a.clone();
                         let mut sub2 = vec![0.0f32; n];
                         let (mut fx2, mut fy2) = (b.clone(), c.clone());
                         let mut st2 = vec![0.0f32; n];
-                        let mut ac2 = a.clone();
+                        let mut acc_out = a.clone();
                         let mut bl2 = vec![0.0f32; n];
                         for tid in 0..t {
-                            let (r0, k) = chunk(rows, t, tid);
-                            affine_rows(&mut aff2, w, stride, r0, k, s, off, phase);
-                            sub_scaled_rows(&a, &b, &mut sub2, w, stride, r0, k, s, phase);
-                            normalize_flow_rows(&a, &mut fx2, &mut fy2, w, rows, stride, r0, k, num, den);
-                            flow_stencil_rows(&mut st2, &b, &c, &d, w, rows, stride, s, r0, k, phase);
-                            let (e0, ek) = chunk(n as i32, t, tid);
-                            let ph = (phase + 4 * e0 as usize) & 31;
-                            add_const(&mut ac2[e0 as usize..], ek as i64, s);
-                            blend3(&a[e0 as usize..], &b[e0 as usize..], &c[e0 as usize..], &mut bl2[e0 as usize..], ek as i64, ph);
+                            let (row_start, k) = chunk(rows, t, tid);
+                            affine_rows(&mut aff_out, w, stride, row_start, k, s, off, phase);
+                            sub_scaled_rows(&a, &b, &mut sub2, w, stride, row_start, k, s, phase);
+                            normalize_flow_rows(&a, &mut fx2, &mut fy2, w, rows, stride, row_start, k, num, den);
+                            flow_stencil_rows(&mut st2, &b, &c, &d, w, rows, stride, s, row_start, k, phase);
+                            let (start, ek) = chunk(n as i32, t, tid);
+                            let ph = (phase + 4 * start as usize) & 31;
+                            add_const(&mut acc_out[start as usize..], ek as i64, s);
+                            blend3(&a[start as usize..], &b[start as usize..], &c[start as usize..], &mut bl2[start as usize..], ek as i64, ph);
                         }
-                        let ok = bits(&aff) == bits(&aff2) && bits(&sub) == bits(&sub2) && bits(&fx) == bits(&fx2) && bits(&fy) == bits(&fy2)
-                            && bits(&st) == bits(&st2) && bits(&ac) == bits(&ac2) && bits(&bl) == bits(&bl2);
+                        let ok = bits(&aff) == bits(&aff_out) && bits(&sub) == bits(&sub2) && bits(&fx) == bits(&fx2) && bits(&fy) == bits(&fy2)
+                            && bits(&st) == bits(&st2) && bits(&ac) == bits(&acc_out) && bits(&blend) == bits(&bl2);
                         cases += 1;
                         if !ok {
                             bad += 1;
                             println!("DIFF w {} rows {} extra {} phase {} T {}: aff {} sub {} fx {} fy {} st {} ac {} bl {}", w, rows, extra, phase, t,
-                                bits(&aff) == bits(&aff2), bits(&sub) == bits(&sub2), bits(&fx) == bits(&fx2), bits(&fy) == bits(&fy2),
-                                bits(&st) == bits(&st2), bits(&ac) == bits(&ac2), bits(&bl) == bits(&bl2));
+                                bits(&aff) == bits(&aff_out), bits(&sub) == bits(&sub2), bits(&fx) == bits(&fx2), bits(&fy) == bits(&fy2),
+                                bits(&st) == bits(&st2), bits(&ac) == bits(&acc_out), bits(&blend) == bits(&bl2));
                         }
                     }
                 }
@@ -123,9 +123,9 @@ fn sum_rows_is_one_chunk() {
                     *v = 1.0;
                 }
             }
-            let mut h1 = ComposedHost::new(1);
-            h1.add_plane(1, plane.clone(), 0);
-            let base = slot_reduce(&h1.sum_slots(1, w, rows, w).unwrap());
+            let mut composed = ComposedHost::new(1);
+            composed.add_plane(1, plane.clone(), 0);
+            let base = slot_reduce(&composed.sum_slots(1, w, rows, w).unwrap());
             for t in 2..=6 {
                 let mut h = ComposedHost::new(t);
                 h.add_plane(1, plane.clone(), 0);

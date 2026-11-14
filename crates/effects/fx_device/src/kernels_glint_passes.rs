@@ -34,26 +34,26 @@ float gp_mul(float a, float b) {
     float r = a * b;
     return (r == r) ? r : gp_pick(a, b);
 }
-/* vfmsub213ss d, s2, s3: d * s2 - s3, one rounding; NaN priority d, s2, s3. */
-float gp_fms213(float d, float s2, float s3) {
-    float r = fma(d, s2, -s3);
+/* vfmsub213ss d, second, third: d * second - third, one rounding; NaN priority d, second, third. */
+float gp_fms213(float d, float second, float third) {
+    float r = fma(d, second, -third);
     if (r == r) {
         return r;
     }
     if (d != d) {
         return as_float(as_uint(d) | 0x400000u);
     }
-    return gp_pick(s2, s3);
+    return gp_pick(second, third);
 }
 
-/* (l0 + l4 + l2 + l6) + (l1 + l5 + l3 + l7) in the CPU's grouping */
+/* (lane0 + lane4 + lane2 + lane6) + (l1 + lane5 + lane3 + lane7) in the CPU's grouping */
 float gp_reduce(float* z) {
-    float q0 = gp_add(z[0], z[4]);
-    float q1 = gp_add(z[1], z[5]);
-    float q2 = gp_add(z[2], z[6]);
-    float q3 = gp_add(z[3], z[7]);
-    float lo = gp_add(q0, q2);
-    float hi = gp_add(q1, q3);
+    float zsum0 = gp_add(z[0], z[4]);
+    float zsum1 = gp_add(z[1], z[5]);
+    float zsum2 = gp_add(z[2], z[6]);
+    float zsum3 = gp_add(z[3], z[7]);
+    float lo = gp_add(zsum0, zsum2);
+    float hi = gp_add(zsum1, zsum3);
     return gp_add(lo, hi);
 }
 
@@ -319,20 +319,20 @@ __kernel void glint_lines_f32(__global const float* src, __global float* dst, __
         return;
     }
     int w = (int)len;
-    __global const float* sp = src + j * (size_t)lstep;
+    __global const float* src_row = src + j * (size_t)lstep;
     __global float* dp = dst + j * (size_t)lstep;
-    __global float* b0 = scr + j * 2 * (size_t)len;
-    __global float* b1 = b0 + len;
+    __global float* scratch0 = scr + j * 2 * (size_t)len;
+    __global float* scratch1 = scratch0 + len;
     int cur = (int)((j * (size_t)flip) & 1u);
     for (int i = 0; i < 2147483647; i++) {
         if (i >= w) {
             break;
         }
-        float v = sp[(size_t)i * st];
+        float v = src_row[(size_t)i * st];
         if (cur == 0) {
-            b0[i] = v;
+            scratch0[i] = v;
         } else {
-            b1[i] = v;
+            scratch1[i] = v;
         }
     }
     int a = cur;
@@ -342,23 +342,23 @@ __kernel void glint_lines_f32(__global const float* src, __global float* dst, __
         }
         int r = radii[k];
         if (a == 0) {
-            gp_box(b0, b1, (int)edge, r, w, al0);
+            gp_box(scratch0, scratch1, (int)edge, r, w, al0);
         } else {
-            gp_box(b1, b0, (int)edge, r, w, al1);
+            gp_box(scratch1, scratch0, (int)edge, r, w, al1);
         }
         a = 1 - a;
     }
     cur = a;
     if (shift != 0u) {
         if (cur == 0) {
-            gp_blend(b0, b1, w, (int)shift);
+            gp_blend(scratch0, scratch1, w, (int)shift);
         } else {
-            gp_blend(b1, b0, w, (int)shift);
+            gp_blend(scratch1, scratch0, w, (int)shift);
         }
         cur = 1 - cur;
     }
     float scale = as_float(scale_bits);
-    __global const float* fin = (cur == 0) ? b0 : b1;
+    __global const float* fin = (cur == 0) ? scratch0 : scratch1;
     for (int i = 0; i < 2147483647; i++) {
         if (i >= w) {
             break;

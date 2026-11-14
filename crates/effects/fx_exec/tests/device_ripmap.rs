@@ -48,8 +48,8 @@ fn a_device_built_ripmap_feeds_the_device_samplers_with_the_cpu_bytes() {
     let mut b = DeviceBackend::with_allowlist(ctx, &["make_mipmap", "blur_warp", "warp_rel", "warp"]);
     let (w, h) = (23usize, 11usize);
     let n = w * h;
-    let kp = KParams::standin();
-    let mk = |ch: usize| Image { n, planes: (0..ch).map(|p| (0..n).map(|i| ((i * 7 + p * 13) % 31) as f32 * 0.07 - 0.4).collect()).collect() };
+    let kp = KParams::host_defaults();
+    let mk = |chan: usize| Image { n, planes: (0..chan).map(|p| (0..n).map(|i| ((i * 7 + p * 13) % 31) as f32 * 0.07 - 0.4).collect()).collect() };
     let cst = |v: &[f32]| {
         let mut l = [0u32; 4];
         for (i, x) in v.iter().enumerate() {
@@ -58,13 +58,13 @@ fn a_device_built_ripmap_feeds_the_device_samplers_with_the_cpu_bytes() {
         Val::Const { n: v.len(), lanes: l }
     };
     let coords = |s: f32| Image { n, planes: vec![(0..n).map(|i| ((i % 17) as f32 / 8.0 - 1.0) * s).collect(), (0..n).map(|i| ((i % 5) as f32 / 2.0 - 1.0) * s).collect()] };
-    for ch in 1..=4usize {
-        let src = Val::Img(Rc::new(mk(ch)));
+    for chan in 1..=4usize {
+        let src = Val::Img(Rc::new(mk(chan)));
         let mm_args = vec![src.clone(), cst(&[1.0, 2.0]), cst(&[1.0])];
-        let call = NodeCall { idx: 0, class: "make_mipmap", tag: ch as i32, n, dims: (w, h), kp: &kp };
+        let call = NodeCall { idx: 0, class: "make_mipmap", tag: chan as i32, n, dims: (w, h), kp: &kp };
         let mip = b.try_run(&call, &mm_args).expect("make_mipmap on the device");
         assert!(matches!(mip, Val::DevMip(_)));
-        let cpu_mip = match kernels::run_any("make_mipmap", ch as i32, &[Arg::Img(&mk(ch)), Arg::Const { n: 2, lanes: [1.0f32.to_bits(), 2.0f32.to_bits(), 0, 0] }, Arg::Const { n: 1, lanes: [1.0f32.to_bits(), 0, 0, 0] }], n, (w, h), &kp).unwrap() {
+        let cpu_mip = match kernels::run_any("make_mipmap", chan as i32, &[Arg::Img(&mk(chan)), Arg::Const { n: 2, lanes: [1.0f32.to_bits(), 2.0f32.to_bits(), 0, 0] }, Arg::Const { n: 1, lanes: [1.0f32.to_bits(), 0, 0, 0] }], n, (w, h), &kp).unwrap() {
             Out::Mip(m) => m,
             _ => panic!("ripmap expected"),
         };
@@ -74,14 +74,14 @@ fn a_device_built_ripmap_feeds_the_device_samplers_with_the_cpu_bytes() {
             ("warp", vec![mip.clone(), Val::Img(Rc::new(coords(0.9))), cst(&[1.0, 2.0]), cst(&[0.0])]),
         ];
         for (class, args) in cases {
-            let call = NodeCall { idx: 1, class, tag: ch as i32, n, dims: (w, h), kp: &kp };
-            let got = b.try_run(&call, &args).unwrap_or_else(|e| panic!("{class} ch{ch}: {e:?}"));
+            let call = NodeCall { idx: 1, class, tag: chan as i32, n, dims: (w, h), kp: &kp };
+            let got = b.try_run(&call, &args).unwrap_or_else(|e| panic!("{class} ch{chan}: {e:?}"));
             let Val::Dev(d) = got else { panic!("device image expected") };
             let dev = d.materialize().unwrap().clone();
             let cpu_args: Vec<Arg> = args.iter().enumerate().map(|(i, a)| if i == 0 { Arg::Mip(&cpu_mip) } else { a.as_arg() }).collect();
-            let Out::Img(want) = kernels::run_any(class, ch as i32, &cpu_args, n, (w, h), &kp).unwrap() else { panic!("image expected") };
+            let Out::Img(want) = kernels::run_any(class, chan as i32, &cpu_args, n, (w, h), &kp).unwrap() else { panic!("image expected") };
             for (p, (g, e)) in dev.planes.iter().zip(&want.planes).enumerate() {
-                assert!(g.iter().zip(e).all(|(a, c)| a.to_bits() == c.to_bits()), "{class} ch{ch} plane {p}");
+                assert!(g.iter().zip(e).all(|(a, c)| a.to_bits() == c.to_bits()), "{class} ch{chan} plane {p}");
             }
         }
         // the host copy of the device ripmap equals the CPU ripmap

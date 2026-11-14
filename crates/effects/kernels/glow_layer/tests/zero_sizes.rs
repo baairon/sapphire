@@ -21,8 +21,8 @@ fn zero_sizes_are_noops() {
             let mut it = dst.iter_mut();
             let mut dm: Vec<PlaneMut> = (0..n).map(|_| PlaneMut { data: it.next().unwrap(), width: w, height: h, stride: 5 }).collect();
             assert_eq!(render_full(&p, &pl, &mut dm), Ok(()));
-            let bp = BrightParams { thresholds: [0.5; 3] };
-            assert_eq!(bright_pass(&bp, &pl, &mut dm), Ok(()));
+            let bright_params = BrightParams { thresholds: [0.5; 3] };
+            assert_eq!(bright_pass(&bright_params, &pl, &mut dm), Ok(()));
         }
     }
 }

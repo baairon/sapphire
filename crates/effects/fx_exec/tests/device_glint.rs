@@ -43,7 +43,7 @@ fn the_glint_op_passes_the_self_check_against_the_cpu() {
 
 /// The CPU kernel of a corpus case.
 fn cpu_of(case: &fx_exec::device_ops::SelfCase) -> Result<Image, String> {
-    let kp = case.kp.unwrap_or_else(KParams::standin);
+    let kp = case.kp.unwrap_or_else(KParams::host_defaults);
     let n = case.dims.0 * case.dims.1;
     let mut imgs = case.args.iter();
     let total = case.args.len() + case.consts.len();
@@ -139,7 +139,7 @@ fn declines_and_refusals() {
     let n = w * h;
     let src = Image { n, planes: (0..3).map(|p| (0..n).map(|i| ((i * 7 + p * 3) % 17) as f32 / 16.0).collect()).collect() };
     let up = DevImage::upload(&ctx.session, &src.planes.iter().map(|p| p.as_slice()).collect::<Vec<_>>()).unwrap();
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     fn call_of(tag: i32, n: usize, dims: (usize, usize), kp: &KParams) -> NodeCall<'_> {
         NodeCall { idx: 0, class: "glint", tag, n, dims, kp }
     }
@@ -164,7 +164,7 @@ fn declines_and_refusals() {
     sh[1] = ArgShape::Img { channels: 3 };
     assert!((GLINT.accepts)(&call_of(3, n, (w, h), &kp), &sh).is_err());
     // a nonzero blur phase
-    let mut kp_blur = KParams::standin();
+    let mut kp_blur = KParams::host_defaults();
     kp_blur.glint_align.blur = 4;
     assert!((GLINT.accepts)(&call_of(3, n, (w, h), &kp_blur), &shapes(&ok, img3)).is_err());
     // a frame over i32::MAX / 4 samples (shape only)
@@ -250,7 +250,7 @@ fn every_blend_kernel_mutant_is_refused_by_the_self_check() {
 
 /// Runs `glint_blend_f32` directly with the scale-1 route on a source of exactly 1.0 and the given destinations; returns the words.
 fn blend_s1(s: &Arc<fx_device::Session>, d: &[f32]) -> Vec<u32> {
-    use fx_device::cl::Arg as ClArg;
+    use fx_device::ocl::Arg as ClArg;
     let n = d.len();
     let dst = DevImage::upload(s, &[d]).unwrap();
     let src = DevImage::upload(s, &[&vec![1.0f32; n]]).unwrap();

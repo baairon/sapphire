@@ -456,8 +456,8 @@ impl<'a> Ctx<'a> {
             let formals: Vec<String> = e.params.iter().map(|x| x.name.clone()).collect();
             return self.inline(s, key, name, "effect", &e.name, &inputs, &formals, e.body, call_args);
         }
-        if let Some(&di) = c.defun_idx.get(head) {
-            let d = &c.defuns[di];
+        if let Some(&defun_slot) = c.defun_idx.get(head) {
+            let d = &c.defuns[defun_slot];
             if args.len() != d.args.len() {
                 return berr(format!(
                     "Wrong number of arguments to defun '{}' (got {}, expected {})",
@@ -508,15 +508,15 @@ impl<'a> Ctx<'a> {
                 vars.insert(sv.to_string(), r);
             }
         }
-        let ch = self.new_scope(Some(s), false);
-        self.scopes[ch].vars = vars;
+        let chan = self.new_scope(Some(s), false);
+        self.scopes[chan].vars = vars;
         self.active.push(callee.to_string());
         self.inline_depth += 1;
-        let r = self.build_node(ch, Key::P(body), name);
+        let r = self.build_node(chan, Key::P(body), name);
         self.inline_depth -= 1;
         self.active.pop();
         r?;
-        let ind = self.genotype_indices(ch, &Key::P(body))?;
+        let ind = self.genotype_indices(chan, &Key::P(body))?;
         self.set_indices(s, call_key.clone(), ind)
     }
 
@@ -530,19 +530,19 @@ impl<'a> Ctx<'a> {
             let r = self.pnode_for_var(s, v, 0)?;
             self.build_node(s, r.key, None)?;
         }
-        let ch = self.new_scope(Some(s), true);
+        let chan = self.new_scope(Some(s), true);
         for sv in SPECIAL_VARS {
-            self.scopes[ch].vars.insert(sv.to_string(), VarRef { key: Key::Special(sv.to_string()), which: 1 });
+            self.scopes[chan].vars.insert(sv.to_string(), VarRef { key: Key::Special(sv.to_string()), which: 1 });
         }
         for b in binds {
             for (i, n) in b.names.iter().enumerate() {
-                self.scopes[ch].vars.insert(n.clone(), VarRef { key: Key::P(b.rhs), which: i + 1 });
+                self.scopes[chan].vars.insert(n.clone(), VarRef { key: Key::P(b.rhs), which: i + 1 });
             }
-            self.scopes[ch].node_names.insert(Key::P(b.rhs), b.names.clone());
-            self.scopes[ch].value_counts.insert(Key::P(b.rhs), b.names.len());
+            self.scopes[chan].node_names.insert(Key::P(b.rhs), b.names.clone());
+            self.scopes[chan].value_counts.insert(Key::P(b.rhs), b.names.len());
         }
-        self.build_node(ch, Key::P(result), name)?;
-        let ind = self.genotype_indices(ch, &Key::P(result))?;
+        self.build_node(chan, Key::P(result), name)?;
+        let ind = self.genotype_indices(chan, &Key::P(result))?;
         self.set_indices(s, key.clone(), ind)
     }
 }

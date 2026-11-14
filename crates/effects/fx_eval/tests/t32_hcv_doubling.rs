@@ -4,11 +4,11 @@ use fx_eval::hostcurve::{fold, HostCurveValues};
 
 const P: &str = "Blur_Motion_Curves_No_Transform";
 
-fn hcv(global: Option<i64>, flag: i64, rows: &str, ae32: bool) -> HostCurveValues {
+fn hcv(global: Option<i64>, flag: i64, rows: &str, claim_route: bool) -> HostCurveValues {
     let g = global.map(|g| format!("host global {}\n", g)).unwrap_or_default();
     let mut h = HostCurveValues::parse(&format!("host effect_ref 4660\nhost time_mult 256\nhost time_scale 1\nhost double_flag {}\n{}{}", flag, g, rows)).unwrap();
     h.time_frames = Some(1.0);
-    h.ae32 = ae32;
+    h.claim_route = claim_route;
     h.source = "x.hcv".to_string();
     h
 }
@@ -101,11 +101,11 @@ fn refusals_by_name() {
     assert!(fold(P, "nosuch", 0.0, &[1.0], 1, &h, &mut d).is_none() && d[0].starts_with("TICKMAP-HOST-FIELD-UNSOURCED (parameter record of"));
     d.clear();
     assert!(fold("Other_Program", "z_dist", 0.0, &[1.0], 1, &h, &mut d).is_none() && d[0].starts_with("TICKMAP-HOST-FIELD-UNSOURCED (parameter record of Other_Program"));
-    let h2 = {
+    let fold_args = {
         let mut x = HostCurveValues::parse("host effect_ref 1\nhost time_mult 256\nhost time_scale 1\nhost double_flag 0\nhost global 0\nhost selector 1\n").unwrap();
         x.time_frames = Some(1.0);
         x
     };
     d.clear();
-    assert!(fold(P, "z_dist", 0.0, &[1.0], 1, &h2, &mut d).is_none() && d[0] == format!("ROUTE-SELECTOR-NOT-CLAIMED ({})", P));
+    assert!(fold(P, "z_dist", 0.0, &[1.0], 1, &fold_args, &mut d).is_none() && d[0] == format!("ROUTE-SELECTOR-NOT-CLAIMED ({})", P));
 }

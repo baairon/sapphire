@@ -5,9 +5,9 @@ use fx_eval::{build_effect, Corpus};
 use fx_exec::{compile_for, execute_compiled, Binding, HostFrames, Image, Inputs};
 use std::collections::BTreeMap;
 
-fn grad(w: usize, h: usize, ch: usize, bias: f32) -> Image {
+fn grad(w: usize, h: usize, chan: usize, bias: f32) -> Image {
     let n = w * h;
-    let planes: Vec<Vec<f32>> = (0..ch).map(|c| (0..n).map(|i| bias + (i as f32 / n as f32) * (0.25 + 0.25 * c as f32)).collect()).collect();
+    let planes: Vec<Vec<f32>> = (0..chan).map(|c| (0..n).map(|i| bias + (i as f32 / n as f32) * (0.25 + 0.25 * c as f32)).collect()).collect();
     Image::from_planes(planes).unwrap()
 }
 

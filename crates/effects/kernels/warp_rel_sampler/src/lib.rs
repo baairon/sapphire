@@ -71,12 +71,12 @@ pub enum Host {
     /// byte == 0: pointer = lattice.bufs[i][j] + (n + n*(wt[i]+3)) floats
     Mode0,
     /// byte != 0: pointer = [S] + 4*(([S]*e8[j] + e0[i]) * [S]); also calls the assert helper
-    Mode1 { buf: Vec<f32>, c0: i32, d0: i32, e0: Vec<i32>, e8: Vec<i32> },
+    Mode1 { buf: Vec<f32>, row_mul: i32, elem_mul: i32, x_index: Vec<i32>, y_index: Vec<i32> },
 }
 
 /// Image context (rdx = r15).
 pub struct Image {
-    pub f1: F1Params,
+    pub sampler_params: F1Params,
     pub w: i32,
     pub h: i32,
     pub d_cell_d: i32,
@@ -85,8 +85,8 @@ pub struct Image {
 }
 
 pub struct Args<'a> {
-    pub a1: &'a [f32],
-    pub a2: &'a [f32],
+    pub coord_x: &'a [f32],
+    pub coord_y: &'a [f32],
     pub const_coords: bool, // r9d != 0
     pub c1: &'a [f32],      // [rbx]
     pub c2: &'a [f32],      // [rbx]
@@ -103,7 +103,7 @@ pub struct Assumption {
 
 pub fn assumptions() -> Vec<Assumption> {
     vec![
-        Assumption { id: "FX2-A1", basis: "ROUTE AVX2-ONLY: dispatcher tests mask 0x9d97ff (and r10,0x9d97ff; cmp; jne) and jumps to; mask 0x117ff goes to the SSE body, bit 0 to; neither twin is ported", label: "MEASURED listing" },
+        Assumption { id: "FX2-A1", basis: "ROUTE AVX2-ONLY: dispatcher tests mask (and r10,; cmp; jne) and jumps to; mask 0x117ff goes to the SSE body, bit 0 to; neither twin is ported", label: "MEASURED listing" }, // origin: 0x9d97ff, 0x9d97ff
         Assumption { id: "FX2-A2", basis: " (assert helper) is a recorded no-op, as in warp_driver; reached when flag != 0 and not (d_cell_d > 1 and d_cell_e > 1), and from when the host byte is nonzero", label: "ASSUMED, CALLEE-MODELLED" },
         Assumption { id: "FX2-A3", basis: " (16 B uncovered, rdi of the assert call) is only an assert argument; the port never reads it; zero stand-in on both sides would be ARBITRARY and changes no output (no bit of F2's result depends on it)", label: "ARBITRARY, not read" },
         Assumption { id: "FX2-A4", basis: "temp row phase: rbp is 16 mod 32 (frame self-aligned), so the scalar head of the aligned ymm loop is 4 floats for n >= 29; n >= 29 is unreachable without destroying the return address", label: "INFERRED, ALIGN-DEPENDENT (body's own frame)" },
@@ -177,24 +177,24 @@ pub fn wrap(recs: &mut Vec<Rec>, v: f32, dim: i32, mode: i32) -> Result<f32, F2E
 
 /// Scales: (scx = [rbp], scy = [rbp]) from .
 pub fn scales(o: &Obj) -> (f32, f32) {
-    let x13 = o.assumption_g - o.assumption_f;
-    (HALF * x13, (HALF * o.aspect_block_d) * x13)
+    let diff_13 = o.assumption_g - o.assumption_f;
+    (HALF * diff_13, (HALF * o.aspect_block_d) * diff_13)
 }
 
 /// X before the wrap : fma(a1, scx, (f32)(i - 1 + (port_obj_b - ox)) - (f32)(assumption_c - ox)). `i` is the 1-based pixel.
-pub fn x_raw(o: &Obj, scx: f32, a1: f32, i: i32) -> f32 {
-    let edx = o.port_obj_b.wrapping_sub(o.sub_x);
-    let edi = o.assumption_c.wrapping_sub(o.sub_x);
-    let r8 = i.wrapping_add(edx).wrapping_sub(1);
-    let base = (r8 as f32) - (edi as f32);
-    a1.mul_add(scx, base) // vfmadd231ss 
+pub fn x_raw(o: &Obj, scx: f32, coord_x: f32, i: i32) -> f32 {
+    let copy_mode = o.port_obj_b.wrapping_sub(o.sub_x);
+    let quot_int = o.assumption_c.wrapping_sub(o.sub_x);
+    let route_int_7 = i.wrapping_add(copy_mode).wrapping_sub(1);
+    let base = (route_int_7 as f32) - (quot_int as f32);
+    coord_x.mul_add(scx, base) // vfmadd231ss 
 }
 
 /// Y before the wrap : fnmsub(scy, a2, (f32)(assumption_d - oy)) + (f32)(port_obj_a - oy).
-pub fn y_raw(o: &Obj, scy: f32, a2: f32) -> f32 {
+pub fn y_raw(o: &Obj, scy: f32, coord_y: f32) -> f32 {
     let cy = o.assumption_d.wrapping_sub(o.sub_y) as f32;
     let dy = o.port_obj_a.wrapping_sub(o.sub_y) as f32;
-    let t = (-scy).mul_add(a2, -cy); // vfnmsub213ss : -(scy*a2) - cy
+    let t = (-scy).mul_add(coord_y, -cy); // vfnmsub213ss : -(scy*a2) - cy
     t + dy
 }
 
@@ -208,18 +208,18 @@ fn clamp_dir(c: f32, dim: i32) -> f32 {
 /// Blend weights : (w0, wn, ws, wd)
 pub fn weights(fx: f32, fy: f32) -> (f32, f32, f32, f32) {
     let t = fx * fy;
-    let w0 = ((ONE - fx) - fy) + t;
+    let corner_weight = ((ONE - fx) - fy) + t;
     let wn = fx - t;
     let ws = fy - t;
-    (w0, wn, ws, t)
+    (corner_weight, wn, ws, t)
 }
 
-fn blend1(w: (f32, f32, f32, f32), r0: f32, rn: f32, rs: f32, rd: f32, vec: bool) -> f32 {
-    let (w0, wn, ws, wd) = w;
+fn blend1(w: (f32, f32, f32, f32), tap_sample: f32, rn: f32, rs: f32, rd: f32, vec: bool) -> f32 {
+    let (corner_weight, wn, ws, wd) = w;
     if vec {
         // ymm, xmm 
         let v = wn * rn;
-        let v = w0.mul_add(r0, v);
+        let v = corner_weight.mul_add(tap_sample, v);
         let v = wd.mul_add(rd, v);
         ws.mul_add(rs, v)
     } else {
@@ -227,7 +227,7 @@ fn blend1(w: (f32, f32, f32, f32), r0: f32, rn: f32, rs: f32, rd: f32, vec: bool
         let s = wd * rd;
         let t = ws * rs;
         let s = wn.mul_add(rn, s);
-        let t = w0.mul_add(r0, t);
+        let t = corner_weight.mul_add(tap_sample, t);
         s + t
     }
 }
@@ -243,13 +243,13 @@ pub fn packed_flags(n: usize, head: usize) -> Vec<bool> {
         return f;
     }
     let nblk = (n - head) / 16;
-    let edx = head + nblk * 16;
-    for j in head..edx {
+    let copy_mode = head + nblk * 16;
+    for j in head..copy_mode {
         f[j] = true;
     }
-    let m = n - edx;
+    let m = n - copy_mode;
     if m >= 4 {
-        for j in edx..edx + (m & !3) {
+        for j in copy_mode..copy_mode + (m & !3) {
             f[j] = true;
         }
     }
@@ -270,31 +270,31 @@ pub fn head_from_phase(phase_bytes: usize) -> usize {
 fn acquire<'a>(img: &'a Image, lat: &'a Lattice, i: i32, j: i32) -> Result<(&'a [f32], i64), F2Error> {
     match &img.host {
         Host::Mode0 => {
-            let w = *img.f1.width_tab.get(usize::try_from(i).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
-            let base = (img.f1.n.wrapping_add(w.wrapping_add(3).wrapping_mul(img.f1.n))) as i64;
+            let w = *img.sampler_params.width_tab.get(usize::try_from(i).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
+            let base = (img.sampler_params.n.wrapping_add(w.wrapping_add(3).wrapping_mul(img.sampler_params.n))) as i64;
             let row = lat.bufs.get(usize::try_from(i).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
             let buf = row.get(usize::try_from(j).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
             Ok((buf.as_slice(), base))
         }
-        Host::Mode1 { buf, c0, d0, e0, e8 } => {
-            let ej = *e8.get(usize::try_from(j).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
-            let ei = *e0.get(usize::try_from(i).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
-            let r8 = c0.wrapping_mul(ej).wrapping_add(ei).wrapping_mul(*d0);
-            Ok((buf.as_slice(), r8 as i64))
+        Host::Mode1 { buf, row_mul, elem_mul, x_index, y_index } => {
+            let ej = *y_index.get(usize::try_from(j).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
+            let ei = *x_index.get(usize::try_from(i).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
+            let route_int_7 = row_mul.wrapping_mul(ej).wrapping_add(ei).wrapping_mul(*elem_mul);
+            Ok((buf.as_slice(), route_int_7 as i64))
         }
     }
 }
 
 /// Getter (S, i): (width_tab[i] + 3) * n, 32 bit wrapping.
 fn stride(img: &Image, i: i32) -> Result<i32, F2Error> {
-    let w = *img.f1.width_tab.get(usize::try_from(i).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
-    Ok(w.wrapping_add(3).wrapping_mul(img.f1.n))
+    let w = *img.sampler_params.width_tab.get(usize::try_from(i).map_err(|_| F2Error::Oob)?).ok_or(F2Error::Oob)?;
+    Ok(w.wrapping_add(3).wrapping_mul(img.sampler_params.n))
 }
 
 /// Whole body (after the dispatcher). `phase_bytes` is the temp row phase input (default TEMP_PHASE_BYTES).
 pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32>], phase_bytes: usize) -> Result<Vec<Rec>, F2Error> {
     let mut recs = Vec::new();
-    let n = img.f1.n;
+    let n = img.sampler_params.n;
     let wh = img.w.wrapping_mul(img.h);
     if wh == 0 {
         // for each plane then 
@@ -308,22 +308,22 @@ pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32
     if a.flag != 0 && !(img.d_cell_d > 1 && img.d_cell_e > 1) {
         recs.push(Rec::AssertCellA);
     }
-    img.f1.flag_x = a.mx;
-    img.f1.flag_y = a.my;
+    img.sampler_params.flag_x = a.mx;
+    img.sampler_params.flag_y = a.my;
     let (scx, scy) = scales(o);
-    let (mut x0, mut y0) = (0.0f32, 0.0f32); // [rbp], [rbp]
+    let (mut x_coord_in, mut y_coord_in) = (0.0f32, 0.0f32); // [rbp], [rbp]
     let at = |v: &[f32], i: usize| v.get(i).copied().ok_or(F2Error::Oob);
     let packed = packed_flags(n.max(0) as usize, head_from_phase(phase_bytes));
     let mut smashed = false;
-    for r12 in 1..=(o.count as i64) {
-        let pix = (r12 - 1) as usize;
-        if !a.const_coords || r12 == 1 {
-            x0 = at(a.a1, pix)?;
-            y0 = at(a.a2, pix)?;
+    for step_no in 1..=(o.count as i64) {
+        let pix = (step_no - 1) as usize;
+        if !a.const_coords || step_no == 1 {
+            x_coord_in = at(a.coord_x, pix)?;
+            y_coord_in = at(a.coord_y, pix)?;
         }
-        let xr = x_raw(o, scx, x0, r12 as i32);
+        let xr = x_raw(o, scx, x_coord_in, step_no as i32);
         let x = wrap(&mut recs, xr, img.w, a.mx)?;
-        let yr = y_raw(o, scy, y0);
+        let yr = y_raw(o, scy, y_coord_in);
         let y = wrap(&mut recs, yr, img.h, a.my)?;
         if a.flag != 0 {
             let c1 = at(a.c1, pix)?;
@@ -346,13 +346,13 @@ pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32
                 recs.push(Rec::F1 { col: pix as i32, mx: a.mx, my: a.my, i: ip, j: jq, x: x.to_bits(), y: y.to_bits(), a: fa.to_bits(), b: fb.to_bits() });
                 let call = Call { x, y, a: fa, b: fb, col: pix as i32, i: ip, j: jq };
                 let mut refs: Vec<&mut [f32]> = out.iter_mut().map(|v| v.as_mut_slice()).collect();
-                sample(&img.f1, lat, &call, &mut refs).map_err(F2Error::F1)?;
+                sample(&img.sampler_params, lat, &call, &mut refs).map_err(F2Error::F1)?;
                 continue;
             }
         }
         // normal path 
-        let wt0 = img.f1.width_tab.first().copied().ok_or(F2Error::Oob)?;
-        let ht0 = img.f1.height_tab.first().copied().ok_or(F2Error::Oob)?;
+        let wt0 = img.sampler_params.width_tab.first().copied().ok_or(F2Error::Oob)?;
+        let ht0 = img.sampler_params.height_tab.first().copied().ok_or(F2Error::Oob)?;
         let xc = if a.mx == 0 {
             if NEG_ONE > x {
                 NEG_ONE
@@ -378,15 +378,15 @@ pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32
         let fx = sx - (ix as f32);
         let fy = sy - (iy as f32);
         recs.push(Rec::AccCellA);
-        let (buf, off0) = acquire(img, lat, 0, 0)?;
+        let (buf, buf_start) = acquire(img, lat, 0, 0)?;
         recs.push(Rec::AccCellB);
         if !matches!(img.host, Host::Mode0) {
             recs.push(Rec::AssertCellA);
         }
         let stride = stride(img, 0)?;
-        let ecx = (ix.wrapping_sub(1)).wrapping_mul(n);
-        let r14d = (iy.wrapping_sub(1)).wrapping_mul(stride);
-        let base = off0 + (ecx as i64) + (r14d as i64);
+        let col_offset = (ix.wrapping_sub(1)).wrapping_mul(n);
+        let row_term = (iy.wrapping_sub(1)).wrapping_mul(stride);
+        let base = buf_start + (col_offset as i64) + (row_term as i64);
         if n <= 0 {
             continue;
         }
@@ -407,11 +407,11 @@ pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32
         let mut temp = vec![0.0f32; n as usize];
         for j in 0..(n as usize) {
             let jj = j as i64;
-            let r0 = get(base + jj)?;
+            let tap_sample = get(base + jj)?;
             let rn = get(base + n as i64 + jj)?;
             let rs = get(base + stride as i64 + jj)?;
             let rd = get(base + n as i64 + stride as i64 + jj)?;
-            temp[j] = blend1(w, r0, rn, rs, rd, packed[j]);
+            temp[j] = blend1(w, tap_sample, rn, rs, rd, packed[j]);
         }
         for (c, t) in temp.iter().enumerate() {
             let pl = out.get_mut(c).ok_or(F2Error::Oob)?;

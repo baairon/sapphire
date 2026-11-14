@@ -11,14 +11,14 @@ fn cst(v: &[f32]) -> Arg<'static> {
     }
     Arg::Const { n: v.len(), lanes: l }
 }
-fn planes(ch: usize, n: usize, f: impl Fn(usize, usize) -> f32) -> Image {
-    Image::from_planes((0..ch).map(|k| (0..n).map(|i| f(k, i)).collect()).collect()).unwrap()
+fn planes(chan: usize, n: usize, f: impl Fn(usize, usize) -> f32) -> Image {
+    Image::from_planes((0..chan).map(|k| (0..n).map(|i| f(k, i)).collect()).collect()).unwrap()
 }
 fn run(class: &str, args: &[Arg], w: usize, h: usize) -> Image {
     let c: Vec<i32> = args.iter().map(|a| a.count()).collect();
     let t = Tables::embedded().select_counts(class, &c);
     assert!(t > 0, "no combo for {} {:?}", class, c);
-    match run_any(class, t, args, w * h, (w, h), &KParams::standin()).unwrap() {
+    match run_any(class, t, args, w * h, (w, h), &KParams::host_defaults()).unwrap() {
         Out::Img(i) => i,
         _ => panic!(),
     }
@@ -67,23 +67,23 @@ fn comp_premult_rgb_rows_and_alpha_fill() {
     }
     let (w, h) = (4, 2);
     let n = w * h;
-    let a3 = planes(3, n, |k, i| (k + 1) as f32 + i as f32);
-    let b3 = planes(3, n, |k, i| 0.5 * (k + 1) as f32 - 0.25 * i as f32);
-    let b4 = planes(4, n, |k, i| 0.5 * (k + 1) as f32 - 0.25 * i as f32);
+    let under_img = planes(3, n, |k, i| (k + 1) as f32 + i as f32);
+    let top_img_a = planes(3, n, |k, i| 0.5 * (k + 1) as f32 - 0.25 * i as f32);
+    let top_img_b = planes(4, n, |k, i| 0.5 * (k + 1) as f32 - 0.25 * i as f32);
     let t = planes(1, n, |_, i| TS[i]);
     // (3,3,1) -> 3 channels
-    let r = run("comp_premult", &[Arg::Img(&a3), Arg::Img(&b3), Arg::Img(&t)], w, h);
+    let r = run("comp_premult", &[Arg::Img(&under_img), Arg::Img(&top_img_a), Arg::Img(&t)], w, h);
     assert_eq!(r.channels(), 3);
     for k in 0..3 {
-        let want: Vec<f32> = (0..n).map(|i| over(a3.planes[k][i], b3.planes[k][i], TS[i])).collect();
+        let want: Vec<f32> = (0..n).map(|i| over(under_img.planes[k][i], top_img_a.planes[k][i], TS[i])).collect();
         same(&r.planes[k], &want);
     }
     // (3,4,1) -> 4 channels, A has 3 channels: output plane 3 is 1.0
-    let r = run("comp_premult", &[Arg::Img(&a3), Arg::Img(&b4), Arg::Img(&t)], w, h);
+    let r = run("comp_premult", &[Arg::Img(&under_img), Arg::Img(&top_img_b), Arg::Img(&t)], w, h);
     assert_eq!(r.channels(), 4);
     same(&r.planes[3], &vec![1.0; n]);
     for k in 0..3 {
-        let want: Vec<f32> = (0..n).map(|i| over(a3.planes[k][i], b4.planes[k][i], TS[i])).collect();
+        let want: Vec<f32> = (0..n).map(|i| over(under_img.planes[k][i], top_img_b.planes[k][i], TS[i])).collect();
         same(&r.planes[k], &want);
     }
 }

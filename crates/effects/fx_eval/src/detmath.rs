@@ -48,12 +48,12 @@ fn div(a: &Fx, b: &Fx) -> Fx {
 
 /// atanh(s) = s + s^3/3 + s^5/5 + ... for |s| <= 1/3.
 fn atanh(s: &Fx) -> Fx {
-    let s2 = s.mul(s);
+    let s_sq = s.mul(s);
     let mut p = *s;
     let mut sum = *s;
     let mut k = 1u64;
     loop {
-        p = p.mul(&s2);
+        p = p.mul(&s_sq);
         k += 2;
         let t = p.div_u64(k);
         if t.is_zero() {
@@ -69,9 +69,9 @@ fn atan_unit(t: &Fx) -> Fx {
     if t.is_zero() {
         return Fx::zero();
     }
-    let t2 = t.mul(t);
-    let inv = Fx::from_int(1).add(&t2).recip();
-    let y = t2.mul(&inv);
+    let t_sq = t.mul(t);
+    let inv = Fx::from_int(1).add(&t_sq).recip();
+    let y = t_sq.mul(&inv);
     let mut term = t.mul(&inv);
     let mut sum = term;
     for n in 1u64..2000 {
@@ -376,11 +376,11 @@ fn round_ratio(num: &Big, den: &Big, prec: i64, emin: i64, emax: i64) -> Option<
     let p = if e >= emin { prec } else { prec - (emin - e) };
     // q = floor(num * 2^(p - e) / den): p + 1 bits including the half bit (p may be 0 or less for deep underflow)
     let sh = p - e;
-    let (n2, d2) = if sh >= 0 { (num.shl(sh as u64), den.clone()) } else { (num.clone(), den.shl((-sh) as u64)) };
+    let (sum_2, d2) = if sh >= 0 { (num.shl(sh as u64), den.clone()) } else { (num.clone(), den.shl((-sh) as u64)) };
     if p < -1 {
         return Some(0.0);
     }
-    let (q, sticky) = divmod(&n2, &d2);
+    let (q, sticky) = divmod(&sum_2, &d2);
     let mut m = q >> 1;
     let half = q & 1 == 1;
     if half && (sticky || m & 1 == 1) {

@@ -3,7 +3,7 @@
 //! single-edit mutants of the kernel source, each of which the compare must refuse. Prints NOT RUN without an OpenCL device (run with
 //! --test-threads=1: platform discovery is not thread safe).
 
-use fx_device::cl::Buffer;
+use fx_device::ocl::Buffer;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{Backend as Handle, DevImage, DeviceKind, Session};
 use fx_exec::device_ops_tilt_alpha::{host_words, tilt_alpha_launch};
@@ -32,7 +32,7 @@ struct Case {
     host: tilt_alpha::Host,
     w: usize,
     h: usize,
-    base: usize,
+    start_phase: usize,
     rowbuf: bool,
     kind: usize,
     seed: u64,
@@ -47,7 +47,7 @@ impl Lcg {
 }
 
 fn rows(c: &Case) -> Vec<(usize, usize, usize)> {
-    (0..c.h).map(|y| (y * c.w, c.w, if c.rowbuf { c.base & 0x1f } else { (c.base + y * c.w * 4) & 0x1f })).collect()
+    (0..c.h).map(|y| (y * c.w, c.w, if c.rowbuf { c.start_phase & 0x1f } else { (c.start_phase + y * c.w * 4) & 0x1f })).collect()
 }
 
 fn planes(c: &Case, pool: &[f32]) -> (Vec<f32>, Vec<f32>) {
@@ -112,7 +112,7 @@ fn cases() -> Vec<Case> {
                         idx += 1;
                         continue;
                     }
-                    out.push(Case { st, host, w, h: 2, base: ph * 4, rowbuf, kind: idx % 3, seed: idx as u64 * 7919 + 13 });
+                    out.push(Case { st, host, w, h: 2, start_phase: ph * 4, rowbuf, kind: idx % 3, seed: idx as u64 * 7919 + 13 });
                     idx += 1;
                 }
             }
@@ -231,18 +231,18 @@ const MUTANTS: &[(&str, &str, &str)] = &[
 #[test]
 fn every_tilt_alpha_mutant_is_refused_by_the_compare() {
     let Some(ctx) = device() else { return };
-    let base = fx_device::kernels::device_program();
+    let start_phase = fx_device::kernels::device_program();
     let opts = fx_device::kernels::BUILD_OPTIONS;
     let (dev_h, info) = fx_device::probe::open(ctx.info.index).unwrap();
     let bin = |s: &Session| fx_device::progcache::fnv(&s.program.binary().unwrap());
-    let clean = Arc::new(Session::open_source(&dev_h, &info, &base, opts).unwrap());
+    let clean = Arc::new(Session::open_source(&dev_h, &info, &start_phase, opts).unwrap());
     let base_hash = bin(&clean);
     let t = compare(&clean, false, true);
     assert_eq!(t.mismatches, 0, "the unmutated program must pass: {:?}", t.first_mismatch);
     let mut killed = 0usize;
     for (name, old, new) in MUTANTS {
-        assert_eq!(base.matches(old).count(), 1, "mutant `{name}`: the text must occur once");
-        let text = base.replacen(old, new, 1);
+        assert_eq!(start_phase.matches(old).count(), 1, "mutant `{name}`: the text must occur once");
+        let text = start_phase.replacen(old, new, 1);
         let s = Arc::new(Session::open_source(&dev_h, &info, &text, opts).unwrap());
         let h = bin(&s);
         assert_ne!(h, base_hash, "mutant `{name}` built the base binary");

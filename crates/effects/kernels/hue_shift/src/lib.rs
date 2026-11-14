@@ -135,10 +135,10 @@ pub fn pixel_traced(mut r: f32, mut g: f32, mut b: f32, shift: f32) -> ([f32; 3]
     let h = if r == hi {
         tr |= T_HUE_R;
         let q = nx_div(nx_sub(g, b), delta);
-        let q6 = nx_add(q, SIX);
+        let nx_add_6 = nx_add(q, SIX);
         if 0.0 > q {
             tr |= T_Q_NEG;
-            q6
+            nx_add_6
         } else {
             q
         }
@@ -160,10 +160,10 @@ pub fn pixel_traced(mut r: f32, mut g: f32, mut b: f32, shift: f32) -> ([f32; 3]
         frac = nx_sub(x, x.floor());
     }
     let c = nx_mul(v, s);
-    let t6 = nx_mul(SIX, frac);
+    let prod_6 = nx_mul(SIX, frac);
     //  vcomiss t6,6; jb keeps t6 (unordered sets CF, so NaN is kept), otherwise 0
-    let t = if t6 < SIX || t6.is_nan() {
-        t6
+    let t = if prod_6 < SIX || prod_6.is_nan() {
+        prod_6
     } else {
         tr |= T_T_CLAMP;
         0.0

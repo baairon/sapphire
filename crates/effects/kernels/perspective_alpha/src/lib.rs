@@ -26,7 +26,7 @@ const K_CELL_C: f32 = f32::from_bits(0x40c9_0fdb); // 2 pi, 4 B read (MEASURED)
 const K_CELL_B: f64 = f64::from_bits(0x3fd7_0a3d_8000_0000); // (double)0.36f (MEASURED)
 const ONE: f32 = 1.0; //  (MEASURED)
 /// Vector clamp maximum, 8 lanes of (NOT captured): stand-in 1.0f (PX2-A1, same cell as SC2-A1).
-pub const RAMP_MAX_STANDIN: f32 = 1.0;
+pub const RAMP_MAX_DEFAULT: f32 = 1.0;
 /// ROI element size, qword, MEASURED = 4.
 const ROI_ELEM: i64 = 4;
 
@@ -51,7 +51,7 @@ pub struct Info {
     pub port_blk_b: i32,
     pub port_blk_c: i32,
     /// [info] and (i32), (f64)
-    pub s8: i32,
+    pub alpha_cells: i32,
     pub port_info_b: i32,
     pub port_info_a: f64,
 }
@@ -61,7 +61,7 @@ pub enum Route {
     /// x8 == 0: ROI zero fill of `count` floats (with flag 0; the byte count is 4 * count) or, flag != 0, only the call is reported
     Fill { count: i32, flag: bool },
     /// flag != 0: tail call (this, info, outs, xmm0 = r1, xmm1 = P); no plane write
-    Gpu { r1: f32, p: f32 },
+    Gpu { cos_t: f32, p: f32 },
     /// the element loops ran
     Ramp,
 }
@@ -78,12 +78,12 @@ pub struct Outcome {
     pub route: Route,
     /// argument of 
     pub theta: f32,
-    pub r0: f32,
-    pub r1: f32,
-    pub x8: f32,
+    pub sin_t: f32,
+    pub cos_t: f32,
+    pub cos_scaled: f32,
     /// edi handed to (esi is 4); only on the non fill routes
-    pub edi: Option<i32>,
-    pub ecx: Option<i32>,
+    pub quot_int: Option<i32>,
+    pub signed_m: Option<i32>,
     pub p: Option<f32>,
     pub plan: Option<Plan>,
 }
@@ -103,7 +103,7 @@ fn cvttsd2si32(x: f64) -> i32 {
     }
 }
 
-/// Section plan of for a destination whose address has `phase` = (address & 0x1f) bytes.
+/// Section plan of for a destination whose position has `phase` = (position & 0x1f) bytes.
 /// `None` for n <= 0 (return). A phase that is not a multiple of 4 gives all scalar.
 pub fn plan(n: i32, phase: usize) -> Option<Plan> {
     if n <= 0 {
@@ -133,8 +133,8 @@ pub fn plan(n: i32, phase: usize) -> Option<Plan> {
 
 /// One element: q = f32(ecx) * fma(-P, v, -r1); q < 0 gives +0.0 (the integer 0 store or the cmpltps/andnps mask), else min(max, q)
 /// with the minss/minps rule (second operand on NaN or equality).
-fn ramp(cf: f32, p: f32, r1: f32, v: f32, max: f32) -> f32 {
-    let q = nx_mul(cf, nx_fma(-p, v, -r1));
+fn ramp(cf: f32, p: f32, cos_t: f32, v: f32, max: f32) -> f32 {
+    let q = nx_mul(cf, nx_fma(-p, v, -cos_t));
     if q < 0.0 {
         0.0
     } else if max < q {
@@ -158,10 +158,10 @@ pub fn perspective_alpha_with(
     dst_phase: usize,
 ) -> Result<Outcome, Error> {
     let theta = nx_mul(nx_mul(K_CELL_A, par.params_b), K_CELL_C);
-    let (r0, r1) = sc(theta).ok_or(Error::SincosOutOfContract)?;
-    let x8 = nx_mul(r1, par.params_a);
-    let mut o = Outcome { route: Route::Ramp, theta, r0, r1, x8, edi: None, ecx: None, p: None, plan: None };
-    if x8 == 0.0 {
+    let (sin_t, cos_t) = sc(theta).ok_or(Error::SincosOutOfContract)?;
+    let cos_scaled = nx_mul(cos_t, par.params_a);
+    let mut o = Outcome { route: Route::Ramp, theta, sin_t, cos_t, cos_scaled, quot_int: None, signed_m: None, p: None, plan: None };
+    if cos_scaled == 0.0 {
         let b = info.port_blk_b;
         let c = if info.roi_form == 0 { info.port_blk_a } else { info.port_blk_c };
         let cnt = c.wrapping_mul(b);
@@ -176,17 +176,17 @@ pub fn perspective_alpha_with(
         }
         return Ok(o);
     }
-    let p = nx_mul(par.params_c, r0);
+    let p = nx_mul(par.params_c, sin_t);
     let den = nx_mul(par.params_c, info.port_info_b as f32) as f64;
-    let num = ((info.s8 as f64) * K_CELL_B) * info.port_info_a;
-    let edi = cvttsd2si32(num / den);
-    let m = edi.max(4);
-    let ecx = if x8 > 0.0 { m.wrapping_neg() } else { m };
-    o.edi = Some(edi);
-    o.ecx = Some(ecx);
+    let num = ((info.alpha_cells as f64) * K_CELL_B) * info.port_info_a;
+    let quot_int = cvttsd2si32(num / den);
+    let m = quot_int.max(4);
+    let signed_m = if cos_scaled > 0.0 { m.wrapping_neg() } else { m };
+    o.quot_int = Some(quot_int);
+    o.signed_m = Some(signed_m);
     o.p = Some(p);
     if flag {
-        o.route = Route::Gpu { r1, p };
+        o.route = Route::Gpu { cos_t, p };
         return Ok(o);
     }
     let Some(pl) = plan(info.n, dst_phase) else {
@@ -197,17 +197,17 @@ pub fn perspective_alpha_with(
     if src.len() < n || dst.len() < n {
         return Err(Error::ShortBuffer);
     }
-    let cf = ecx as f32;
+    let cf = signed_m as f32;
     for i in 0..n {
         let vector = i >= pl.peel && i < pl.vend;
-        dst[i] = ramp(cf, p, r1, src[i], if vector { ramp_max } else { ONE });
+        dst[i] = ramp(cf, p, cos_t, src[i], if vector { ramp_max } else { ONE });
     }
     Ok(o)
 }
 
 /// The body as shipped: native sincos port, vector clamp maximum = stand-in PX2-A1.
 pub fn perspective_alpha(par: &Params, info: &Info, flag: bool, src: &[f32], dst: &mut [f32], dst_phase: usize) -> Result<Outcome, Error> {
-    perspective_alpha_with(&sincos_native, RAMP_MAX_STANDIN, par, info, flag, src, dst, dst_phase)
+    perspective_alpha_with(&sincos_native, RAMP_MAX_DEFAULT, par, info, flag, src, dst, dst_phase)
 }
 
 use fx_common::x86::{nx_fma, nx_mul};
@@ -227,7 +227,7 @@ pub fn assumptions() -> Vec<Assumption> {
         Assumption { id: "PX2-A4", va: "", value: "finite |theta| >= 8192 (|params_b| > 5215.19; the earlier note said 1303 and forgot the factor 0.25 * 2pi = 1.5708) runs the double sincos and the reducer, ported inside libm_sincos and executed in the emulator: covered by T2 (RERUN_SC1.md)", basis: "" },
         Assumption { id: "PX2-A5", va: "", value: "flag != 0: the tail call (ramp route) and the flag path of (jump to, fill route) are not ported; arguments are compared by the call-record check only", basis: "" },
         Assumption { id: "PX2-A6", va: "", value: "the flag 0 fill ends in (tail jump) or (call, when != 0): both modelled as memset(dst, 0, bytes) in the emulator and as a zero fill in the port (same as HX-A1 in the blur crate)", basis: "; callee bodies not read" },
-        Assumption { id: "PX2-A7", va: "", value: "feature word 0x9d97ff selects the AVX2 body (dispatcher not ported)", basis: "" },
+        Assumption { id: "PX2-A7", va: "", value: "feature word selects the AVX2 body (dispatcher not ported)", basis: "" }, // origin: 0x9d97ff
         Assumption { id: "PX2-A8", va: " (target of the pointer cell)", value: "the dword read by is zero (pointer cell, captured zero range) so the fill takes the tail jump to; the choice does not change the zero fill", basis: "MEASURED (lookup.py Z8); only the memset model of PX2-A6 is assumed" },
     ]
 }

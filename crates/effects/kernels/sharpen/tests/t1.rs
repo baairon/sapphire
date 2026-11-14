@@ -48,8 +48,8 @@ fn combine_is_fused_not_two_rounded() {
         let two = x + (x - b) * g;
         if fused.to_bits() != two.to_bits() { gen_diff += 1; }
         let u = combine_elem(x, b, 1.0);
-        let u2 = (x * 2.0) - b; // 2x is exact, so unit path fused equals unfused
-        if u.to_bits() != u2.to_bits() { unit_diff += 1; }
+        let prod_2 = (x * 2.0) - b; // 2x is exact, so unit path fused equals unfused
+        if u.to_bits() != prod_2.to_bits() { unit_diff += 1; }
     }
     assert!(gen_diff > 100, "fused vs two rounding differ on {}", gen_diff);
     assert_eq!(unit_diff, 0);

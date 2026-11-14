@@ -80,8 +80,8 @@ fn at(pl: &Plane, idx: i64) -> Result<f32, Unsupported> {
     Ok(pl.buf[k as usize])
 }
 
-fn lerp_term(v0: f32, v1: f32, frac: f32, wgt: f32) -> f32 {
-    (v0 - v1).mul_add(frac, -v0) * wgt
+fn lerp_term(sample_a: f32, sample_b: f32, frac: f32, wgt: f32) -> f32 {
+    (sample_a - sample_b).mul_add(frac, -sample_a) * wgt
 }
 
 /// Result of the S8/S9 selector for an X-major flag_cell_a != 0 sample.
@@ -107,79 +107,79 @@ pub fn x_major_sample_ex(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane, sel
     let hs = hst.hs;
     let (mx0, my) = (st.mode_x, st.mode_y);
     let cond_any = mx0 != 0 || my > 0;
-    let (a0, a1, a3, a4) = (a[0], a[1], a[3], a[4]);
+    let (alpha_init, alpha_origin, tap_width, norm_num) = (a[0], a[1], a[3], a[4]);
     if st.flag_cell_a == 0 {
         *sel = Some(XSel::FlagZero);
         return p3::flag0_sample(st, a, hst, pl);
     }
     let mut sums = [0.0f32; 4];
     let mut wsum = 0.0f32;
-    let (x, y, dx, dy) = (st.x, st.y, st.dx, st.dy);
-    let (mut dir, mut c, esi, n0, fx, c0, dxs);
-    if dx > 0.0 {
+    let (x, y, delta_x, dy) = (st.x, st.y, st.delta_x, st.dy);
+    let (mut dir, mut c, tap_b, tap_span, fx, mix, dxs);
+    if delta_x > 0.0 {
         let fl = x.floor();
         dir = 1i32;
         fx = x - fl;
         c = cvtt(fl);
         let ce = st.e2x.ceil();
-        esi = cvtt(ce);
-        c0 = ce - st.e2x;
-        n0 = esi.wrapping_sub(c).wrapping_add(1);
-        dxs = dx;
+        tap_b = cvtt(ce);
+        mix = ce - st.e2x;
+        tap_span = tap_b.wrapping_sub(c).wrapping_add(1);
+        dxs = delta_x;
     } else {
         let ce = x.ceil();
         dir = -1;
         c = cvtt(ce);
         let fl = st.e2x.floor();
-        c0 = st.e2x - fl;
+        mix = st.e2x - fl;
         fx = ce - x;
-        esi = cvtt(fl);
-        n0 = c.wrapping_sub(esi).wrapping_add(1);
-        dxs = -dx;
+        tap_b = cvtt(fl);
+        tap_span = c.wrapping_sub(tap_b).wrapping_add(1);
+        dxs = -delta_x;
     }
     let slope0 = dy / dxs;
     let mut yy = (-slope0).mul_add(fx, y); // vfnmadd231ss 
-    let step_a = st.k_a1_a0 / ((n0 as f32) * a3);
-    let y5 = yy.floor();
-    let y9 = slope0 + st.e2y;
-    let dl = if cond_any {
-        c < 0 || c >= w || ja(0.0, y5) || jae(y5, hs) || esi < 0 || esi >= w || ja(0.0, y9) || jae(y9, hs)
+    let step_a = st.a_gap_first / ((tap_span as f32) * tap_width);
+    let floor_y = yy.floor();
+    let sum_9 = slope0 + st.e2y;
+    let out_of_range = if cond_any {
+        c < 0 || c >= w || ja(0.0, floor_y) || jae(floor_y, hs) || tap_b < 0 || tap_b >= w || ja(0.0, sum_9) || jae(sum_9, hs)
     } else {
         false
     };
-    let direct0 = cond_any && !dl;
-    let b_cell_m = if direct0 || mx0 != 0 { false } else { c < 0 || c >= w || esi < 0 || esi >= w };
-    let b_cell_l = if my != 0 { false } else { ja(0.0, y5) || jae(y5, hs) || ja(0.0, y9) || jae(y9, hs) };
-    let n = n0.min(1000).max(0);
-    *sel = Some(if n <= 0 { XSel::Empty } else if dl { XSel::General } else { XSel::Specialised });
-    if n > 0 && !dl {
-        let si = p3::SpecIn {
-            c, dir, n, fx, c0, slope: slope0, yy, step_a, w, h, stride, a: *a, k_a2_a1: st.k_a2_a1, k_1_a3: st.k_1_a3,
+    let direct0 = cond_any && !out_of_range;
+    let b_cell_m = if direct0 || mx0 != 0 { false } else { c < 0 || c >= w || tap_b < 0 || tap_b >= w };
+    let b_cell_l = if my != 0 { false } else { ja(0.0, floor_y) || jae(floor_y, hs) || ja(0.0, sum_9) || jae(sum_9, hs) };
+    let n = tap_span.min(1000).max(0);
+    *sel = Some(if n <= 0 { XSel::Empty } else if out_of_range { XSel::General } else { XSel::Specialised });
+    if n > 0 && !out_of_range {
+        let spec = p3::SpecIn {
+            c, dir, n, fx, mix, slope: slope0, yy, step_a, w, h, stride, a: *a, a_gap_second: st.a_gap_second, one_minus_a_last: st.one_minus_a_last,
             col_clamp: b_cell_m, row_clamp: b_cell_l,
         };
-        let (s, ws) = p3::spec_loop(&si, pl)?;
+        let (s, ws) = p3::spec_loop(&spec, pl)?;
         sums = s;
         wsum = ws;
     } else if n > 0 {
         let mut slope = slope0;
         let hfi = cvtt(hs) as f32;
         let omfx = 1.0 - fx;
-        let omc0 = 1.0 - c0;
+        let omc0 = 1.0 - mix;
         let nf = n as f32;
-        let wlim = nf * a3;
-        let step_b = st.k_a2_a1 / (nf * st.k_1_a3);
+        let wlim = nf * tap_width;
+        let step_b = st.a_gap_second / (nf * st.one_minus_a_last);
         let twoh = 2.0f32.mul_add(hfi, -1.0); // vfmsub213ss 
         let colmax = cvtt(wf - 1.0);
         let hf = h as f32;
-        let mut alpha = a0;
+        let mut alpha = alpha_init;
         let mut step = step_a;
-        let mut al = false;
+        let mut at_limit = false;
         for k in 0..n {
-            if !al && (k as f32) >= wlim {
+            if !at_limit && (k as f32) >= wlim {
                 let q = k / n; // idiv, always 0
-                alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
+                alpha = (tap_width - (q as f32)).mul_add(step_b, alpha_origin); // vfmadd213ss 
                 step = step_b;
-                al = true;
+                at_limit = true;
             }
             if (c as f32) >= wf {
                 if hst.port_blk_a != 0 {
@@ -222,15 +222,15 @@ pub fn x_major_sample_ex(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane, sel
             let t = cvtt(fr);
             let frac = fr - (t as f32);
             let idx = cc.wrapping_mul(4).wrapping_sub(stride).wrapping_add(t.wrapping_mul(stride)) as i64;
-            for ch in 0..4 {
-                let v0 = at(pl, idx + ch as i64)?;
-                let v1 = at(pl, idx + stride as i64 + ch as i64)?;
-                sums[ch] = sums[ch] - lerp_term(v0, v1, frac, wgt);
+            for chan in 0..4 {
+                let sample_a = at(pl, idx + chan as i64)?;
+                let sample_b = at(pl, idx + stride as i64 + chan as i64)?;
+                sums[chan] = sums[chan] - lerp_term(sample_a, sample_b, frac, wgt);
             }
         }
     }
     // S15 finalizer : k = a4 / wsum, planes = acc * k
-    let r = a4 / wsum;
+    let r = norm_num / wsum;
     Ok([sums[0] * r, sums[1] * r, sums[2] * r, sums[3] * r])
 }
 
@@ -244,7 +244,7 @@ pub fn x_selector(st: &S5State, a: &[f32; 5], hst: &Host) -> Result<XSel, Unsupp
 
 /// Zero-length stub : P1 renders (x, y) into the planes; then planes 0..3 at the sample index are multiplied by a4.
 fn p1_stub(c: &P1Cfg, inp: &Inputs, pl: &Plane, x: f32, y: f32, i: usize, out: &mut Vec<Vec<f32>>) -> Result<(), Unsupported> {
-    let pp = blur_warp_point::Params { n: c.n, width: c.w0, height: c.h0, flag_x: inp.mode_x, flag_y: inp.mode_y };
+    let pp = blur_warp_point::Params { n: c.n, width: c.plane_width, height: c.plane_height, flag_x: inp.mode_x, flag_y: inp.mode_y };
     let g = blur_warp_point::Geometry { base: pl.origin, stride: inp.acc_stride };
     let n = c.n.max(0) as usize;
     if out.len() < n.max(4) || out.iter().any(|v| i >= v.len()) {
@@ -265,23 +265,23 @@ fn p1_stub(c: &P1Cfg, inp: &Inputs, pl: &Plane, x: f32, y: f32, i: usize, out: &
 }
 
 /// Ported part of body D: zero-length samples and X-major flag_cell_a != 0 general loop; out[0..4] are the four planes.
-pub fn run_planes_full(p: &Params, inp: &Inputs, hst: &Host, pl: &Plane, p1: Option<&P1Cfg>, out: &mut Vec<Vec<f32>>) -> Result<(), Unsupported> {
+pub fn run_planes_full(p: &Params, inp: &Inputs, hst: &Host, pl: &Plane, pass1_cfg: Option<&P1Cfg>, out: &mut Vec<Vec<f32>>) -> Result<(), Unsupported> {
     if p.count <= 0 {
         return Ok(());
     }
     let g = |v: &Vec<f32>, i: usize| v.get(i).copied().unwrap_or(0.0);
     let (mut l_p1x, mut l_p1y, mut l_p2x, mut l_p2y) = (g(&inp.p1x, 0), g(&inp.p1y, 0), g(&inp.p2x, 0), g(&inp.p2y, 0));
     let (scx, scy) = s0_scales(p);
-    let k_1_a3 = 1.0f32 - inp.a[3];
-    let k_a1_a0 = inp.a[1] - inp.a[0];
-    let k_a2_a1 = inp.a[2] - inp.a[1];
+    let one_minus_a_last = 1.0f32 - inp.a[3];
+    let a_gap_first = inp.a[1] - inp.a[0];
+    let a_gap_second = inp.a[2] - inp.a[1];
     let mut recs = Vec::new();
     for i in 0..(p.count as usize) {
-        if !inp.p1_const {
+        if !inp.first_end_const {
             l_p1x = g(&inp.p1x, i);
             l_p1y = g(&inp.p1y, i);
         }
-        if !inp.p2_const {
+        if !inp.second_end_const {
             l_p2x = g(&inp.p2x, i);
             l_p2y = g(&inp.p2y, i);
         }
@@ -290,17 +290,17 @@ pub fn run_planes_full(p: &Params, inp: &Inputs, hst: &Host, pl: &Plane, p1: Opt
         let e2x = (l_p2x - l_p1x).mul_add(scx, x); // 
         let e2y = (-(l_p2y - l_p1y)).mul_add(scy, y); // 
         if x == e2x && y == e2y {
-            let c = p1.ok_or(Unsupported::P1Needed)?;
+            let c = pass1_cfg.ok_or(Unsupported::P1Needed)?;
             p1_stub(c, inp, pl, x, y, i, out)?;
             continue;
         }
-        let dx = e2x - x;
+        let delta_x = e2x - x;
         let dy = e2y - y;
-        let (adx, ady) = (dx.abs(), dy.abs());
+        let (adx, ady) = (delta_x.abs(), dy.abs());
         let y_major = !(adx >= ady); // vcomiss |dx|,|dy|; jb (NaN included)
         let st = S5State {
-            sample: i, x, y, p1x: l_p1x, p1y: l_p1y, p2x: l_p2x, p2y: l_p2y, e2x, e2y, dx, dy, adx, ady, y_major,
-            data_ptr: inp.acc_ptr, width: p.img_w, height: p.img_h, stride: inp.acc_stride, scx, scy, k_a1_a0, k_a2_a1, k_1_a3,
+            sample: i, x, y, p1x: l_p1x, p1y: l_p1y, p2x: l_p2x, p2y: l_p2y, e2x, e2y, delta_x, dy, adx, ady, y_major,
+            data_buf_handle: inp.acc_buf_handle, width: p.img_w, height: p.img_h, stride: inp.acc_stride, scx, scy, a_gap_first, a_gap_second, one_minus_a_last,
             scale: inp.a[4], flag_cell_a: inp.flag_cell_a, mode_x: inp.mode_x, mode_y: inp.mode_y,
         };
         let mut sel = None;
@@ -324,15 +324,15 @@ mod tests {
 
     fn base(flag: u32) -> (S5State, [f32; 5], Host, Plane) {
         let st = S5State {
-            sample: 0, x: -0.5, y: 1.0, p1x: 0.0, p1y: 0.0, p2x: 0.0, p2y: 0.0, e2x: 1.5, e2y: 1.0, dx: 2.0, dy: 0.0, adx: 2.0, ady: 0.0, y_major: false,
-            data_ptr: 0, width: 8, height: 8, stride: 40, scx: 1.0, scy: 1.0, k_a1_a0: 0.0, k_a2_a1: 0.0, k_1_a3: 0.5, scale: 1.0, flag_cell_a: flag, mode_x: 1, mode_y: 0,
+            sample: 0, x: -0.5, y: 1.0, p1x: 0.0, p1y: 0.0, p2x: 0.0, p2y: 0.0, e2x: 1.5, e2y: 1.0, delta_x: 2.0, dy: 0.0, adx: 2.0, ady: 0.0, y_major: false,
+            data_buf_handle: 0, width: 8, height: 8, stride: 40, scx: 1.0, scy: 1.0, a_gap_first: 0.0, a_gap_second: 0.0, one_minus_a_last: 0.5, scale: 1.0, flag_cell_a: flag, mode_x: 1, mode_y: 0,
         };
         // channel c of pixel (col, row) = c*100 + row*10 + col, 4 floats per pixel, stride 40 floats
         let mut buf = vec![0.0f32; 1000];
         for row in 0..12i64 {
             for col in 0..10i64 {
-                for ch in 0..4i64 {
-                    buf[(200 + row * 40 + col * 4 + ch) as usize] = (ch * 100 + row * 10 + col) as f32;
+                for chan in 0..4i64 {
+                    buf[(200 + row * 40 + col * 4 + chan) as usize] = (chan * 100 + row * 10 + col) as f32;
                 }
             }
         }
@@ -346,8 +346,8 @@ mod tests {
         let (s, a, h, p) = base(1);
         assert_eq!(x_selector(&s, &a, &h), Ok(XSel::General));
         let v = x_major_sample(&s, &a, &h, &p).unwrap();
-        for ch in 0..4 {
-            assert!((v[ch] - (11.5 + 100.0 * ch as f32)).abs() < 1e-3, "{:?}", v);
+        for chan in 0..4 {
+            assert!((v[chan] - (11.5 + 100.0 * chan as f32)).abs() < 1e-3, "{:?}", v);
         }
     }
 
@@ -355,7 +355,7 @@ mod tests {
     fn selector_cases() {
         let (mut s, a, h, _) = base(1);
         s.x = 1.0;
-        s.dx = 0.5;
+        s.delta_x = 0.5;
         s.e2x = 1.5;
         assert_eq!(x_selector(&s, &a, &h), Ok(XSel::Specialised));
         s.mode_x = 0;
@@ -365,7 +365,7 @@ mod tests {
         assert_eq!(x_selector(&s0, &a, &h), Ok(XSel::FlagZero)); // BW7C: flag_cell_a == 0 is ported
         let (mut s, a, h, p) = base(1);
         s.e2x = s.x; // n = 1 would still run; make n <= 0: dx>0 but esi < c
-        s.dx = 1.0;
+        s.delta_x = 1.0;
         s.e2x = -3.5;
         let _ = x_selector(&s, &a, &h);
         let _ = p;
@@ -383,7 +383,7 @@ mod tests {
                 s.mode_x = mx;
                 s.mode_y = my;
                 s.e2x = 9.5;
-                s.dx = 10.0;
+                s.delta_x = 10.0;
                 let r1 = x_major_sample(&s, &a, &h, &p);
                 let r2 = x_major_sample(&s, &a, &h, &p);
                 assert_eq!(r1.as_ref().map(|v| v.map(f32::to_bits)), r2.as_ref().map(|v| v.map(f32::to_bits)));
@@ -404,7 +404,7 @@ mod tests {
         let (mut s, a, h, p) = base(1);
         s.x = 3.0;
         s.e2x = 0.5;
-        s.dx = 1.0; // forced dx>0 branch with esi < c: n <= 0
+        s.delta_x = 1.0; // forced dx>0 branch with esi < c: n <= 0
         let r = x_major_sample(&s, &a, &h, &p).unwrap();
         assert!(r.iter().all(|f| f.is_nan()), "{:?}", r); // 0 * (a4/0) = NaN
     }
@@ -414,7 +414,7 @@ mod tests {
         let p = Params { count: 1, aspect_block_d: 2.0, assumption_e: 7.0, assumption_c: 0, assumption_d: 0, assumption_f: 0.0, assumption_g: 10.0, assumption_h: 0.0, img_w: 8, img_h: 6 };
         let inp = Inputs {
             a: [0.0, 1.0, 3.0, 0.5, 2.0], p1x: vec![0.25], p1y: vec![3.0], p2x: vec![0.25], p2y: vec![3.0],
-            p1_const: true, p2_const: true, flag_cell_a: 0, mode_x: 0, mode_y: 0, acc_ptr: 0, acc_stride: 40,
+            first_end_const: true, second_end_const: true, flag_cell_a: 0, mode_x: 0, mode_y: 0, acc_buf_handle: 0, acc_stride: 40,
         };
         let h = Host { port_blk_a: 0, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 6.0, ws: 8.0 };
         let (_, _, _, pl) = base(0);

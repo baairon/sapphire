@@ -34,9 +34,9 @@ impl Lcg {
         (self.0 >> 33) as u32
     }
 }
-fn synth(ch: usize, n: usize, seed: u64) -> Image {
+fn synth(chan: usize, n: usize, seed: u64) -> Image {
     let mut g = Lcg(seed);
-    let planes = (0..ch).map(|_| (0..n).map(|_| 0.05 + (g.next() as f32 / 2147483648.0)).collect()).collect();
+    let planes = (0..chan).map(|_| (0..n).map(|_| 0.05 + (g.next() as f32 / 2147483648.0)).collect()).collect();
     Image::from_planes(planes).unwrap()
 }
 fn cst(v: &[f32]) -> Arg<'static> {
@@ -50,7 +50,7 @@ fn run(args: &[Arg], w: usize, h: usize) -> Image {
     let c: Vec<i32> = args.iter().map(|a| a.count()).collect();
     let t = Tables::embedded().select_counts("dissolve", &c);
     assert!(t > 0, "no combo for dissolve {:?}", c);
-    match run_any("dissolve", t, args, w * h, (w, h), &KParams::standin()).unwrap() {
+    match run_any("dissolve", t, args, w * h, (w, h), &KParams::host_defaults()).unwrap() {
         Out::Img(i) => i,
         _ => panic!(),
     }
@@ -107,11 +107,11 @@ fn dissolve_is_deterministic_and_sensitive_to_the_matte() {
     }
     let a = synth(4, 64, 1);
     let b = synth(4, 64, 2);
-    let r1 = run(&[Arg::Img(&a), Arg::Img(&b), cst(&[0.5])], 8, 8);
+    let run_out = run(&[Arg::Img(&a), Arg::Img(&b), cst(&[0.5])], 8, 8);
     let r2 = run(&[Arg::Img(&a), Arg::Img(&b), cst(&[0.5])], 8, 8);
     let r3 = run(&[Arg::Img(&a), Arg::Img(&b), cst(&[0.6])], 8, 8);
-    assert_eq!(bits(&r1), bits(&r2));
-    assert_ne!(bits(&r1), bits(&r3));
+    assert_eq!(bits(&run_out), bits(&r2));
+    assert_ne!(bits(&run_out), bits(&r3));
 }
 
 fn plan_cmds(path: &str) -> Vec<String> {
@@ -168,10 +168,10 @@ fn trails_autogen_x1_node_level_equals_original_plan_commands() {
         eprintln!("{}", line);
         assert!(same);
         // negative control: a different matte must differ from the plan commands' result
-        let mut b2 = b.clone();
-        b2.overrides.insert("mocha_mask_opacity".into(), vec![0.75]);
-        let cp2 = compile_for(&g, &b2).unwrap();
-        let node2 = execute_compiled(&cp2, &b2, &inp, &host).unwrap();
+        let mut binding2 = b.clone();
+        binding2.overrides.insert("mocha_mask_opacity".into(), vec![0.75]);
+        let cp2 = compile_for(&g, &binding2).unwrap();
+        let node2 = execute_compiled(&cp2, &binding2, &inp, &host).unwrap();
         assert_ne!(bits(&node2.dest), bits(&d));
     });
 }
@@ -182,7 +182,7 @@ fn arg_descr(cp: &fx_eval::CompiledProgram, a: usize) -> String {
         None => return "?".into(),
     };
     let n = (nd.elnum.max(1) as usize).min(4);
-    if nd.kind == "const" || nd.b160 || nd.folded {
+    if nd.kind == "const" || nd.is_const_node || nd.folded {
         let l: Vec<String> = (0..n).map(|i| format!("{}", f32::from_bits(nd.lanes[i]))).collect();
         format!("c{}[{}]", n, l.join(","))
     } else if nd.kind == "input" {
@@ -227,9 +227,9 @@ fn class_use_over_the_corpus() {
                     Err(_) => continue,
                 };
                 for nd in &cp.nodes {
-                    if (nd.kind == "func" || nd.kind == "auto") && !nd.b160 && !nd.folded && want.contains(&nd.prim.as_str()) {
+                    if (nd.kind == "func" || nd.kind == "auto") && !nd.is_const_node && !nd.folded && want.contains(&nd.prim.as_str()) {
                         let d: Vec<String> = nd.args.iter().map(|a| arg_descr(&cp, *a)).collect();
-                        let shape: Vec<String> = d.iter().map(|x| x.split(|ch| ch == ':' || ch == '[').next().unwrap().to_string()).collect();
+                        let shape: Vec<String> = d.iter().map(|x| x.split(|chan| chan == ':' || chan == '[').next().unwrap().to_string()).collect();
                         let key = (nd.prim.clone(), format!("{} -> {}ch", d.join(" "), nd.elnum));
                         let ent = by.entry(key).or_insert((BTreeSet::new(), 0, s.paramset.clone()));
                         ent.0.insert(e.name.clone());
@@ -242,12 +242,12 @@ fn class_use_over_the_corpus() {
             }
         }
         let mut out = String::from("class\toperands (cN = constant of N lanes with values, imgN = image of N channels : source) -> output channels\tprograms\tbranch_sets\texample_set\texample_programs\n");
-        for ((cl, d), (ps, n, ex)) in &by {
-            out.push_str(&format!("{}\t{}\t{}\t{}\t{}\t{}\n", cl, d, ps.len(), n, ex, ps.iter().take(5).cloned().collect::<Vec<_>>().join(" ")));
+        for ((class_name, d), (ps, n, ex)) in &by {
+            out.push_str(&format!("{}\t{}\t{}\t{}\t{}\t{}\n", class_name, d, ps.len(), n, ex, ps.iter().take(5).cloned().collect::<Vec<_>>().join(" ")));
         }
         let mut sh = String::from("class\toperand shape -> output channels\tprograms\tbranch_sets\texample_programs\n");
-        for ((cl, d), (ps, n)) in &shapes {
-            sh.push_str(&format!("{}\t{}\t{}\t{}\t{}\n", cl, d, ps.len(), n, ps.iter().take(8).cloned().collect::<Vec<_>>().join(" ")));
+        for ((class_name, d), (ps, n)) in &shapes {
+            sh.push_str(&format!("{}\t{}\t{}\t{}\t{}\n", class_name, d, ps.len(), n, ps.iter().take(8).cloned().collect::<Vec<_>>().join(" ")));
         }
         let _ = std::fs::create_dir_all(effects_vecdir::out_dir());
         let _ = std::fs::write(effects_vecdir::out_dir().join("IN3_CLASS_USE.tsv"), &out);
@@ -296,7 +296,7 @@ fn dissolve_bearing_sets_run_end_to_end() {
                     Ok(cp) => cp,
                     Err(_) => continue,
                 };
-                if !cp.nodes.iter().any(|n| (n.kind == "func" || n.kind == "auto") && !n.b160 && !n.folded && n.prim == "dissolve") {
+                if !cp.nodes.iter().any(|n| (n.kind == "func" || n.kind == "auto") && !n.is_const_node && !n.folded && n.prim == "dissolve") {
                     continue;
                 }
                 nd += 1;

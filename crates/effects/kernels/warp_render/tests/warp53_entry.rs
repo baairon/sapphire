@@ -56,7 +56,7 @@ fn parse(c: &[&str]) -> Case {
         ht0: pi(22),
         tstep: f(c[20]),
         fill: fl(c[28]),
-        p: WarpPrim { const_coords: pi(10) != 0, const_a1: f(c[34]), const_a2: f(c[35]), a1_arr: fl(c[29]), a2_arr: fl(c[30]), c1_arr: fl(c[31]), c2_arr: fl(c[32]), flag: pi(9) as u8, mx: pi(7), my: pi(8) },
+        p: WarpPrim { const_coords: pi(10) != 0, const_a1: f(c[34]), const_a2: f(c[35]), lanes_a_first: fl(c[29]), lanes_a_second: fl(c[30]), lanes_c_first: fl(c[31]), lanes_c_second: fl(c[32]), flag: pi(9) as u8, mx: pi(7), my: pi(8) },
         rec: WarpRec { count: pi(2), aspect_block_d: f(c[17]), assumption_e: f(c[42]), idx: pi(33), assumption_c: pi(11), assumption_d: pi(12), assumption_f: f(c[18]), assumption_g: f(c[19]), assumption_h: f(c[43]) },
         geom: if pi(44) != 0 { Some(ImageGeom { left: f(c[45]), right: f(c[46]), assumption_h: f(c[47]), aspect: f(c[48]), assumption_c: pi(49), assumption_d: pi(50) }) } else { None },
         src: if c.len() > 40 { fl(c[40]) } else { vec![] },
@@ -65,7 +65,7 @@ fn parse(c: &[&str]) -> Case {
 
 fn image(c: &Case) -> DriverImage {
     DriverImage {
-        f1: F1Params { n: c.n, width_tab: vec![c.wt0; 8], height_tab: vec![c.ht0; 8], t: (0..16).map(|k| 1.0 + k as f32 * c.tstep).collect(), flag_x: 0, flag_y: 0 },
+        sampler_params: F1Params { n: c.n, width_tab: vec![c.wt0; 8], height_tab: vec![c.ht0; 8], t: (0..16).map(|k| 1.0 + k as f32 * c.tstep).collect(), flag_x: 0, flag_y: 0 },
         w: c.w,
         h: c.h,
         d_cell_d: c.d_cell_d,
@@ -93,7 +93,7 @@ fn tokens(c: &Case, recs: &[DriverRec]) -> String {
 
 fn token1(c: &Case) -> String {
     let w = wrapper_args(&c.p, c.rec.idx).unwrap();
-    format!("{}W:ok:r9={}:a1={:08x}:a2={:08x}:c1={:08x}:c2={:08x}:fl={}:mx={}:my={}", if ctx_logs_error(c.geom.as_ref()) { "G " } else { "" }, w.const_coords as i32, w.a1[0].to_bits(), w.a2[0].to_bits(), w.c1[0].to_bits(), w.c2[0].to_bits(), w.flag, w.mx, w.my)
+    format!("{}W:ok:r9={}:a1={:08x}:a2={:08x}:c1={:08x}:c2={:08x}:fl={}:mx={}:my={}", if ctx_logs_error(c.geom.as_ref()) { "G " } else { "" }, w.const_coords as i32, w.coord_x[0].to_bits(), w.coord_y[0].to_bits(), w.c1[0].to_bits(), w.c2[0].to_bits(), w.flag, w.mx, w.my)
 }
 
 type Res = Result<(Vec<Vec<f32>>, Vec<DriverRec>), WarpError>;
@@ -124,16 +124,16 @@ fn warp53_against_emulated_original() {
         cases += 1;
         let cs = parse(&c);
         // the harness labels 0x5b9bd0's rsi 'badrsi' because here rsi is the 0x7d0 byte stack context built by 0x5ba5c0 (not a layout region): same call, normalised
-        let rec2_norm = c[39].replace("D:badrsi", "D:ok");
-        let (st1, rec1, st2, rec2) = (c[36], c[37], c[38], rec2_norm.as_str());
+        let record_second_norm = c[39].replace("D:badrsi", "D:ok");
+        let (st1, record_first, st2, record_second) = (c[36], c[37], c[38], record_second_norm.as_str());
         let src = if cs.src.is_empty() { vec![0.0f32; 4096] } else { cs.src.clone() };
         if st1 == "ok" {
             st1_cmp += 1;
             rec_tokens += 1;
             let mine = token1(&cs);
-            if mine != rec1 {
+            if mine != record_first {
                 rec_diff += 1;
-                lines.push(format!("{}\tRECORD DIFF stage1\n  port {}\n  emu  {}", cs.name, mine, rec1));
+                lines.push(format!("{}\tRECORD DIFF stage1\n  port {}\n  emu  {}", cs.name, mine, record_first));
             }
         } else {
             lines.push(format!("{}\tSTAGE1 EMULATOR FAULT '{}'", cs.name, st1));
@@ -151,9 +151,9 @@ fn warp53_against_emulated_original() {
             ("ok", Ok((out, recs))) => {
                 let mine2 = tokens(&cs, recs);
                 rec_tokens += 1;
-                if mine2 != rec2 {
+                if mine2 != record_second {
                     rec_diff += 1;
-                    lines.push(format!("{}\tRECORD DIFF stage2\n  port {}\n  emu  {}", cs.name, mine2, rec2));
+                    lines.push(format!("{}\tRECORD DIFF stage2\n  port {}\n  emu  {}", cs.name, mine2, record_second));
                 }
                 let emu: Vec<Vec<u32>> = c[41].split(';').map(|p| if p.is_empty() { vec![] } else { p.split(',').map(|h| u32::from_str_radix(h, 16).unwrap()).collect() }).collect();
                 compared += 1;
@@ -197,9 +197,9 @@ fn warp53_against_emulated_original() {
     let muts: Vec<Mut> = vec![
         ("idx + 1", |c| c.rec.idx += 1),
         ("const_coords toggled", |c| c.p.const_coords = !c.p.const_coords),
-        ("a1_arr[idx] + 0.37", |c| { let i = c.rec.idx as usize; c.p.a1_arr[i] += 0.37 }),
-        ("a2_arr[idx] + 0.37", |c| { let i = c.rec.idx as usize; c.p.a2_arr[i] += 0.37 }),
-        ("c1 and c2 swapped", |c| std::mem::swap(&mut c.p.c1_arr, &mut c.p.c2_arr)),
+        ("a1_arr[idx] + 0.37", |c| { let i = c.rec.idx as usize; c.p.lanes_a_first[i] += 0.37 }),
+        ("a2_arr[idx] + 0.37", |c| { let i = c.rec.idx as usize; c.p.lanes_a_second[i] += 0.37 }),
+        ("c1 and c2 swapped", |c| std::mem::swap(&mut c.p.lanes_c_first, &mut c.p.lanes_c_second)),
         ("flag toggled", |c| c.p.flag = if c.p.flag == 0 { 1 } else { 0 }),
         ("mx + 1 mod 3", |c| c.p.mx = (c.p.mx + 1) % 3),
         ("my + 1 mod 3", |c| c.p.my = (c.p.my + 1) % 3),
@@ -217,7 +217,7 @@ fn warp53_against_emulated_original() {
         let (mut changed, mut total) = (0, 0);
         for c in &kept {
             let base = exec(c, &c.src);
-            if base.is_err() || (c.rec.idx as usize) + 1 >= c.p.a1_arr.len() {
+            if base.is_err() || (c.rec.idx as usize) + 1 >= c.p.lanes_a_first.len() {
                 continue;
             }
             let mut c2 = c.clone();
@@ -241,8 +241,8 @@ fn warp53_against_emulated_original() {
 /// true when the two results differ in any output bit class or record (used by the sensitivity count)
 fn differs_bits(a: &Res, b: &Res) -> bool {
     match (a, b) {
-        (Ok((o1, r1)), Ok((o2, r2))) => r1 != r2 || o1.iter().flatten().zip(o2.iter().flatten()).any(|(x, y)| !class_eq(x.to_bits(), y.to_bits())),
-        (Err(e1), Err(e2)) => e1 != e2,
+        (Ok((lanes_a, res_a)), Ok((lanes_b, r2))) => res_a != r2 || lanes_a.iter().flatten().zip(lanes_b.iter().flatten()).any(|(x, y)| !class_eq(x.to_bits(), y.to_bits())),
+        (Err(err_a), Err(err_b)) => err_a != err_b,
         _ => true,
     }
 }

@@ -20,16 +20,16 @@ pub const WARP_HELPERS: &str = r#"
 double warp_fmod(double x, double y) {
     ulong xb = as_ulong(x);
     ulong sgn = xb & 0x8000000000000000ul;
-    uint e11 = (uint)((xb >> 52) & 0x7fful);
-    if (e11 == 0x7ffu) {
+    uint exp_field = (uint)((xb >> 52) & 0x7fful);
+    if (exp_field == 0x7ffu) {
         return as_double(0x7ff8000000000000ul);
     }
-    if (e11 == 0u) {
+    if (exp_field == 0u) {
         return as_double(sgn);
     }
     ulong ay = (ulong)y;
     ulong mant = (xb & 0xffffffffffffful) | 0x10000000000000ul;
-    int e = (int)e11 - 1075;
+    int e = (int)exp_field - 1075;
     double r;
     if (e >= 0) {
         ulong t = 1ul % ay;
@@ -66,10 +66,10 @@ int warp_cvtss2si(float x) {
    st holds the 64 (sin, cos) entries of the sincosf table as double bit patterns. */
 void warp_sincosf(float x, __global const ulong* st, float* so, float* co, int* big) {
     uint bits = as_uint(x);
-    uint ax = (((bits >> 16) & 0x7fffu) - 0x80u) & 0xffffu;
-    if (ax <= 0x457fu) {
+    uint abs_x = (((bits >> 16) & 0x7fffu) - 0x80u) & 0xffffu;
+    if (abs_x <= 0x457fu) {
         float t = as_float(0x4122f983u) * x;
-        int edx = warp_cvtss2si(t);
+        int copy_mode = warp_cvtss2si(t);
         float rt = (t + as_float(0x4b400000u)) - as_float(0x4b400000u);
         double xd = (double)x;
         ulong m = (ulong)bits & 0x80000000ul;
@@ -77,24 +77,24 @@ void warp_sincosf(float x, __global const ulong* st, float* so, float* co, int* 
         double a = as_double(0x77b921fb54444000ul ^ sg);
         double b = as_double(0x7532e7b9676733aful ^ sg);
         double rd = as_double(((ulong)as_uint(rt)) << 29);
-        uint i0 = ((((uint)edx + 0x1c7600u) << 4) & 0x3f0u) >> 4;
-        uint i1 = ((((uint)edx + 0x1c7610u) << 4) & 0x3f0u) >> 4;
+        uint flag_0 = ((((uint)copy_mode + 0x1c7600u) << 4) & 0x3f0u) >> 4;
+        uint flag_1 = ((((uint)copy_mode + 0x1c7610u) << 4) & 0x3f0u) >> 4;
         double r = xd - a * rd;
         double w = b * rd + r;
         double r2 = r * r;
         double p = (as_double(0xbfe0000000000000ul) * r2 + 0x1p+0) + as_double(0x3fa5555555555555ul) * (r2 * r2);
         double q = (as_double(0xbfc5555555555555ul) * r2 + 0x1p+0) + as_double(0x3f81111111111111ul) * (r2 * r2);
-        double s0 = as_double(st[2u * i0]);
-        double c0 = as_double(st[2u * i0 + 1u]);
-        double s1 = as_double(st[2u * i1]);
-        double c1 = as_double(st[2u * i1 + 1u]);
-        double o0 = s0 * p + (w * c0) * q;
-        double o1 = s1 * p + (w * c1) * q;
-        *so = (float)o0;
-        *co = (float)o1;
+        double s0 = as_double(st[2u * flag_0]);
+        double coef_s = as_double(st[2u * flag_0 + 1u]);
+        double as_double_1 = as_double(st[2u * flag_1]);
+        double c1 = as_double(st[2u * flag_1 + 1u]);
+        double dst_ch0 = s0 * p + (w * coef_s) * q;
+        double dst_ch1 = as_double_1 * p + (w * c1) * q;
+        *so = (float)dst_ch0;
+        *co = (float)dst_ch1;
         return;
     }
-    if (ax >= 0x8000u) {
+    if (abs_x >= 0x8000u) {
         double xd = (double)x;
         *so = (float)(xd * as_double(0x3fefffffff800000ul));
         *co = (float)(0x1p+0 - xd * xd);
@@ -156,9 +156,9 @@ float warp_wrap(float v, int dim, int mode) {
     return v;
 }
 
-__kernel void warp_warp_f32(__global const float* plane, uint plen, __global const float* a1, __global const float* a2,
-                       int const_coords, float ca1, float ca2,
-                       __global float* o0, __global float* o1, __global float* o2, __global float* o3,
+__kernel void warp_warp_f32(__global const float* plane, uint plen, __global const float* coord_x_in, __global const float* coord_y_in,
+                       int const_coords, float coord_a_first, float coord_a_second,
+                       __global float* dst_ch0, __global float* dst_ch1, __global float* dst_ch2, __global float* dst_ch3,
                        int n, int w, int h, int wt0, int ht0, int mx, int my,
                        float aspect, float left, float right, float geo_e, float geo_h, int roi_x, int roi_y,
                        int rel, __global uint* err) {
@@ -169,36 +169,36 @@ __kernel void warp_warp_f32(__global const float* plane, uint plen, __global con
     }
     int y = (int)(gid / (uint)w);
     int xi = (int)(gid % (uint)w);
-    float x0 = ca1;
-    float y0 = ca2;
+    float coord_x = coord_a_first;
+    float coord_y = coord_a_second;
     if (!const_coords) {
-        x0 = a1[gid];
-        y0 = a2[gid];
+        coord_x = coord_x_in[gid];
+        coord_y = coord_y_in[gid];
     }
-    float x13 = right - left;
-    float scx = 0x1p-1f * x13;
-    float scy = (0x1p-1f * aspect) * x13;
+    float diff_13 = right - left;
+    float scx = 0x1p-1f * diff_13;
+    float scy = (0x1p-1f * aspect) * diff_13;
     float xr;
     float yr;
     if (rel) {
-        int r8 = (int)(((uint)(xi + 1) + (uint)roi_x) - 1u);
-        float base = (float)r8 - (float)roi_x;
-        xr = fma(x0, scx, base);
+        int route_int_7 = (int)(((uint)(xi + 1) + (uint)roi_x) - 1u);
+        float base = (float)route_int_7 - (float)roi_x;
+        xr = fma(coord_x, scx, base);
         float cy = (float)roi_y;
         float dy = (float)((int)((uint)y + (uint)roi_y));
-        float t = fma(-scy, y0, -cy);
+        float t = fma(-scy, coord_y, -cy);
         yr = t + dy;
     } else {
-        float t = x0 + 0x1p+0f;
+        float t = coord_x + 0x1p+0f;
         float base = left - (float)roi_x;
         xr = fma(t, scx, base);
-        float t2 = y0 - 0x1p+0f;
-        float m = fma(scy, t2, -geo_h);
+        float shifted_y = coord_y - 0x1p+0f;
+        float m = fma(scy, shifted_y, -geo_h);
         float top = geo_e - (float)roi_y;
         yr = top - m;
     }
     float x = warp_wrap(xr, w, mx);
-    float y1 = warp_wrap(yr, h, my);
+    float warp_wrap_1 = warp_wrap(yr, h, my);
     float xc = x;
     if (mx == 0) {
         if (-0x1p+0f > x) {
@@ -208,13 +208,13 @@ __kernel void warp_warp_f32(__global const float* plane, uint plen, __global con
             xc = (wb < x) ? wb : x;
         }
     }
-    float yc = y1;
+    float yc = warp_wrap_1;
     if (my == 0) {
-        if (-0x1p+0f > y1) {
+        if (-0x1p+0f > warp_wrap_1) {
             yc = -0x1p+0f;
         } else {
             float hb = (float)ht0;
-            yc = (hb < y1) ? hb : y1;
+            yc = (hb < warp_wrap_1) ? hb : warp_wrap_1;
         }
     }
     float sx = 0x1p+0f + xc;
@@ -225,43 +225,43 @@ __kernel void warp_warp_f32(__global const float* plane, uint plen, __global con
     float fy = sy - (float)iy;
     int wp3 = (int)((uint)wt0 + 3u);
     int stride = (int)((uint)wp3 * (uint)n);
-    long off0 = (long)n + (long)((int)((uint)n * (uint)wp3));
-    int ecx = (int)((uint)(ix - 1) * (uint)n);
-    int r14 = (int)((uint)(iy - 1) * (uint)stride);
-    long base0 = off0 + (long)ecx + (long)r14;
+    long buf_start = (long)n + (long)((int)((uint)n * (uint)wp3));
+    int col_offset = (int)((uint)(ix - 1) * (uint)n);
+    int prod_14 = (int)((uint)(iy - 1) * (uint)stride);
+    long base0 = buf_start + (long)col_offset + (long)prod_14;
     float t = fx * fy;
-    float w0 = ((0x1p+0f - fx) - fy) + t;
+    float corner_weight = ((0x1p+0f - fx) - fy) + t;
     float wn = fx - t;
     float ws = fy - t;
     float wd = t;
     long lim = (long)plen;
     for (int j = 0; j < 4; j++) {
         if (j < n) {
-            long k0 = base0 + (long)j;
-            long k1 = base0 + (long)n + (long)j;
-            long k2 = base0 + (long)stride + (long)j;
-            long k3 = base0 + (long)n + (long)stride + (long)j;
-            if (k0 < 0 || k0 >= lim || k1 < 0 || k1 >= lim || k2 < 0 || k2 >= lim || k3 < 0 || k3 >= lim) {
+            long sum_0 = base0 + (long)j;
+            long next_offset = base0 + (long)n + (long)j;
+            long stride_offset = base0 + (long)stride + (long)j;
+            long sum_3 = base0 + (long)n + (long)stride + (long)j;
+            if (sum_0 < 0 || sum_0 >= lim || next_offset < 0 || next_offset >= lim || stride_offset < 0 || stride_offset >= lim || sum_3 < 0 || sum_3 >= lim) {
                 atomic_or(err, 1u);
                 return;
             }
-            float r0 = plane[k0];
-            float rn = plane[k1];
-            float rs = plane[k2];
-            float rd = plane[k3];
+            float tap_sample = plane[sum_0];
+            float rn = plane[next_offset];
+            float rs = plane[stride_offset];
+            float rd = plane[sum_3];
             float s = wd * rd;
             float u = ws * rs;
             s = fma(wn, rn, s);
-            u = fma(w0, r0, u);
+            u = fma(corner_weight, tap_sample, u);
             float v = s + u;
             if (j == 0) {
-                o0[gid] = v;
+                dst_ch0[gid] = v;
             } else if (j == 1) {
-                o1[gid] = v;
+                dst_ch1[gid] = v;
             } else if (j == 2) {
-                o2[gid] = v;
+                dst_ch2[gid] = v;
             } else {
-                o3[gid] = v;
+                dst_ch3[gid] = v;
             }
         }
     }
@@ -272,11 +272,11 @@ pub const WARP_ROTATE: &str = r#"
 /* MIRRORS_MUL_ADD: rotate2d::render_cfg (FMA sites 0 to 31) */
 
 /* path 1..4: the angle is a plane (v constant or planes, centre constant or planes: P1 vC cC, P2 vC cP, P3 vP cC, P4 vP cP).
-   path 5..7: the angle is a constant, (s, c) come from the host (P5 vC cP, P6 vP cP, P7 vP cC with the host folded k1, k2).
-   cv = (a, b) constant v lanes, cc = (cc, d) constant centre lanes; for path 1 the host passes dx, dy in cv. */
+   path 5..7: the angle is a constant, (s, c) come from the host (P5 vC cP, P6 vP cP, P7 vP cC with the host folded next_offset, stride_offset).
+   cv = (a, b) constant v lanes, cc = (cc, d) constant centre lanes; for path 1 the host passes delta_x, dy in cv. */
 __kernel void warp_rotate_f32(__global const float* ang, __global const float* vx, __global const float* vy,
-                         __global const float* cx, __global const float* cy,
-                         float va, float vb, float ca, float cb, float sconst, float cconst, float k1, float k2,
+                         __global const float* centre_x, __global const float* cy,
+                         float va, float vb, float ca, float cb, float sconst, float cconst, float next_offset, float stride_offset,
                          __global const ulong* st, __global float* ox, __global float* oy, uint n, int path,
                          __global uint* err) {
     uint i = (uint)get_global_id(0);
@@ -296,64 +296,64 @@ __kernel void warp_rotate_f32(__global const float* ang, __global const float* v
     float rx;
     float ry;
     if (path == 1) {
-        float dx = va;
+        float delta_x = va;
         float dy = vb;
-        float t1 = fma(-dy, s, ca);
-        float t2 = fma(s, dx, cb);
-        rx = fma(dx, c, t1);
-        ry = fma(c, dy, t2);
+        float rx_part = fma(-dy, s, ca);
+        float shifted_y = fma(s, delta_x, cb);
+        rx = fma(delta_x, c, rx_part);
+        ry = fma(c, dy, shifted_y);
     } else if (path == 2) {
-        float cxi = cx[i];
+        float cxi = centre_x[i];
         float cyi = cy[i];
-        float dx = va - cxi;
+        float delta_x = va - cxi;
         float dy = vb - cyi;
-        float t1 = fma(dx, c, cxi);
-        rx = fma(-dy, s, t1);
-        float t2 = fma(dy, c, cyi);
-        ry = fma(s, dx, t2);
+        float rx_part = fma(delta_x, c, cxi);
+        rx = fma(-dy, s, rx_part);
+        float shifted_y = fma(dy, c, cyi);
+        ry = fma(s, delta_x, shifted_y);
     } else if (path == 3) {
         float vxi = vx[i];
         float vyi = vy[i];
-        float dx = vxi - ca;
+        float delta_x = vxi - ca;
         float dy = vyi - cb;
-        float t1 = fma(dx, c, ca);
-        float t2 = fma(dx, s, cb);
-        rx = fma(-dy, s, t1);
-        ry = fma(c, dy, t2);
+        float rx_part = fma(delta_x, c, ca);
+        float shifted_y = fma(delta_x, s, cb);
+        rx = fma(-dy, s, rx_part);
+        ry = fma(c, dy, shifted_y);
     } else if (path == 4) {
-        float cxi = cx[i];
+        float cxi = centre_x[i];
         float cyi = cy[i];
-        float dx = vx[i] - cxi;
+        float delta_x = vx[i] - cxi;
         float dy = vy[i] - cyi;
-        float t1 = fma(dx, c, cxi);
-        rx = fma(-dy, s, t1);
-        float t2 = fma(dy, c, cyi);
-        ry = fma(s, dx, t2);
+        float rx_part = fma(delta_x, c, cxi);
+        rx = fma(-dy, s, rx_part);
+        float shifted_y = fma(dy, c, cyi);
+        ry = fma(s, delta_x, shifted_y);
     } else if (path == 5) {
-        float cxi = cx[i];
+        float cxi = centre_x[i];
         float cyi = cy[i];
-        float dx = va - cxi;
+        float delta_x = va - cxi;
         float dy = vb - cyi;
-        float t1 = fma(dx, c, cxi);
-        rx = fma(-dy, s, t1);
-        float t2 = fma(c, dy, cyi);
-        ry = fma(dx, s, t2);
+        float rx_part = fma(delta_x, c, cxi);
+        rx = fma(-dy, s, rx_part);
+        float shifted_y = fma(c, dy, cyi);
+        ry = fma(delta_x, s, shifted_y);
     } else if (path == 6) {
-        float cxi = cx[i];
+        float cxi = centre_x[i];
         float cyi = cy[i];
-        float dx = vx[i] - cxi;
+        float delta_x = vx[i] - cxi;
         float dy = vy[i] - cyi;
-        float t1 = fma(dx, c, cxi);
-        rx = fma(-dy, s, t1);
-        float t2 = fma(c, dy, cyi);
-        ry = fma(dx, s, t2);
+        float rx_part = fma(delta_x, c, cxi);
+        rx = fma(-dy, s, rx_part);
+        float shifted_y = fma(c, dy, cyi);
+        ry = fma(delta_x, s, shifted_y);
     } else {
         float vxi = vx[i];
         float vyi = vy[i];
-        float t1 = fma(c, vxi, k1);
-        float t2 = fma(vxi, s, k2);
-        rx = fma(-vyi, s, t1);
-        ry = fma(vyi, c, t2);
+        float rx_part = fma(c, vxi, next_offset);
+        float shifted_y = fma(vxi, s, stride_offset);
+        rx = fma(-vyi, s, rx_part);
+        ry = fma(vyi, c, shifted_y);
     }
     ox[i] = rx;
     oy[i] = ry;
@@ -373,10 +373,10 @@ void warp_plan(int w, uint phase, int* pk, int* pe) {
         return;
     }
     int peel;
-    int esi;
+    int tap_b;
     if (nn < 29) {
         peel = 0;
-        esi = nn & ~15;
+        tap_b = nn & ~15;
     } else {
         uint ph = phase & 31u;
         if (ph == 0u) {
@@ -389,15 +389,15 @@ void warp_plan(int w, uint phase, int* pk, int* pe) {
         if (nn < peel + 16) {
             return;
         }
-        esi = nn - ((nn - peel) & 15);
+        tap_b = nn - ((nn - peel) & 15);
     }
-    int rem = nn - esi;
-    int v8 = esi;
+    int rem = nn - tap_b;
+    int end_tap = tap_b;
     if (rem >= 8) {
-        v8 = esi + (rem & ~7);
+        end_tap = tap_b + (rem & ~7);
     }
     *pk = peel;
-    *pe = v8;
+    *pe = end_tap;
 }
 
 float warp_nr_inv(float x) {
@@ -405,9 +405,9 @@ float warp_nr_inv(float x) {
     return (r + r) - ((r * x) * r);
 }
 
-/* kc: m1 p m4 m5 m6 m7 b (host constants, perspective::constants). out1 = (b * u) * q, out2 = fma(fma(v, m5, -m6), q, m1). */
+/* kc: a_sin p b_sin b_cos sin_k cos_k b (host constants, perspective::constants). out1 = (b * u) * q, out2 = fma(fma(v, b_cos, -sin_k), q, a_sin). */
 __kernel void warp_persp_f32(__global const float* u, __global const float* v, __global float* out1, __global float* out2,
-                        float m1, float p, float m4, float m5, float m6, float m7, float b,
+                        float a_sin, float p, float b_sin, float b_cos, float sin_k, float cos_k, float b,
                         int w, int h, uint base, int rowbuf) {
     uint gid = (uint)get_global_id(0);
     uint total = (uint)w * (uint)h;
@@ -428,7 +428,7 @@ __kernel void warp_persp_f32(__global const float* u, __global const float* v, _
     int vec = (xi >= pk && xi < pe);
     float vv = v[gid];
     float uu = u[gid];
-    float d = fma(-m4, vv, -m7);
+    float d = fma(-b_sin, vv, -cos_k);
     float q;
     if (vec) {
         int zero = (d == 0x0p+0f);
@@ -439,7 +439,7 @@ __kernel void warp_persp_f32(__global const float* u, __global const float* v, _
         } else if (pgt == dgt) {
             q = (0x1.8p+0f - p) * warp_nr_inv(d);
         } else {
-            float dn = fma(m4, vv, m7);
+            float dn = fma(b_sin, vv, cos_k);
             q = p * warp_nr_inv(dn);
         }
     } else {
@@ -454,18 +454,18 @@ __kernel void warp_persp_f32(__global const float* u, __global const float* v, _
             }
         }
     }
-    float t = fma(vv, m5, -m6);
+    float t = fma(vv, b_cos, -sin_k);
     out1[gid] = (b * uu) * q;
-    out2[gid] = fma(t, q, m1);
+    out2[gid] = fma(t, q, a_sin);
 }
 
-/* perspective_alpha::ramp with the clamp maximum 1.0 in every part. cf = (float)ecx, p, r1 from the host. */
-__kernel void warp_persp_alpha_f32(__global const float* v, __global float* dst, uint n, float cf, float p, float r1) {
+/* perspective_alpha::ramp with the clamp maximum 1.0 in every part. cf = (float)col_offset, p, cos_t from the host. */
+__kernel void warp_persp_alpha_f32(__global const float* v, __global float* dst, uint n, float cf, float p, float cos_t) {
     uint i = (uint)get_global_id(0);
     if (i >= n) {
         return;
     }
-    float q = cf * fma(-p, v[i], -r1);
+    float q = cf * fma(-p, v[i], -cos_t);
     float o;
     if (q < 0x0p+0f) {
         o = 0x0p+0f;

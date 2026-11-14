@@ -14,7 +14,7 @@ fn img(w: usize, h: usize, seed: f32) -> Image {
 fn run(w: usize, h: usize) -> Result<Image, ExecError> {
     let (a, b) = (img(w, h, 0.0), img(w, h, 0.4));
     let args = [Arg::Img(&a), Arg::Img(&b), cst(1.0), cst(1.0), cst(1.0), cst(0.1), cst(1.0), cst(0.5), cst(0.2)];
-    run_any("optical_flow", 3, &args, w * h, (w, h), &KParams::standin()).and_then(|o: Out| o.into_image())
+    run_any("optical_flow", 3, &args, w * h, (w, h), &KParams::host_defaults()).and_then(|o: Out| o.into_image())
 }
 
 #[test]
@@ -50,7 +50,7 @@ fn a_side_below_two_is_refused_by_name() {
 fn a_wrong_tag_is_a_shape_error() {
     let (a, b) = (img(8, 8, 0.0), img(8, 8, 0.4));
     let args = [Arg::Img(&a), Arg::Img(&b), cst(1.0), cst(1.0), cst(1.0), cst(0.1), cst(1.0), cst(0.5), cst(0.2)];
-    assert!(matches!(run_any("optical_flow", 1, &args, 64, (8, 8), &KParams::standin()), Err(ExecError::Shape(_))));
+    assert!(matches!(run_any("optical_flow", 1, &args, 64, (8, 8), &KParams::host_defaults()), Err(ExecError::Shape(_))));
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn a_bad_host_phase_is_refused_and_valid_ones_run() {
     let (a, b) = (img(64, 32, 0.0), img(64, 32, 0.4));
     let args = [Arg::Img(&a), Arg::Img(&b), cst(1.0), cst(1.0), cst(1.0), cst(0.1), cst(1.0), cst(0.5), cst(0.2)];
     for bad in [2u32, 64, 65] {
-        let mut kp = KParams::standin();
+        let mut kp = KParams::host_defaults();
         kp.flow_host_phase = bad;
         match run_any("optical_flow", 3, &args, 64 * 32, (64, 32), &kp) {
             Err(ExecError::Kernel { msg, .. }) => assert!(msg.starts_with("OPTICAL-FLOW-BAD-HOST-VALUE-REFUSED"), "{msg}"),
@@ -95,7 +95,7 @@ fn a_bad_host_phase_is_refused_and_valid_ones_run() {
         }
     }
     for ok in [0u32, 16, 28, 32, 60] {
-        let mut kp = KParams::standin();
+        let mut kp = KParams::host_defaults();
         kp.flow_host_phase = ok;
         assert!(run_any("optical_flow", 3, &args, 64 * 32, (64, 32), &kp).is_ok(), "{ok}");
     }

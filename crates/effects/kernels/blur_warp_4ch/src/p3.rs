@@ -9,7 +9,7 @@ pub struct SpecIn {
     pub dir: i32,
     pub n: i32,
     pub fx: f32,
-    pub c0: f32,
+    pub mix: f32,
     pub slope: f32,
     pub yy: f32,
     pub step_a: f32,
@@ -17,8 +17,8 @@ pub struct SpecIn {
     pub h: i32,
     pub stride: i32,
     pub a: [f32; 5],
-    pub k_a2_a1: f32,
-    pub k_1_a3: f32,
+    pub a_gap_second: f32,
+    pub one_minus_a_last: f32,
     /// [rbp] != 0: column clamp (S10, S11)
     pub col_clamp: bool,
     /// [rbp] != 0: row clamp (S10, S12)
@@ -30,22 +30,22 @@ pub struct SpecIn {
 pub fn spec_loop(s: &SpecIn, pl: &Plane) -> Result<([f32; 4], f32), Unsupported> {
     let nm = match (s.col_clamp, s.row_clamp) { (true, true) => "S10", (true, false) => "S11", (false, true) => "S12", (false, false) => "S13" };
     LOG.with(|l| l.borrow_mut().push(nm));
-    let (a0, a1, a3) = (s.a[0], s.a[1], s.a[3]);
+    let (alpha_init, alpha_origin, tap_width) = (s.a[0], s.a[1], s.a[3]);
     let nf = s.n as f32;
-    let wlim = nf * a3;
-    let step_b = s.k_a2_a1 / (nf * s.k_1_a3);
+    let wlim = nf * tap_width;
+    let step_b = s.a_gap_second / (nf * s.one_minus_a_last);
     let omfx = 1.0 - s.fx;
-    let omc0 = 1.0 - s.c0;
+    let omc0 = 1.0 - s.mix;
     let hf = s.h as f32;
     let mut sums = [0.0f32; 4];
     let mut wsum = 0.0f32;
-    let (mut c, mut yy, mut alpha, mut step, mut al) = (s.c, s.yy, a0, s.step_a, false);
+    let (mut c, mut yy, mut alpha, mut step, mut at_limit) = (s.c, s.yy, alpha_init, s.step_a, false);
     for k in 0..s.n {
-        if !al && (k as f32) >= wlim {
+        if !at_limit && (k as f32) >= wlim {
             let q = k / s.n; // idiv, always 0
-            alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
+            alpha = (tap_width - (q as f32)).mul_add(step_b, alpha_origin); // vfmadd213ss 
             step = step_b;
-            al = true;
+            at_limit = true;
         }
         let wgt = if k == 0 { alpha * omfx } else if k == s.n - 1 { alpha * omc0 } else { alpha };
         let cc = if s.col_clamp { if c >= -1 { c.min(s.w) } else { -1 } } else { c };
@@ -60,20 +60,20 @@ pub fn spec_loop(s: &SpecIn, pl: &Plane) -> Result<([f32; 4], f32), Unsupported>
         let tf = t as f32;
         let frac = fr - tf;
         let idx = cc.wrapping_mul(4).wrapping_sub(s.stride).wrapping_add(t.wrapping_mul(s.stride)) as i64;
-        for ch in 0..3 {
-            let v0 = at(pl, idx + ch as i64)?;
-            let v1 = at(pl, idx + s.stride as i64 + ch as i64)?;
-            sums[ch] = sums[ch] - lerp_term(v0, v1, frac, wgt);
+        for chan in 0..3 {
+            let sample_a = at(pl, idx + chan as i64)?;
+            let sample_b = at(pl, idx + s.stride as i64 + chan as i64)?;
+            sums[chan] = sums[chan] - lerp_term(sample_a, sample_b, frac, wgt);
         }
-        let v0 = at(pl, idx + 3)?;
-        let v1 = at(pl, idx + s.stride as i64 + 3)?;
+        let sample_a = at(pl, idx + 3)?;
+        let sample_b = at(pl, idx + s.stride as i64 + 3)?;
         if s.row_clamp {
-            sums[3] = sums[3] - lerp_term(v0, v1, frac, wgt);
+            sums[3] = sums[3] - lerp_term(sample_a, sample_b, frac, wgt);
         } else {
             // /85/8a (S11), /dc/e1 (S13): vfmsub132, vfmadd213, vfmsub231
-            let b = (frac - 1.0).mul_add(v0, -v1);
-            let d = tf.mul_add(v1, b);
-            let e = v1.mul_add(yy_old, -d);
+            let b = (frac - 1.0).mul_add(sample_a, -sample_b);
+            let d = tf.mul_add(sample_b, b);
+            let e = sample_b.mul_add(yy_old, -d);
             sums[3] = e * wgt + sums[3];
         }
     }
@@ -91,7 +91,7 @@ pub struct F0Sel {
     pub loop_id: u8,
 }
 
-fn f0_setup(st: &S5State, a3: f32, hst: &Host) -> (F0Sel, f32, f32, i32, i32, f32, f32) {
+fn f0_setup(st: &S5State, tap_width: f32, hst: &Host) -> (F0Sel, f32, f32, i32, i32, f32, f32) {
     let wf = st.width as f32;
     let hs = hst.hs;
     let (mx0, my) = (st.mode_x, st.mode_y);
@@ -111,43 +111,43 @@ fn f0_setup(st: &S5State, a3: f32, hst: &Host) -> (F0Sel, f32, f32, i32, i32, f3
     let nraw = ((e ^ sg).wrapping_sub(sg)).wrapping_add(1);
     let nf = nraw as f32;
     let slope = (ye - ys) / nf;
-    let step_a = st.k_a1_a0 / (nf * a3);
+    let step_a = st.a_gap_first / (nf * tap_width);
     let n = nraw.min(1000).max(0);
     let loop_id = if n <= 0 { 0 } else if !col_clamp { 4 } else if !row_clamp { 3 } else if !wrap { 2 } else { 1 };
     (F0Sel { col_clamp, row_clamp, wrap, n, loop_id }, slope, step_a, c_start, dir, ys, nf)
 }
 
 /// Selector only for flag_cell_a == 0.
-pub fn flag0_selector(st: &S5State, a3: f32, hst: &Host) -> F0Sel {
-    f0_setup(st, a3, hst).0
+pub fn flag0_selector(st: &S5State, tap_width: f32, hst: &Host) -> F0Sel {
+    f0_setup(st, tap_width, hst).0
 }
 
 /// X-major flag_cell_a == 0 sample (S16..S20): nearest-neighbour accumulation, no interpolation, weights alpha only.
 pub fn flag0_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Result<[f32; 4], Unsupported> {
     let (w, h, stride) = (st.width, st.height, st.stride);
     let wf = w as f32;
-    let (a0, a1, a3, a4) = (a[0], a[1], a[3], a[4]);
-    let (sel, slope0, step_a, c_start, dir0, ys, _nf) = f0_setup(st, a3, hst);
+    let (alpha_init, alpha_origin, tap_width, norm_num) = (a[0], a[1], a[3], a[4]);
+    let (sel, slope0, step_a, c_start, dir0, ys, _nf) = f0_setup(st, tap_width, hst);
     let n = sel.n;
     LOG.with(|l| l.borrow_mut().push(["E", "M1", "M2", "M3", "M4"][sel.loop_id as usize]));
     let mut sums = [0.0f32; 4];
     let mut wsum = 0.0f32;
     if n > 0 {
         let nf = n as f32;
-        let wlim = nf * a3;
-        let step_b = st.k_a2_a1 / (nf * st.k_1_a3);
+        let wlim = nf * tap_width;
+        let step_b = st.a_gap_second / (nf * st.one_minus_a_last);
         let hfi = cvtt(hst.hs);
         let hf = hfi as f32;
         let twoh = 2.0f32.mul_add(hf, -1.0); // vfmsub213ss 
         let colmax = cvtt(wf - 1.0);
         let (mut c, mut dir, mut yy, mut slope) = (c_start, dir0, ys, slope0);
-        let (mut alpha, mut step, mut al) = (a0, step_a, false);
+        let (mut alpha, mut step, mut at_limit) = (alpha_init, step_a, false);
         for k in 0..n {
-            if !al && (k as f32) >= wlim {
+            if !at_limit && (k as f32) >= wlim {
                 let q = k / n; // idiv, always 0
-                alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
+                alpha = (tap_width - (q as f32)).mul_add(step_b, alpha_origin); // vfmadd213ss 
                 step = step_b;
-                al = true;
+                at_limit = true;
             }
             let ri = cvtt(yy);
             let cc = if sel.col_clamp { if c >= -1 { c.min(w) } else { -1 } } else { c };
@@ -156,9 +156,9 @@ pub fn flag0_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Resul
             yy = yy + slope;
             let idx = rr.wrapping_mul(stride).wrapping_add(cc.wrapping_mul(4)) as i64;
             c = c.wrapping_add(dir);
-            for ch in 0..4 {
-                let v = at(pl, idx + ch as i64)?;
-                sums[ch] = alpha * v + sums[ch];
+            for chan in 0..4 {
+                let v = at(pl, idx + chan as i64)?;
+                sums[chan] = alpha * v + sums[chan];
             }
             alpha = alpha + step;
             if sel.wrap {
@@ -195,7 +195,7 @@ pub fn flag0_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Resul
             }
         }
     }
-    let r = a4 / wsum;
+    let r = norm_num / wsum;
     Ok([sums[0] * r, sums[1] * r, sums[2] * r, sums[3] * r])
 }
 
@@ -208,8 +208,8 @@ mod tests {
         let mut buf = vec![0.0f32; 1000];
         for row in 0..12i64 {
             for col in 0..10i64 {
-                for ch in 0..4i64 {
-                    buf[(200 + row * 40 + col * 4 + ch) as usize] = (ch * 100 + row * 10 + col) as f32;
+                for chan in 0..4i64 {
+                    buf[(200 + row * 40 + col * 4 + chan) as usize] = (chan * 100 + row * 10 + col) as f32;
                 }
             }
         }
@@ -217,7 +217,7 @@ mod tests {
     }
 
     fn si(cc: bool, rc: bool) -> SpecIn {
-        SpecIn { c: 1, dir: 1, n: 2, fx: 0.0, c0: 0.0, slope: 0.0, yy: 2.0, step_a: 0.0, w: 8, h: 8, stride: 40, a: [1.0, 1.0, 1.0, 0.5, 1.0], k_a2_a1: 0.0, k_1_a3: 0.5, col_clamp: cc, row_clamp: rc }
+        SpecIn { c: 1, dir: 1, n: 2, fx: 0.0, mix: 0.0, slope: 0.0, yy: 2.0, step_a: 0.0, w: 8, h: 8, stride: 40, a: [1.0, 1.0, 1.0, 0.5, 1.0], a_gap_second: 0.0, one_minus_a_last: 0.5, col_clamp: cc, row_clamp: rc }
     }
 
     #[test]
@@ -245,8 +245,8 @@ mod tests {
 
     fn f0(mx: i32, my: i32) -> (S5State, [f32; 5], Host, Plane) {
         let st = S5State {
-            sample: 0, x: 0.5, y: 1.5, p1x: 0.0, p1y: 0.0, p2x: 0.0, p2y: 0.0, e2x: 2.5, e2y: 1.5, dx: 2.0, dy: 0.0, adx: 2.0, ady: 0.0, y_major: false,
-            data_ptr: 0, width: 8, height: 8, stride: 40, scx: 1.0, scy: 1.0, k_a1_a0: 0.0, k_a2_a1: 0.0, k_1_a3: 0.5, scale: 2.0, flag_cell_a: 0, mode_x: mx, mode_y: my,
+            sample: 0, x: 0.5, y: 1.5, p1x: 0.0, p1y: 0.0, p2x: 0.0, p2y: 0.0, e2x: 2.5, e2y: 1.5, delta_x: 2.0, dy: 0.0, adx: 2.0, ady: 0.0, y_major: false,
+            data_buf_handle: 0, width: 8, height: 8, stride: 40, scx: 1.0, scy: 1.0, a_gap_first: 0.0, a_gap_second: 0.0, one_minus_a_last: 0.5, scale: 2.0, flag_cell_a: 0, mode_x: mx, mode_y: my,
         };
         (st, [1.0, 1.0, 1.0, 0.5, 2.0], Host { port_blk_a: 1, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 8.0, ws: 8.0 }, plane())
     }
@@ -257,8 +257,8 @@ mod tests {
         let (s, a, h, p) = f0(0, 0);
         assert_eq!(flag0_selector(&s, a[3], &h).loop_id, 4);
         let v = flag0_sample(&s, &a, &h, &p).unwrap();
-        for ch in 0..4 {
-            assert!((v[ch] - (44.0 + 200.0 * ch as f32)).abs() < 1e-3, "{:?}", v);
+        for chan in 0..4 {
+            assert!((v[chan] - (44.0 + 200.0 * chan as f32)).abs() < 1e-3, "{:?}", v);
         }
     }
 
@@ -308,8 +308,8 @@ mod tests {
         // dl = (mx != 0 || my > 0) && any of eight range checks; dl == 0 -> Specialised, dl == 1 -> General (flag_cell_a != 0, n > 0)
         let base = |mx: i32, my: i32| {
             let st = S5State {
-                sample: 0, x: 1.5, y: 2.0, p1x: 0.0, p1y: 0.0, p2x: 0.0, p2y: 0.0, e2x: 4.5, e2y: 2.0, dx: 3.0, dy: 0.0, adx: 3.0, ady: 0.0, y_major: false,
-                data_ptr: 0, width: 8, height: 8, stride: 40, scx: 1.0, scy: 1.0, k_a1_a0: 0.0, k_a2_a1: 0.0, k_1_a3: 0.5, scale: 1.0, flag_cell_a: 1, mode_x: mx, mode_y: my,
+                sample: 0, x: 1.5, y: 2.0, p1x: 0.0, p1y: 0.0, p2x: 0.0, p2y: 0.0, e2x: 4.5, e2y: 2.0, delta_x: 3.0, dy: 0.0, adx: 3.0, ady: 0.0, y_major: false,
+                data_buf_handle: 0, width: 8, height: 8, stride: 40, scx: 1.0, scy: 1.0, a_gap_first: 0.0, a_gap_second: 0.0, one_minus_a_last: 0.5, scale: 1.0, flag_cell_a: 1, mode_x: mx, mode_y: my,
             };
             (st, [1.0f32, 1.0, 1.0, 0.5, 1.0], Host { port_blk_a: 1, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 8.0, ws: 8.0 })
         };
@@ -322,11 +322,11 @@ mod tests {
                 // each of the eight checks (c<0, c>=w, y5<0, y5>=hs, esi<0, esi>=w, y9<0, y9>=hs)
                 let tweaks: [fn(&mut S5State); 6] = [
                     |s| { s.x = -0.5; s.e2x = 3.5; },
-                    |s| { s.x = 8.5; s.e2x = 11.5; s.dx = 3.0; },
+                    |s| { s.x = 8.5; s.e2x = 11.5; s.delta_x = 3.0; },
                     |s| { s.y = -1.0; s.e2y = -1.0; },
                     |s| { s.y = 9.0; s.e2y = 9.0; },
-                    |s| { s.e2x = 9.5; s.dx = 8.0; },
-                    |s| { s.x = -3.5; s.e2x = -0.5; s.dx = 3.0; },
+                    |s| { s.e2x = 9.5; s.delta_x = 8.0; },
+                    |s| { s.x = -3.5; s.e2x = -0.5; s.delta_x = 3.0; },
                 ];
                 for (i, t) in tweaks.iter().enumerate() {
                     let (mut st, a, h) = base(mx, my);

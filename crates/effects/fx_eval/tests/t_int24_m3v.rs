@@ -37,8 +37,8 @@ fn m3v_fld2_binding_b_own_lanes() {
 fn m3v_distinct_lanes_vector_arg1_equal_one() {
     // the recorded first assert of refused_n3_vector_arg0_distinct_lanes, now M3V; and a bit-equal 2-lane argument 1 of 1.0
     assert_eq!(v3_form(&[v([0.75f32.to_bits(), 0.7f32.to_bits(), 0.75f32.to_bits()]), s(1.0)], 3), "M3V");
-    let a1 = ArgView2 { is_const: true, lanes: [1.0, 1.0, 0.0, 0.0], n: 2, elnum: Some(2) };
-    assert_eq!(v3_form(&[v(FLD2_A), a1], 3), "M3V");
+    let const_view = ArgView2 { is_const: true, lanes: [1.0, 1.0, 0.0, 0.0], n: 2, elnum: Some(2) };
+    assert_eq!(v3_form(&[v(FLD2_A), const_view], 3), "M3V");
 }
 
 #[test]
@@ -47,8 +47,8 @@ fn refused_n3_three_lane_arg0_arg1_not_one() {
     for x in [0.875f32, 0.0, -1.0, 1.0000001, 2.0] {
         assert_eq!(v3_form(&[v(FLD2_A), s(x)], 3), "UNMEASURED-FORM", "argument 1 {}", x);
     }
-    let a1 = ArgView2 { is_const: true, lanes: [1.0, 0.875, 0.0, 0.0], n: 2, elnum: Some(2) };
-    assert_eq!(v3_form(&[v(FLD2_B), a1], 3), "UNMEASURED-FORM");
+    let const_view = ArgView2 { is_const: true, lanes: [1.0, 0.875, 0.0, 0.0], n: 2, elnum: Some(2) };
+    assert_eq!(v3_form(&[v(FLD2_B), const_view], 3), "UNMEASURED-FORM");
     // -0.0 lanes and NaN in argument 0 do not change the class (any lanes); argument 1 NaN is refused
     assert_eq!(v3_form(&[v([0x8000_0000, 0x7fc0_0000, 0x3f80_0000]), s(1.0)], 3), "M3V");
     assert_eq!(v3_form(&[v(FLD2_A), s(f32::NAN)], 3), "UNMEASURED-FORM");

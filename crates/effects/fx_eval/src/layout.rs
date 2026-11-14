@@ -98,17 +98,17 @@ pub fn layout_cmds(cp: &CompiledProgram, fmt_g6: &dyn Fn(f64) -> String) -> Vec<
     // the propagation 
     let mut mark: HashSet<usize> = HashSet::new();
     loop {
-        let mut ch = false;
+        let mut chan = false;
         for n in &cp.nodes {
             if (n.kind == "func" || n.kind == "auto") && (mark.contains(&n.idx) || flags_of(&n.prim) & 0x2000 != 0) {
                 for &a in &n.args {
                     if (cp.nodes[a].kind == "func" || cp.nodes[a].kind == "auto") && !mark_blocked(&n.prim) && mark.insert(a) {
-                        ch = true;
+                        chan = true;
                     }
                 }
             }
         }
-        if !ch {
+        if !chan {
             break;
         }
     }

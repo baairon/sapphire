@@ -7,13 +7,13 @@ use optical_flow_solve::stretch::*;
 /// Accumulators of one sum loop: x0 is the scalar accumulator (xmm0 low lane), v[k] the eight four-lane accumulators.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Acc {
-    pub vx_0: f32,
+    pub scalar_sum: f32,
     pub v: [[f32; 4]; 8],
 }
 
 impl Acc {
     pub fn new() -> Acc {
-        Acc { vx_0: 0.0, v: [[0.0; 4]; 8] }
+        Acc { scalar_sum: 0.0, v: [[0.0; 4]; 8] }
     }
 }
 
@@ -41,13 +41,13 @@ fn sum_row(acc: &mut Acc, a: &[f32], first: usize, w: i32, phase: u32) {
     }
     if scalar_only {
         for j in 0..w as usize {
-            acc.vx_0 = acc.vx_0.fadd(a[first + j]);
+            acc.scalar_sum = acc.scalar_sum.fadd(a[first + j]);
         }
         return;
     }
     let end = w - ((w - pe) & 0x1f);
     for j in 0..pe as usize {
-        acc.vx_0 = acc.vx_0.fadd(a[first + j]);
+        acc.scalar_sum = acc.scalar_sum.fadd(a[first + j]);
     }
     let mut k = pe as usize;
     loop {
@@ -67,8 +67,8 @@ fn sum_row(acc: &mut Acc, a: &[f32], first: usize, w: i32, phase: u32) {
     let rem = (w - end) as usize;
     let mut done = 0usize;
     if rem >= 4 {
-        let vn_4 = rem & !3;
-        while done < vn_4 {
+        let quad_end = rem & !3;
+        while done < quad_end {
             for l in 0..4 {
                 acc.v[0][l] = acc.v[0][l].fadd(a[first + end as usize + done + l]);
             }
@@ -76,15 +76,15 @@ fn sum_row(acc: &mut Acc, a: &[f32], first: usize, w: i32, phase: u32) {
         }
     }
     for j in done..rem {
-        acc.vx_0 = acc.vx_0.fadd(a[first + end as usize + j]);
+        acc.scalar_sum = acc.scalar_sum.fadd(a[first + end as usize + j]);
     }
 }
 
 /// Sum loop over `h` rows of `w` elements. `off0` is the element index of the first row, `stride` the row step, `base_phase`
 /// the byte address of element 0 of `a` modulo 16.
-pub fn sum_plane(a: &[f32], base_phase: u32, vo_ff0: i64, stride: i64, w: i32, h: u32) -> Acc {
+pub fn sum_plane(a: &[f32], base_phase: u32, start_index: i64, stride: i64, w: i32, h: u32) -> Acc {
     let mut acc = Acc::new();
-    let mut off = vo_ff0;
+    let mut off = start_index;
     for _ in 0..h {
         let phase = ((base_phase as i64 + 4 * off) & 15) as u32;
         sum_row(&mut acc, a, off as usize, w, phase);
@@ -95,25 +95,25 @@ pub fn sum_plane(a: &[f32], base_phase: u32, vo_ff0: i64, stride: i64, w: i32, h
 
 /// Fold of the accumulators and division by the count (listing 0x484772..0x4847b5 and its clones). Returns (total, count, mean).
 pub fn finish(acc: &Acc, count: i32) -> (f32, f32, f32) {
-    let va_dd4 = |p: [f32; 4], q: [f32; 4]| [p[0].fadd(q[0]), p[1].fadd(q[1]), p[2].fadd(q[2]), p[3].fadd(q[3])];
-    let vx_7 = va_dd4(acc.v[0], acc.v[1]);
-    let vx_5 = va_dd4(acc.v[2], acc.v[3]);
-    let vx_3 = va_dd4(acc.v[4], acc.v[5]);
-    let vx_1 = va_dd4(acc.v[6], acc.v[7]);
-    let vx_2 = va_dd4(vx_7, vx_5);
-    let vx_4 = va_dd4(vx_3, vx_1);
-    let vx_6 = va_dd4(vx_2, vx_4);
-    let vx_8 = [vx_6[2], vx_6[3], vx_6[2], vx_6[3]];
-    let vx_9 = va_dd4(vx_6, vx_8);
-    let vx_11 = vx_9[0].fadd(vx_9[1]);
-    let total = vx_11.fadd(acc.vx_0);
+    let add_lanes4 = |p: [f32; 4], q: [f32; 4]| [p[0].fadd(q[0]), p[1].fadd(q[1]), p[2].fadd(q[2]), p[3].fadd(q[3])];
+    let lanes_01 = add_lanes4(acc.v[0], acc.v[1]);
+    let lanes_23 = add_lanes4(acc.v[2], acc.v[3]);
+    let lanes_45 = add_lanes4(acc.v[4], acc.v[5]);
+    let lanes_67 = add_lanes4(acc.v[6], acc.v[7]);
+    let lanes_0123 = add_lanes4(lanes_01, lanes_23);
+    let lanes_4567 = add_lanes4(lanes_45, lanes_67);
+    let lanes_all = add_lanes4(lanes_0123, lanes_4567);
+    let lanes = [lanes_all[2], lanes_all[3], lanes_all[2], lanes_all[3]];
+    let lane_sum = add_lanes4(lanes_all, lanes);
+    let term = lane_sum[0].fadd(lane_sum[1]);
+    let total = term.fadd(acc.scalar_sum);
     let cnt = count as f32;
     (total, cnt, total.fdiv(cnt))
 }
 
 /// Fill loop: `h` rows of `w` elements starting at element `off0`, row step `stride`.
-pub fn fill_plane(p: &mut [f32], vo_ff0: i64, stride: i64, w: i32, h: u32, mean: f32) {
-    let mut off = vo_ff0;
+pub fn fill_plane(p: &mut [f32], start_index: i64, stride: i64, w: i32, h: u32, mean: f32) {
+    let mut off = start_index;
     for _ in 0..h {
         for j in 0..w.max(0) as usize {
             p[off as usize + j] = mean;

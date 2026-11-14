@@ -4,7 +4,7 @@
 //! compare; single-edit mutants of the program text must each be refused. Prints NOT RUN without an OpenCL device (run with
 //! --test-threads=1: platform discovery is not thread safe).
 
-use fx_device::cl::Buffer;
+use fx_device::ocl::Buffer;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{Backend as Handle, DevImage, DeviceKind, Session};
 use fx_exec::device_ops_flow_solve_b::{median_pair_dev, median_rows_dev, smooth_normalise_dev, vmath_dev, DevPlanes, SmoothPass};
@@ -277,10 +277,10 @@ fn cmp_smooth(s: &Arc<Session>, stub: bool, first: bool) -> Tally {
         // planes: 0 src1, 1 p1, 2 q1, 3 src2, 4 p2, 5 q2, 6 scale
         let g = Geo { width: c.w, height: c.h, stride: c.stride, relax_scale: fb(c.relax), smooth_weight: fb(c.weight), c: fb(c.c) };
         let f = |v: &Vec<u32>| -> Vec<f32> { v.iter().map(|b| fb(*b)).collect() };
-        let (s1, mut p1, mut q1, s2, mut p2, mut q2, sc) = (f(&planes[0]), f(&planes[1]), f(&planes[2]), f(&planes[3]), f(&planes[4]), f(&planes[5]), f(&planes[6]));
+        let (src1, mut p_pass1, mut q_pass1, src2, mut p_pass2, mut q_pass2, sc) = (f(&planes[0]), f(&planes[1]), f(&planes[2]), f(&planes[3]), f(&planes[4]), f(&planes[5]), f(&planes[6]));
         {
-            let mut a = Pass { src: &s1, p: &mut p1, q: &mut q1 };
-            let mut b = Pass { src: &s2, p: &mut p2, q: &mut q2 };
+            let mut a = Pass { src: &src1, p: &mut p_pass1, q: &mut q_pass1 };
+            let mut b = Pass { src: &src2, p: &mut p_pass2, q: &mut q_pass2 };
             smooth_normalise(&g, if c.scale { Some(&sc) } else { None }, &mut a, &mut b, c.start, c.count);
         }
         let imgs: Vec<DevImage> = planes.iter().map(|p| up(s, p)).collect();
@@ -293,7 +293,7 @@ fn cmp_smooth(s: &Arc<Session>, stub: bool, first: bool) -> Tally {
                 s.queue.fill(imgs[k].plane(0), 0.0f32).unwrap();
             }
         }
-        let want: Vec<Vec<u32>> = [&p1, &q1, &p2, &q2].iter().map(|v| v.iter().map(|x| x.to_bits()).collect()).collect();
+        let want: Vec<Vec<u32>> = [&p_pass1, &q_pass1, &p_pass2, &q_pass2].iter().map(|v| v.iter().map(|x| x.to_bits()).collect()).collect();
         let got: Vec<Vec<u32>> = [1, 2, 4, 5].iter().map(|k| down(&imgs[*k])).collect();
         let mut ok = true;
         for (a, b) in want.iter().zip(&got) {
@@ -362,24 +362,24 @@ fn cmp_median(s: &Arc<Session>, stub: bool, first: bool) -> Tally {
         let dst0 = med_data(2, c.seed + 999, n, &pool);
         let mut cpu = dst0.clone();
         let want = optical_flow_solve::median::median_rows(&src, &mut cpu, c.w, c.rows, c.pitch, c.start, c.count);
-        let si = up(s, &src);
-        let di = up(s, &dst0);
+        let src_dev = up(s, &src);
+        let dst_dev = up(s, &dst0);
         if stub {
-            s.queue.fill(di.plane(0), 0.0f32).unwrap();
-            let ok = t.words(&cpu, &down(&di));
+            s.queue.fill(dst_dev.plane(0), 0.0f32).unwrap();
+            let ok = t.words(&cpu, &down(&dst_dev));
             t.note(ok, || format!("median case {ci} {c:?}"));
             if first && !ok {
                 break;
             }
             continue;
         }
-        let got = median_rows_dev(s, si.plane(0), di.plane(0), c.w, c.rows, c.pitch, c.start, c.count);
+        let got = median_rows_dev(s, src_dev.plane(0), dst_dev.plane(0), c.w, c.rows, c.pitch, c.start, c.count);
         let ok = match (&want, &got) {
-            (Ok(()), Ok(())) => t.words(&cpu, &down(&di)),
+            (Ok(()), Ok(())) => t.words(&cpu, &down(&dst_dev)),
             (Err(_), Err(fx_device::DevError::Unsupported(_))) => {
                 t.refusals_equal += 1;
                 // a refusal leaves the destination untouched
-                down(&di) == dst0
+                down(&dst_dev) == dst0
             }
             _ => false,
         };
@@ -525,7 +525,7 @@ const MUTANTS: &[(&str, &str, &str, &str)] = &[
     ("smooth", "operand roles of the centre term", "float b_term_centre = ofb_fms231(bb, d, centre);", "float b_term_centre = ofb_fms231(centre, d, bb);"),
     ("smooth", "last column test", "bool last_col = (long)i >= (long)w - 1;", "bool last_col = (long)i > (long)w - 1;"),
     ("smooth", "plane swap", "float cc = as_float(qw[ix]);", "float cc = as_float(pw[ix]);"),
-    ("smooth", "unfused 231 form", "float ofb_fma231(float d, float s2, float s3) {\n    float r = fma(s2, s3, d);", "float ofb_fma231(float d, float s2, float s3) {\n    float r = s2 * s3 + d;"),
+    ("smooth", "unfused 231 form", "float ofb_fma231(float d, float second, float third) {\n    float r = fma(second, third, d);", "float ofb_fma231(float d, float second, float third) {\n    float r = second * third + d;"),
     ("smooth", "third NaN operand not quieted", "return as_float(as_uint(c) | 0x400000u);\n    }\n    return as_float(0xffc00000u);\n}\nfloat ofb_add", "return as_float(as_uint(c));\n    }\n    return as_float(0xffc00000u);\n}\nfloat ofb_add"),
     ("smooth", "pass two formula arm", "float b_term_right = (second != 0u) ? ofb_fms213(c, bb, right) : ofb_fms231(right, bb, c);\n            float b_term_centre = ofb_fms231(bb, d, centre);", "float b_term_right = (second == 0u) ? ofb_fms213(c, bb, right) : ofb_fms231(right, bb, c);\n            float b_term_centre = ofb_fms231(bb, d, centre);"),
     ("median", "minss compare", "uint ofb_minss(uint a, uint b) {\n    return (as_float(a) < as_float(b)) ? a : b;", "uint ofb_minss(uint a, uint b) {\n    return (as_float(a) <= as_float(b)) ? a : b;"),

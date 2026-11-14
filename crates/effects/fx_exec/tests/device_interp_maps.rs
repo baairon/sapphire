@@ -42,7 +42,7 @@ fn the_interp_maps_kernels_equal_the_crate_on_the_corpus() {
 
 #[test]
 fn accepts_refuses_what_the_cpu_refuses_by_name() {
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let img = |c: usize| ArgShape::Img { channels: c };
     let cst = ArgShape::Const { n: 1 };
     let call = |tag: i32, dims: (usize, usize)| NodeCall { idx: 0, class: "optical_flow_interp_maps", tag, n: dims.0 * dims.1, dims, kp: &kp };
@@ -71,9 +71,9 @@ fn harness_an_existing_op_passes_and_a_wrong_stub_is_refused() {
     let existing = fx_exec::device_ops::DEVICE_OPS.iter().find(|d| d.class == "copy").unwrap();
     fx_exec::device_ops::selfcheck(&ctx.session, existing).expect("an existing allowlisted op passes");
     let base = fx_device::kernels::device_program();
-    let old = "o0[i] = as_uint(res_a);";
+    let old = "out_a[i] = as_uint(res_a);";
     assert_eq!(base.matches(old).count(), 1);
-    let stub = open_with(&ctx, &base.replacen(old, "o0[i] = 0u;", 1));
+    let stub = open_with(&ctx, &base.replacen(old, "out_a[i] = 0u;", 1));
     match fx_exec::device_ops::selfcheck(&stub, &INTERP_MAPS) {
         Err(m) => println!("STUB refused: {}", m.lines().next().unwrap_or("")),
         Ok(_) => panic!("the wrong stub kernel was accepted"),
@@ -85,7 +85,7 @@ const MUTANTS: &[(&str, &str, &str)] = &[
     ("splat x base unfused", "float shifted = im_fma231(0x1p-1f, scale, av);", "float shifted = nanx_add(nanx_mul(scale, av), 0x1p-1f);"),
     ("splat store compare direction", "if (as_float(best[d]) > cost) {", "if (as_float(best[d]) >= cost) {"),
     ("clamp fraction constant", "*fr = 0x1p+0f;", "*fr = 0x1p-1f;"),
-    ("cost accumulation dropped", "cost = (ch == 0) ? e : nanx_add(e, cost);", "cost = e;"),
+    ("cost accumulation dropped", "cost = (chan == 0) ? e : nanx_add(e, cost);", "cost = e;"),
     ("cost error operand order", "float t = nanx_sub(delta_bottom, dxa);", "float t = nanx_sub(dxa, delta_bottom);"),
     ("fill first neighbour load", "if (ri == 0 && k == 0) {", "if (ri == 0 && k == 1) {"),
     ("fill count test", "if (cnt > 0x0p+0f) {", "if (cnt >= 0x0p+0f) {"),

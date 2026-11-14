@@ -22,14 +22,14 @@ fn q(v: f64) -> f32 {
 fn multiplier(time: f32, freq: f32, seed: f32, wave_amp: f32, color_amp: f32) -> [u32; 3] {
     let pos = c([time, 0.0, 0.0, 0.0], 2);
     let w = fold_lanes("warp_noise", &[pos.clone(), s(freq), s(1.0), s(seed)], 1, None).expect("warp_noise folds");
-    let seed3 = seed + 0.3333f32;
-    let w3 = fold_lanes("warp_noise3", &[pos, s(freq), s(1.0), s(seed3)], 3, None).expect("warp_noise3 folds");
+    let seed_shifted = seed + 0.3333f32;
+    let noise_lanes = fold_lanes("warp_noise3", &[pos, s(freq), s(1.0), s(seed_shifted)], 3, None).expect("warp_noise3 folds");
     let amp = q(0.2);
     let wave = sin_rev(time * 5.0 + (0.25f32 - 0.0)) * wave_amp;
     let luma = 1.0f32 * (f(w[0]) - 0.5);
     let mut r = [0u32; 3];
     for k in 0..3 {
-        let rand = (luma + color_amp * (f(w3[k]) - 0.5)) * 2.0;
+        let rand = (luma + color_amp * (f(noise_lanes[k]) - 0.5)) * 2.0;
         r[k] = (1.0f32 + (amp * 1.0f32) * (rand + wave)).to_bits();
     }
     r
@@ -44,10 +44,10 @@ fn classes_fold() {
 #[test]
 fn recorded_bindings_fold_to_the_recorded_bits() {
     let seed = 8060.0f32 / 65536.0;
-    let wa03 = q(0.3);
+    let weight_point_three = q(0.3);
     let rows: [(&str, [u32; 3], [u32; 3]); 7] = [
         ("default", multiplier(0.0, 30.0, seed, 0.0, 0.0), [0x3f86e9c8; 3]),
-        ("waveamp03", multiplier(0.0, 30.0, seed, wa03, 0.0), [0x3f8e97da; 3]),
+        ("waveamp03", multiplier(0.0, 30.0, seed, weight_point_three, 0.0), [0x3f8e97da; 3]),
         ("randcol1", multiplier(0.0, 30.0, seed, 0.0, 1.0), [0x3f88a855, 0x3f806919, 0x3f8d4a72]),
         ("time7", multiplier(7.0 / 24.0, 30.0, seed, 0.0, 0.0), [0x3f612e85; 3]),
         ("time17", multiplier(17.0 / 24.0, 30.0, seed, 0.0, 0.0), [0x3f631550; 3]),
@@ -117,9 +117,9 @@ fn value_classes_do_not_panic() {
     for &x in &vals {
         for &fr in &vals {
             for &sd in &[0.0f32, 0.123, f32::NAN, f32::INFINITY, -1.0e30] {
-                let a1 = [c([x, 0.0, 0.0, 0.0], 2), s(fr), s(1.0), s(sd)];
-                let _ = fold_lanes("warp_noise", &a1, 1, None);
-                let _ = fold_lanes("warp_noise3", &a1, 3, None);
+                let lanes_in = [c([x, 0.0, 0.0, 0.0], 2), s(fr), s(1.0), s(sd)];
+                let _ = fold_lanes("warp_noise", &lanes_in, 1, None);
+                let _ = fold_lanes("warp_noise3", &lanes_in, 3, None);
             }
         }
     }

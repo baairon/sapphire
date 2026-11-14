@@ -7,7 +7,7 @@
 //! memory, [`crate::probe::memory_budget`]); an allocation that would pass it is [`DevError::Memory`] and the
 //! executor runs that node on the CPU.
 
-use crate::cl::{self, Access, Arg, Buffer, ClError, Context, Kernel, Program, Queue, Range};
+use crate::ocl::{self, Access, Arg, Buffer, ClError, Context, Kernel, Program, Queue, Range};
 use crate::kernels::{self, BUILD_OPTIONS};
 use crate::probe::{self, DeviceInfo};
 use std::fmt;
@@ -98,13 +98,13 @@ impl fmt::Debug for Session {
 
 impl Session {
     /// Builds the device program ([`kernels::device_program`]) with [`BUILD_OPTIONS`] through the program cache.
-    pub fn open(device: &cl::Device, info: &DeviceInfo) -> Result<Session, ClError> {
+    pub fn open(device: &ocl::Device, info: &DeviceInfo) -> Result<Session, ClError> {
         Session::open_source(device, info, &kernels::device_program(), BUILD_OPTIONS)
     }
 
     /// Builds `source` with `options` (the tests that a relaxing build is caught pass their own).
-    pub fn open_source(device: &cl::Device, info: &DeviceInfo, source: &str, options: &str) -> Result<Session, ClError> {
-        let _create = cl::serialize_creation();
+    pub fn open_source(device: &ocl::Device, info: &DeviceInfo, source: &str, options: &str) -> Result<Session, ClError> {
+        let _create = ocl::serialize_creation();
         let context = Context::new(device)?;
         let queue = Queue::new(&context)?;
         let program = crate::progcache::build(&context, device, source, options)?;
@@ -123,11 +123,11 @@ impl Session {
     }
 
     /// Uploads `data` read only (not counted against the budget: used by the self-check).
-    pub fn input<T: cl::Pod>(&self, data: &[T]) -> Result<Buffer<T>, ClError> {
+    pub fn input<T: ocl::Pod>(&self, data: &[T]) -> Result<Buffer<T>, ClError> {
         Buffer::from_slice(&self.context, data, Access::ReadOnly)
     }
 
-    pub fn output<T: cl::Pod>(&self, len: usize) -> Result<Buffer<T>, ClError> {
+    pub fn output<T: ocl::Pod>(&self, len: usize) -> Result<Buffer<T>, ClError> {
         Buffer::new(&self.context, len, Access::WriteOnly)
     }
 

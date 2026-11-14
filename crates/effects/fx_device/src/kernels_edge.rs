@@ -11,19 +11,19 @@
 pub const EDGE_GRAD: &str = r#"
 /* MIRRORS_MUL_ADD: edge_detect::edge_rows (fma213 at the three squared-sum sites) */
 
-float ed_fma213(float d, float s2, float s3) {
-    float r = fma(d, s2, s3);
+float ed_fma213(float d, float factor, float addend) {
+    float r = fma(d, factor, addend);
     if (r == r) {
         return r;
     }
     if (d != d) {
         return as_float(as_uint(d) | 0x400000u);
     }
-    if (s2 != s2) {
-        return as_float(as_uint(s2) | 0x400000u);
+    if (factor != factor) {
+        return as_float(as_uint(factor) | 0x400000u);
     }
-    if (s3 != s3) {
-        return as_float(as_uint(s3) | 0x400000u);
+    if (addend != addend) {
+        return as_float(as_uint(addend) | 0x400000u);
     }
     return as_float(0xffc00000u);
 }

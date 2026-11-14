@@ -27,33 +27,33 @@ __kernel void glow_bright1_f32(__global float* p, uint n, float t, float k) {
 }
 
 /* glow_layer::bright::three_plane: excess e over the thresholds, colour sum s, scale f = (k * e) / s when s > k * e. */
-__kernel void glow_bright3_f32(__global float* p0, __global float* p1, __global float* p2, uint n, float t0, float t1, float t2, float k) {
+__kernel void glow_bright3_f32(__global float* p0, __global float* plane_g, __global float* p2, uint n, float thresh_r, float thresh_g, float thresh_b, float k) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
     }
     float r = p0[i];
-    float g = p1[i];
+    float g = plane_g[i];
     float b = p2[i];
-    float e = (r > t0) ? nanx_sub(r, t0) : 0x0p+0f;
-    if (g > t1) {
-        e = nanx_add(e, nanx_sub(g, t1));
+    float e = (r > thresh_r) ? nanx_sub(r, thresh_r) : 0x0p+0f;
+    if (g > thresh_g) {
+        e = nanx_add(e, nanx_sub(g, thresh_g));
     }
-    if (b > t2) {
-        e = nanx_add(e, nanx_sub(b, t2));
+    if (b > thresh_b) {
+        e = nanx_add(e, nanx_sub(b, thresh_b));
     }
     if (!(e > 0x0p+0f)) {
         p0[i] = 0x0p+0f;
-        p1[i] = 0x0p+0f;
+        plane_g[i] = 0x0p+0f;
         p2[i] = 0x0p+0f;
         return;
     }
     float mr = (r > 0x0p+0f) ? r : 0x0p+0f;
-    float s1 = (g > 0x0p+0f) ? nanx_add(g, mr) : mr;
-    float s = (b > 0x0p+0f) ? nanx_add(b, s1) : s1;
+    float pick_1 = (g > 0x0p+0f) ? nanx_add(g, mr) : mr;
+    float s = (b > 0x0p+0f) ? nanx_add(b, pick_1) : pick_1;
     if (!(s > 0x0p+0f)) {
         p0[i] = 0x0p+0f;
-        p1[i] = 0x0p+0f;
+        plane_g[i] = 0x0p+0f;
         p2[i] = 0x0p+0f;
         return;
     }
@@ -61,7 +61,7 @@ __kernel void glow_bright3_f32(__global float* p0, __global float* p1, __global 
     if (s > tt) {
         float f = nanx_div(tt, s);
         p0[i] = nanx_mul(r, f);
-        p1[i] = nanx_mul(f, g);
+        plane_g[i] = nanx_mul(f, g);
         p2[i] = nanx_mul(f, b);
     }
 }

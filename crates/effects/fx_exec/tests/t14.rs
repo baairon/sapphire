@@ -12,15 +12,15 @@ fn cst(v: &[f32]) -> Arg<'static> {
     }
     Arg::Const { n: v.len(), lanes: l }
 }
-fn img(ch: usize, n: usize) -> Image {
+fn img(chan: usize, n: usize) -> Image {
     // plane k, sample i = 10 * (k + 1) + i, all exact in f32
-    Image::from_planes((0..ch).map(|k| (0..n).map(|i| (10 * (k + 1) + i) as f32).collect()).collect()).unwrap()
+    Image::from_planes((0..chan).map(|k| (0..n).map(|i| (10 * (k + 1) + i) as f32).collect()).collect()).unwrap()
 }
 fn run(class: &str, args: &[Arg], w: usize, h: usize) -> Image {
     let c: Vec<i32> = args.iter().map(|a| a.count()).collect();
     let t = Tables::from_tsv(effects_rtdata::text("fx_exec/data/COMBOS_EXEC.tsv")).select_counts(class, &c);
     assert!(t > 0, "no combo for {} {:?}", class, c);
-    match run_any(class, t, args, w * h, (w, h), &KParams::standin()).unwrap() {
+    match run_any(class, t, args, w * h, (w, h), &KParams::host_defaults()).unwrap() {
         Out::Img(i) => i,
         _ => panic!(),
     }
@@ -107,31 +107,31 @@ fn round_channel_shapes() {
         same(&r.planes[k], &want);
     }
     // (2,1): the second operand's channel 0 serves both channels (min(c, n_out - 1))
-    let a2 = img(2, n);
-    let r = run("round", &[Arg::Img(&a2), cst(&[3.0])], w, h);
+    let src_img = img(2, n);
+    let r = run("round", &[Arg::Img(&src_img), cst(&[3.0])], w, h);
     assert_eq!(r.channels(), 2);
     for k in 0..2 {
-        let want: Vec<f32> = a2.planes[k].iter().map(|&x| snap_pos(x, 3.0)).collect();
+        let want: Vec<f32> = src_img.planes[k].iter().map(|&x| snap_pos(x, 3.0)).collect();
         same(&r.planes[k], &want);
     }
     // (3,4): three snapped channels, then plane 3 = y * floor(1 / y) of the second operand's channel 3 (alpha synthesis)
-    let b4 = Image::from_planes(vec![
+    let from_planes_4 = Image::from_planes(vec![
         (0..n).map(|i| 1.0 + i as f32).collect(),
         (0..n).map(|i| 2.0 + i as f32).collect(),
         (0..n).map(|i| 3.0 + i as f32).collect(),
         vec![0.25; n],
     ])
     .unwrap();
-    let r = run("round", &[Arg::Img(&a), Arg::Img(&b4)], w, h);
+    let r = run("round", &[Arg::Img(&a), Arg::Img(&from_planes_4)], w, h);
     assert_eq!(r.channels(), 4);
     for k in 0..3 {
-        let want: Vec<f32> = (0..n).map(|i| snap_pos(a.planes[k][i], b4.planes[k][i])).collect();
+        let want: Vec<f32> = (0..n).map(|i| snap_pos(a.planes[k][i], from_planes_4.planes[k][i])).collect();
         same(&r.planes[k], &want);
     }
     same(&r.planes[3], &vec![1.0; n]); // 0.25 * floor(4) = 1
     // (4,3): plane 3 = floor(x) of the first operand's channel 3 (alpha drop)
-    let a4 = Image::from_planes(vec![vec![5.0; n], vec![6.0; n], vec![7.0; n], (0..n).map(|i| 2.5 + i as f32).collect()]).unwrap();
-    let r = run("round", &[Arg::Img(&a4), Arg::Img(&b)], w, h);
+    let four_plane_img = Image::from_planes(vec![vec![5.0; n], vec![6.0; n], vec![7.0; n], (0..n).map(|i| 2.5 + i as f32).collect()]).unwrap();
+    let r = run("round", &[Arg::Img(&four_plane_img), Arg::Img(&b)], w, h);
     assert_eq!(r.channels(), 4);
     let want3: Vec<f32> = (0..n).map(|i| (2.5 + i as f32).floor()).collect();
     same(&r.planes[3], &want3);
@@ -144,7 +144,7 @@ fn round_refuses_two_constants() {
     }
     let args = [cst(&[1.5]), cst(&[0.5])];
     let t = Tables::from_tsv(effects_rtdata::text("fx_exec/data/COMBOS_EXEC.tsv")).select_counts("round", &[1, 1]);
-    let e = run_any("round", t, &args, 15, (5, 3), &KParams::standin()).unwrap_err();
+    let e = run_any("round", t, &args, 15, (5, 3), &KParams::host_defaults()).unwrap_err();
     assert!(matches!(e, ExecError::Unsupported { .. }));
 }
 
@@ -172,19 +172,19 @@ fn scale_rgb_shapes() {
         same(&r.planes[k], &want);
     }
     // (4,3) tag 4: three products, plane 3 copied from the first operand's channel 3 by the host pad call (mode 0)
-    let a4 = img(4, n);
-    let r = run("scale_rgb", &[Arg::Img(&a4), Arg::Img(&b)], w, h);
+    let four_plane_img = img(4, n);
+    let r = run("scale_rgb", &[Arg::Img(&four_plane_img), Arg::Img(&b)], w, h);
     assert_eq!(r.channels(), 4);
     for k in 0..3 {
-        let want: Vec<f32> = (0..n).map(|i| a4.planes[k][i] * b.planes[k][i]).collect();
+        let want: Vec<f32> = (0..n).map(|i| four_plane_img.planes[k][i] * b.planes[k][i]).collect();
         same(&r.planes[k], &want);
     }
-    same(&r.planes[3], &a4.planes[3]);
+    same(&r.planes[3], &four_plane_img.planes[3]);
     // (3,4) tag 4: plane 3 from the second operand's channel 3 (mode 1)
-    let b4 = img(4, n);
-    let r = run("scale_rgb", &[Arg::Img(&a), Arg::Img(&b4)], w, h);
+    let from_planes_4 = img(4, n);
+    let r = run("scale_rgb", &[Arg::Img(&a), Arg::Img(&from_planes_4)], w, h);
     assert_eq!(r.channels(), 4);
-    same(&r.planes[3], &b4.planes[3]);
+    same(&r.planes[3], &from_planes_4.planes[3]);
 }
 
 /// IN7-A4: the evaluator's constant path of round (`snap_const`, `snap_one_over_const`, `snap_unit_const`) equals the crate's element kernels

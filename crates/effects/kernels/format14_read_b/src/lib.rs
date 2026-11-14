@@ -77,17 +77,17 @@ fn range(start: i32, end: i32, block: bool) -> Result<usize, ReadErr> {
     }
     let mut n = 0usize;
     if block {
-        let mut r13 = start;
+        let mut pos = start;
         let step: i32 = if mu(6) { 0x20 } else { 0x10 };
         loop {
-            let esi = match r13.checked_add(step) {
+            let tap_b = match pos.checked_add(step) {
                 Some(v) => v,
                 None => return Err(ReadErr::BlockCounterOverflow),
             };
-            let ecx = if esi < end { esi } else { end };
-            n += (ecx - r13) as usize;
-            r13 = esi;
-            if r13 >= end {
+            let run_end = if tap_b < end { tap_b } else { end };
+            n += (run_end - pos) as usize;
+            pos = tap_b;
+            if pos >= end {
                 break;
             }
         }
@@ -127,19 +127,19 @@ pub fn range1(start: i32, end: i32, block: bool) -> usize {
     }
     let nb = (nb as u32) as u64; // ecx
     let mut total = 0usize;
-    let mut eax: u32 = 0;
-    while (eax as u64) < nb {
-        let r9d: i32 = (eax as i32).wrapping_mul(16);
-        let mut edi: i32 = start.wrapping_add(r9d).wrapping_add(step);
-        let r13d: i32 = start.wrapping_add(r9d);
-        if edi >= end {
-            edi = end;
+    let mut row_idx: u32 = 0;
+    while (row_idx as u64) < nb {
+        let row_stride: i32 = (row_idx as i32).wrapping_mul(16);
+        let mut quot_int: i32 = start.wrapping_add(row_stride).wrapping_add(step);
+        let start_shifted: i32 = start.wrapping_add(row_stride);
+        if quot_int >= end {
+            quot_int = end;
         }
-        if edi > r13d {
-            let cnt = edi as i64 - (eax as i32 as i64) * 16 - start as i64;
+        if quot_int > start_shifted {
+            let cnt = quot_int as i64 - (row_idx as i32 as i64) * 16 - start as i64;
             total += cnt as u64 as usize;
         }
-        eax = eax.wrapping_add(1);
+        row_idx = row_idx.wrapping_add(1);
     }
     total
 }

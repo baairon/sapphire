@@ -10,12 +10,12 @@ const EXPECT: &[u32] = &[
 ];
 
 fn run(r: f32, g: f32, b: f32, scale: f32, masked: bool) -> [u32; 3] {
-    let (rp, gp, bp, mp) = ([r], [g], [b], [scale]);
+    let (rp, gp, blue_plane, mp) = ([r], [g], [b], [scale]);
     let p = Params { const_colour: false, scalar_scale: !masked, colour: [0.0; 3], scale, flag: false };
-    let inp = Inputs { src: Some([&rp, &gp, &bp]), mask: if masked { Some(&mp) } else { None } };
-    let (mut o0, mut o1, mut o2) = ([0.0f32], [0.0f32], [0.0f32]);
-    pixels(&p, 1, &inp, &mut [&mut o0, &mut o1, &mut o2]).unwrap();
-    [o0[0].to_bits(), o1[0].to_bits(), o2[0].to_bits()]
+    let inp = Inputs { src: Some([&rp, &gp, &blue_plane]), mask: if masked { Some(&mp) } else { None } };
+    let (mut lanes_0, mut lanes_1, mut lanes_2) = ([0.0f32], [0.0f32], [0.0f32]);
+    pixels(&p, 1, &inp, &mut [&mut lanes_0, &mut lanes_1, &mut lanes_2]).unwrap();
+    [lanes_0[0].to_bits(), lanes_1[0].to_bits(), lanes_2[0].to_bits()]
 }
 
 #[test]

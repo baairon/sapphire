@@ -19,7 +19,7 @@ fn planes(n: usize) -> Image {
 }
 
 fn cells() -> KParams {
-    let mut kp = KParams::standin();
+    let mut kp = KParams::host_defaults();
     kp.palpha_cells = Some((640, 480, 2.0));
     kp
 }
@@ -51,7 +51,7 @@ fn refusals() {
     let img = planes(4);
     let args = [Arg::Img(&img), cst(&[20.0, 35.0]), cst(&[1.5])];
     // no host record fields
-    assert!(kernels::run_any("tilt_alpha", 1, &args, 4, (4, 1), &KParams::standin()).is_err());
+    assert!(kernels::run_any("tilt_alpha", 1, &args, 4, (4, 1), &KParams::host_defaults()).is_err());
     // host branch: |cos(angle) / amount| < 1e-4
     let big = [Arg::Img(&img), cst(&[20.0, 35.0]), cst(&[1.0e6])];
     assert!(kernels::run_any("tilt_alpha", 1, &big, 4, (4, 1), &cells()).is_err());

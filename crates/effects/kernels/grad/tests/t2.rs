@@ -59,10 +59,10 @@ fn t2_against_emulated_original() {
             let src = c.input("src").unwrap();
             let (wa, wx, wy) = (c.output("aux").unwrap(), c.output("dx").unwrap(), c.output("dy").unwrap());
             let sent = f32::from_bits(0x7fc0ffee);
-            let (mut aux, mut dx, mut dy) = (vec![sent; w * h], vec![sent; w * h], vec![sent; w * h]);
-            render(&p, &src, w, h, &mut aux, &mut dx, &mut dy).unwrap();
+            let (mut aux, mut delta_x, mut dy) = (vec![sent; w * h], vec![sent; w * h], vec![sent; w * h]);
+            render(&p, &src, w, h, &mut aux, &mut delta_x, &mut dy).unwrap();
             let mut line = format!("{}\t{}\t{}x{}", m.param_set, c.name, w, h);
-            for (nm, got, want) in [("aux", &aux, &wa), ("dx", &dx, &wx), ("dy", &dy, &wy)] {
+            for (nm, got, want) in [("aux", &aux, &wa), ("dx", &delta_x, &wx), ("dy", &dy, &wy)] {
                 let diff = PlaneDiff::compare(got, w, want, w, w, h);
                 floats += diff.samples;
                 bad_bytes += diff.differing_bytes;

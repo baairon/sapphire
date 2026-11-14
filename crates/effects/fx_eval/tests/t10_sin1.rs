@@ -8,10 +8,10 @@ fn measured_warp_waves2_values() {
     // PLAN_ORIG_Warp_Waves2_a: NODE 33 cos lanes f304353f, NODE 34 sin lanes f404353f, NODE 55 cos eb46773f, NODE 56 sin ee83843e
     assert_eq!(b(cos_rev(0.125)), 0x3f3504f3);
     assert_eq!(b(sin_rev(0.125)), 0x3f3504f4);
-    let x15 = f32::from_bits(0x3d2aaaab) ; // 1/24 revolution = 15 degrees (f32(15)/f32(360))
+    let from_bits_15 = f32::from_bits(0x3d2aaaab) ; // 1/24 revolution = 15 degrees (f32(15)/f32(360))
     assert_eq!(b(cos_rev(15.0f32 / 360.0)), 0x3f7746eb);
     assert_eq!(b(sin_rev(15.0f32 / 360.0)), 0x3e8483ee);
-    let _ = x15;
+    let _ = from_bits_15;
 }
 
 #[test]
@@ -66,8 +66,8 @@ fn computed_regions_equal_the_copies() {
         }
     }
     for t in [&st, &ct] {
-        assert_eq!(a.c540, w(t, 0x540 / 8));
-        assert_eq!(a.c548, w(t, 0x548 / 8));
+        assert_eq!(a.table_coef_a, w(t, 0x540 / 8));
+        assert_eq!(a.table_coef_b, w(t, 0x548 / 8));
         assert_eq!(0xffff_ffff_ff00_0000u64, w(t, 0x550 / 8));
     }
 }

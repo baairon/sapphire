@@ -22,7 +22,7 @@ pub struct Binding {
     /// FRAME-INDEX-REQUIRED (set by fx_run on the 'ae32' route): get_frame_number must be given in `host`
     pub frame_index_required: bool,
     /// step v2: set by fx_run on the 'ae32' route only; copied into CompileOptions::v3_bound_count
-    pub v3_bound_count: bool,
+    pub claim_bound_count: bool,
     pub input_elnum: BTreeMap<String, i32>,
     pub paramset: String,
     pub no_fold: bool,
@@ -73,7 +73,7 @@ impl Binding {
             const_inputs: BTreeMap::new(),
             host: BTreeMap::new(),
             frame_index_required: false,
-            v3_bound_count: false,
+            claim_bound_count: false,
             input_elnum: BTreeMap::new(),
             paramset: String::new(),
             no_fold: false,
@@ -85,7 +85,7 @@ impl Binding {
             bound_input_mask: 1,
             do_postdiv: None,
             ctx: None,
-            kp: KParams::standin(),
+            kp: KParams::host_defaults(),
         }
     }
     pub fn compile_options(&self) -> CompileOptions {
@@ -115,7 +115,7 @@ impl Binding {
             //: fx_run copies --ctx-word2 and --ctx-has-data into CompileOptions itself
             ctx_word2: self.ctx.as_ref().map(|c| c.stack_word2).unwrap_or(false),
             ctx_has_data: self.ctx.as_ref().map(|c| c.has_data).unwrap_or(0),
-            v3_bound_count: self.v3_bound_count,
+            claim_bound_count: self.claim_bound_count,
             xy_unshared: false,
             xy_place: false,
             xy_pres_keys: None,
@@ -245,9 +245,9 @@ pub fn compile_for(program: &Genotype, binding: &Binding) -> Result<CompiledProg
     xy_writers_for(program, binding)?;
     //: with the context carried into CompileOptions, word 2 = 1 is planned by the preserve-group model
     // (fx_eval::preserve); the other native refusals of check_native stay, and the motion_blur and downsample programs are refused by name.
-    let w2 = binding.ctx.as_ref().map(|c| c.stack_word2).unwrap_or(false);
+    let preserve_mode = binding.ctx.as_ref().map(|c| c.stack_word2).unwrap_or(false);
     if let Some(c) = &binding.ctx {
-        if w2 { c.check_native_preserve() } else { c.check_native() }.map_err(ExecError::Shape)?;
+        if preserve_mode { c.check_native_preserve() } else { c.check_native() }.map_err(ExecError::Shape)?;
     }
     //: on the verified render path F is a required explicit input; a program that reads get_frame_number
     // with no host value refuses instead of folding zeros. State A callers (frame_index_required false) keep NV3-A7's zeros.
@@ -259,7 +259,7 @@ pub fn compile_for(program: &Genotype, binding: &Binding) -> Result<CompiledProg
         return Err(ExecError::BadPlan("compile: FPS-UNGIVEN (the program reads get_frames_per_second and the run gives no rate; pass --host-value get_frames_per_second=RATE)".into()));
     }
     let cp = compile(program, &combo_table(), &binding.compile_options()).map_err(|e| ExecError::BadPlan(format!("compile: {}", e)))?;
-    if w2 {
+    if preserve_mode {
         if let Some(e) = fx_eval::preserve::model_refusal(&cp) {
             return Err(ExecError::Shape(e));
         }
@@ -277,7 +277,7 @@ pub fn execute(program: &Genotype, binding: &Binding, inputs: &Inputs, host: &Ho
 pub fn unsupported_classes(cp: &CompiledProgram) -> Vec<String> {
     let mut v: Vec<String> = Vec::new();
     for nd in &cp.nodes {
-        if (nd.kind == "func" || nd.kind == "auto") && !nd.b160 && !nd.folded && !kernels::is_supported(&nd.prim) {
+        if (nd.kind == "func" || nd.kind == "auto") && !nd.is_const_node && !nd.folded && !kernels::is_supported(&nd.prim) {
             let c = kernels::normalize_class(&nd.prim).to_string();
             if !v.contains(&c) {
                 v.push(c);
@@ -317,15 +317,15 @@ fn const_val(nd: &PlanNode) -> Result<Val, ExecError> {
     Ok(Val::Const { n, lanes })
 }
 
-fn broadcast(a: &Arg, ch: usize, n: usize) -> Result<Image, ExecError> {
+fn broadcast(a: &Arg, chan: usize, n: usize) -> Result<Image, ExecError> {
     match a {
         Arg::Img(i) => {
-            if i.channels() != ch {
-                return Err(ExecError::Shape(format!("host value has {} channels, {} needed", i.channels(), ch)));
+            if i.channels() != chan {
+                return Err(ExecError::Shape(format!("host value has {} channels, {} needed", i.channels(), chan)));
             }
             Ok((*i).clone())
         }
-        Arg::Const { lanes, .. } => Ok(Image::from_const(lanes, ch, n)),
+        Arg::Const { lanes, .. } => Ok(Image::from_const(lanes, chan, n)),
         Arg::Mip(_) => Err(ExecError::Shape("a ripmap object cannot be broadcast as a host value".into())),
     }
 }
@@ -355,7 +355,7 @@ fn scaled_geom(g: &Geom, f: u32) -> Geom {
 fn execute_downsampled(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: &HostFrames, f: u32) -> Result<ExecOutput, ExecError> {
     let lv = crate::downsampled::levels_of_factor(f);
     let (w, h) = (inputs.width, inputs.height);
-    let (w2, h2) = crate::downsampled::small_dims(w, h, lv);
+    let (small_w, small_h) = crate::downsampled::small_dims(w, h, lv);
     // the small plane base mod 32 is a HOST value (MEASURED 0 at 64x32 and 50x7, 16 at 63x33 and 49x9); DS2_PHASE overrides the KParams value for the comparison tools
     let phase = std::env::var("DS2_PHASE").ok().and_then(|v| v.parse::<u32>().ok()).unwrap_or(binding.kp.ds_dst_phase);
     let mut images: BTreeMap<String, Image> = BTreeMap::new();
@@ -370,17 +370,17 @@ fn execute_downsampled(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs,
         for p in im.planes.iter() {
             planes.push(crate::downsampled::downsample_plane(p, w, h, lv, phase).0);
         }
-        images.insert(name.clone(), Image { n: w2 * h2, planes });
+        images.insert(name.clone(), Image { n: small_w * small_h, planes });
     }
-    let mut b2 = binding.clone();
+    let mut small_binding = binding.clone();
     let g = scaled_geom(&geom_of(&binding.kp, w, h), f);
-    b2.kp.geom = Some(g);
+    small_binding.kp.geom = Some(g);
     // the body writer (the last writer of the placement model) sets the head of the small-size xy rows; without a writer list the KParams head stands
     let mut kp_body = binding.kp;
     if let Some(wb) = XY_WRITERS.lock().unwrap().last() {
         kp_body.xy_head = ((32 - wb.1 as usize % 32) % 32) as i32 / 4 % 8;
     }
-    let xy = ds_xy(&kp_body, w, h, w2, h2, f);
+    let xy = ds_xy(&kp_body, w, h, small_w, small_h, f);
     images.insert("xy".to_string(), xy);
     let hoist = fx_eval::cpuplan::ds_hoist(cp);
     let mut pre: BTreeMap<usize, Val> = BTreeMap::new();
@@ -389,24 +389,24 @@ fn execute_downsampled(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs,
         let only: std::collections::BTreeSet<usize> = hoist.iter().copied().collect();
         let (_o, vals) = eval_graph(cp, binding, inputs, host, Some(&only), &BTreeMap::new())?;
         for (p, nd) in cp.nodes.iter().enumerate() {
-            let read_by_body = cp.nodes.iter().any(|m| (m.kind == "func" || m.kind == "auto") && !m.b160 && !m.folded && !only.contains(&m.idx) && m.args.contains(&nd.idx));
+            let read_by_body = cp.nodes.iter().any(|m| (m.kind == "func" || m.kind == "auto") && !m.is_const_node && !m.folded && !only.contains(&m.idx) && m.args.contains(&nd.idx));
             if only.contains(&nd.idx) && read_by_body {
                 if let Some(Val::Img(im)) = vals[p].as_ref() {
                     let mut planes = Vec::with_capacity(im.planes.len());
                     for pl in im.planes.iter() {
                         planes.push(crate::downsampled::downsample_plane(pl, w, h, lv, phase).0);
                     }
-                    pre.insert(nd.idx, Val::Img(Rc::new(Image { n: w2 * h2, planes })));
+                    pre.insert(nd.idx, Val::Img(Rc::new(Image { n: small_w * small_h, planes })));
                 }
             }
         }
     }
-    let small = Inputs { width: w2, height: h2, images };
+    let small = Inputs { width: small_w, height: small_h, images };
     // the compiler's tail (the nodes the CPU-driver plan places after the command) leaves the body: the body runs at the small size up to its root,
     // the root is upsampled, then the tail runs at full size on the upsampled root (the plan's order; the small-plane alpha clamp of the tail node runs here)
     let (tail, body_root) = fx_eval::cpuplan::ds_tail_split(cp);
     let skip: std::collections::BTreeSet<usize> = tail.iter().copied().collect();
-    let mut out = eval_graph_r(cp, &b2, &small, host, None, &pre, &skip, body_root)?.0;
+    let mut out = eval_graph_r(cp, &small_binding, &small, host, None, &pre, &skip, body_root)?.0;
     let mut planes = Vec::with_capacity(out.dest.planes.len());
     for p in out.dest.planes.iter() {
         planes.push(crate::downsampled::upsample_plane(p, w, h, lv));
@@ -420,26 +420,26 @@ fn execute_downsampled(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs,
         out.trace.extend(tout.trace);
         out.diagnostics.extend(tout.diagnostics);
     }
-    out.diagnostics.push(format!("exec-downsampled factor {} ({} levels), body at {}x{}", f, lv, w2, h2));
+    out.diagnostics.push(format!("exec-downsampled factor {} ({} levels), body at {}x{}", f, lv, small_w, small_h));
     Ok(out)
 }
 
 /// the alias flag of the sharpen class from the plan the executor runs: every sharpen run-primitive writes its first source ref, or none does (mixed is an error).
 fn sharpen_alias_of(cp: &CompiledProgram) -> Result<bool, ExecError> {
     let plan = fx_eval::cpuplan::plan_text_mode(cp, fx_eval::cpuplan::PlanMode::CpuDriver);
-    let mut al: Vec<bool> = Vec::new();
+    let mut at_limit: Vec<bool> = Vec::new();
     for l in plan.lines().filter(|l| l.starts_with("CMD") && l.contains("run-primitive")) {
         let t: Vec<&str> = l.split_whitespace().collect();
         if let Some(pos) = t.iter().position(|x| *x == "sharpen") {
             if pos >= 1 && pos + 1 < t.len() {
-                al.push(t[pos - 1] == t[pos + 1]);
+                at_limit.push(t[pos - 1] == t[pos + 1]);
             }
         }
     }
-    if al.iter().any(|x| *x != al[0]) {
-        return Err(ExecError::Shape(format!("sharpen: mixed alias flags in the plan {:?}", al)));
+    if at_limit.iter().any(|x| *x != at_limit[0]) {
+        return Err(ExecError::Shape(format!("sharpen: mixed alias flags in the plan {:?}", at_limit)));
     }
-    Ok(al.first().copied().unwrap_or(false))
+    Ok(at_limit.first().copied().unwrap_or(false))
 }
 
 fn execute_plain(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, host: &HostFrames) -> Result<ExecOutput, ExecError> {
@@ -502,7 +502,7 @@ fn eval_graph_core(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, hos
             continue;
         }
         if let Some(o) = only {
-            if (nd.kind == "func" || nd.kind == "auto") && !nd.b160 && !nd.folded && !o.contains(&nd.idx) {
+            if (nd.kind == "func" || nd.kind == "auto") && !nd.is_const_node && !nd.folded && !o.contains(&nd.idx) {
                 continue;
             }
         }
@@ -521,7 +521,7 @@ fn eval_graph_core(cp: &CompiledProgram, binding: &Binding, inputs: &Inputs, hos
                 Val::Img(Rc::new(im.clone()))
             }
             "const" => const_val(nd)?,
-            "func" | "auto" if nd.b160 || nd.folded => const_val(nd)?,
+            "func" | "auto" if nd.is_const_node || nd.folded => const_val(nd)?,
             "func" | "auto" => {
                 let mut argvals: Vec<Val> = Vec::with_capacity(nd.args.len());
                 for (ak, a) in nd.args.iter().enumerate() {
@@ -655,7 +655,7 @@ pub fn frame_key(t: f32) -> i32 {
 /// HOST-FRAMES classes. get_frame: the first constant argument is the frame offset (NV5-A6). get_prev_dest: the host
 /// previous destination, else its argument (INFERRED: the fallback value). save_prev_dest: identity that records.
 pub fn run_host(class: &str, elnum: i32, args: &[Arg], n: usize, host: &HostFrames, saved: &mut Option<Image>) -> Result<(Image, i32), ExecError> {
-    let ch = if elnum > 0 { elnum as usize } else { 4 };
+    let chan = if elnum > 0 { elnum as usize } else { 4 };
     match class {
         "get_frame" => {
             let off = args
@@ -683,7 +683,7 @@ pub fn run_host(class: &str, elnum: i32, args: &[Arg], n: usize, host: &HostFram
             Ok((im.clone(), im.channels() as i32))
         }
         "get_prev_dest" => {
-            let tag = args.first().map(|a| a.count()).unwrap_or(ch as i32);
+            let tag = args.first().map(|a| a.count()).unwrap_or(chan as i32);
             let tag = if tag == 1 { 3 } else { tag };
             match &host.prev_dest {
                 Some(im) => {
@@ -700,7 +700,7 @@ pub fn run_host(class: &str, elnum: i32, args: &[Arg], n: usize, host: &HostFram
         }
         _ => {
             let a = args.first().ok_or_else(|| ExecError::BadPlan("save_prev_dest without an argument".into()))?;
-            let im = broadcast(a, if let Arg::Img(i) = a { i.channels() } else { ch }, n)?;
+            let im = broadcast(a, if let Arg::Img(i) = a { i.channels() } else { chan }, n)?;
             *saved = Some(im.clone());
             let c = im.channels() as i32;
             Ok((im, c))
@@ -731,7 +731,7 @@ pub fn execute_host(
     host: &HostFrames,
 ) -> Result<HostExecOutput, ExecError> {
     hc.check_claim()?;
-    if hc.ae32.is_some() {
+    if hc.claim_route.is_some() {
         // the 'ae32' route never falls back to the format-16 source; its whole-effect entry is `execute_ae32`
         return Err(ExecError::Shape("the 'ae32' route runs through execute_ae32 (u32 host words in and out), never the format-16 host source".into()));
     }
@@ -842,23 +842,23 @@ pub fn execute_ae32_const(
 /// -0.484375, -0.984375, 0.0625, 0.0625 at Half 64x32 (orig_nodes/N_*B01*.json, `var`). `geom33_a` = t + u with the same t, u as assumption_h = t - u
 /// (, Geom::dump); a caller-supplied geometry has no geom33_a here and keeps ystep = xstep. DS2_XY=old restores the fitted form
 /// (x_k = s + k*(f*d) with d = 2/W of the full frame) for the differential test.
-fn ds_xy(kp: &KParams, w: usize, h: usize, w2: usize, h2: usize, f: u32) -> Image {
+fn ds_xy(kp: &KParams, w: usize, h: usize, small_w: usize, small_h: usize, f: u32) -> Image {
     let g = geom_of(kp, w, h);
     let ff = f as f32;
-    let (xs, x0, ys, y0);
+    let (xs, x_origin, ys, y_slope);
     if std::env::var("DS2_XY").map(|v| v == "old").unwrap_or(false) {
         let wf = w as f32;
         let d = 2.0f32 / wf;
         let dd = d * ff;
         xs = dd;
-        x0 = -1.0f32 + 1.0f32 / wf;
+        x_origin = -1.0f32 + 1.0f32 / wf;
         ys = dd;
-        y0 = (g.assumption_h / ff).mul_add(dd, 1.0);
-        return ds_xy_build(kp, w2, h2, xs, x0, ys, -y0);
+        y_slope = (g.assumption_h / ff).mul_add(dd, 1.0);
+        return ds_xy_build(kp, small_w, small_h, xs, x_origin, ys, -y_slope);
     }
     let (assumption_f, assumption_g, assumption_h) = (g.left / ff, g.right / ff, g.assumption_h / ff);
     xs = 2.0f32 / (assumption_g - assumption_f);
-    x0 = (0.0f32 - assumption_f).mul_add(xs, -1.0);
+    x_origin = (0.0f32 - assumption_f).mul_add(xs, -1.0);
     if kp.geom.is_none() && kp.geom_mode == crate::types::GeomMode::Dump {
         let a = kp.host_aspect;
         let t = 0.5f32.mul_add(h as f32, -0.5);
@@ -869,18 +869,18 @@ fn ds_xy(kp: &KParams, w: usize, h: usize, w2: usize, h2: usize, f: u32) -> Imag
         ys = xs;
     }
     let one = g.assumption_e.mul_add(ys, 1.0);
-    y0 = (-(assumption_h)).mul_add(ys, -one);
-    ds_xy_build(kp, w2, h2, xs, x0, ys, y0)
+    y_slope = (-(assumption_h)).mul_add(ys, -one);
+    ds_xy_build(kp, small_w, small_h, xs, x_origin, ys, y_slope)
 }
 
-fn ds_xy_build(kp: &KParams, w2: usize, h2: usize, xs: f32, x0: f32, ys: f32, y0rec: f32) -> Image {
-    let row = crate::types::x_ramp(w2, kp.xy_head.max(0) as usize, x0, xs);
-    let mut px = Vec::with_capacity(w2 * h2);
-    let mut py = Vec::with_capacity(w2 * h2);
-    for y in 0..h2 {
+fn ds_xy_build(kp: &KParams, small_w: usize, small_h: usize, xs: f32, x_origin: f32, ys: f32, y0rec: f32) -> Image {
+    let row = crate::types::x_ramp(small_w, kp.xy_head.max(0) as usize, x_origin, xs);
+    let mut px = Vec::with_capacity(small_w * small_h);
+    let mut py = Vec::with_capacity(small_w * small_h);
+    for y in 0..small_h {
         px.extend_from_slice(&row);
         let yv = (-(y as f32)).mul_add(ys, -y0rec);
-        py.extend(std::iter::repeat(yv).take(w2));
+        py.extend(std::iter::repeat(yv).take(small_w));
     }
-    Image { n: w2 * h2, planes: vec![px, py] }
+    Image { n: small_w * small_h, planes: vec![px, py] }
 }

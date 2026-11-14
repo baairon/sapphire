@@ -59,7 +59,7 @@ pub struct PassYJob<'a> {
     pub frac: f32,
     /// subpixel flag (nonzero in the original).
     pub subpixel: bool,
-    /// ASSUMPTION B-A4: address of the scratch base modulo 32, in bytes (0 = 32 byte aligned).
+    /// ASSUMPTION B-A4: position of the scratch start modulo 32, in bytes (0 = 32 byte aligned).
     pub base_phase: usize,
 }
 
@@ -104,32 +104,32 @@ pub fn pass_y(job: &PassYJob, src: &[f32], dst: &mut [f32]) -> Result<(), RowsYE
                 b[row] = src[row * w + col0 + j];
             }
         }
-        let mut r15 = pp;
+        let mut plane_pos = pp;
         for j in 0..ncols {
-            let mut r14 = slots[j];
+            let mut slot_idx = slots[j];
             for p in 0..n {
                 let e = edge.unwrap();
                 let (ra, rb) = (job.a[p] as usize, job.b[p] as usize);
                 let blend = job.subpixel && job.a[p] != job.b[p];
-                let inp = std::mem::take(&mut bufs[r14]);
-                let mut out = std::mem::take(&mut bufs[r15]);
+                let inp = std::mem::take(&mut bufs[slot_idx]);
+                let mut out = std::mem::take(&mut bufs[plane_pos]);
                 if blend {
                     let mut z = std::mem::take(&mut bufs[BUF_Z]);
-                    column_window(&inp, &mut z, rb, e, phase(r14));
-                    column_window(&inp, &mut out, ra, e, phase(r14));
+                    column_window(&inp, &mut z, rb, e, phase(slot_idx));
+                    column_window(&inp, &mut out, ra, e, phase(slot_idx));
                     let cp = job.c[p];
                     fx_common::nanop::blend_in_place(&mut out[..h], &z[..h], cp, job.frac);
                     bufs[BUF_Z] = z;
                 } else {
-                    column_window(&inp, &mut out, ra, e, phase(r14));
+                    column_window(&inp, &mut out, ra, e, phase(slot_idx));
                 }
-                bufs[r14] = inp;
-                bufs[r15] = out;
-                std::mem::swap(&mut r14, &mut r15);
+                bufs[slot_idx] = inp;
+                bufs[plane_pos] = out;
+                std::mem::swap(&mut slot_idx, &mut plane_pos);
             }
-            slots[j] = r14;
+            slots[j] = slot_idx;
         }
-        pp = r15;
+        pp = plane_pos;
         for j in 0..ncols {
             let b = &bufs[slots[j]];
             for row in 0..h {
@@ -149,9 +149,9 @@ pub fn pass_y_inplace(job: &PassYJob, plane: &mut [f32]) -> Result<(), RowsYErro
 
 fn reduce8(v: [f32; 8]) -> f32 {
     let h = [v[0].fadd(v[4]), v[1].fadd(v[5]), v[2].fadd(v[6]), v[3].fadd(v[7])];
-    let t0 = h[0].fadd(h[2]);
-    let t1 = h[1].fadd(h[3]);
-    t0.fadd(t1)
+    let pair_sum_a = h[0].fadd(h[2]);
+    let pair_sum_b = h[1].fadd(h[3]);
+    pair_sum_a.fadd(pair_sum_b)
 }
 
 fn vadd(a: [f32; 8], inp: &[f32], at: usize) -> [f32; 8] {
@@ -159,7 +159,7 @@ fn vadd(a: [f32; 8], inp: &[f32], at: usize) -> [f32; 8] {
 }
 
 /// S0 = sum of the first `len` samples (mode 1, mode 0), exact summation order.
-/// `phase` = address of inp[0] modulo 32 in bytes.
+/// `phase` = position of inp[0] modulo 32 in bytes.
 pub fn prefix_sum(inp: &[f32], len: usize, edge: Edge, phase: usize) -> f32 {
     let a = phase & 31;
     let mut peel = 0usize;
@@ -187,7 +187,7 @@ pub fn prefix_sum(inp: &[f32], len: usize, edge: Edge, phase: usize) -> f32 {
     let end = len - ((len - peel) & 63);
     let nblk = (end - peel) / 64;
     let rem = len - end;
-    let nb8 = rem / 8;
+    let blocks_of_eight = rem / 8;
     let total;
     match edge {
         Edge::Mirror => {
@@ -204,7 +204,7 @@ pub fn prefix_sum(inp: &[f32], len: usize, edge: Edge, phase: usize) -> f32 {
                 x = vadd(x, inp, base + 48);
                 y = vadd(y, inp, base + 56);
             }
-            for k in 0..nb8 {
+            for k in 0..blocks_of_eight {
                 x = vadd(x, inp, end + 8 * k);
             }
             let v: [f32; 8] = core::array::from_fn(|i| x[i].fadd(y[i]));
@@ -218,20 +218,20 @@ pub fn prefix_sum(inp: &[f32], len: usize, edge: Edge, phase: usize) -> f32 {
                     s[k] = vadd(s[k], inp, base + 8 * k);
                 }
             }
-            let s01: [f32; 8] = core::array::from_fn(|i| s[0][i].fadd(s[1][i]));
-            let s23: [f32; 8] = core::array::from_fn(|i| s[2][i].fadd(s[3][i]));
-            let s45: [f32; 8] = core::array::from_fn(|i| s[4][i].fadd(s[5][i]));
-            let s67: [f32; 8] = core::array::from_fn(|i| s[6][i].fadd(s[7][i]));
-            let l: [f32; 8] = core::array::from_fn(|i| s01[i].fadd(s23[i]));
-            let r: [f32; 8] = core::array::from_fn(|i| s45[i].fadd(s67[i]));
+            let from_fn_01: [f32; 8] = core::array::from_fn(|i| s[0][i].fadd(s[1][i]));
+            let from_fn_23: [f32; 8] = core::array::from_fn(|i| s[2][i].fadd(s[3][i]));
+            let from_fn_45: [f32; 8] = core::array::from_fn(|i| s[4][i].fadd(s[5][i]));
+            let from_fn_67: [f32; 8] = core::array::from_fn(|i| s[6][i].fadd(s[7][i]));
+            let l: [f32; 8] = core::array::from_fn(|i| from_fn_01[i].fadd(from_fn_23[i]));
+            let r: [f32; 8] = core::array::from_fn(|i| from_fn_45[i].fadd(from_fn_67[i]));
             let mut v: [f32; 8] = core::array::from_fn(|i| l[i].fadd(r[i]));
-            for k in 0..nb8 {
+            for k in 0..blocks_of_eight {
                 v = vadd(v, inp, end + 8 * k);
             }
             total = reduce8(v);
         }
     }
-    for i in (end + 8 * nb8)..len {
+    for i in (end + 8 * blocks_of_eight)..len {
         acc = acc.fadd(inp[i]);
     }
     total.fadd(acc)
@@ -240,7 +240,7 @@ pub fn prefix_sum(inp: &[f32], len: usize, edge: Edge, phase: usize) -> f32 {
 /// One window pass over a column: out[i] = sum of inp over [i-r, i+r] with the edge rule,
 /// as the listing sliding sum (S0, head, middle, tail with their pair groupings).
 /// Preconditions: out.len() == inp.len() == H, r >= 0, r == 0 or 2r + 2 <= H (driver cap).
-/// `phase` = address of inp[0] modulo 32 (bytes), only used for windows of 64 or more samples.
+/// `phase` = position of inp[0] modulo 32 (bytes), only used for windows of 64 or more samples.
 pub fn column_window(inp: &[f32], out: &mut [f32], r: usize, edge: Edge, phase: usize) {
     let h = inp.len();
     assert!(out.len() == h && h > 0 && (r == 0 || 2 * r + 2 <= h));
@@ -255,15 +255,15 @@ pub fn column_window(inp: &[f32], out: &mut [f32], r: usize, edge: Edge, phase: 
         let a = inp[r + 1 + 2 * k];
         if mir {
             let s = inp[r - 1 - 2 * k];
-            let y1 = a.fsub(s).fadd(y);
-            out[2 * k + 1] = y1;
-            let a2 = inp[r + 2 + 2 * k];
-            let s2 = inp[r - 2 - 2 * k];
-            y = y1.fadd(a2).fsub(s2);
+            let running = a.fsub(s).fadd(y);
+            out[2 * k + 1] = running;
+            let next_in = inp[r + 2 + 2 * k];
+            let sum_2 = inp[r - 2 - 2 * k];
+            y = running.fadd(next_in).fsub(sum_2);
         } else {
-            let y1 = y.fadd(a);
-            out[2 * k + 1] = y1;
-            y = y1.fadd(inp[r + 2 + 2 * k]);
+            let running = y.fadd(a);
+            out[2 * k + 1] = running;
+            y = running.fadd(inp[r + 2 + 2 * k]);
         }
     }
     if r > 2 * p {
@@ -280,11 +280,11 @@ pub fn column_window(inp: &[f32], out: &mut [f32], r: usize, edge: Edge, phase: 
             out[r + 2 * k] = y;
             let a = inp[2 * r + 1 + 2 * k];
             let s = inp[2 * k];
-            let y1 = a.fsub(s).fadd(y);
-            out[r + 2 * k + 1] = y1;
-            let s2 = inp[2 * k + 1];
-            let a2 = inp[2 * r + 2 + 2 * k];
-            y = y1.fsub(s2).fadd(a2);
+            let running = a.fsub(s).fadd(y);
+            out[r + 2 * k + 1] = running;
+            let sum_2 = inp[2 * k + 1];
+            let next_in = inp[2 * r + 2 + 2 * k];
+            y = running.fsub(sum_2).fadd(next_in);
         }
         if n > 2 * q {
             out[r + 2 * q] = y;
@@ -301,15 +301,15 @@ pub fn column_window(inp: &[f32], out: &mut [f32], r: usize, edge: Edge, phase: 
         let s = inp[hn + 2 * k];
         if mir {
             let a = inp[h - 1 - 2 * k];
-            let y1 = a.fsub(s).fadd(y);
-            out[m + 2 * k + 1] = y1;
-            let a2 = inp[h - 2 - 2 * k];
-            let s2 = inp[hn + 2 * k + 1];
-            y = y1.fadd(a2).fsub(s2);
+            let running = a.fsub(s).fadd(y);
+            out[m + 2 * k + 1] = running;
+            let next_in = inp[h - 2 - 2 * k];
+            let sum_2 = inp[hn + 2 * k + 1];
+            y = running.fadd(next_in).fsub(sum_2);
         } else {
-            let y1 = y.fsub(s);
-            out[m + 2 * k + 1] = y1;
-            y = y1.fsub(inp[hn + 2 * k + 1]);
+            let running = y.fsub(s);
+            out[m + 2 * k + 1] = running;
+            y = running.fsub(inp[hn + 2 * k + 1]);
         }
     }
     if r + 1 > 2 * p2 {

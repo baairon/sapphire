@@ -12,14 +12,14 @@ fn plan_puts_the_tail_after_the_command_on_a_fresh_image() {
     for name in [BO, TB] {
         let text = plan(name, &binding(2.0, true));
         let c = canon(&text);
-        let di = c.iter().position(|l| l.contains("exec-downsampled")).unwrap();
-        assert!(!c[di].contains("postdivide"), "{}: the tail is outside the command", name);
-        let tl = &c[di + 1];
+        let line_idx = c.iter().position(|l| l.contains("exec-downsampled")).unwrap();
+        assert!(!c[line_idx].contains("postdivide"), "{}: the tail is outside the command", name);
+        let tl = &c[line_idx + 1];
         assert!(tl.starts_with("CMD 6 exec-linewise (exec-linewise 1 1") || tl.contains("(exec-linewise 1 1"), "{}: {}", name, tl);
         assert!(tl.contains("allocate-images") && tl.contains("postdivide") && tl.contains("convert-to-dest") && tl.contains("free-images"), "{}: {}", name, tl);
         // fresh image: the tail output is not the command destination
-        let dest = c[di].split_whitespace().nth(5).unwrap().to_string();
-        assert!(c[di + 2].contains("free-images") && c[di + 2].contains(&dest), "{}: the command destination is freed after the tail", name);
+        let dest = c[line_idx].split_whitespace().nth(5).unwrap().to_string();
+        assert!(c[line_idx + 2].contains("free-images") && c[line_idx + 2].contains(&dest), "{}: the command destination is freed after the tail", name);
         let pd = tl.split("postdivide").next().unwrap().split_whitespace().rev().nth(0).unwrap();
         assert_ne!(pd, dest, "{}: postdivide output is not in place on the command destination", name);
     }

@@ -16,8 +16,8 @@ fn genotype(name: &str) -> Genotype {
     build_effect(&c, c.find_effect(name, None).unwrap()).unwrap()
 }
 
-fn ramp(ch: usize, n: usize, base: f32) -> Image {
-    Image::from_planes((0..ch).map(|c| (0..n).map(|i| base + c as f32 * 0.125 + i as f32 * 0.01).collect()).collect()).unwrap()
+fn ramp(chan: usize, n: usize, base: f32) -> Image {
+    Image::from_planes((0..chan).map(|c| (0..n).map(|i| base + c as f32 * 0.125 + i as f32 * 0.01).collect()).collect()).unwrap()
 }
 
 fn binding(ov: &[(&str, Vec<f32>)]) -> Binding {
@@ -80,25 +80,25 @@ fn trails_default_blends_prev_dest_and_source_and_saves_the_result() {
         let ks: Vec<f32> = cp
             .nodes
             .iter()
-            .filter(|nd| nd.prim == "*" && !nd.b160 && !nd.folded)
-            .map(|nd| nd.args.iter().find_map(|a| cp.nodes.iter().find(|m| m.idx == *a && m.b160).map(|m| f32::from_bits(m.lanes[0]))).unwrap())
+            .filter(|nd| nd.prim == "*" && !nd.is_const_node && !nd.folded)
+            .map(|nd| nd.args.iter().find_map(|a| cp.nodes.iter().find(|m| m.idx == *a && m.is_const_node).map(|m| f32::from_bits(m.lanes[0]))).unwrap())
             .collect();
         assert_eq!(ks.len(), 2);
-        let (k1, k2) = (ks[0], ks[1]);
+        let (k_prev, k_src) = (ks[0], ks[1]);
         let classes: Vec<&str> = o.trace.iter().map(|r| r.class.as_str()).collect();
         assert_eq!(classes, vec!["get_prev_dest", "*", "*", "+", "save_prev_dest"]);
         for c in 0..4 {
             for i in 0..n {
-                let want = prev.planes[c][i] * k1 + src.planes[c][i] * k2;
+                let want = prev.planes[c][i] * k_prev + src.planes[c][i] * k_src;
                 assert_eq!(o.dest.planes[c][i].to_bits(), want.to_bits(), "c{} i{}", c, i);
             }
         }
         assert_eq!(o.saved_prev_dest.as_ref().unwrap(), &o.dest);
         // first frame: no previous destination, get_prev_dest returns its argument (the Source in the default branch; INFERRED)
-        let o0 = execute(&g, &binding(&[]), &inp, &HostFrames::default()).unwrap();
+        let run_out = execute(&g, &binding(&[]), &inp, &HostFrames::default()).unwrap();
         for c in 0..4 {
             for i in 0..n {
-                assert_eq!(o0.dest.planes[c][i].to_bits(), (src.planes[c][i] * k1 + src.planes[c][i] * k2).to_bits());
+                assert_eq!(run_out.dest.planes[c][i].to_bits(), (src.planes[c][i] * k_prev + src.planes[c][i] * k_src).to_bits());
             }
         }
     });
@@ -143,8 +143,8 @@ fn hue_sat_bright_single_parameters_by_hand() {
         let mut rep = String::from("set\truns\n");
         for s in &sets {
             let o = run(s);
-            let o2 = run(s);
-            assert_eq!(o.dest, o2.dest);
+            let rerun = run(s);
+            assert_eq!(o.dest, rerun.dest);
             assert!(o.dest.planes.iter().all(|p| p.iter().all(|x| x.is_finite())), "{:?}", s);
             rep.push_str(&format!("{:?}\t{}\n", s, o.trace.iter().map(|r| r.class.clone()).collect::<Vec<_>>().join(" ")));
         }

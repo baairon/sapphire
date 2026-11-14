@@ -49,8 +49,8 @@ fn bound_raw_lens_is_not_the_alias() {
         return;
     }
     let (rc, _, alias) = run("1", true, false, "b");
-    let (rc2, err2, raw) = run("3", true, true, "c");
-    assert_eq!((rc, rc2), (0, 0), "{}", err2);
+    let (exit_code_third, err2, raw) = run("3", true, true, "c");
+    assert_eq!((rc, exit_code_third), (0, 0), "{}", err2);
     assert_ne!(alias.unwrap(), raw.unwrap(), "the raw (unconverted) Lens control must differ from the converted alias");
 }
 

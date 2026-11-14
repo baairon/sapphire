@@ -79,7 +79,7 @@ fn filter_slices<const RULE: bool>(av: &[f32], bv: &[f32], ov: &mut [f32], p: [f
     let ov = &mut ov[..n];
     let one = 1.0f32;
     let two = 2.0f32;
-    let (r, p1, p2) = (p[0], p[1], p[2]);
+    let (r, second_param, p2) = (p[0], p[1], p[2]);
     let rm1 = r - one;
     let mut lo: usize = 0;
     let mut hi: usize = 1;
@@ -101,34 +101,34 @@ fn filter_slices<const RULE: bool>(av: &[f32], bv: &[f32], ov: &mut [f32], p: [f
             h += 1;
         }
         hi = h;
-        let v9;
-        if p1 > one {
+        let window_out;
+        if second_param > one {
             let mut v = av[i];
             if r > two {
-                let mut s8 = sum;
-                let mut c8 = cnt;
+                let mut win_sum = sum;
+                let mut win_count = cnt;
                 let t = nx_sub(g, rm1);
                 if t > bv[lo] {
-                    s8 = sub_r::<RULE>(sum, av[lo]);
-                    c8 = cnt.wrapping_sub(1);
+                    win_sum = sub_r::<RULE>(sum, av[lo]);
+                    win_count = cnt.wrapping_sub(1);
                 }
-                let t2 = bv[h - 1];
+                let sum_2 = bv[h - 1];
                 let u = nx_add(rm1, g);
-                if t2 > u {
-                    c8 = c8.wrapping_sub(1);
-                    s8 = sub_r::<RULE>(s8, av[h - 1]);
+                if sum_2 > u {
+                    win_count = win_count.wrapping_sub(1);
+                    win_sum = sub_r::<RULE>(win_sum, av[h - 1]);
                 }
-                if c8 > 0 {
-                    v = s8 / (c8 as f32);
+                if win_count > 0 {
+                    v = win_sum / (win_count as f32);
                 }
             }
             let mean = nx_div(sum, cnt as f32);
             let d = sub_r::<RULE>(mean, v);
-            v9 = fma_r::<RULE>(v, d, p2);
+            window_out = fma_r::<RULE>(v, d, p2);
         } else {
-            v9 = nx_div(sum, cnt as f32);
+            window_out = nx_div(sum, cnt as f32);
         }
-        ov[i] = v9;
+        ov[i] = window_out;
     }
 }
 
@@ -139,7 +139,7 @@ fn filter_slices<const RULE: bool>(av: &[f32], bv: &[f32], ov: &mut [f32], p: [f
 fn filter_aliased(mem: &mut [f32], a: usize, out: usize, b: usize, n: i64, p: [f32; 3]) {
     let one = 1.0f32;
     let two = 2.0f32;
-    let (r, p1, p2) = (p[0], p[1], p[2]);
+    let (r, second_param, p2) = (p[0], p[1], p[2]);
     let rm1 = r - one;
     let mut lo: i64 = 0;
     let mut hi: i64 = 1;
@@ -161,34 +161,34 @@ fn filter_aliased(mem: &mut [f32], a: usize, out: usize, b: usize, n: i64, p: [f
             h += 1;
         }
         hi = h;
-        let v9;
-        if p1 > one {
+        let window_out;
+        if second_param > one {
             let mut v = mem[a + i as usize];
             if r > two {
-                let mut s8 = sum;
-                let mut c8 = cnt;
+                let mut win_sum = sum;
+                let mut win_count = cnt;
                 let t = nx_sub(g, rm1);
                 if t > mem[b + lo as usize] {
-                    s8 = sum.fsub(mem[a + lo as usize]);
-                    c8 = cnt.wrapping_sub(1);
+                    win_sum = sum.fsub(mem[a + lo as usize]);
+                    win_count = cnt.wrapping_sub(1);
                 }
-                let t2 = mem[b + (h - 1) as usize];
+                let sum_2 = mem[b + (h - 1) as usize];
                 let u = nx_add(rm1, g);
-                if t2 > u {
-                    c8 = c8.wrapping_sub(1);
-                    s8 = s8.fsub(mem[a + (h - 1) as usize]);
+                if sum_2 > u {
+                    win_count = win_count.wrapping_sub(1);
+                    win_sum = win_sum.fsub(mem[a + (h - 1) as usize]);
                 }
-                if c8 > 0 {
-                    v = s8 / (c8 as f32);
+                if win_count > 0 {
+                    v = win_sum / (win_count as f32);
                 }
             }
             let mean = nx_div(sum, cnt as f32);
             let d = mean.fsub(v);
-            v9 = fma231(v, d, p2);
+            window_out = fma231(v, d, p2);
         } else {
-            v9 = nx_div(sum, cnt as f32);
+            window_out = nx_div(sum, cnt as f32);
         }
-        mem[out + i as usize] = v9;
+        mem[out + i as usize] = window_out;
     }
 }
 
@@ -262,25 +262,25 @@ pub fn job_y(mem: &mut Vec<f32>, job: &Job, start: i32, count: i32, rec: &mut Re
     let dst_base = job.dst as i64 + start as i64;
     let mut k: i64 = 0;
     loop {
-        let ecx = (count as i64 - 64 * k).min(64);
-        let edx = (count as i64 - 64 * (k + 1)).min(64);
+        let flag = (count as i64 - 64 * k).min(64);
+        let copy_mode = (count as i64 - 64 * (k + 1)).min(64);
         if k == 0 {
             for row in 0..h as i64 {
-                for c in 0..ecx {
+                for c in 0..flag {
                     mem[ins(c as usize) + row as usize] = mem[(src_base + row * w + c) as usize];
                 }
             }
         }
-        for c in 0..ecx {
+        for c in 0..flag {
             let bptr = (aux_base + (64 * k + c) * job.h as i64) as usize;
             filter3(mem, ins(c as usize), outs(c as usize), bptr, job.h as i64, p, rec);
         }
         for row in 0..h as i64 {
-            for c in 0..ecx {
+            for c in 0..flag {
                 let v = mem[outs(c as usize) + row as usize];
                 mem[(dst_base + 64 * k + c + row * w) as usize] = v;
             }
-            for c in 0..edx.max(0) {
+            for c in 0..copy_mode.max(0) {
                 let v = mem[(src_base + 64 * k + 64 + c + row * w) as usize];
                 mem[ins(c as usize) + row as usize] = v;
             }

@@ -108,15 +108,15 @@ impl Ctx {
         if a.0 == -1 || b.0 == -1 || a.1 <= 0 || b.1 <= 0 {
             return false;
         }
-        let (a0, a1, b0, b1) = (a.0 as usize, a.1 as usize, b.0 as usize, b.1 as usize);
-        if self.nodes[a0].g < 0 || self.nodes[b0].g < 0 {
+        let (a_lo, a_hi, b_lo, b_hi) = (a.0 as usize, a.1 as usize, b.0 as usize, b.1 as usize);
+        if self.nodes[a_lo].g < 0 || self.nodes[b_lo].g < 0 {
             return false;
         }
-        if !self.key_eq(a1 - 1, b0) {
+        if !self.key_eq(a_hi - 1, b_lo) {
             return false;
         }
-        let ga = self.nodes[a0].g;
-        for i in b0..b1 {
+        let ga = self.nodes[a_lo].g;
+        for i in b_lo..b_hi {
             let nd = &self.nodes[i];
             if !nd.is_func {
                 continue;
@@ -213,11 +213,11 @@ fn hoist(c: &mut Ctx) {
     if n == 0 {
         return;
     }
-    let e0 = c.run_end(0);
-    if e0 >= n {
+    let end_of_run = c.run_end(0);
+    if end_of_run >= n {
         return;
     }
-    let mut s = e0;
+    let mut s = end_of_run;
     let mut e = c.run_end(s);
     loop {
         let nxt = if e < n { Some(c.run_end(e)) } else { None };
@@ -244,38 +244,38 @@ fn hoist_one(c: &mut Ctx, s: usize, e: usize) {
     if !c.key_eq(s - 1, s) {
         return;
     }
-    let mut r14 = s;
-    let mut rsi = s;
+    let mut run_start = s;
+    let mut scan_pos = s;
     loop {
-        rsi -= 1;
-        if rsi == 0 {
-            r14 = 0;
-        } else if c.nodes[rsi].g != c.nodes[rsi - 1].g {
-            r14 = rsi;
+        scan_pos -= 1;
+        if scan_pos == 0 {
+            run_start = 0;
+        } else if c.nodes[scan_pos].g != c.nodes[scan_pos - 1].g {
+            run_start = scan_pos;
         }
-        if rsi == 0 {
+        if scan_pos == 0 {
             break;
         }
-        let cand = c.nodes[rsi - 1].id;
+        let cand = c.nodes[scan_pos - 1].id;
         if c.uses(s, e, cand) {
             break;
         }
-        if !c.key_eq(rsi - 1, s) {
+        if !c.key_eq(scan_pos - 1, s) {
             break;
         }
     }
-    if r14 >= s {
+    if run_start >= s {
         return;
     }
-    let xend = c.run_end(r14);
-    let xr = (r14 as i64, xend as i64);
-    let pr = if r14 > 0 {
-        let gp = c.nodes[r14 - 1].g;
-        let mut ps = r14 - 1;
+    let xend = c.run_end(run_start);
+    let xr = (run_start as i64, xend as i64);
+    let pr = if run_start > 0 {
+        let gp = c.nodes[run_start - 1].g;
+        let mut ps = run_start - 1;
         while ps > 0 && c.nodes[ps - 1].g == gp {
             ps -= 1;
         }
-        (ps as i64, r14 as i64)
+        (ps as i64, run_start as i64)
     } else {
         (-1, -1)
     };
@@ -289,28 +289,28 @@ fn hoist_one(c: &mut Ctx, s: usize, e: usize) {
         return;
     }
     // move C to r14
-    let blk: Vec<LNode> = c.nodes[r14..e].to_vec();
+    let blk: Vec<LNode> = c.nodes[run_start..e].to_vec();
     let clen = e - s;
-    let mut mv: Vec<LNode> = Vec::with_capacity(e - r14);
-    mv.extend_from_slice(&blk[(s - r14)..]);
-    mv.extend_from_slice(&blk[..(s - r14)]);
+    let mut mv: Vec<LNode> = Vec::with_capacity(e - run_start);
+    mv.extend_from_slice(&blk[(s - run_start)..]);
+    mv.extend_from_slice(&blk[..(s - run_start)]);
     for (t, nd) in mv.into_iter().enumerate() {
-        c.nodes[r14 + t] = nd;
+        c.nodes[run_start + t] = nd;
     }
-    let r9 = r14 + clen;
-    if c.nodes[r14].g < 0 {
+    let tap_a = run_start + clen;
+    if c.nodes[run_start].g < 0 {
         return;
     }
     if first {
-        let gp = c.nodes[r14 - 1].g;
-        for t in r14..r9 {
+        let gp = c.nodes[run_start - 1].g;
+        for t in run_start..tap_a {
             c.nodes[t].g = gp;
         }
     }
     if second {
-        let gx = c.nodes[r9].g;
-        let gc = c.nodes[r9 - 1].g;
-        let mut t = r9;
+        let gx = c.nodes[tap_a].g;
+        let gc = c.nodes[tap_a - 1].g;
+        let mut t = tap_a;
         while t < c.n() && c.nodes[t].g == gx {
             c.nodes[t].g = gc;
             t += 1;

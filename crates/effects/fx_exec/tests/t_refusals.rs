@@ -13,7 +13,7 @@ fn cst(v: f32) -> Arg<'static> {
 const OVER: usize = i32::MAX as usize + 1;
 
 fn std_params() -> KParams {
-    let mut kp = KParams::standin();
+    let mut kp = KParams::host_defaults();
     kp.blur_render_scale = 0;
     kp
 }

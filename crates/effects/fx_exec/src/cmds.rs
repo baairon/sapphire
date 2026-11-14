@@ -22,13 +22,13 @@ pub fn parse_sx(text: &str) -> Result<Sx, ExecError> {
     let t = text.replace("\\n", " ");
     let mut toks: Vec<String> = Vec::new();
     let mut cur = String::new();
-    for ch in t.chars() {
-        match ch {
+    for chan in t.chars() {
+        match chan {
             '(' | ')' | '[' | ']' => {
                 if !cur.is_empty() {
                     toks.push(std::mem::take(&mut cur));
                 }
-                toks.push(ch.to_string());
+                toks.push(chan.to_string());
             }
             c if c.is_whitespace() => {
                 if !cur.is_empty() {
@@ -165,13 +165,13 @@ impl<'a> St<'a> {
         match head {
             "allocate-images" | "allocate-images-preserved" => {
                 let r = refname(l.get(1).ok_or_else(|| ExecError::BadPlan("allocate-images".into()))?)?;
-                let ch: usize = l.get(2).and_then(atom).and_then(|a| a.parse().ok()).ok_or_else(|| ExecError::BadPlan("allocate-images channels".into()))?;
-                self.refs.insert(r, Val::Img(Rc::new(Image::zeros(ch, n))));
+                let chan: usize = l.get(2).and_then(atom).and_then(|a| a.parse().ok()).ok_or_else(|| ExecError::BadPlan("allocate-images channels".into()))?;
+                self.refs.insert(r, Val::Img(Rc::new(Image::zeros(chan, n))));
             }
             "convert-from-source" => {
                 let idx: usize = l.get(1).and_then(atom).and_then(|a| a.parse().ok()).ok_or_else(|| ExecError::BadPlan("convert-from-source index".into()))?;
                 let r = refname(l.get(2).ok_or_else(|| ExecError::BadPlan("convert-from-source ref".into()))?)?;
-                if let Some(ae) = self.hc.and_then(|hc| hc.ae32.as_ref()) {
+                if let Some(ae) = self.hc.and_then(|hc| hc.claim_route.as_ref()) {
                     // the 'ae32' route, the recorded reader head and plane count of this source (readers)
                     let s = ae.sources.get(idx).ok_or_else(|| ExecError::MissingInput(format!("'ae32' host source {}", idx)))?;
                     let im = crate::hostconv14::ae32_to_image(s, self.w, self.h)?;
@@ -220,7 +220,7 @@ impl<'a> St<'a> {
                     Val::Mip(_) | Val::DevMip(_) => return Err(ExecError::Shape("convert-to-dest of a ripmap object".into())),
                     Val::Dev(_) => return Err(ExecError::Shape("convert-to-dest of a device image".into())),
                 };
-                if let Some(ae) = self.hc.and_then(|hc| hc.ae32.as_ref()) {
+                if let Some(ae) = self.hc.and_then(|hc| hc.claim_route.as_ref()) {
                     // DEST-ROUTE (code 14 zero-arm bodies and the row copier), never the format-16 writer
                     self.out.ae32_dest = Some(crate::hostconv14::ae32_dest(ae, &im, self.w, self.h)?);
                 } else if let Some(hc) = self.hc {
@@ -278,13 +278,13 @@ impl<'a> St<'a> {
         }
         let args: Vec<Arg> = vals.iter().map(|v| v.as_arg()).collect();
         let operands: Vec<i32> = args.iter().map(|a| a.count()).collect();
-        let dest_ch = match self.refs.get(&dest) {
+        let dest_chan = match self.refs.get(&dest) {
             Some(Val::Img(i)) => i.channels() as i32,
             _ => 0,
         };
         let (img, tag) = if kernels::HOST_CLASSES.contains(&c.as_str()) {
             let mut saved = self.out.saved_prev_dest.take();
-            let r = run_host(&c, dest_ch, &args, n, self.host, &mut saved)?;
+            let r = run_host(&c, dest_chan, &args, n, self.host, &mut saved)?;
             self.out.saved_prev_dest = saved;
             (crate::kernels2::Out::Img(r.0), r.1)
         } else {
@@ -302,8 +302,8 @@ impl<'a> St<'a> {
             }
             (kernels::run_any(&c, tag, &args, n, (self.w, self.h), &kpe)?, tag)
         };
-        if dest_ch != 0 && img.channels() as i32 != dest_ch {
-            self.out.trace.push(format!("note: {} wrote {} channels into a {} channel temp", c, img.channels(), dest_ch));
+        if dest_chan != 0 && img.channels() as i32 != dest_chan {
+            self.out.trace.push(format!("note: {} wrote {} channels into a {} channel temp", c, img.channels(), dest_chan));
         }
         self.out.trace.push(format!("{} {:?} -> tag {}", c, operands, tag));
         match img {

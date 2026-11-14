@@ -122,32 +122,32 @@ pub fn partition(total: i32, pool: &mut Pool, th: &Threads, ev: &mut Vec<Ev>) ->
         init(pool, ev); // 
     }
     // 
-    let r15;
+    let thread_count;
     if pool.wpg2_s33_pool_b != 0 && pool.wpg2_s33_pool_a != 0 {
         ev.push(Ev::Nthr);
-        r15 = th.nthr;
+        thread_count = th.nthr;
     } else {
-        r15 = 1;
+        thread_count = 1;
     }
-    let ecx: i32;
+    let thread_id: i32;
     if pool.wpg2_s33_pool_b == 0 || pool.wpg2_s33_pool_a == 0 || pool.g_cell_d == 0 {
-        ecx = 0; // 
+        thread_id = 0; // 
     } else if pool.g_cell_b == 0 && pool.g_cell_c == 0 {
         init(pool, ev); //  (unreachable, kept)
-        ecx = tid_of(pool, th, ev);
+        thread_id = tid_of(pool, th, ev);
     } else {
-        ecx = tid_of(pool, th, ev); // 
+        thread_id = tid_of(pool, th, ev); // 
     }
-    if total < r15 {
-        let edx: i32 = if ecx < total { 1 } else { 0 }; // 
-        let start = ecx.wrapping_mul(edx);
-        Ok((start, edx)) // [r13] = start, [r14] = count
+    if total < thread_count {
+        let copy_mode: i32 = if thread_id < total { 1 } else { 0 }; // 
+        let start = thread_id.wrapping_mul(copy_mode);
+        Ok((start, copy_mode)) // [r13] = start, [r14] = count
     } else {
-        let q = total.checked_div(r15).ok_or(S33Error::DivZero)?; //  idiv (a zero divisor faults in the original)
-        let last = r15.wrapping_sub(1);
-        let start = q.wrapping_mul(ecx);
+        let q = total.checked_div(thread_count).ok_or(S33Error::DivZero)?; //  idiv (a zero divisor faults in the original)
+        let last = thread_count.wrapping_sub(1);
+        let start = q.wrapping_mul(thread_id);
         let mut count = q;
-        if ecx == last {
+        if thread_id == last {
             count = total.wrapping_sub(start);
         }
         Ok((start, count))
@@ -297,19 +297,19 @@ pub fn slot33_warp(
         return Ok(Out33 { flag_byte, ran: false });
     }
     ev.push(Ev::Host);
-    let r8 = if prim.n >= 3 { 2 } else if prim.n >= 2 { 1 } else { 0 };
+    let route_int_7 = if prim.n >= 3 { 2 } else if prim.n >= 2 { 1 } else { 0 };
     // plane 1: in = u, out = c1, v1 = (assumption_g - assumption_f) * 0.25
-    let v1 = mul_ss(sub_ss(ctx.assumption_g, ctx.assumption_f), QUARTER);
+    let quarter_span = mul_ss(sub_ss(ctx.assumption_g, ctx.assumption_f), QUARTER);
     let mk = |v: u32, fl: u32| Params { width: ctx.w, height: ctx.h, flag: fl, pre_cell_a_bits: 0, pre_cell_b_bits: 0, v, start: 0, count: 0 };
     let need = (ctx.w.max(0) as usize) * (ctx.h.max(0) as usize);
     if uv.0.len() < need || uv.1.len() < need || c1.len() < need || c2.len() < need {
         return Err(S33Error::Short);
     }
-    let p1 = mk(v1, (r8 > 0) as u32);
-    parallel_for(pool, th, ev, |pl, t, e| callback(fw, &p1, uv.0, c1, pl, t, e))?;
+    let slot_plan = mk(quarter_span, (route_int_7 > 0) as u32);
+    parallel_for(pool, th, ev, |pl, t, e| callback(fw, &slot_plan, uv.0, c1, pl, t, e))?;
     // plane 2: in = v, out = c2, v2 = (geom33_a - assumption_h) * 0.25
     let v2 = mul_ss(sub_ss(ctx.geom33_a, ctx.assumption_h), QUARTER);
-    let p2 = mk(v2, (r8 > 1) as u32);
+    let p2 = mk(v2, (route_int_7 > 1) as u32);
     parallel_for(pool, th, ev, |pl, t, e| callback(fw, &p2, uv.1, c2, pl, t, e))?;
     Ok(Out33 { flag_byte, ran: true })
 }

@@ -30,15 +30,15 @@ pub struct Assumption {
 
 pub fn assumptions() -> Vec<Assumption> {
     vec![
-        Assumption { id: "copy-flat", va: "0x672c60", value: "the host copy is one contiguous copy of c*b elements from the start of both planes; for dense planes (stride == width) that is the plain copy of the visible samples",
+        Assumption { id: "copy-flat", va: "", value: "the host copy is one contiguous copy of c*b elements from the start of both planes; for dense planes (stride == width) that is the plain copy of the visible samples", // origin: 0x672c60
             basis: "listing 672c60..672d4a and callees 670340, 6704b0, 136fbb0", label: "closed" },
-        Assumption { id: "copy-roi", va: "0x5b9b10", value: "both ROI forms are reachable from 0x33bca0 and 0x33bfb0; n = c * b with c = width (form 1) or the row pitch field (form 2)",
+        Assumption { id: "copy-roi", va: "", value: "both ROI forms are reachable from 0x33bca0 and 0x33bfb0; n = c * b with c = width (form 1) or the row pitch field (form 2)", // origin: 0x5b9b10
             basis: "listing 5b9b10..5b9bce, 33bca0, 33bfb0; the meaning of the row pitch field is inferred", label: "closed, pitch meaning inferred" },
-        Assumption { id: "dense-planes", va: "0x674000", value: "parity is claimed for dense planes (stride == width); padded strides are processed per visible sample and are outside the original's contract (it walks n contiguous floats)",
+        Assumption { id: "dense-planes", va: "", value: "parity is claimed for dense planes (stride == width); padded strides are processed per visible sample and are outside the original's contract (it walks n contiguous floats)", // origin: 0x674000
             basis: "the original walks c*b contiguous floats in the copy and in the pass", label: "documented limit" },
-        Assumption { id: "roi-constants", va: "0x160f270", value: "ROI constants at 0x160f270 (zeros), 0x160f280 (qword 4), 0x160f290 (zeros), 0x160f2a0 (qword 4); they do not enter pixel values",
+        Assumption { id: "roi-constants", va: "", value: "ROI constants (zeros), (qword 4), (zeros), (qword 4); they do not enter pixel values", // origin: 0x160f270, 0x160f270, 0x160f280, 0x160f290, 0x160f2a0
             basis: "captured data image", label: "closed" },
-        Assumption { id: "default-slots", va: "0x1610b70", value: "the default slots at 0x1610b70 and 0x16112f0 are not used; every parameter is explicit",
+        Assumption { id: "default-slots", va: "", value: "the default slots and are not used; every parameter is explicit", // origin: 0x1610b70, 0x1610b70, 0x16112f0
             basis: "address audit of the captured data image", label: "not used" },
     ]
 }
@@ -87,8 +87,8 @@ fn three_plane(r: f32, g: f32, b: f32, t: &[f32; 3], k: f32) -> Option<[f32; 3]>
         return Some([0.0; 3]);
     }
     let mr = maxss(r, 0.0);
-    let s1 = if g > 0.0 { g.fadd(mr) } else { mr };
-    let s = if b > 0.0 { b.fadd(s1) } else { s1 };
+    let pick_1 = if g > 0.0 { g.fadd(mr) } else { mr };
+    let s = if b > 0.0 { b.fadd(pick_1) } else { pick_1 };
     if !(s > 0.0) {
         return Some([0.0; 3]);
     }

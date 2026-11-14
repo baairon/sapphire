@@ -19,13 +19,13 @@ pub const XMM3_CONST: f32 = 1.0;
 #[derive(Clone, Debug)]
 pub struct ThisObj {
     /// this (byte): nonzero = the first segment endpoint is one constant pair (this, this), else two arrays at [[this]]
-    pub p1_const: u8,
+    pub first_end_const: u8,
     /// array (or the single inline value at index 0 when `p1_const != 0`): this / [[this]]
     pub p1x: Vec<f32>,
     /// this / [[this]]
     pub p1y: Vec<f32>,
     /// this (byte): same for the second endpoint, inline at this / this, arrays at [[this]]
-    pub p2_const: u8,
+    pub second_end_const: u8,
     pub p2x: Vec<f32>,
     pub p2y: Vec<f32>,
     /// this (xmm0)
@@ -52,9 +52,9 @@ pub struct ImageObj {
     /// channel count n; selects the body (1 = A, 2 = B, 3 = C, 4 = D)
     pub n: i32,
     /// ripmap level 0 width [[img] field], used by (stride = (w0 + 3) * n) and by P1
-    pub w0: i32,
+    pub plane_width: i32,
     /// ripmap level 0 height [[img] field]
-    pub h0: i32,
+    pub plane_height: i32,
     /// plane (0,0) of the ripmap: the buffer [[[img] field] field]; data pointer = buffer + 4 * (n + n * (w0 + 3)) bytes
     pub plane00: std::sync::Arc<Vec<f32>>,
 }
@@ -183,9 +183,9 @@ pub fn render_m(this: &ThisObj, rec: &Rec, img: &ImageObj, flag: u8, out: &mut V
         return Ok(Outcome::NoBody { n: img.n });
     }
     // arguments of the dispatcher call (etc.): xmm0 =, xmm1 =, xmm2 = xmm1, xmm3 = captured 1.0f, xmm4 = 
-    let xmm3 = if is(Mut::ConstOneToZero) { 0.0 } else { XMM3_CONST };
-    let xmm2 = if is(Mut::Xmm2FromCc) { this.f_cc } else { this.assumption_a };
-    let xmm4 = if is(Mut::ScaleFromD0) { this.assumption_a } else { this.assumption_b };
+    let unit_scale = if is(Mut::ConstOneToZero) { 0.0 } else { XMM3_CONST };
+    let centre_coef = if is(Mut::Xmm2FromCc) { this.f_cc } else { this.assumption_a };
+    let scale_coef = if is(Mut::ScaleFromD0) { this.assumption_a } else { this.assumption_b };
     let (mut p1x, mut p1y) = (this.p1x.clone(), this.p1y.clone());
     if is(Mut::P1XYSwapped) {
         std::mem::swap(&mut p1x, &mut p1y);
@@ -195,31 +195,31 @@ pub fn render_m(this: &ThisObj, rec: &Rec, img: &ImageObj, flag: u8, out: &mut V
         std::mem::swap(&mut p2x, &mut p2y);
     }
     // r9d / r15d: the byte flags, normalised to 0/1 (cmovne with 1)
-    let mut p1c = this.p1_const != 0;
+    let mut first_is_const = this.first_end_const != 0;
     if is(Mut::P1ConstInverted) {
-        p1c = !p1c;
+        first_is_const = !first_is_const;
     }
-    let p2c = if is(Mut::P2ConstIgnored) { false } else { this.p2_const != 0 };
-    let stride = img.n.wrapping_mul(img.w0.wrapping_add(3));
+    let second_is_const = if is(Mut::P2ConstIgnored) { false } else { this.second_end_const != 0 };
+    let stride = img.n.wrapping_mul(img.plane_width.wrapping_add(3));
     let inp = Inputs {
-        a: [this.f_cc, this.assumption_a, xmm2, xmm3, xmm4],
+        a: [this.f_cc, this.assumption_a, centre_coef, unit_scale, scale_coef],
         p1x,
         p1y,
         p2x,
         p2y,
-        p1_const: p1c,
-        p2_const: p2c,
+        first_end_const: first_is_const,
+        second_end_const: second_is_const,
         flag_cell_a: if is(Mut::FlagCellAZero) { 0 } else { this.flag_cell_a as u32 },
         mode_x: mx,
         mode_y: my,
-        acc_ptr: 0,
+        acc_buf_handle: 0,
         acc_stride: stride,
     };
     let count = if is(Mut::CountPlusOne) { rec.count + 1 } else { rec.count };
     let p = Params { count, aspect_block_d: rec.aspect_block_d, assumption_e: rec.assumption_e, assumption_c: rec.assumption_c, assumption_d: rec.assumption_d, assumption_f: rec.assumption_f, assumption_g: rec.assumption_g, assumption_h: rec.assumption_h, img_w: img.width, img_h: img.height };
     //  (ripmap level 0, plane (0,0)): data pointer = plane + 4 * (n + n * (w0 + 3)) bytes
-    let pl = Plane { buf: img.plane00.clone(), origin: img.n as i64 + (img.n as i64) * (img.w0 as i64 + 3) };
-    let cfg = P1Cfg { n: img.n, w0: img.w0, h0: img.h0 };
+    let pl = Plane { buf: img.plane00.clone(), origin: img.n as i64 + (img.n as i64) * (img.plane_width as i64 + 3) };
+    let cfg = P1Cfg { n: img.n, plane_width: img.plane_width, plane_height: img.plane_height };
     let r = match body_n {
         1 => blur_warp_1ch::p2::run_planes_full(&p, &inp, &host, &pl, Some(&cfg), out).map_err(|e| format!("{:?}", e)),
         2 => blur_warp_2ch::run_planes_b(&p, &inp, &host, &pl, Some(&cfg), out).map_err(|e| format!("{:?}", e)),
@@ -241,7 +241,7 @@ pub struct Assumption {
 pub fn assumptions() -> Vec<Assumption> {
     vec![
         Assumption { id: "BW1-A1", tier: "CAPTURED", basis: "xmm3 constant 1.0f, lookup_bw.tsv N4 0000803f; also the scalar twin of the 1.0f x 8 vector constant" },
-        Assumption { id: "BW1-A2", tier: "ROUTE", basis: "feature word 0x9d97ff served through the feature word pointer cell: dispatchers etc. jump to the AVX2 body only on a full mask match " },
+        Assumption { id: "BW1-A2", tier: "ROUTE", basis: "feature word served through the feature word pointer cell: dispatchers etc. jump to the AVX2 body only on a full mask match " }, // origin: 0x9d97ff
         Assumption { id: "BW1-A3", tier: "INFERRED", basis: "the bodies A..D are the bwb bodies: same call targets as the bwb render; their parity (K-PARITY-THIN for A..D floor per body in their READMEs) is inherited, not re-proved; the argument mapping and host statics are the new glue and are proved by run_r.py" },
         Assumption { id: "BW1-A4", tier: "INFERRED", basis: "channel count n = [[this]] picks the body (cmp 1/2/3/4) and is the same field P1 reads as n; matches the COMBOS.tsv rows (arg 0 values 1,2,3,4)" },
         Assumption { id: "BW1-A5", tier: "HOST-HOOKED", basis: "fmod returns Python math.fmod (libm_fmod is bit equal on finite inputs per its README), records its call (writes 16 captured bytes to a stack scratch the bodies never read); the image accessors and P1 run as REAL emulated code in the R-PARITY run" },
@@ -258,9 +258,9 @@ mod tests {
         let stride = n * (w + 3);
         let plane: Vec<f32> = (0..(stride * (h + 6)) as usize).map(|i| (i % 7) as f32 * 0.5).collect();
         (
-            ThisObj { p1_const: 1, p1x: vec![0.5], p1y: vec![1.5], p2_const: 1, p2x: vec![0.7], p2y: vec![1.2], f_cc: 0.5, assumption_a: 1.0, assumption_b: 1.0, mode_x: 0, mode_y: 0, flag_cell_a: 0 },
+            ThisObj { first_end_const: 1, p1x: vec![0.5], p1y: vec![1.5], second_end_const: 1, p2x: vec![0.7], p2y: vec![1.2], f_cc: 0.5, assumption_a: 1.0, assumption_b: 1.0, mode_x: 0, mode_y: 0, flag_cell_a: 0 },
             Rec { count: 1, aspect_block_d: h as f32 / w as f32, assumption_e: h as f32, assumption_c: 0, assumption_d: 0, assumption_f: 0.0, assumption_g: w as f32, assumption_h: 0.0 },
-            ImageObj { width: w, height: h, n, w0: w, h0: h, plane00: std::sync::Arc::new(plane) },
+            ImageObj { width: w, height: h, n, plane_width: w, plane_height: h, plane00: std::sync::Arc::new(plane) },
         )
     }
 
@@ -370,10 +370,10 @@ mod tests {
                     t.mode_x = mx;
                     t.mode_y = my;
                     t.flag_cell_a = port_blk_a;
-                    t.p1_const = 0;
+                    t.first_end_const = 0;
                     t.p1x = vec![0.2, 0.9];
                     t.p1y = vec![1.1, 1.7];
-                    t.p2_const = 0;
+                    t.second_end_const = 0;
                     t.p2x = vec![0.8, 0.1];
                     t.p2y = vec![1.4, 1.2];
                     i.height = if hh == 0 { 0 } else { 7 };

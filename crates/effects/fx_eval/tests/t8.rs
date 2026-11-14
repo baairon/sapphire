@@ -209,8 +209,8 @@ fn rule_record_bound_of_plus_minus_1e6_is_not_enforced() {
 #[test]
 fn clamp_is_lane_wise_on_vectors() {
     let mut v = [-9.0f32, 0.5, 9.0, f32::NAN];
-    let ch = clamp_lanes(&mut v, -1.0, 1.0);
-    assert!(ch);
+    let chan = clamp_lanes(&mut v, -1.0, 1.0);
+    assert!(chan);
     assert_eq!(v[0], -1.0);
     assert_eq!(v[1], 0.5);
     assert_eq!(v[2], 1.0);

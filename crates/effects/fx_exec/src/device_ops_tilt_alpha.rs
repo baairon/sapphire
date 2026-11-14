@@ -13,7 +13,7 @@ use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use crate::types::{Image, KParams};
 use fx_common::nanop::NanOps;
 use fx_common::x86::flip_sign;
-use fx_device::cl::{Arg as ClArg, Buffer};
+use fx_device::ocl::{Arg as ClArg, Buffer};
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
 use std::sync::Arc;
@@ -140,16 +140,16 @@ fn tilt_alpha_corpus() -> Vec<SelfCase> {
     let pool = adversarial_f32(300, 4242);
     let mut out = Vec::new();
     let mut k = 0usize;
-    for (si, (sw_t, amount, cells)) in sets().into_iter().enumerate() {
+    for (set_idx, (sw_t, amount, cells)) in sets().into_iter().enumerate() {
         for &(w, h) in &[(1usize, 2usize), (7, 3), (8, 2), (9, 2), (15, 2), (16, 3), (1199, 2), (1200, 3), (1201, 3), (1207, 2)] {
             let n = w * h;
             for (base, rowbuf) in [(0i32, false), (4, false), (12, true), (28, false), (20, true)] {
                 k += 1;
-                if (k + si) % 3 == 2 {
+                if (k + set_idx) % 3 == 2 {
                     continue;
                 }
                 let pick = |q: usize, i: usize| -> f32 {
-                    match (si + q + i) % 5 {
+                    match (set_idx + q + i) % 5 {
                         0 => pool[(i * 7 + q * 13 + k) % pool.len()],
                         1 => ((i as f32) * 0.003 - 1.0) * (1 + q) as f32,
                         _ => (((i * 29 + k * 17) % 61) as f32 - 30.0) * 0.1,
@@ -157,12 +157,12 @@ fn tilt_alpha_corpus() -> Vec<SelfCase> {
                 };
                 let x: Vec<f32> = (0..n).map(|i| pick(0, i)).collect();
                 let y: Vec<f32> = (0..n).map(|i| pick(1, i)).collect();
-                let mut kp = KParams::standin();
+                let mut kp = KParams::host_defaults();
                 kp.palpha_base = base;
                 kp.palpha_rowbuf = rowbuf;
                 kp.palpha_cells = Some(cells);
                 out.push(SelfCase {
-                    name: format!("tilt_alpha set{si} {w}x{h} base{base} rowbuf{rowbuf}"),
+                    name: format!("tilt_alpha set{set_idx} {w}x{h} base{base} rowbuf{rowbuf}"),
                     dims: (w, h),
                     tag: 1,
                     args: vec![Image { n, planes: vec![x, y] }],

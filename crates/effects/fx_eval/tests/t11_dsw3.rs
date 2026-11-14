@@ -62,9 +62,9 @@ fn img(n: i32) -> ArgView2 {
 
 #[test]
 fn comp_premult_collapses_to_a_only_when_b_and_t_are_zero() {
-    let z3 = cv([0.0; 4], 3);
-    assert_eq!(collapse_arm("comp_premult", &[img(3), z3.clone(), cv([0.0; 4], 1)], Some(3)), Some(0));
-    assert_eq!(collapse_arm("comp_premult", &[img(3), z3.clone(), cv([0.5; 4], 1)], Some(3)), None);
+    let const_arg_3 = cv([0.0; 4], 3);
+    assert_eq!(collapse_arm("comp_premult", &[img(3), const_arg_3.clone(), cv([0.0; 4], 1)], Some(3)), Some(0));
+    assert_eq!(collapse_arm("comp_premult", &[img(3), const_arg_3.clone(), cv([0.5; 4], 1)], Some(3)), None);
     assert_eq!(collapse_arm("comp_premult", &[img(3), img(3), cv([0.0; 4], 1)], Some(3)), None);
 }
 

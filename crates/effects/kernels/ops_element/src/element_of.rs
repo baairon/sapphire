@@ -104,8 +104,8 @@ pub fn render_m(p: &EParams, planes: &mut Vec<Vec<f32>>, svc: &Svc, outs: &mut [
         return Err(ElError::BadNout(nout));
     }
     let a_const = p.a_const && m != EMutant::ConstAsImage;
-    for ch in 0..nout as usize {
-        let ich = if m == EMutant::IdxShift { (ch + 1) % 4 } else { ch };
+    for out_chan in 0..nout as usize {
+        let ich = if m == EMutant::IdxShift { (out_chan + 1) % 4 } else { out_chan };
         let raw = if m == EMutant::IdxRound {
             let x = p.idx[ich];
             if x.is_nan() { i32::MIN } else { x.round() as i32 }
@@ -115,11 +115,11 @@ pub fn render_m(p: &EParams, planes: &mut Vec<Vec<f32>>, svc: &Svc, outs: &mut [
             cvtt(p.idx[ich])
         };
         let k = fold(p.count, raw, m);
-        let alias = dst_alias[ch];
+        let alias = dst_alias[out_chan];
         if a_const {
             let k = if m == EMutant::ConstIdx0 { 0 } else { k as usize };
             let bits = p.a_consts[k].to_bits();
-            let dst: &mut Vec<f32> = if alias >= 0 { &mut planes[alias as usize] } else { &mut outs[ch] };
+            let dst: &mut Vec<f32> = if alias >= 0 { &mut planes[alias as usize] } else { &mut outs[out_chan] };
             if p.n > 0 {
                 let mut cnt = p.n as usize;
                 if m == EMutant::FillNMinus1 {
@@ -153,7 +153,7 @@ pub fn render_m(p: &EParams, planes: &mut Vec<Vec<f32>>, svc: &Svc, outs: &mut [
                 r?;
             } else {
                 let refs: Vec<&[f32]> = planes.iter().map(|v| v.as_slice()).collect();
-                call_service(svc, p.count, &refs, chan, &mut outs[ch], p.n, &mut tr)?;
+                call_service(svc, p.count, &refs, chan, &mut outs[out_chan], p.n, &mut tr)?;
             }
         }
     }

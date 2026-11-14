@@ -29,7 +29,7 @@ fn m(id: u32) -> bool {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Weights {
     pub p0: f64,
-    pub p1: f64,
+    pub mid_weight: f64,
     pub p2: f64,
 }
 
@@ -60,21 +60,21 @@ pub enum MonoError {
 
 /// Section split : (peel, vector end).
 pub fn split(n: i32, dst_phase: u32) -> (usize, usize) {
-    let t8 = if m(3) { 9 } else { 8 };
-    let t797 = if m(4) { 800 } else { 0x31d };
-    if n < t8 {
+    let pick_8 = if m(3) { 9 } else { 8 };
+    let scalar_limit = if m(4) { 800 } else { 0x31d };
+    if n < pick_8 {
         return (0, 0);
     }
-    if n < t797 {
+    if n < scalar_limit {
         return (0, (n & !7) as usize);
     }
-    let r8 = dst_phase & 0x1f;
+    let route_int_7 = dst_phase & 0x1f;
     let mut peel: u32 = 0;
-    if !m(12) && r8 != 0 {
-        if r8 & 3 != 0 {
+    if !m(12) && route_int_7 != 0 {
+        if route_int_7 & 3 != 0 {
             return (0, 0);
         }
-        peel = (32 - r8) >> 2;
+        peel = (32 - route_int_7) >> 2;
         if m(5) {
             peel += 1;
         }
@@ -96,7 +96,7 @@ fn to_f32_trunc(x: f64) -> f32 {
 
 /// One element: `t = w1 * g` (vmulsd/vmulpd), `t = fma(r, w0, t)`, `t = fma(b, w2, t)`, one rounding to f32 (vcvtsd2ss/vcvtpd2ps).
 fn luma(w: (f64, f64, f64), r: f32, g: f32, b: f32) -> f32 {
-    let (w0, w1, w2) = if m(1) {
+    let (weight_r, diff_1, weight_b) = if m(1) {
         (w.2, w.1, w.0)
     } else if m(2) {
         (w.1, w.0, w.2)
@@ -104,23 +104,23 @@ fn luma(w: (f64, f64, f64), r: f32, g: f32, b: f32) -> f32 {
         w
     };
     if m(8) {
-        let t = (w1 as f32) * g;
-        let t = r.mul_add(w0 as f32, t);
-        return b.mul_add(w2 as f32, t);
+        let t = (diff_1 as f32) * g;
+        let t = r.mul_add(weight_r as f32, t);
+        return b.mul_add(weight_b as f32, t);
     }
     let (r, g, b) = (r as f64, g as f64, b as f64);
     let t = if m(9) {
-        let t = r * w0;
-        let t = g.mul_add(w1, t);
-        b.mul_add(w2, t)
+        let t = r * weight_r;
+        let t = g.mul_add(diff_1, t);
+        b.mul_add(weight_b, t)
     } else if m(11) {
-        let t = w1 * g;
-        let t = r * w0 + t;
-        b * w2 + t
+        let t = diff_1 * g;
+        let t = r * weight_r + t;
+        b * weight_b + t
     } else {
-        let t = w1 * g;
-        let t = r.mul_add(w0, t);
-        b.mul_add(w2, t)
+        let t = diff_1 * g;
+        let t = r.mul_add(weight_r, t);
+        b.mul_add(weight_b, t)
     };
     if m(10) {
         to_f32_trunc(t)
@@ -160,7 +160,7 @@ pub fn render(p: &Params, src: Option<[&[f32]; 3]>, out0: &mut [f32]) -> Result<
                     let l = (i - lo) & 3;
                     (p.vec_w[0][l], p.vec_w[1][l], p.vec_w[2][l])
                 } else {
-                    (p.scalar.p0, p.scalar.p1, p.scalar.p2)
+                    (p.scalar.p0, p.scalar.mid_weight, p.scalar.p2)
                 };
                 out0[i] = luma(w, src[0][i], src[1][i], src[2][i]);
             }
@@ -180,7 +180,7 @@ pub const COMBOS: [(i32, i32); 4] = [(1, 1), (2, 2), (3, 1), (4, 2)];
 pub fn assumptions() -> Vec<(&'static str, &'static str)> {
     vec![
         ("IN4A-MA1", "weight cells: scalar and vector are explicit parameters (no default); MEASURED-DYLIB values 0.3125 / 0.5 / 0.1875 in every lane; T2 runs a second value for each group (vector alt, scalar alt)"),
-        ("IN4A-MA2", "ROUTE AVX2-ONLY: feature word cell served as 0x9d97ff in the R-PARITY run; AVX tier, SSE tier, init retry and the GPU twin are not ported or compared"),
+        ("IN4A-MA2", "ROUTE AVX2-ONLY: feature word cell served as in the R-PARITY run; AVX tier, SSE tier, init retry and the GPU twin are not ported or compared"), // origin: 0x9d97ff
         ("IN4A-MA3", "HOST-HOOKED: the callee (host plane service) is a record-only hook in T2 (arguments this, mode 0, channel, destination plane, info compared); the executor wiring runs the finished plane_service crate for every recorded call"),
         ("IN4A-MA4", "ALIGN-DEPENDENT: dst_phase only chooses the peel for n >= 0x31d; HOST-FP-ASSUMED (round to nearest, no FTZ, no DAZ); a null [this] with n > 0 and c >= 3 is outside the contract (error here)"),
     ]
@@ -193,7 +193,7 @@ mod tests {
         channels: 3,
         n: 0,
         dst_phase: 0,
-        scalar: Weights { p0: 0.3125, p1: 0.5, p2: 0.1875 },
+        scalar: Weights { p0: 0.3125, mid_weight: 0.5, p2: 0.1875 },
         vec_w: [[0.3125; 4], [0.5; 4], [0.1875; 4]],
     };
     fn p(ch: i32, n: i32) -> Params {

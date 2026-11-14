@@ -46,7 +46,7 @@ pub struct ObjParams {
     /// obj
     pub c: usize,
     /// obj (GPU pitch unit; only feeds the and fields)
-    pub d0: i32,
+    pub obj_scale: i32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,13 +81,13 @@ fn log_over_ln2(x: i32) -> f64 {
     let k = 31 - x.leading_zeros() as i32;
     let m = x as f64 / (1u64 << k) as f64;
     let z = (m - 1.0) / (m + 1.0);
-    let z2 = z * z;
+    let z_squared = z * z;
     let mut term = z;
     let mut sum = 0.0f64;
     let mut n = 1.0f64;
     for _ in 0..40 {
         sum += term / n;
-        term *= z2;
+        term *= z_squared;
         n += 2.0;
     }
     k as f64 + 2.0 * sum / LN2
@@ -110,9 +110,9 @@ fn level_count(x: i32, m: Mut2) -> i32 {
     }
 }
 
-fn chain(w0: i32, n: i32, m: Mut2) -> Vec<i32> {
+fn chain(start: i32, n: i32, m: Mut2) -> Vec<i32> {
     let mut v = Vec::new();
-    let mut e = w0;
+    let mut e = start;
     for _ in 0..n.max(0) {
         v.push(e);
         e = if m == Mut2::WidthsFloorHalf { e >> 1 } else { e.wrapping_add(1) >> 1 };
@@ -132,13 +132,13 @@ pub fn alloc(o: &ObjParams, filter: i32, m: Mut2) -> Result<AllocOut, Error> {
     let heights = chain(if m == Mut2::HeightsFromWidth { o.w } else { o.h }, np, m);
     let width_sum = widths.iter().fold(0i32, |a, &w| a.wrapping_add(w).wrapping_add(3));
     let height_sum = heights.iter().fold(0i32, |a, &h| a.wrapping_add(h).wrapping_add(3));
-    let d4 = (o.d0 as i64) << 2;
-    if d4 == 0 {
+    let scale_fixed = (o.obj_scale as i64) << 2;
+    if scale_fixed == 0 {
         return Err(Error::Contract("obj is zero (divides by it)".into()));
     }
-    let rdi = (width_sum as i64 as u64).wrapping_mul(d4 as u64);
-    let up = if m == Mut2::PitchNoRound { rdi / 256 } else { rdi.wrapping_add(255) / 256 };
-    let pitch_elems = (up.wrapping_mul(256) / (d4 as u64)) as u32;
+    let scaled_width = (width_sum as i64 as u64).wrapping_mul(scale_fixed as u64);
+    let up = if m == Mut2::PitchNoRound { scaled_width / 256 } else { scaled_width.wrapping_add(255) / 256 };
+    let pitch_elems = (up.wrapping_mul(256) / (scale_fixed as u64)) as u32;
     let mut heap = vec![(nl.max(0) as u64) * 4, (np.max(0) as u64) * 4, (nl.max(0) as u64) * 8, (nl.max(0) as u64) * 8];
     for _ in 0..nl.max(0) {
         heap.push((np.max(0) as u64) * 8);
@@ -149,8 +149,8 @@ pub fn alloc(o: &ObjParams, filter: i32, m: Mut2) -> Result<AllocOut, Error> {
         heap.push((mx.max(0) as u64) * 4);
         let mut t = Vec::new();
         for k in 0..mx.max(0) {
-            let k2 = if m == Mut2::ScaleTableFlip { mx - 1 - k } else { k };
-            let den = (1i32.wrapping_shl(k2 as u32)) as f32;
+            let pick_2 = if m == Mut2::ScaleTableFlip { mx - 1 - k } else { k };
+            let den = (1i32.wrapping_shl(pick_2 as u32)) as f32;
             t.push((f32::from_bits(ONE_BITS) / den).to_bits());
         }
         if m == Mut2::ScaleTableSkipped {
@@ -168,7 +168,7 @@ pub fn alloc(o: &ObjParams, filter: i32, m: Mut2) -> Result<AllocOut, Error> {
             plane_requests.push((n as i64 as u64).wrapping_shl(2));
         }
     }
-    Ok(AllocOut { nl, np, widths, heights, scale, width_sum, height_sum, pitch_elems, pitch_unit_bytes: d4, heap_requests: heap, plane_requests })
+    Ok(AllocOut { nl, np, widths, heights, scale, width_sum, height_sum, pitch_elems, pitch_unit_bytes: scale_fixed, heap_requests: heap, plane_requests })
 }
 
 /// Slot 33: builds the (sentinel filled) ripmap object for a CPU ripmap output.
@@ -237,19 +237,19 @@ pub fn base_fill(rm: &mut RipMap, src: &SrcRow, rec: &RecRow, wrap_x: i32, pad: 
     let y = y as usize;
     for x in 0..w {
         let idx = xs + x as i64;
-        for ch in 0..c {
-            if idx < 0 || idx as usize >= src.planes[ch].len() {
+        for chan in 0..c {
+            if idx < 0 || idx as usize >= src.planes[chan].len() {
                 return Err(Error::Contract("source element index outside the supplied row".into()));
             }
-            let v = convert(src.format, src.planes[ch][idx as usize], m)?;
-            let i = rm.at(0, x as isize, y as isize, ch);
+            let v = convert(src.format, src.planes[chan][idx as usize], m)?;
+            let i = rm.at(0, x as isize, y as isize, chan);
             rm.planes[0][i] = v;
         }
     }
-    for ch in 0..c {
-        let first = rm.planes[0][rm.at(0, 0, y as isize, ch)];
-        let last = rm.planes[0][rm.at(0, w as isize - 1, y as isize, ch)];
-        let (l, r1, r2) = match wrap_x {
+    for chan in 0..c {
+        let first = rm.planes[0][rm.at(0, 0, y as isize, chan)];
+        let last = rm.planes[0][rm.at(0, w as isize - 1, y as isize, chan)];
+        let (l, right_edge, r2) = match wrap_x {
             2 => {
                 if m == Mut2::ClampPadSwap {
                     (last, first, first)
@@ -268,12 +268,12 @@ pub fn base_fill(rm: &mut RipMap, src: &SrcRow, rec: &RecRow, wrap_x: i32, pad: 
                 if m == Mut2::ConstPadSkipped {
                     continue;
                 }
-                (pad[ch], pad[ch], pad[ch])
+                (pad[chan], pad[chan], pad[chan])
             }
         };
-        let (a, b, d) = (rm.at(0, -1, y as isize, ch), rm.at(0, w as isize, y as isize, ch), rm.at(0, w as isize + 1, y as isize, ch));
+        let (a, b, d) = (rm.at(0, -1, y as isize, chan), rm.at(0, w as isize, y as isize, chan), rm.at(0, w as isize + 1, y as isize, chan));
         rm.planes[0][a] = l;
-        rm.planes[0][b] = r1;
+        rm.planes[0][b] = right_edge;
         rm.planes[0][d] = r2;
     }
     Ok(())
@@ -331,7 +331,7 @@ mod tests {
     #[test]
     fn levels_and_extents_from_the_listing() {
         // NL = ceil(log2 W) + 2, widths halve with ceil: W = 5 -> 5 levels 5,3,2,1,1; W = 8 -> 5 levels 8,4,2,1,1; W = 1 -> 2 levels 1,1
-        let o = ObjParams { w: 5, h: 8, c: 3, d0: 16 };
+        let o = ObjParams { w: 5, h: 8, c: 3, obj_scale: 16 };
         let a = alloc(&o, 1, Mut2::None).unwrap();
         assert_eq!((a.nl, a.np), (5, 5));
         assert_eq!(a.widths, vec![5, 3, 2, 1, 1]);
@@ -339,7 +339,7 @@ mod tests {
         assert_eq!(a.width_sum, 8 + 6 + 5 + 4 + 4);
         assert_eq!(a.scale.as_ref().unwrap().len(), 5);
         assert_eq!(f32::from_bits(a.scale.as_ref().unwrap()[3]), 0.125);
-        let a = alloc(&ObjParams { w: 1, h: 1, c: 1, d0: 4 }, 1, Mut2::None).unwrap();
+        let a = alloc(&ObjParams { w: 1, h: 1, c: 1, obj_scale: 4 }, 1, Mut2::None).unwrap();
         assert_eq!((a.nl, a.np), (2, 2));
         let a = alloc(&o, 0, Mut2::None).unwrap();
         assert_eq!((a.nl, a.np, a.scale.is_none()), (1, 1, true));
@@ -349,11 +349,11 @@ mod tests {
     #[test]
     fn pitch_fields_follow_x() {
         // pitch_elems = ceil(width_sum * 4 d0 / 256) * 256 / (4 d0); pitch_unit_bytes = 4 d0
-        let a = alloc(&ObjParams { w: 5, h: 8, c: 3, d0: 3 }, 0, Mut2::None).unwrap();
+        let a = alloc(&ObjParams { w: 5, h: 8, c: 3, obj_scale: 3 }, 0, Mut2::None).unwrap();
         assert_eq!(a.width_sum, 8);
         assert_eq!(a.pitch_unit_bytes, 12);
         assert_eq!(a.pitch_elems, ((8u64 * 12 + 255) / 256 * 256 / 12) as u32);
-        assert!(alloc(&ObjParams { w: 5, h: 8, c: 3, d0: 0 }, 0, Mut2::None).is_err());
+        assert!(alloc(&ObjParams { w: 5, h: 8, c: 3, obj_scale: 0 }, 0, Mut2::None).is_err());
     }
 
     fn rm1(w: usize, h: usize, c: usize) -> RipMap {
@@ -367,7 +367,7 @@ mod tests {
         let rec = RecRow { roi_x: 0, x_cell_a: 1, y_cell_a: 11, y_cell_b: 10 };
         // row 1, x shift 1: pixels 0..2 read elements 1..3
         base_fill(&mut rm, &src, &rec, 1, &[0, 0], Mut2::None).unwrap();
-        let g = |rm: &RipMap, x: isize, y: isize, ch: usize| f32::from_bits(rm.planes[0][rm.at(0, x, y, ch)]);
+        let g = |rm: &RipMap, x: isize, y: isize, chan: usize| f32::from_bits(rm.planes[0][rm.at(0, x, y, chan)]);
         assert_eq!(g(&rm, 0, 1, 0), 1.0);
         assert_eq!(g(&rm, 1, 1, 0), -8.0);
         assert_eq!(g(&rm, 2, 1, 0), 7.0 / 4096.0);
@@ -410,7 +410,7 @@ mod tests {
 
     #[test]
     fn end_to_end_small_and_errors() {
-        let o = ObjParams { w: 3, h: 2, c: 1, d0: 1 };
+        let o = ObjParams { w: 3, h: 2, c: 1, obj_scale: 1 };
         let (a, mut rm) = slot33(&o, 1, 0, Mut2::None).unwrap();
         assert_eq!((a.nl, a.np), (4, 3));
         let src = SrcRow { format: 2, c: 1, planes: vec![vec![1.0f32.to_bits(), 3.0f32.to_bits(), 5.0f32.to_bits()]] };
@@ -420,8 +420,8 @@ mod tests {
         slot34(&mut rm, 2, 2, 1, &[0]).unwrap();
         // level 1 x = 0 is (1 + 3) / 2
         assert_eq!(f32::from_bits(rm.planes[rm.idx(1, 0)][rm.at(1, 0, 0, 0)]), 2.0);
-        assert!(slot33(&ObjParams { w: 0, h: 2, c: 1, d0: 1 }, 1, 0, Mut2::None).is_err());
-        assert!(slot33(&ObjParams { w: 3, h: 2, c: 1, d0: 0 }, 1, 0, Mut2::None).is_err());
+        assert!(slot33(&ObjParams { w: 0, h: 2, c: 1, obj_scale: 1 }, 1, 0, Mut2::None).is_err());
+        assert!(slot33(&ObjParams { w: 3, h: 2, c: 1, obj_scale: 0 }, 1, 0, Mut2::None).is_err());
         let again = alloc(&o, 1, Mut2::None).unwrap();
         assert_eq!(a, again);
         assert_eq!(assumptions2().len(), 7);
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn mutants_change_results() {
-        let o = ObjParams { w: 7, h: 6, c: 2, d0: 5 };
+        let o = ObjParams { w: 7, h: 6, c: 2, obj_scale: 5 };
         let base = alloc(&o, 1, Mut2::None).unwrap();
         for m in [Mut2::LevelsPlus1, Mut2::WidthsFloorHalf, Mut2::ScaleTableFlip, Mut2::PitchNoRound, Mut2::HeightsFromWidth, Mut2::ScaleTableSkipped] {
             assert_ne!(alloc(&o, 1, m).unwrap(), base, "{:?}", m);

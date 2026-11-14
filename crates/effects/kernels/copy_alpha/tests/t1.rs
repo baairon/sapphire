@@ -85,8 +85,8 @@ fn determinism_and_errors() {
     assert_eq!(run(0, 1, 2, &s, &s), run(0, 1, 2, &s, &s));
     assert_eq!(run(4, 0, 2, &s, &s), Err(Error::NoChannels));
     let short = [1.0f32];
-    let sp = [&short[..]];
-    assert_eq!(run(0, 1, 2, &Source::Planes { planes: &sp, last: 0 }, &s), Err(Error::PlaneShort));
+    let short_planes = [&short[..]];
+    assert_eq!(run(0, 1, 2, &Source::Planes { planes: &short_planes, last: 0 }, &s), Err(Error::PlaneShort));
     assert_eq!(run(0, 1, 2, &Source::Planes { planes: &planes, last: -1 }, &s), Err(Error::ChannelRange));
     let mut small = vec![0.0f32; 1];
     let mut refs: Vec<&mut [f32]> = vec![small.as_mut_slice()];
@@ -98,10 +98,10 @@ fn determinism_and_errors() {
 fn pooled_fill_clears_negative_zero() {
     let neg = [0x8000_0000u32, 0x7fc0_0001, 0x0000_0000, 5];
     let s = Source::Scalar { values: &neg, is_int: false, last: 3 };
-    let go = |n: usize, idle: bool, ch_mode: i32| {
+    let go = |n: usize, idle: bool, chan_mode: i32| {
         let mut outs: Vec<Vec<f32>> = vec![vec![f32::from_bits(0x7fc0ffee); n]];
         let mut refs: Vec<&mut [f32]> = outs.iter_mut().map(|v| v.as_mut_slice()).collect();
-        copy_alpha(&Params { mode: ch_mode, nchan: 1, n, pool_idle: idle }, &s, &s, &mut refs).unwrap();
+        copy_alpha(&Params { mode: chan_mode, nchan: 1, n, pool_idle: idle }, &s, &s, &mut refs).unwrap();
         outs.remove(0)
     };
     assert!(go(512, true, 0).iter().all(|x| x.to_bits() == 0));
@@ -109,13 +109,13 @@ fn pooled_fill_clears_negative_zero() {
     assert!(go(512, false, 0).iter().all(|x| x.to_bits() == 0x8000_0000));
     // NaN payloads are stored unchanged by the pool as well
     let nan = [0x7fc0_0001u32, 0, 0, 0];
-    let s2 = Source::Scalar { values: &nan, is_int: false, last: 3 };
+    let sum_2 = Source::Scalar { values: &nan, is_int: false, last: 3 };
     let mut o = vec![0f32; 600];
-    copy_alpha(&Params { mode: 0, nchan: 1, n: 600, pool_idle: true }, &s2, &s2, &mut [o.as_mut_slice()]).unwrap();
+    copy_alpha(&Params { mode: 0, nchan: 1, n: 600, pool_idle: true }, &sum_2, &sum_2, &mut [o.as_mut_slice()]).unwrap();
     assert!(o.iter().all(|x| x.to_bits() == 0x7fc0_0001));
     // count 0 writes nothing
     let mut z = vec![f32::from_bits(0x1234_5678); 4];
-    copy_alpha(&Params { mode: 0, nchan: 1, n: 0, pool_idle: true }, &s2, &s2, &mut [z.as_mut_slice()]).unwrap();
+    copy_alpha(&Params { mode: 0, nchan: 1, n: 0, pool_idle: true }, &sum_2, &sum_2, &mut [z.as_mut_slice()]).unwrap();
     assert!(z.iter().all(|x| x.to_bits() == 0x1234_5678));
 }
 

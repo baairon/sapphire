@@ -87,11 +87,11 @@ fn run_layout(layout: &str) -> Tally {
             let (w, s) = (wh[0], wh[1]);
             let mis: u64 = parts[4][1..].parse().unwrap();
             let p0 = rd(&d.join(format!("{}.in_p0.f32", c)));
-            let p1 = rd(&d.join(format!("{}.in_p1.f32", c)));
+            let second_plane = rd(&d.join(format!("{}.in_p1.f32", c)));
             let cur = rd(&d.join(format!("{}.in_cur.f32", c)));
             let wa = rd(&d.join(format!("{}.out_a.f32", c)));
             let wt = rd(&d.join(format!("{}.out_t.f32", c)));
-            let ctx = Ctx { w, s, flag_cell_b: pi(pr, "flag98"), f0: pf(pr, "f0"), f4: pf(pr, "f4"), f8: pf(pr, "f8"), fc: pf(pr, "fc"), esh2_job_ctx_a: pf(pr, "f100"), k: pf(pr, "k") };
+            let ctx = Ctx { w, s, flag_cell_b: pi(pr, "flag98"), d_scale: pf(pr, "f0"), ca_param: pf(pr, "f4"), e_scale: pf(pr, "f8"), fc: pf(pr, "fc"), esh2_job_ctx_a: pf(pr, "f100"), k: pf(pr, "k") };
             let n = (w * s) as usize;
             let mut a = vec![f32::from_bits(SENT); n];
             let mut tt = vec![f32::from_bits(SENT); n];
@@ -101,9 +101,9 @@ fn run_layout(layout: &str) -> Tally {
                 count = s - start;
             }
             // cur plane address: plane base is 0x50000000 + k * 0x1000000 (16 MiB aligned) + mis; only mod 64 matters
-            let cur_addr = 0x5000_0000u64 + 2 * 0x100_0000 + mis;
-            let mut b = Bufs { p0: &p0, p1: &p1, cur: &cur, a: &mut a, t: &mut tt };
-            job_1(&ctx, start, count, cur_addr, &mut b).unwrap();
+            let cur_phase = 0x5000_0000u64 + 2 * 0x100_0000 + mis;
+            let mut b = Bufs { p0: &p0, second_plane: &second_plane, cur: &cur, a: &mut a, t: &mut tt };
+            job_1(&ctx, start, count, cur_phase, &mut b).unwrap();
             let tag = format!("{}/{}/{}", layout, pname, c);
             cmp(&format!("{} a", tag), &a, &wa, &mut t);
             cmp(&format!("{} t", tag), &tt, &wt, &mut t);
@@ -142,7 +142,7 @@ fn t2_b3() {
     report("B3");
 }
 #[test]
-fn t2_bp() {
+fn ctx_case_a() {
     if !effects_vecdir::have_all(&["wave_s9/esh2_job/t2"]) {
         return;
     }

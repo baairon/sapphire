@@ -202,24 +202,24 @@ impl Fx {
         };
         // keep bits hb..hb-52
         let low = hb - 52; // position of the lowest kept bit
-        let mut m53: u64 = 0;
+        let mut mantissa_bits: u64 = 0;
         for i in 0..53 {
             if self.bit(low + i) {
-                m53 |= 1u64 << i;
+                mantissa_bits |= 1u64 << i;
             }
         }
         let half = self.bit(low - 1);
         let sticky = self.any_below(low - 1);
-        if half && (sticky || (m53 & 1) == 1) {
-            m53 += 1;
+        if half && (sticky || (mantissa_bits & 1) == 1) {
+            mantissa_bits += 1;
         }
         let mut e = hb - FRAC_BITS; // unbiased exponent of the leading bit
-        if m53 == 1u64 << 53 {
-            m53 >>= 1;
+        if mantissa_bits == 1u64 << 53 {
+            mantissa_bits >>= 1;
             e += 1;
         }
         assert!(e > -1022 && e < 1023, "to_f64 out of range");
-        let bits = (((e + 1023) as u64) << 52) | (m53 & ((1u64 << 52) - 1));
+        let bits = (((e + 1023) as u64) << 52) | (mantissa_bits & ((1u64 << 52) - 1));
         let v = f64::from_bits(bits);
         if self.neg { -v } else { v }
     }
@@ -317,14 +317,14 @@ pub fn pi() -> &'static Fx {
 
 /// (sin a, cos a) by Taylor series, for |a| up to about 3.2.
 pub fn sincos(a: &Fx) -> (Fx, Fx) {
-    let a2 = a.mul(a);
+    let a_sq = a.mul(a);
     let mut s = *a;
     let mut c = Fx::from_int(1);
     let mut ts = *a;
     let mut tc = Fx::from_int(1);
     for k in 1u64..400 {
-        tc = tc.mul(&a2).div_u64((2 * k - 1) * (2 * k)).neg();
-        ts = ts.mul(&a2).div_u64((2 * k) * (2 * k + 1)).neg();
+        tc = tc.mul(&a_sq).div_u64((2 * k - 1) * (2 * k)).neg();
+        ts = ts.mul(&a_sq).div_u64((2 * k) * (2 * k + 1)).neg();
         if tc.is_zero() && ts.is_zero() {
             break;
         }

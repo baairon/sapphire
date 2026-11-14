@@ -15,12 +15,12 @@ fn m21_unit_test_bitwise_equals_float_equality_for_all_2_32_gains() {
 }
 #[test]
 fn m22_gain_index_ge_equals_gt_for_all_small_pairs() {
-    let f_ge = |ch: usize, n: usize| if ch >= n { n } else { ch };
-    let f_gt = |ch: usize, n: usize| if ch > n { n } else { ch };
-    for ch in 0..4096usize {
+    let f_ge = |chan: usize, n: usize| if chan >= n { n } else { chan };
+    let f_gt = |chan: usize, n: usize| if chan > n { n } else { chan };
+    for chan in 0..4096usize {
         for n in 0..4096usize {
-            assert_eq!(f_ge(ch, n), f_gt(ch, n));
-            assert_eq!(sharpen::plan::gain_index(ch, n), f_ge(ch, n));
+            assert_eq!(f_ge(chan, n), f_gt(chan, n));
+            assert_eq!(sharpen::plan::gain_index(chan, n), f_ge(chan, n));
         }
     }
 }

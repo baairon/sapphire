@@ -51,7 +51,7 @@ fn main() {
         let t = f32::from_bits(hx(c[2]));
         let pinfo = Pinfo { time_frames: f32::from_bits(hx(c[3])), selector: c[4].parse().unwrap(), unit_x3: 1.0, unit_d4: 0.0, unit_d5: 0.0 };
         let m: i32 = c[5].parse().unwrap();
-        let f4: i32 = c[6].parse().unwrap();
+        let double_word: i32 = c[6].parse().unwrap();
         let gid: i32 = c[7].parse().unwrap();
         let scale: i32 = c[8].parse().unwrap();
         let eref: u64 = c[9].parse().unwrap();
@@ -65,7 +65,7 @@ fn main() {
             index: c[16].parse().unwrap(),
             rec_unit_value: 1.0,
         };
-        let hr = HostRec { effect_ref: eref, time_mult: m, time_scale: scale, double_flag: f4, size_x: c[17].parse().unwrap(), size_y: c[18].parse().unwrap() };
+        let hr = HostRec { effect_ref: eref, time_mult: m, time_scale: scale, double_flag: double_word, size_x: c[17].parse().unwrap(), size_y: c[18].parse().unwrap() };
         let nto = NoTimeObj { a: c[19].parse().unwrap(), c: c[20].parse().unwrap() };
         let mut hv = HashMap::new();
         for it in c[21].split(';').filter(|x| !x.is_empty()) {

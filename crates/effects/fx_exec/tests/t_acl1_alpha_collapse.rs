@@ -70,12 +70,12 @@ fn a_four_element_source_keeps_both_nodes() {
 #[test]
 fn the_collapse_removes_the_nodes_from_the_compiled_graph() {
     let g = genotype();
-    let live = |channels: i32| -> usize {
+    let live_planes = |channels: i32| -> usize {
         let mut b = Binding::defaults();
         b.input_elnum.insert("Source".into(), channels);
         let cp = compile_for(&g, &b).expect("compile");
         cp.nodes.iter().filter(|n| (n.prim == "copy_alpha" || n.prim == "v3_to_v4_if4_a") && !n.folded).count()
     };
-    assert_eq!(live(3), 0);
-    assert_eq!(live(4), 4);
+    assert_eq!(live_planes(3), 0);
+    assert_eq!(live_planes(4), 4);
 }

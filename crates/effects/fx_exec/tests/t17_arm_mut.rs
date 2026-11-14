@@ -49,13 +49,13 @@ fn selector_tag_domain_is_2_or_minus_1() {
         return;
     }
     let t = Tables::embedded();
-    let (mut n, mut n2) = (0usize, 0usize);
-    fn rec(t: &Tables, cur: &mut Vec<i32>, depth: usize, n: &mut usize, n2: &mut usize) {
+    let (mut n, mut visit_count) = (0usize, 0usize);
+    fn rec(t: &Tables, cur: &mut Vec<i32>, depth: usize, n: &mut usize, visit_count: &mut usize) {
         let tag = t.select_counts("grad", cur);
         *n += 1;
         assert!(tag == 2 || tag == -1, "tag {} for {:?}", tag, cur);
         if tag == 2 {
-            *n2 += 1;
+            *visit_count += 1;
             // select_counts is a prefix matcher: a list shorter than four can give 2 (grad_k then refuses it in need(args, 4)); with four or more operands
             // (the only lists grad_k accepts) tag 2 needs the first four counts to be (1,1,1,1).
             if cur.len() >= 4 {
@@ -65,14 +65,14 @@ fn selector_tag_domain_is_2_or_minus_1() {
         if depth < 6 {
             for c in 0..=4 {
                 cur.push(c);
-                rec(t, cur, depth + 1, n, n2);
+                rec(t, cur, depth + 1, n, visit_count);
                 cur.pop();
             }
         }
     }
-    rec(&t, &mut Vec::new(), 0, &mut n, &mut n2);
-    eprintln!("selector sweep: {} count tuples, {} give tag 2, the rest -1", n, n2);
-    assert!(n2 >= 1);
+    rec(&t, &mut Vec::new(), 0, &mut n, &mut visit_count);
+    eprintln!("selector sweep: {} count tuples, {} give tag 2, the rest -1", n, visit_count);
+    assert!(visit_count >= 1);
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn digest_route_shapes_and_widths() {
                     let args: Vec<Arg> = vec![if srcconst { cst(0.3) } else { Arg::Img(&src) }, cst(amt), cst(gain), cst(sub)];
                     let counts: Vec<i32> = args.iter().map(|a| a.count()).collect();
                     let tag = tables.select_counts("grad", &counts);
-                    let mut kp = KParams::standin();
+                    let mut kp = KParams::host_defaults();
                     kp.host_aspect = asp;
                     let line = format!("w{} h{} sc{} a{} {} {} {}", w, hh, srcconst, asp, amt, gain, sub);
                     if tag < 0 {
@@ -114,7 +114,7 @@ fn digest_direct_tags_probe() {
     let args = [Arg::Img(&src), cst(0.4), cst(0.5), cst(1.0)];
     let mut h = 0xcbf29ce484222325u64;
     for tag in [-1, 0, 1, 2, 3, 4] {
-        outcome(run_any("grad", tag, &args, 32, (8, 4), &KParams::standin()), &mut h, &format!("tag{}", tag));
+        outcome(run_any("grad", tag, &args, 32, (8, 4), &KParams::host_defaults()), &mut h, &format!("tag{}", tag));
     }
     println!("DIGEST tags {:016x}", h);
 }
@@ -126,7 +126,7 @@ fn digest_multi_plane_source_probe() {
     for planes in 1..=4usize {
         let src = lcg_img(8, 4, planes, 20 + planes as u64);
         let args = [Arg::Img(&src), cst(0.4), cst(0.5), cst(1.0)];
-        outcome(run_any("grad", 2, &args, 32, (8, 4), &KParams::standin()), &mut h, &format!("planes{}", planes));
+        outcome(run_any("grad", 2, &args, 32, (8, 4), &KParams::host_defaults()), &mut h, &format!("planes{}", planes));
     }
     println!("DIGEST planes {:016x}", h);
 }
@@ -136,10 +136,10 @@ fn digest_unequal_lanes_probe() {
     // PROBE for mutant 34: a count-1 constant whose lane 1 differs from lane 0 (fx_eval::lanes_of never builds one: it replicates the last element).
     let src = lcg_img(8, 4, 1, 31);
     let mut h = 0xcbf29ce484222325u64;
-    for (l0, l1) in [(0.4f32, 0.4f32), (0.4, 0.9), (0.0, 0.7), (-1.0, 2.0)] {
-        let amt = Arg::Const { n: 1, lanes: [l0.to_bits(), l1.to_bits(), l1.to_bits(), l1.to_bits()] };
+    for (amt_x, l1) in [(0.4f32, 0.4f32), (0.4, 0.9), (0.0, 0.7), (-1.0, 2.0)] {
+        let amt = Arg::Const { n: 1, lanes: [amt_x.to_bits(), l1.to_bits(), l1.to_bits(), l1.to_bits()] };
         let args = [Arg::Img(&src), amt, cst(0.5), cst(1.0)];
-        outcome(run_any("grad", 2, &args, 32, (8, 4), &KParams::standin()), &mut h, &format!("lanes{} {}", l0, l1));
+        outcome(run_any("grad", 2, &args, 32, (8, 4), &KParams::host_defaults()), &mut h, &format!("lanes{} {}", amt_x, l1));
     }
     println!("DIGEST lanes {:016x}", h);
 }

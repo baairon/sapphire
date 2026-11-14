@@ -13,34 +13,34 @@
 pub const INTERP_MAPS: &str = r#"
 /* MIRRORS_MUL_ADD: optical_flow_interp_maps::channel_error, kernels::k1_splat, optical_flow_interp_maps::splat_scan, kernels::k5_interp */
 
-/* vfmadd213ss d, s2, s3: d * s2 + s3 with one rounding; a NaN result is the first NaN of d, s2, s3 quieted, else the default NaN */
-float im_fma213(float d, float s2, float s3) {
-    float r = fma(d, s2, s3);
-    return isnan(r) ? nanx_pick3(d, s2, s3) : r;
+/* vfmadd213ss d, second, third: d * second + third with one rounding; a NaN result is the first NaN of d, second, third quieted, else the default NaN */
+float im_fma213(float d, float second, float third) {
+    float r = fma(d, second, third);
+    return isnan(r) ? nanx_pick3(d, second, third) : r;
 }
 
-/* vfmadd231ss d, s2, s3: s2 * s3 + d */
-float im_fma231(float d, float s2, float s3) {
-    float r = fma(s2, s3, d);
-    return isnan(r) ? nanx_pick3(d, s2, s3) : r;
+/* vfmadd231ss d, second, third: second * third + d */
+float im_fma231(float d, float second, float third) {
+    float r = fma(second, third, d);
+    return isnan(r) ? nanx_pick3(d, second, third) : r;
 }
 
-/* vfnmadd213ss d, s2, s3: -(d * s2) + s3 */
-float im_fnma213(float d, float s2, float s3) {
-    float r = fma(-d, s2, s3);
-    return isnan(r) ? nanx_pick3(d, s2, s3) : r;
+/* vfnmadd213ss d, second, third: -(d * second) + third */
+float im_fnma213(float d, float second, float third) {
+    float r = fma(-d, second, third);
+    return isnan(r) ? nanx_pick3(d, second, third) : r;
 }
 
-/* vfmsub213ss d, s2, s3: d * s2 - s3 */
-float im_fms213(float d, float s2, float s3) {
-    float r = fma(d, s2, -s3);
-    return isnan(r) ? nanx_pick3(d, s2, s3) : r;
+/* vfmsub213ss d, second, third: d * second - third */
+float im_fms213(float d, float second, float third) {
+    float r = fma(d, second, -third);
+    return isnan(r) ? nanx_pick3(d, second, third) : r;
 }
 
-/* vfnmsub213ss d, s2, s3: -(d * s2) - s3 */
-float im_fnms213(float d, float s2, float s3) {
-    float r = fma(-d, s2, -s3);
-    return isnan(r) ? nanx_pick3(d, s2, s3) : r;
+/* vfnmsub213ss d, second, third: -(d * second) - third */
+float im_fnms213(float d, float second, float third) {
+    float r = fma(-d, second, -third);
+    return isnan(r) ? nanx_pick3(d, second, third) : r;
 }
 
 float im_flip(float x) {
@@ -78,13 +78,13 @@ float im_channel_error(float tl, float tr, float ll, float br, float fx, float f
     return nanx_mul(e, e);
 }
 
-__global const uint* im_sel(__global const uint* p0, __global const uint* p1, __global const uint* p2, int k) {
-    return (k == 0) ? p0 : ((k == 1) ? p1 : p2);
+__global const uint* im_sel(__global const uint* p0, __global const uint* mid_plane, __global const uint* p2, int k) {
+    return (k == 0) ? p0 : ((k == 1) ? mid_plane : p2);
 }
 
 /* matching cost of one source pixel over up to three channels */
-float im_cost(__global const uint* n0, __global const uint* n1, __global const uint* n2,
-              __global const uint* q0, __global const uint* q1, __global const uint* q2,
+float im_cost(__global const uint* src_ch0, __global const uint* src_ch1, __global const uint* src_ch2,
+              __global const uint* ref_ch0, __global const uint* ref_ch1, __global const uint* ref_ch2,
               float av, float bv, float xf, float yf, int col, int row, int w, int h, int nc) {
     float cost = 0x0p+0f;
     if (nc > 0) {
@@ -97,18 +97,18 @@ float im_cost(__global const uint* n0, __global const uint* n1, __global const u
         int row_lo = y_lo * w;
         int row_hi = y_hi * w;
         int pidx = row * w + col;
-        for (int ch = 0; ch < 3; ch++) {
-            if (ch >= nc) {
+        for (int chan = 0; chan < 3; chan++) {
+            if (chan >= nc) {
                 break;
             }
-            __global const uint* pl = im_sel(n0, n1, n2, ch);
+            __global const uint* pl = im_sel(src_ch0, src_ch1, src_ch2, chan);
             float sample_tl = as_float(pl[x_lo + row_lo]);
             float sample_tr = as_float(pl[x_hi + row_lo]);
             float sample_lower_left = as_float(pl[x_lo + row_hi]);
             float sample_br = as_float(pl[x_hi + row_hi]);
-            float p = as_float(im_sel(q0, q1, q2, ch)[pidx]);
+            float p = as_float(im_sel(ref_ch0, ref_ch1, ref_ch2, chan)[pidx]);
             float e = im_channel_error(sample_tl, sample_tr, sample_lower_left, sample_br, fx, fy, p);
-            cost = (ch == 0) ? e : nanx_add(e, cost);
+            cost = (chan == 0) ? e : nanx_add(e, cost);
         }
     }
     return cost;
@@ -132,8 +132,8 @@ void im_store(__global uint* tfx, __global uint* tfy, __global uint* best, __glo
 
 /* k1_splat over every row, then splat_scan: one work item, the crate's serial loops in raster order */
 __kernel void im_splat(__global const uint* fa, __global const uint* fb,
-                       __global const uint* n0, __global const uint* n1, __global const uint* n2,
-                       __global const uint* q0, __global const uint* q1, __global const uint* q2,
+                       __global const uint* src_ch0, __global const uint* src_ch1, __global const uint* src_ch2,
+                       __global const uint* ref_ch0, __global const uint* ref_ch1, __global const uint* ref_ch2,
                        __global uint* tfx, __global uint* tfy, __global uint* best, __global uint* cov, __global uint* sdone,
                        int w, int h, int nc, float scale) {
     if (get_global_id(0) != 0) {
@@ -168,7 +168,7 @@ __kernel void im_splat(__global const uint* fa, __global const uint* fb,
                 sdone[idx] = 1u;
                 continue;
             }
-            float cost = im_cost(n0, n1, n2, q0, q1, q2, av, bv, xf, yf, col, row, w, h, nc);
+            float cost = im_cost(src_ch0, src_ch1, src_ch2, ref_ch0, ref_ch1, ref_ch2, av, bv, xf, yf, col, row, w, h, nc);
             im_store(tfx, tfy, best, cov, tx + ty * w, abits, bbits, cost);
             sdone[idx] = 1u;
         }
@@ -201,7 +201,7 @@ __kernel void im_splat(__global const uint* fa, __global const uint* fb,
             if (ix < 0 || ix >= w || iy < 0 || iy >= h) {
                 continue;
             }
-            float cost = im_cost(n0, n1, n2, q0, q1, q2, av, bv, xf, yf, col, row, w, h, nc);
+            float cost = im_cost(src_ch0, src_ch1, src_ch2, ref_ch0, ref_ch1, ref_ch2, av, bv, xf, yf, col, row, w, h, nc);
             im_store(tfx, tfy, best, cov, ix + iy * w, abits, bbits, cost);
         }
     }
@@ -295,7 +295,7 @@ __kernel void im_count_sum(__global const uint* rows, __global uint* total, int 
 }
 
 /* k5_interp: one work item per pixel; the row path (scalar head, eight lane body, scalar tail) is chosen from the width and the row's byte phase */
-__kernel void im_interp(__global const uint* fa, __global const uint* fb, __global uint* o0, __global uint* o1, __global uint* o2, __global uint* o3,
+__kernel void im_interp(__global const uint* fa, __global const uint* fb, __global uint* out_a, __global uint* out_b, __global uint* out_c, __global uint* out_d,
                         int w, int h, float scale, float c, float cs, float oms, float gain_rest, float flow_offset) {
     int i = (int)get_global_id(0);
     if (i >= w * h) {
@@ -349,9 +349,9 @@ __kernel void im_interp(__global const uint* fa, __global const uint* fb, __glob
         res_b = nanx_mul(c, im_fnma213(scale, b, flow_offset));
         res_d = nanx_mul(c, im_fma213(b, oms, flow_offset));
     }
-    o0[i] = as_uint(res_a);
-    o1[i] = as_uint(res_b);
-    o2[i] = as_uint(res_c);
-    o3[i] = as_uint(res_d);
+    out_a[i] = as_uint(res_a);
+    out_b[i] = as_uint(res_b);
+    out_c[i] = as_uint(res_c);
+    out_d[i] = as_uint(res_d);
 }
 "#;

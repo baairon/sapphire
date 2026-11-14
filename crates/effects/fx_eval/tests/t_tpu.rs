@@ -23,8 +23,8 @@ fn text(raw0: i32, raw1: i32, sx: Option<i32>, sy: Option<i32>, unit: Option<(f3
         t.push_str(&format!("host size_y {}\n", v));
     }
     t.push_str(&format!("value shift 24 0 1 24 0 {}\nvalue shift 25 0 1 24 0 {}\n", raw0, raw1));
-    if let Some((r6, x3, d4, d5)) = unit {
-        t.push_str(&format!("unit shift rec6c {}\nunit shift x3 {}\nunit shift d4 {}\nunit shift d5 {}\n", hex32(r6), hex32(x3), hex64(d4), hex64(d5)));
+    if let Some((rec_unit_bits, unit_x, unit_d, unit_dd)) = unit {
+        t.push_str(&format!("unit shift rec6c {}\nunit shift x3 {}\nunit shift d4 {}\nunit shift d5 {}\n", hex32(rec_unit_bits), hex32(unit_x), hex64(unit_d), hex64(unit_dd)));
     }
     if point {
         t.push_str("point shift list none\n");
@@ -35,7 +35,7 @@ fn text(raw0: i32, raw1: i32, sx: Option<i32>, sy: Option<i32>, unit: Option<(f3
 fn run(style: &str, t: &str) -> (Option<Vec<f32>>, Vec<String>) {
     let mut h = HostCurveValues::parse(t).unwrap();
     h.time_frames = Some(0.0);
-    h.ae32 = true;
+    h.claim_route = true;
     let mut d = Vec::new();
     let r = fold(style, "shift", 0.5, &[0.0, 0.0], 2, &h, &mut d);
     (r, d)
@@ -64,15 +64,15 @@ fn tpu_constructed_pins() {
         return;
     }
     let cases: [(f32, f32, f64, f64); 5] = [(2.0, 1.0, 1.0, 1.0), (1.0, 0.5, 1.0, 1.0), (1.0, 1.0, 2.0, 1.0), (1.0, 1.0, 1.0, 0.5), (2.0, 0.5, 2.0, 0.5)];
-    for (r6, x3, d4, d5) in cases {
-        let u = UnitIn { x1: 50.0, rec_unit_value: r6, x3, d4, d5 };
+    for (rec_unit_bits, unit_x, unit_d, unit_dd) in cases {
+        let u = UnitIn { unit_origin: 50.0, rec_unit_value: rec_unit_bits, unit_x, unit_d, unit_dd };
         let want = [unit_nibble5(0.25, 0, &u).to_bits(), unit_nibble5(-0.125, 1, &u).to_bits()];
-        let (r, d) = run(STYLES[0], &text(16384, -8192, Some(50), Some(7), Some((r6, x3, d4, d5)), false));
+        let (r, d) = run(STYLES[0], &text(16384, -8192, Some(50), Some(7), Some((rec_unit_bits, unit_x, unit_d, unit_dd)), false));
         let r = r.unwrap_or_else(|| panic!("{:?}", d));
-        assert_eq!([r[0].to_bits(), r[1].to_bits()], want, "pins {:?}", (r6, x3, d4, d5));
+        assert_eq!([r[0].to_bits(), r[1].to_bits()], want, "pins {:?}", (rec_unit_bits, unit_x, unit_d, unit_dd));
     }
     // size_x and size_y differ, so a size_x taken from size_y is seen
-    let u = UnitIn { x1: 50.0, rec_unit_value: 1.0, x3: 1.0, d4: 1.0, d5: 1.0 };
+    let u = UnitIn { unit_origin: 50.0, rec_unit_value: 1.0, unit_x: 1.0, unit_d: 1.0, unit_dd: 1.0 };
     let (r, _) = run(STYLES[1], &text(16384, -8192, Some(50), Some(7), Some((1.0, 1.0, 1.0, 1.0)), false));
     assert_eq!(r.unwrap()[0].to_bits(), unit_nibble5(0.25, 0, &u).to_bits());
 }

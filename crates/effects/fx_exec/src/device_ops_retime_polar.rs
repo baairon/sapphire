@@ -12,7 +12,7 @@ use crate::backend::NodeCall;
 use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use crate::device_ops_pointwise::const_image;
 use crate::types::{Image, KParams};
-use fx_device::cl::{Access, Arg as ClArg, Buffer};
+use fx_device::ocl::{Access, Arg as ClArg, Buffer};
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
 use std::sync::Arc;
@@ -190,13 +190,13 @@ pub fn gen_pair(r: &mut Lcg, pool: &[f32]) -> (f32, f32) {
         }
         2 | 3 | 4 | 5 => {
             let outer = [0u32, 1, 250, 251, 252, 253, 254];
-            let e1 = outer[(r.next() as usize) % outer.len()] as i32;
+            let outer_exp = outer[(r.next() as usize) % outer.len()] as i32;
             let ds = [-75i32, -56, -55, -54, -53, -52, -40, 0, 40, 52, 53, 54, 55, 56, 72, 73, 74, 75, 100];
-            let e2 = (e1 + ds[(r.next() as usize) % ds.len()]).clamp(1, 254) as u32;
+            let inner_exp = (outer_exp + ds[(r.next() as usize) % ds.len()]).clamp(1, 254) as u32;
             let m = |r: &mut Lcg| (r.next() as u32) & 0x7f_ffff;
             let sg = |r: &mut Lcg| ((r.next() & 1) as u32) << 31;
-            let a = f32::from_bits(sg(r) | ((e1 as u32) << 23) | m(r));
-            let b = f32::from_bits(sg(r) | (e2 << 23) | m(r));
+            let a = f32::from_bits(sg(r) | ((outer_exp as u32) << 23) | m(r));
+            let b = f32::from_bits(sg(r) | (inner_exp << 23) | m(r));
             if r.next() & 1 == 0 { (a, b) } else { (b, a) }
         }
         _ => (pool[(r.next() as usize) % pool.len()], pool[(r.next() as usize) % pool.len()]),
@@ -260,7 +260,7 @@ fn xy_corpus() -> Vec<SelfCase> {
         let n = w * h;
         for &ph in phases {
             let (xs, ys) = polar_pairs(n, (k * 17 + ph as usize) as u64, &pool);
-            let mut kp = KParams::standin();
+            let mut kp = KParams::host_defaults();
             kp.polar_mag_phase = ph;
             out.push(SelfCase {
                 name: format!("{w}x{h} phase {ph}"),

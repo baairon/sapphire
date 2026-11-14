@@ -32,11 +32,11 @@ fn fill_takes_the_mean_of_flagged_neighbours() {
     assert_eq!(f32::from_bits(value_out[1]), 3.0);
     assert_eq!(valid_out, [0, 1, 0]);
     // no flagged neighbour: untouched
-    let m0b0 = [0u32; 3];
-    let (mut s3b, mut m2bb) = ([7u32; 3], [7u32; 3]);
-    let mut k = K2 { w: 3, h: 1, stride: 3, covered: &covered, value_in: &value_in, value_out: &mut s3b, valid_in: &m0b0, valid_out: &mut m2bb };
+    let zero_masks = [0u32; 3];
+    let (mut shift_set, mut mask_pair) = ([7u32; 3], [7u32; 3]);
+    let mut k = K2 { w: 3, h: 1, stride: 3, covered: &covered, value_in: &value_in, value_out: &mut shift_set, valid_in: &zero_masks, valid_out: &mut mask_pair };
     k2_fill(&mut k, 0, 1);
-    assert_eq!(s3b, [7; 3]);
+    assert_eq!(shift_set, [7; 3]);
 }
 
 #[test]

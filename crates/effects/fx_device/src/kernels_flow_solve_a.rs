@@ -58,34 +58,34 @@ float flow_a_flip(float x) {
     return as_float(as_uint(x) ^ 0x80000000u);
 }
 
-/* d * s2 + s3 */
-float flow_a_fma213(float d, float s2, float s3) {
-    float r = fma(d, s2, s3);
-    return (r != r) ? flow_a_pick3(d, s2, s3) : r;
+/* d * second + third */
+float flow_a_fma213(float d, float second, float third) {
+    float r = fma(d, second, third);
+    return (r != r) ? flow_a_pick3(d, second, third) : r;
 }
 
-/* s2 * s3 + d */
-float flow_a_fma231(float d, float s2, float s3) {
-    float r = fma(s2, s3, d);
-    return (r != r) ? flow_a_pick3(d, s2, s3) : r;
+/* second * third + d */
+float flow_a_fma231(float d, float second, float third) {
+    float r = fma(second, third, d);
+    return (r != r) ? flow_a_pick3(d, second, third) : r;
 }
 
-/* d * s2 - s3 */
-float flow_a_fms213(float d, float s2, float s3) {
-    float r = fma(d, s2, -s3);
-    return (r != r) ? flow_a_pick3(d, s2, s3) : r;
+/* d * second - third */
+float flow_a_fms213(float d, float second, float third) {
+    float r = fma(d, second, -third);
+    return (r != r) ? flow_a_pick3(d, second, third) : r;
 }
 
-/* -(d * s2) + s3 */
-float flow_a_fnma213(float d, float s2, float s3) {
-    float r = fma(-d, s2, s3);
-    return (r != r) ? flow_a_pick3(d, s2, s3) : r;
+/* -(d * second) + third */
+float flow_a_fnma213(float d, float second, float third) {
+    float r = fma(-d, second, third);
+    return (r != r) ? flow_a_pick3(d, second, third) : r;
 }
 
-/* -(d * s3) - s2 */
-float flow_a_fnms132(float d, float s2, float s3) {
-    float r = fma(-d, s3, -s2);
-    return (r != r) ? flow_a_pick3(d, s2, s3) : r;
+/* -(d * third) - second */
+float flow_a_fnms132(float d, float second, float third) {
+    float r = fma(-d, third, -second);
+    return (r != r) ? flow_a_pick3(d, second, third) : r;
 }
 
 /* Split of a row of w elements: (head, vec_end, all_scalar). lanes is the vector width, min_aligned the width from which the
@@ -120,8 +120,8 @@ __kernel void flow_a_fma_mix(__global const float* pa, __global const float* pb,
     long off = r * (long)stride;
     long k = off + i;
     uint ph = (phase + (uint)off * 4u) & 31u;
-    long3 sp = flow_a_split((long)w, 16, 29, ph, 32);
-    int vec = (sp.z == 0 && i >= sp.x && i < sp.y) ? 1 : 0;
+    long3 row_split = flow_a_split((long)w, 16, 29, ph, 32);
+    int vec = (row_split.z == 0 && i >= row_split.x && i < row_split.y) ? 1 : 0;
     float e = pe[k];
     float c = pc[k];
     float b = pb[k];
@@ -202,8 +202,8 @@ __kernel void flow_a_diff_sum(__global const float* pp, __global const float* pq
         }
         long off = ((long)row0 + (long)row) * (long)stride;
         uint ph = (phase + (uint)off * 4u) & 31u;
-        long3 sp = flow_a_split((long)w, 8, 907, ph, 32);
-        if (sp.z != 0) {
+        long3 row_split = flow_a_split((long)w, 8, 907, ph, 32);
+        if (row_split.z != 0) {
             for (int i = 0; i < 2000000000; i++) {
                 if (i >= w) {
                     break;
@@ -214,7 +214,7 @@ __kernel void flow_a_diff_sum(__global const float* pp, __global const float* pq
             continue;
         }
         for (int i = 0; i < 2000000000; i++) {
-            if ((long)i >= sp.x) {
+            if ((long)i >= row_split.x) {
                 break;
             }
             float s = flow_a_diff_one(pp, pq, px, py, off + i);
@@ -225,14 +225,14 @@ __kernel void flow_a_diff_sum(__global const float* pp, __global const float* pq
             lanes[j] = as_float(0u);
         }
         lanes[0] = acc;
-        long p = sp.x;
+        long p = row_split.x;
         for (int blk = 0; blk < 2000000000; blk++) {
             for (int j = 0; j < 8; j++) {
                 float s = flow_a_diff_one(pp, pq, px, py, off + p + j);
                 lanes[j] = flow_a_add(s, lanes[j]);
             }
             p += 8;
-            if (p >= sp.y) {
+            if (p >= row_split.y) {
                 break;
             }
         }
@@ -244,10 +244,10 @@ __kernel void flow_a_diff_sum(__global const float* pp, __global const float* pq
         float lp1 = flow_a_add(ls1, ls3);
         acc = flow_a_add(lp0, lp1);
         for (int i = 0; i < 2000000000; i++) {
-            if ((long)i + sp.y >= (long)w) {
+            if ((long)i + row_split.y >= (long)w) {
                 break;
             }
-            float s = flow_a_diff_one(pp, pq, px, py, off + sp.y + i);
+            float s = flow_a_diff_one(pp, pq, px, py, off + row_split.y + i);
             acc = flow_a_add(s, acc);
         }
     }
@@ -272,8 +272,8 @@ __kernel void flow_a_scale_plane(__global float* pl, int w, int stride, int star
 }
 
 /* Both nests of relax_callback. Work item g: nest = g / (count * w), then row and column. */
-__kernel void flow_a_relax(__global const float* t0, __global const float* u0, __global const float* a0, __global float* o0,
-                        __global const float* t1, __global const float* u1, __global const float* a1, __global float* o1,
+__kernel void flow_a_relax(__global const float* nest_zero_t, __global const float* nest_zero_u, __global const float* nest_zero_acc, __global float* nest_zero_out,
+                        __global const float* nest_one_t, __global const float* nest_one_u, __global const float* nest_one_acc, __global float* nest_one_out,
                         __global const float* pv, uint scale_bits, int has_v,
                         int w, int h, int stride, int start, int count, uint phase) {
     size_t g = get_global_id(0);
@@ -282,10 +282,10 @@ __kernel void flow_a_relax(__global const float* t0, __global const float* u0, _
     size_t q = g % per;
     long y = (long)start + (long)(q / (size_t)w);
     long j = (long)(q % (size_t)w);
-    __global const float* tt = (nest == 0) ? t0 : t1;
-    __global const float* uu = (nest == 0) ? u0 : u1;
-    __global const float* aa = (nest == 0) ? a0 : a1;
-    __global float* oo = (nest == 0) ? o0 : o1;
+    __global const float* tt = (nest == 0) ? nest_zero_t : nest_one_t;
+    __global const float* uu = (nest == 0) ? nest_zero_u : nest_one_u;
+    __global const float* aa = (nest == 0) ? nest_zero_acc : nest_one_acc;
+    __global float* oo = (nest == 0) ? nest_zero_out : nest_one_out;
     float scale = as_float(scale_bits);
     int kind = (y == 0) ? 0 : ((y == (long)h - 1) ? 1 : 2);
     long st = (long)stride;
@@ -312,16 +312,16 @@ __kernel void flow_a_relax(__global const float* t0, __global const float* u0, _
     long x = j - 1;
     uint ph = (uint)((((long)phase + rb * 4) & 63));
     long lb = 64;
-    long3 sp;
+    long3 row_split;
     if (n < 16) {
-        sp = (long3)(0, 0, 1);
+        row_split = (long3)(0, 0, 1);
     } else if (n < 1200) {
-        sp = (long3)(0, n & ~15, 0);
+        row_split = (long3)(0, n & ~15, 0);
     } else {
-        sp = flow_a_split(n, 16, 1200, ph, lb);
+        row_split = flow_a_split(n, 16, 1200, ph, lb);
     }
-    int vec = (sp.z == 0 && x >= sp.x && x < sp.y) ? 1 : 0;
-    float dx = (x == n - 1) ? flow_a_flip(tt[rb + x]) : flow_a_sub(tt[rb + x + 1], tt[rb + x]);
+    int vec = (row_split.z == 0 && x >= row_split.x && x < row_split.y) ? 1 : 0;
+    float delta_x = (x == n - 1) ? flow_a_flip(tt[rb + x]) : flow_a_sub(tt[rb + x + 1], tt[rb + x]);
     float uc = uu[rb + j];
     float ua = (kind == 0) ? as_float(0u) : uu[rb - st + j];
     float a = aa[rb + j];
@@ -329,29 +329,29 @@ __kernel void flow_a_relax(__global const float* t0, __global const float* u0, _
     if (has_v != 0) {
         float pvv = flow_a_mul(scale, pv[rb + j]);
         if (kind == 0) {
-            r = flow_a_fma213(pvv, flow_a_add(dx, uc), a);
+            r = flow_a_fma213(pvv, flow_a_add(delta_x, uc), a);
         } else if (kind == 1) {
             if (vec != 0) {
-                r = flow_a_fma213(pvv, flow_a_add(dx, flow_a_flip(ua)), a);
+                r = flow_a_fma213(pvv, flow_a_add(delta_x, flow_a_flip(ua)), a);
             } else {
-                r = flow_a_fnma213(pvv, flow_a_sub(ua, dx), a);
+                r = flow_a_fnma213(pvv, flow_a_sub(ua, delta_x), a);
             }
         } else {
-            r = flow_a_fma213(pvv, flow_a_add(dx, flow_a_sub(uc, ua)), a);
+            r = flow_a_fma213(pvv, flow_a_add(delta_x, flow_a_sub(uc, ua)), a);
         }
     } else {
         if (kind == 0) {
-            r = flow_a_fma213(flow_a_add(dx, uc), scale, a);
+            r = flow_a_fma213(flow_a_add(delta_x, uc), scale, a);
         } else if (kind == 1) {
             if (vec != 0) {
-                r = flow_a_fma213(flow_a_add(dx, flow_a_flip(ua)), scale, a);
+                r = flow_a_fma213(flow_a_add(delta_x, flow_a_flip(ua)), scale, a);
             } else {
-                r = flow_a_fnma213(flow_a_sub(ua, dx), scale, a);
+                r = flow_a_fnma213(flow_a_sub(ua, delta_x), scale, a);
             }
         } else if (vec != 0) {
-            r = flow_a_fma213(flow_a_add(dx, flow_a_sub(uc, ua)), scale, a);
+            r = flow_a_fma213(flow_a_add(delta_x, flow_a_sub(uc, ua)), scale, a);
         } else {
-            float tm = flow_a_fma213(dx, scale, a);
+            float tm = flow_a_fma213(delta_x, scale, a);
             r = flow_a_fma213(flow_a_sub(uc, ua), scale, tm);
         }
     }

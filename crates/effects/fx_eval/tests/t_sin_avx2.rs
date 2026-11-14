@@ -172,11 +172,11 @@ fn hand_values_need_no_data() {
 #[test]
 fn deterministic_and_lane_independent_in_the_fast_route() {
     let a = [0x3f80_0000u32, 0x4000_0000, 0xbf80_0000, 0x4048_f5c3, 0x3e80_0000, 0x1, 0x8000_0000, 0x4640_e6b6 & 0x45ff_ffff];
-    let r1 = sin8(a);
+    let sines = sin8(a);
     let r2 = sin8(a);
-    assert_eq!(r1, r2);
+    assert_eq!(sines, r2);
     for k in 0..8 {
-        assert_eq!(sin8([a[k]; 8])[0], r1[k], "lane {}", k);
+        assert_eq!(sin8([a[k]; 8])[0], sines[k], "lane {}", k);
     }
 }
 

@@ -122,19 +122,19 @@ fn int_round_trip(v: f32, m: Mutant) -> f32 {
 
 /// The three-way select shared by every variant. `generic` is fma(A, 1 - t, B) (one rounding); the C3 variant passes its own value.
 #[inline]
-fn pick(t: f32, a: f32, b: f32, c3: bool, m: Mutant) -> f32 {
-    let ge1 = if m == Mutant::GtOne { t > ONE } else { t >= ONE };
-    if ge1 {
+fn pick(t: f32, a: f32, b: f32, neg_t_form: bool, m: Mutant) -> f32 {
+    let above_one = if m == Mutant::GtOne { t > ONE } else { t >= ONE };
+    if above_one {
         return if m == Mutant::OneBranchSum { nx_add(a, b) } else { b };
     }
-    let le0 = if m == Mutant::LtZero { t < 0.0 } else { t <= 0.0 };
+    let at_most_zero = if m == Mutant::LtZero { t < 0.0 } else { t <= 0.0 };
     if m == Mutant::NanAdds && t.is_nan() {
         return nx_add(a, b);
     }
-    if le0 {
+    if at_most_zero {
         return if m == Mutant::SumDropsB { a } else { nx_add(a, b) };
     }
-    if c3 && m != Mutant::C3Generic {
+    if neg_t_form && m != Mutant::C3Generic {
         // vfnmadd213ss xmm1(t), xmm7(a), xmm7(a): x = fma(-t, a, a); then b + x
         let x = nx_fma(-t, a, a);
         return nx_add(b, x);
@@ -146,10 +146,10 @@ fn pick(t: f32, a: f32, b: f32, c3: bool, m: Mutant) -> f32 {
     }
 }
 
-fn plane_of<'a>(o: &Operand<'a>, tag: char, ch: usize, need: usize) -> Result<&'a [f32], Error> {
-    let p = o.planes.get(ch).ok_or(Error::MissingPlane(tag, ch))?;
+fn plane_of<'a>(o: &Operand<'a>, tag: char, chan: usize, need: usize) -> Result<&'a [f32], Error> {
+    let p = o.planes.get(chan).ok_or(Error::MissingPlane(tag, chan))?;
     if p.len() < need {
-        return Err(Error::ShortPlane(tag, ch));
+        return Err(Error::ShortPlane(tag, chan));
     }
     Ok(p)
 }
@@ -172,17 +172,17 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mut [
         }
     }
     let nu = if p.n > 0 { p.n as usize } else { 0 };
-    for ch in 0..nout as usize {
-        let r = ch as i32; // r13
-        let ca1 = a.count - 1;
-        let cb1 = b.count - 1;
+    for chan in 0..nout as usize {
+        let r = chan as i32; // r13
+        let coord_a_first = a.count - 1;
+        let b_last_idx = b.count - 1;
         let ct1 = t.count - 1;
         let sel = |c1: i32| -> usize { (r.min(c1)) as usize };
         let mut b_const = b.is_const;
-        let t_ch = if m == Mutant::TPlaneCh0 { 0 } else { sel(ct1) };
+        let t_plane_chan = if m == Mutant::TPlaneCh0 { 0 } else { sel(ct1) };
         let mut b_plane_from_t = false;
-        if ch == 3 {
-            if ca1 == 2 || (m == Mutant::FillCa4 && ca1 == 3) {
+        if chan == 3 {
+            if coord_a_first == 2 || (m == Mutant::FillCa4 && coord_a_first == 3) {
                 if m == Mutant::NoAlphaFill {
                     // fall through to the generic composite
                 } else {
@@ -201,7 +201,7 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mut [
                     return Ok(());
                 }
             }
-            if cb1 == 2 && m != Mutant::NoBSwap {
+            if b_last_idx == 2 && m != Mutant::NoBSwap {
                 // r9 := r8 (B plane pointer := T plane pointer), r15d := r12d (B constant flag := T constant flag)
                 b_plane_from_t = true;
                 if m != Mutant::SwapKeepsFlag {
@@ -212,28 +212,28 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mut [
         if nu == 0 {
             continue;
         }
-        let o_len_ok = outs.get(ch).map(|o| o.len() >= nu).unwrap_or(false);
+        let o_len_ok = outs.get(chan).map(|o| o.len() >= nu).unwrap_or(false);
         if !o_len_ok {
-            return Err(Error::ShortOutput(ch));
+            return Err(Error::ShortOutput(chan));
         }
         // operand access
-        let a_idx = if m == Mutant::APlaneCh0 { 0 } else { sel(ca1) };
-        let a_cidx = if m == Mutant::AConstClamped { sel(ca1) } else { ch };
+        let a_idx = if m == Mutant::APlaneCh0 { 0 } else { sel(coord_a_first) };
+        let a_cidx = if m == Mutant::AConstClamped { sel(coord_a_first) } else { chan };
         let a_plane = if a.is_const { None } else { Some(plane_of(a, 'a', a_idx, nu)?) };
-        let t_plane = if t.is_const { None } else { Some(plane_of(t, 't', t_ch, nu)?) };
+        let t_plane = if t.is_const { None } else { Some(plane_of(t, 't', t_plane_chan, nu)?) };
         let b_plane = if b_const {
             None
         } else if b_plane_from_t {
             // the swapped plane pointer is T's plane for this channel (null record would fault in the original)
-            Some(plane_of(t, 't', t_ch, nu)?)
+            Some(plane_of(t, 't', t_plane_chan, nu)?)
         } else {
-            Some(plane_of(b, 'b', sel(cb1), nu)?)
+            Some(plane_of(b, 'b', sel(b_last_idx), nu)?)
         };
         let ac = a.consts[a_cidx];
-        let bc = b.consts[ch];
-        let tc = t.consts[ch];
+        let bc = b.consts[chan];
+        let tc = t.consts[chan];
         let end = if m == Mutant::SkipLast { nu.saturating_sub(1) } else { nu };
-        let out = &mut *outs[ch];
+        let out = &mut *outs[chan];
         match (a.is_const, b_const, t.is_const) {
             (true, true, true) => {
                 // all constants: one scalar result, converted through int32 and back, then the plane is filled
@@ -251,15 +251,15 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mut [
             }
             (true, false, true) => {
                 // C3: A constant, B plane, T constant: B + fma(-t, A, A)
-                let bp = b_plane.unwrap();
+                let b_vals = b_plane.unwrap();
                 for i in 0..end {
-                    out[i] = pick(tc, ac, bp[i], true, m);
+                    out[i] = pick(tc, ac, b_vals[i], true, m);
                 }
             }
             (true, false, false) => {
-                let (bp, tp) = (b_plane.unwrap(), t_plane.unwrap());
+                let (b_vals, tp) = (b_plane.unwrap(), t_plane.unwrap());
                 for i in 0..end {
-                    out[i] = pick(tp[i], ac, bp[i], false, m);
+                    out[i] = pick(tp[i], ac, b_vals[i], false, m);
                 }
             }
             (false, true, true) => {
@@ -275,15 +275,15 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mut [
                 }
             }
             (false, false, true) => {
-                let (ap, bp) = (a_plane.unwrap(), b_plane.unwrap());
+                let (ap, b_vals) = (a_plane.unwrap(), b_plane.unwrap());
                 for i in 0..end {
-                    out[i] = pick(tc, ap[i], bp[i], false, m);
+                    out[i] = pick(tc, ap[i], b_vals[i], false, m);
                 }
             }
             (false, false, false) => {
-                let (ap, bp, tp) = (a_plane.unwrap(), b_plane.unwrap(), t_plane.unwrap());
+                let (ap, b_vals, tp) = (a_plane.unwrap(), b_plane.unwrap(), t_plane.unwrap());
                 for i in 0..end {
-                    out[i] = pick(tp[i], ap[i], bp[i], false, m);
+                    out[i] = pick(tp[i], ap[i], b_vals[i], false, m);
                 }
             }
         }
@@ -305,12 +305,12 @@ mod tests {
         let b = [[1.0f32, 1.0, 1.0, 1.0]];
         let t = [[1.0f32, 0.0, 0.25, 0.5]];
         let ap: Vec<&[f32]> = a.iter().map(|x| &x[..]).collect();
-        let bp: Vec<&[f32]> = b.iter().map(|x| &x[..]).collect();
+        let b_vals: Vec<&[f32]> = b.iter().map(|x| &x[..]).collect();
         let tp: Vec<&[f32]> = t.iter().map(|x| &x[..]).collect();
         let mut o = vec![0.0f32; 4];
         {
             let mut outs: Vec<&mut [f32]> = vec![&mut o[..]];
-            run(&Params { nout: 1, n: 4 }, &op(1, false, [0.0; 4], &ap), &op(1, false, [0.0; 4], &bp), &op(1, false, [0.0; 4], &tp), &mut outs, Mutant::None).unwrap();
+            run(&Params { nout: 1, n: 4 }, &op(1, false, [0.0; 4], &ap), &op(1, false, [0.0; 4], &b_vals), &op(1, false, [0.0; 4], &tp), &mut outs, Mutant::None).unwrap();
         }
         assert_eq!(o[0], 1.0); // t >= 1: B
         assert_eq!(o[1], 3.0); // t <= 0: A + B
@@ -324,12 +324,12 @@ mod tests {
         let b = [[1.0f32]];
         let t = [[f32::NAN]];
         let ap: Vec<&[f32]> = a.iter().map(|x| &x[..]).collect();
-        let bp: Vec<&[f32]> = b.iter().map(|x| &x[..]).collect();
+        let b_vals: Vec<&[f32]> = b.iter().map(|x| &x[..]).collect();
         let tp: Vec<&[f32]> = t.iter().map(|x| &x[..]).collect();
         let mut o = vec![0.0f32; 1];
         {
             let mut outs: Vec<&mut [f32]> = vec![&mut o[..]];
-            run(&Params { nout: 1, n: 1 }, &op(1, false, [0.0; 4], &ap), &op(1, false, [0.0; 4], &bp), &op(1, false, [0.0; 4], &tp), &mut outs, Mutant::None).unwrap();
+            run(&Params { nout: 1, n: 1 }, &op(1, false, [0.0; 4], &ap), &op(1, false, [0.0; 4], &b_vals), &op(1, false, [0.0; 4], &tp), &mut outs, Mutant::None).unwrap();
         }
         assert!(o[0].is_nan());
     }
@@ -359,13 +359,13 @@ mod tests {
         let ap_data = [[1.0f32; 2]; 3];
         let ap: Vec<&[f32]> = ap_data.iter().map(|x| &x[..]).collect();
         let bd = [[0.5f32; 2]; 3];
-        let bp: Vec<&[f32]> = bd.iter().map(|x| &x[..]).collect();
+        let b_vals: Vec<&[f32]> = bd.iter().map(|x| &x[..]).collect();
         let td = [[0.0f32; 2]];
         let tp: Vec<&[f32]> = td.iter().map(|x| &x[..]).collect();
         let mut os = vec![vec![9.0f32; 2]; 4];
         {
             let mut outs: Vec<&mut [f32]> = os.iter_mut().map(|v| &mut v[..]).collect();
-            run(&Params { nout: 4, n: 2 }, &op(3, false, [0.0; 4], &ap), &op(3, false, [0.0; 4], &bp), &op(1, false, [0.0; 4], &tp), &mut outs, Mutant::None).unwrap();
+            run(&Params { nout: 4, n: 2 }, &op(3, false, [0.0; 4], &ap), &op(3, false, [0.0; 4], &b_vals), &op(1, false, [0.0; 4], &tp), &mut outs, Mutant::None).unwrap();
         }
         assert_eq!(os[0], vec![1.5, 1.5]);
         assert_eq!(os[3], vec![1.0, 1.0]);
@@ -377,7 +377,7 @@ mod tests {
         let mut os2 = vec![vec![9.0f32; 2]; 4];
         {
             let mut outs: Vec<&mut [f32]> = os2.iter_mut().map(|v| &mut v[..]).collect();
-            run(&Params { nout: 4, n: 2 }, &op(4, false, [0.0; 4], &ap4), &op(3, false, [0.0; 4], &bp), &op(1, false, [0.0; 4], &tp2), &mut outs, Mutant::None).unwrap();
+            run(&Params { nout: 4, n: 2 }, &op(4, false, [0.0; 4], &ap4), &op(3, false, [0.0; 4], &b_vals), &op(1, false, [0.0; 4], &tp2), &mut outs, Mutant::None).unwrap();
         }
         assert_eq!(os2[3], vec![2.0 * 0.5 + 0.5, 2.0 * 0.5 + 0.5]);
     }
@@ -389,16 +389,16 @@ mod tests {
         let t = 0.3f32;
         let b = 0.1f32;
         let generic = a.mul_add(1.0 - t, b);
-        let c3 = b + (-t).mul_add(a, a);
+        let premult_c3 = b + (-t).mul_add(a, a);
         let bd = [[b]];
-        let bp: Vec<&[f32]> = bd.iter().map(|x| &x[..]).collect();
+        let b_vals: Vec<&[f32]> = bd.iter().map(|x| &x[..]).collect();
         let mut o = vec![0.0f32; 1];
         {
             let mut outs: Vec<&mut [f32]> = vec![&mut o[..]];
             let k = |v: f32| [v, v, v, v];
-            run(&Params { nout: 1, n: 1 }, &op(1, true, k(a), &[]), &op(1, false, [0.0; 4], &bp), &op(1, true, k(t), &[]), &mut outs, Mutant::None).unwrap();
+            run(&Params { nout: 1, n: 1 }, &op(1, true, k(a), &[]), &op(1, false, [0.0; 4], &b_vals), &op(1, true, k(t), &[]), &mut outs, Mutant::None).unwrap();
         }
-        assert_eq!(o[0].to_bits(), c3.to_bits());
+        assert_eq!(o[0].to_bits(), premult_c3.to_bits());
         let _ = generic;
     }
 

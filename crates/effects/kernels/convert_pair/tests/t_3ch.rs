@@ -121,10 +121,10 @@ fn writer3_equals_writer4_modes_2_and_3() {
     planes[3] = (0..n).map(|i| i as f32 * 0.37 - 2.0).collect();
     for m in [AlphaMode::One, AlphaMode::ZeroAlpha] {
         let mut d3 = vec![f32::from_bits(0xaaaa_aaaa); 4 * n];
-        let mut d4 = d3.clone();
+        let mut dest_line = d3.clone();
         convert_to_dest_line_3(&p3, ToDestParams { mode: m }, &mut d3, n);
-        convert_to_dest_line(&planes, ToDestParams { mode: m }, &mut d4, n);
-        assert_eq!(bitsv(&d3), bitsv(&d4));
+        convert_to_dest_line(&planes, ToDestParams { mode: m }, &mut dest_line, n);
+        assert_eq!(bitsv(&d3), bitsv(&dest_line));
     }
 }
 

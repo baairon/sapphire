@@ -43,8 +43,8 @@ fn at(pl: &Plane, idx: i64) -> Result<f32, Unsupported> {
 }
 
 /// idx = 3*c wrapping (lea), per channel taps
-fn lerp_term(v0: f32, v1: f32, frac: f32, wgt: f32) -> f32 {
-    (v0 - v1).mul_add(frac, -v0) * wgt
+fn lerp_term(sample_a: f32, sample_b: f32, frac: f32, wgt: f32) -> f32 {
+    (sample_a - sample_b).mul_add(frac, -sample_a) * wgt
 }
 
 /// X-major sample (S6, S7/S8 of C); returns out[0..3][sample].
@@ -54,67 +54,67 @@ pub fn x_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
     let hs = hst.hs;
     let (mx0, my) = (st.mode_x, st.mode_y);
     let cond_any = mx0 != 0 || my > 0;
-    let (a0, a1, a3, a4) = (a[0], a[1], a[3], a[4]);
+    let (alpha_init, alpha_origin, tap_width, norm_num) = (a[0], a[1], a[3], a[4]);
     let mut sums = [0.0f32; 3];
     let mut wsum = 0.0f32;
     if st.flag_cell_a != 0 {
-        let (x, y, dx, dy) = (st.x, st.y, st.dx, st.dy);
-        let (mut dir, mut c, esi, n0, fx, c0, dxs);
-        if dx > 0.0 {
+        let (x, y, delta_x, dy) = (st.x, st.y, st.delta_x, st.dy);
+        let (mut dir, mut c, tap_b, tap_span, fx, edge_gap, dxs);
+        if delta_x > 0.0 {
             let fl = x.floor();
             dir = 1i32;
             fx = x - fl;
             c = cvtt(fl);
             let ce = st.e2x.ceil();
-            esi = cvtt(ce);
-            c0 = ce - st.e2x;
-            n0 = esi.wrapping_sub(c).wrapping_add(1);
-            dxs = dx;
+            tap_b = cvtt(ce);
+            edge_gap = ce - st.e2x;
+            tap_span = tap_b.wrapping_sub(c).wrapping_add(1);
+            dxs = delta_x;
         } else {
             let ce = x.ceil();
             dir = -1;
             c = cvtt(ce);
             let fl = st.e2x.floor();
-            c0 = st.e2x - fl;
+            edge_gap = st.e2x - fl;
             fx = ce - x;
-            esi = cvtt(fl);
-            n0 = c.wrapping_sub(esi).wrapping_add(1);
-            dxs = -dx;
+            tap_b = cvtt(fl);
+            tap_span = c.wrapping_sub(tap_b).wrapping_add(1);
+            dxs = -delta_x;
         }
         let slope = dy / dxs;
         let mut yy = (-slope).mul_add(fx, y); // vfnmadd231ss 
-        let step_a = st.k_a1_a0 / ((n0 as f32) * a3);
-        let y5 = yy.floor();
-        let y9 = slope + st.e2y;
+        let step_a = st.a_gap_first / ((tap_span as f32) * tap_width);
+        let floor_y = yy.floor();
+        let y_end = slope + st.e2y;
         let (b_cell_c, direct0) = if cond_any {
-            let o = c < 0 || c >= w || ja(0.0, y5) || jae(y5, hs) || esi < 0 || esi >= w || ja(0.0, y9) || jae(y9, hs);
+            let o = c < 0 || c >= w || ja(0.0, floor_y) || jae(floor_y, hs) || tap_b < 0 || tap_b >= w || ja(0.0, y_end) || jae(y_end, hs);
             (o, !o)
         } else {
             (false, false)
         };
-        let b_cell_g = if direct0 || mx0 != 0 { false } else { c < 0 || c >= w || esi < 0 || esi >= w };
-        let b_cell_h = if my != 0 { false } else { ja(0.0, y5) || jae(y5, hs) || ja(0.0, y9) || jae(y9, hs) };
-        let n = n0.min(1000).max(0);
+        let b_cell_g = if direct0 || mx0 != 0 { false } else { c < 0 || c >= w || tap_b < 0 || tap_b >= w };
+        let b_cell_h = if my != 0 { false } else { ja(0.0, floor_y) || jae(floor_y, hs) || ja(0.0, y_end) || jae(y_end, hs) };
+        let n = tap_span.min(1000).max(0);
         let mut slope = slope;
         if n > 0 {
             let hfi = cvtt(hs) as f32;
             let omfx = 1.0 - fx;
-            let omc0 = 1.0 - c0;
+            let omc0 = 1.0 - edge_gap;
             let nf = n as f32;
-            let wlim = nf * a3;
-            let step_b = st.k_a2_a1 / (nf * st.k_1_a3);
+            let wlim = nf * tap_width;
+            let step_b = st.a_gap_second / (nf * st.one_minus_a_last);
             let twoh = 2.0f32.mul_add(hfi, -1.0); // vfmsub213ss 
             let colmax = cvtt(wf - 1.0);
             let hf = h as f32;
-            let mut alpha = a0;
+            let mut alpha = alpha_init;
             let mut step = step_a;
-            let mut al = false;
+            let mut at_limit = false;
             for k in 0..n {
-                if !al && (k as f32) >= wlim {
+                if !at_limit && (k as f32) >= wlim {
                     let q = k / n;
-                    alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
+                    alpha = (tap_width - (q as f32)).mul_add(step_b, alpha_origin); // vfmadd213ss 
                     step = step_b;
-                    al = true;
+                    at_limit = true;
                 }
                 if b_cell_c {
                     if (c as f32) >= wf {
@@ -159,10 +159,10 @@ pub fn x_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
                 let t = cvtt(fr);
                 let frac = fr - (t as f32);
                 let idx = cc.wrapping_mul(3).wrapping_sub(stride).wrapping_add(t.wrapping_mul(stride)) as i64;
-                for ch in 0..3 {
-                    let v0 = at(pl, idx + ch as i64)?;
-                    let v1 = at(pl, idx + stride as i64 + ch as i64)?;
-                    sums[ch] = sums[ch] - lerp_term(v0, v1, frac, wgt);
+                for chan in 0..3 {
+                    let sample_a = at(pl, idx + chan as i64)?;
+                    let sample_b = at(pl, idx + stride as i64 + chan as i64)?;
+                    sums[chan] = sums[chan] - lerp_term(sample_a, sample_b, frac, wgt);
                 }
             }
         }
@@ -180,25 +180,25 @@ pub fn x_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
         let mut dir = if e < 0 { -1i32 } else { 1 };
         let mf = m as f32;
         let mut ystep = (ye - ya) / mf;
-        let step_a = st.k_a1_a0 / (mf * a3);
+        let step_a = st.a_gap_first / (mf * tap_width);
         let count = m.min(1000).max(0);
         if count > 0 {
             let cf = count as f32;
-            let step_b = st.k_a2_a1 / (cf * st.k_1_a3);
-            let wlim = cf * a3;
+            let step_b = st.a_gap_second / (cf * st.one_minus_a_last);
+            let wlim = cf * tap_width;
             let hsi = cvtt(hs) as f32;
             let twoh = 2.0f32.mul_add(hsi, -1.0); // vfmsub213ss 
             let colmax = cvtt(wf - 1.0);
-            let mut alpha = a0;
+            let mut alpha = alpha_init;
             let mut step = step_a;
-            let mut al = false;
+            let mut at_limit = false;
             for k in 0..count {
                 let mut rown = cvtt(ya);
-                if !al && (k as f32) >= wlim {
+                if !at_limit && (k as f32) >= wlim {
                     let q = k / count;
-                    alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
+                    alpha = (tap_width - (q as f32)).mul_add(step_b, alpha_origin); // vfmadd213ss 
                     step = step_b;
-                    al = true;
+                    at_limit = true;
                 }
                 let col = if b_cell_m { if cs >= -1 { cs.min(w) } else { -1 } } else { cs };
                 if b_cell_l {
@@ -208,9 +208,9 @@ pub fn x_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
                 wsum = wsum + alpha;
                 ya = ya + ystep;
                 cs = cs.wrapping_add(dir);
-                for ch in 0..3 {
-                    let v = at(pl, idx + ch as i64)?;
-                    sums[ch] = alpha * v + sums[ch];
+                for chan in 0..3 {
+                    let v = at(pl, idx + chan as i64)?;
+                    sums[chan] = alpha * v + sums[chan];
                 }
                 alpha = alpha + step;
                 if b_cell_n {
@@ -248,7 +248,7 @@ pub fn x_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
             }
         }
     }
-    let r = a4 / wsum;
+    let r = norm_num / wsum;
     Ok([sums[0] * r, sums[1] * r, sums[2] * r])
 }
 
@@ -259,63 +259,63 @@ pub fn y_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
     let ws = hst.ws;
     let (mx0, my) = (st.mode_x, st.mode_y);
     let cond_any = mx0 != 0 || my > 0;
-    let (a0, a1, a3, a4) = (a[0], a[1], a[3], a[4]);
+    let (alpha_init, alpha_origin, tap_width, norm_num) = (a[0], a[1], a[3], a[4]);
     let mut sums = [0.0f32; 3];
     let mut wsum = 0.0f32;
     if st.flag_cell_a != 0 {
-        let (x, y, dx, dy) = (st.x, st.y, st.dx, st.dy);
-        let (mut r9, esi, n0, fy, c0, dys, mut dir);
+        let (x, y, delta_x, dy) = (st.x, st.y, st.delta_x, st.dy);
+        let (mut tap_a, tap_b, tap_span, fy, edge_gap, dys, mut dir);
         if dy > 0.0 {
             let fl = y.floor();
             fy = y - fl;
-            r9 = cvtt(fl);
+            tap_a = cvtt(fl);
             let ce = st.e2y.ceil();
-            c0 = ce - st.e2y;
-            esi = cvtt(ce);
-            n0 = esi.wrapping_sub(r9).wrapping_add(1);
+            edge_gap = ce - st.e2y;
+            tap_b = cvtt(ce);
+            tap_span = tap_b.wrapping_sub(tap_a).wrapping_add(1);
             dir = 1i32;
             dys = dy;
         } else {
             let ce = y.ceil();
-            r9 = cvtt(ce);
+            tap_a = cvtt(ce);
             fy = ce - y;
             let fl = st.e2y.floor();
-            c0 = st.e2y - fl;
-            esi = cvtt(fl);
-            n0 = r9.wrapping_sub(esi).wrapping_add(1);
+            edge_gap = st.e2y - fl;
+            tap_b = cvtt(fl);
+            tap_span = tap_a.wrapping_sub(tap_b).wrapping_add(1);
             dir = -1;
             dys = -dy;
         }
-        let mut slope = dx / dys;
+        let mut slope = delta_x / dys;
         let mut xx = (-slope).mul_add(fy, x); // vfnmadd231ss 
-        let step_a = st.k_a1_a0 / ((n0 as f32) * a3);
-        let x5 = xx.floor();
-        let x9 = slope + st.e2x;
+        let step_a = st.a_gap_first / ((tap_span as f32) * tap_width);
+        let floor_x = xx.floor();
+        let sum_9 = slope + st.e2x;
         let (b_cell_c, direct0) = if cond_any {
-            let o = ja(0.0, x5) || jae(x5, ws) || r9 < 0 || r9 >= h || ja(0.0, x9) || jae(x9, ws) || esi < 0 || esi >= h;
+            let o = ja(0.0, floor_x) || jae(floor_x, ws) || tap_a < 0 || tap_a >= h || ja(0.0, sum_9) || jae(sum_9, ws) || tap_b < 0 || tap_b >= h;
             (o, !o)
         } else {
             (false, false)
         };
-        let xclamp = if direct0 || mx0 != 0 { false } else { ja(0.0, x5) || jae(x5, ws) || ja(0.0, x9) || jae(x9, ws) };
-        let rowclamp = if my != 0 { false } else { r9 < 0 || r9 >= h || esi < 0 || esi >= h };
-        let n = n0.min(1000).max(0);
+        let xclamp = if direct0 || mx0 != 0 { false } else { ja(0.0, floor_x) || jae(floor_x, ws) || ja(0.0, sum_9) || jae(sum_9, ws) };
+        let rowclamp = if my != 0 { false } else { tap_a < 0 || tap_a >= h || tap_b < 0 || tap_b >= h };
+        let n = tap_span.min(1000).max(0);
         if n > 0 {
             let omfy = 1.0 - fy;
-            let omc0 = 1.0 - c0;
+            let omc0 = 1.0 - edge_gap;
             let nf = n as f32;
-            let wlim = nf * a3;
-            let step_b = st.k_a2_a1 / (nf * st.k_1_a3);
+            let wlim = nf * tap_width;
+            let step_b = st.a_gap_second / (nf * st.one_minus_a_last);
             let twow = 2.0f32.mul_add(ws, -1.0); // vfmsub213ss 
-            let mut alpha = a0;
+            let mut alpha = alpha_init;
             let mut step = step_a;
-            let mut al = false;
+            let mut at_limit = false;
             for k in 0..n {
-                if !al && (k as f32) >= wlim {
+                if !at_limit && (k as f32) >= wlim {
                     let q = k / n;
-                    alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
+                    alpha = (tap_width - (q as f32)).mul_add(step_b, alpha_origin); // vfmadd213ss 
                     step = step_b;
-                    al = true;
+                    at_limit = true;
                 }
                 if b_cell_c {
                     if xx >= ws {
@@ -333,25 +333,25 @@ pub fn y_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
                             xx = xx + ws;
                         }
                     }
-                    if r9 >= h {
+                    if tap_a >= h {
                         if hst.cassumption_a != 0 {
-                            r9 = h - 1;
+                            tap_a = h - 1;
                             dir = -1;
                         } else if hst.cassumption_c != 0 {
-                            r9 = 0;
+                            tap_a = 0;
                         }
-                    } else if r9 < 0 {
+                    } else if tap_a < 0 {
                         if hst.cassumption_a != 0 {
-                            r9 = 0;
+                            tap_a = 0;
                             dir = 1;
                         } else if hst.cassumption_c != 0 {
-                            r9 = h - 1;
+                            tap_a = h - 1;
                         }
                     }
                 }
                 let wgt = if k == 0 { alpha * omfy } else if k == n - 1 { alpha * omc0 } else { alpha };
                 let xc = if xclamp { if ja(-1.0, xx) { -1.0 } else { vmin(wf, xx) } } else { xx };
-                let rr = if rowclamp { if r9 >= -1 { r9.min(h) } else { -1 } } else { r9 };
+                let rr = if rowclamp { if tap_a >= -1 { tap_a.min(h) } else { -1 } } else { tap_a };
                 wsum = wgt + wsum;
                 xx = slope + xx;
                 alpha += step;
@@ -359,11 +359,11 @@ pub fn y_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
                 let t = cvtt(fr);
                 let frac = fr - (t as f32);
                 let idx = rr.wrapping_mul(stride).wrapping_add(t.wrapping_mul(3)) as i64;
-                r9 = r9.wrapping_add(dir);
-                for ch in 0..3 {
-                    let v0 = at(pl, idx - 3 + ch as i64)?;
-                    let v1 = at(pl, idx + ch as i64)?;
-                    sums[ch] = sums[ch] - lerp_term(v0, v1, frac, wgt);
+                tap_a = tap_a.wrapping_add(dir);
+                for chan in 0..3 {
+                    let sample_a = at(pl, idx - 3 + chan as i64)?;
+                    let sample_b = at(pl, idx + chan as i64)?;
+                    sums[chan] = sums[chan] - lerp_term(sample_a, sample_b, frac, wgt);
                 }
             }
         }
@@ -375,40 +375,40 @@ pub fn y_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
         let b_cell_d = if cond_any { ja(0.0, xe) || jae(xe, ws) || ja(0.0, ye) || jae(ye, hf) } else { false };
         let b_cell_f = if mx0 != 0 { false } else { ja(0.0, xa) || jae(xa, ws) || ja(0.0, xe) || jae(xe, ws) };
         let b_cell_e = if my != 0 { false } else { ja(0.0, ya) || jae(ya, hf) || ja(0.0, ye) || jae(ye, hf) };
-        let mut r11 = cvtt(ya);
-        let e = cvtt(ye).wrapping_sub(r11);
+        let mut tap_c = cvtt(ya);
+        let e = cvtt(ye).wrapping_sub(tap_c);
         let m = (e ^ (e >> 31)).wrapping_sub(e >> 31).wrapping_add(1);
         let mut dir = if e < 0 { -1i32 } else { 1 };
         let mf = m as f32;
         let mut xstep = (xe - xa) / mf;
-        let step_a = st.k_a1_a0 / (mf * a3);
+        let step_a = st.a_gap_first / (mf * tap_width);
         let count = m.min(1000).max(0);
         if count > 0 {
             let cf = count as f32;
-            let step_b = st.k_a2_a1 / (cf * st.k_1_a3);
-            let wlim = cf * a3;
+            let step_b = st.a_gap_second / (cf * st.one_minus_a_last);
+            let wlim = cf * tap_width;
             let twow = 2.0f32.mul_add(ws, -1.0); // vfmsub213ss 
-            let mut alpha = a0;
+            let mut alpha = alpha_init;
             let mut step = step_a;
-            let mut al = false;
+            let mut at_limit = false;
             let mut x = xa;
             for k in 0..count {
-                if !al && (k as f32) >= wlim {
+                if !at_limit && (k as f32) >= wlim {
                     let q = k / count;
-                    alpha = (a3 - (q as f32)).mul_add(step_b, a1); // vfmadd213ss 
+                    alpha = (tap_width - (q as f32)).mul_add(step_b, alpha_origin); // vfmadd213ss 
                     step = step_b;
-                    al = true;
+                    at_limit = true;
                 }
                 let xi = cvtt(x);
                 let xcl = if b_cell_f { if xi >= -1 { xi.min(w) } else { -1 } } else { xi };
-                let rowc = if b_cell_e { if r11 >= -1 { r11.min(h) } else { -1 } } else { r11 };
+                let rowc = if b_cell_e { if tap_c >= -1 { tap_c.min(h) } else { -1 } } else { tap_c };
                 let idx = xcl.wrapping_mul(3).wrapping_add(rowc.wrapping_mul(stride)) as i64;
                 wsum = wsum + alpha;
                 x = x + xstep;
-                r11 = r11.wrapping_add(dir);
-                for ch in 0..3 {
-                    let v = at(pl, idx + ch as i64)?;
-                    sums[ch] = alpha * v + sums[ch];
+                tap_c = tap_c.wrapping_add(dir);
+                for chan in 0..3 {
+                    let v = at(pl, idx + chan as i64)?;
+                    sums[chan] = alpha * v + sums[chan];
                 }
                 alpha = alpha + step;
                 if b_cell_d {
@@ -427,32 +427,32 @@ pub fn y_major_sample(st: &S5State, a: &[f32; 5], hst: &Host, pl: &Plane) -> Res
                             x = x + ws;
                         }
                     }
-                    if r11 >= h {
+                    if tap_c >= h {
                         if hst.cassumption_a != 0 {
                             dir = -1;
-                            r11 = h - 1;
+                            tap_c = h - 1;
                         } else if hst.cassumption_c != 0 {
-                            r11 = 0;
+                            tap_c = 0;
                         }
-                    } else if r11 < 0 {
+                    } else if tap_c < 0 {
                         if hst.cassumption_a != 0 {
-                            r11 = 0;
+                            tap_c = 0;
                             dir = 1;
                         } else if hst.cassumption_c != 0 {
-                            r11 = h - 1;
+                            tap_c = h - 1;
                         }
                     }
                 }
             }
         }
     }
-    let r = a4 / wsum;
+    let r = norm_num / wsum;
     Ok([sums[0] * r, sums[1] * r, sums[2] * r])
 }
 
 /// Zero-length stub : P1 renders (x, y); then planes 0, 1, 2 at the sample index are multiplied by a4.
 fn p1_stub(c: &P1Cfg, inp: &Inputs, pl: &Plane, x: f32, y: f32, i: usize, out: &mut Vec<Vec<f32>>) -> Result<(), Unsupported> {
-    let pp = blur_warp_point::Params { n: c.n, width: c.w0, height: c.h0, flag_x: inp.mode_x, flag_y: inp.mode_y };
+    let pp = blur_warp_point::Params { n: c.n, width: c.plane_width, height: c.plane_height, flag_x: inp.mode_x, flag_y: inp.mode_y };
     let g = blur_warp_point::Geometry { base: pl.origin, stride: inp.acc_stride };
     let n = c.n.max(0) as usize;
     if out.len() < n.max(3) || out.iter().any(|v| i >= v.len()) {
@@ -473,23 +473,23 @@ fn p1_stub(c: &P1Cfg, inp: &Inputs, pl: &Plane, x: f32, y: f32, i: usize, out: &
 }
 
 /// Whole body C for X-major, Y-major and zero-length samples; out[0..3] are the three output planes.
-pub fn run_planes_full(p: &Params, inp: &Inputs, hst: &Host, pl: &Plane, p1: Option<&P1Cfg>, out: &mut Vec<Vec<f32>>) -> Result<(), Unsupported> {
+pub fn run_planes_full(p: &Params, inp: &Inputs, hst: &Host, pl: &Plane, pass1_cfg: Option<&P1Cfg>, out: &mut Vec<Vec<f32>>) -> Result<(), Unsupported> {
     if p.count <= 0 {
         return Ok(());
     }
     let g = |v: &Vec<f32>, i: usize| v.get(i).copied().unwrap_or(0.0);
     let (mut l_p1x, mut l_p1y, mut l_p2x, mut l_p2y) = (g(&inp.p1x, 0), g(&inp.p1y, 0), g(&inp.p2x, 0), g(&inp.p2y, 0));
     let (scx, scy) = s0_scales(p);
-    let k_1_a3 = 1.0f32 - inp.a[3];
-    let k_a1_a0 = inp.a[1] - inp.a[0];
-    let k_a2_a1 = inp.a[2] - inp.a[1];
+    let one_minus_a_last = 1.0f32 - inp.a[3];
+    let a_gap_first = inp.a[1] - inp.a[0];
+    let a_gap_second = inp.a[2] - inp.a[1];
     let mut recs = Vec::new();
     for i in 0..(p.count as usize) {
-        if !inp.p1_const {
+        if !inp.first_end_const {
             l_p1x = g(&inp.p1x, i);
             l_p1y = g(&inp.p1y, i);
         }
-        if !inp.p2_const {
+        if !inp.second_end_const {
             l_p2x = g(&inp.p2x, i);
             l_p2y = g(&inp.p2y, i);
         }
@@ -498,16 +498,16 @@ pub fn run_planes_full(p: &Params, inp: &Inputs, hst: &Host, pl: &Plane, p1: Opt
         let e2x = (l_p2x - l_p1x).mul_add(scx, x);
         let e2y = (-(l_p2y - l_p1y)).mul_add(scy, y);
         if x == e2x && y == e2y {
-            let c = p1.ok_or(Unsupported::P1Needed)?;
+            let c = pass1_cfg.ok_or(Unsupported::P1Needed)?;
             p1_stub(c, inp, pl, x, y, i, out)?;
             continue;
         }
-        let dx = e2x - x;
+        let delta_x = e2x - x;
         let dy = e2y - y;
-        let (adx, ady) = (dx.abs(), dy.abs());
+        let (adx, ady) = (delta_x.abs(), dy.abs());
         let st = S5State {
-            sample: i, x, y, p1x: l_p1x, p1y: l_p1y, p2x: l_p2x, p2y: l_p2y, e2x, e2y, dx, dy, adx, ady, y_major: !(adx >= ady),
-            data_ptr: inp.acc_ptr, width: p.img_w, height: p.img_h, stride: inp.acc_stride, scx, scy, k_a1_a0, k_a2_a1, k_1_a3,
+            sample: i, x, y, p1x: l_p1x, p1y: l_p1y, p2x: l_p2x, p2y: l_p2y, e2x, e2y, delta_x, dy, adx, ady, y_major: !(adx >= ady),
+            data_buf_handle: inp.acc_buf_handle, width: p.img_w, height: p.img_h, stride: inp.acc_stride, scx, scy, a_gap_first, a_gap_second, one_minus_a_last,
             scale: inp.a[4], flag_cell_a: inp.flag_cell_a, mode_x: inp.mode_x, mode_y: inp.mode_y,
         };
         let v = if adx >= ady { x_major_sample(&st, &inp.a, hst, pl)? } else { y_major_sample(&st, &inp.a, hst, pl)? };
@@ -528,16 +528,16 @@ mod tests {
 
     fn st(flag: u32) -> (S5State, [f32; 5], Host, Plane) {
         let st = S5State {
-            sample: 0, x: 1.0, y: 1.0, p1x: 0.0, p1y: 0.0, p2x: 0.0, p2y: 0.0, e2x: 3.0, e2y: 1.0, dx: 2.0, dy: 0.0, adx: 2.0, ady: 0.0, y_major: false,
-            data_ptr: 0, width: 8, height: 8, stride: 30, scx: 1.0, scy: 1.0, k_a1_a0: 1.0, k_a2_a1: 1.0, k_1_a3: 0.5, scale: 2.0, flag_cell_a: flag, mode_x: 0, mode_y: 0,
+            sample: 0, x: 1.0, y: 1.0, p1x: 0.0, p1y: 0.0, p2x: 0.0, p2y: 0.0, e2x: 3.0, e2y: 1.0, delta_x: 2.0, dy: 0.0, adx: 2.0, ady: 0.0, y_major: false,
+            data_buf_handle: 0, width: 8, height: 8, stride: 30, scx: 1.0, scy: 1.0, a_gap_first: 1.0, a_gap_second: 1.0, one_minus_a_last: 0.5, scale: 2.0, flag_cell_a: flag, mode_x: 0, mode_y: 0,
         };
         // channel c of pixel (col, row) = c*100 + row*10 + col (row stride 30 floats, 3 floats per pixel)
         let mut buf = vec![0.0f32; 1000];
         for row in 0..12i64 {
             for col in 0..10i64 {
-                for ch in 0..3i64 {
-                    let k = 200 + row * 30 + col * 3 + ch;
-                    buf[k as usize] = (ch * 100 + row * 10 + col) as f32;
+                for chan in 0..3i64 {
+                    let k = 200 + row * 30 + col * 3 + chan;
+                    buf[k as usize] = (chan * 100 + row * 10 + col) as f32;
                 }
             }
         }
@@ -559,10 +559,10 @@ mod tests {
     fn deterministic_finite_both_flags() {
         for flag in [0u32, 1] {
             let (s, a, h, p) = st(flag);
-            let v1 = x_major_sample(&s, &a, &h, &p).unwrap();
+            let sample_b = x_major_sample(&s, &a, &h, &p).unwrap();
             let v2 = x_major_sample(&s, &a, &h, &p).unwrap();
-            assert_eq!(v1.map(f32::to_bits), v2.map(f32::to_bits));
-            assert!(v1.iter().all(|f| f.is_finite()));
+            assert_eq!(sample_b.map(f32::to_bits), v2.map(f32::to_bits));
+            assert!(sample_b.iter().all(|f| f.is_finite()));
         }
     }
 
@@ -571,7 +571,7 @@ mod tests {
         let (mut s, a, h, p) = st(0);
         s.e2x = 1.0;
         s.e2y = 3.0;
-        s.dx = 0.0;
+        s.delta_x = 0.0;
         s.dy = 2.0;
         s.adx = 0.0;
         s.ady = 2.0;
@@ -595,7 +595,7 @@ mod tests {
                     s.mode_x = mx;
                     s.mode_y = my;
                     s.e2x = 9.5;
-                    s.dx = 8.5;
+                    s.delta_x = 8.5;
                     assert!(x_major_sample(&s, &a, &h, &p).is_ok());
                 }
             }
@@ -608,7 +608,7 @@ mod tests {
         let (mut s, a, h, p) = st(0);
         s.e2y = 9.5;
         s.dy = 8.5;
-        s.dx = 0.0;
+        s.delta_x = 0.0;
         s.e2x = s.x;
         s.adx = 0.0;
         s.ady = 8.5;
@@ -622,7 +622,7 @@ mod tests {
         let p = Params { count: 1, aspect_block_d: 2.0, assumption_e: 7.0, assumption_c: 0, assumption_d: 0, assumption_f: 0.0, assumption_g: 10.0, assumption_h: 0.0, img_w: 8, img_h: 6 };
         let inp = Inputs {
             a: [0.0, 1.0, 3.0, 0.5, 2.0], p1x: vec![0.25], p1y: vec![3.0], p2x: vec![0.25], p2y: vec![3.0],
-            p1_const: true, p2_const: true, flag_cell_a: 0, mode_x: 0, mode_y: 0, acc_ptr: 0, acc_stride: 30,
+            first_end_const: true, second_end_const: true, flag_cell_a: 0, mode_x: 0, mode_y: 0, acc_buf_handle: 0, acc_stride: 30,
         };
         let h = Host { port_blk_a: 0, cassumption_a: 0, cassumption_b: 0, cassumption_c: 0, hs: 6.0, ws: 8.0 };
         let (_, _, _, pl) = st(0);

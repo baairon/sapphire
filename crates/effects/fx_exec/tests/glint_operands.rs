@@ -38,19 +38,19 @@ fn glint_is_a_wired_class_with_a_combo_row() {
 #[test]
 fn plan_arguments_render_three_planes() {
     for (w, h) in [(64, 32), (2, 5), (1, 5)] {
-        let p = planes(run(w, h, 3, &KParams::standin(), |_| {}).unwrap());
+        let p = planes(run(w, h, 3, &KParams::host_defaults(), |_| {}).unwrap());
         assert_eq!(p.len(), 3);
         assert!(p.iter().all(|pl| pl.len() == w * h));
     }
-    let p = planes(run(64, 32, 3, &KParams::standin(), |_| {}).unwrap());
+    let p = planes(run(64, 32, 3, &KParams::host_defaults(), |_| {}).unwrap());
     assert!(p.iter().any(|pl| pl.iter().any(|v| *v != 0.0)));
 }
 
 #[test]
 fn arguments_are_taken_by_index() {
-    let base = planes(run(64, 32, 3, &KParams::standin(), |_| {}).unwrap());
+    let base = planes(run(64, 32, 3, &KParams::host_defaults(), |_| {}).unwrap());
     for k in 1..7usize {
-        let other = planes(run(64, 32, 3, &KParams::standin(), |a| {
+        let other = planes(run(64, 32, 3, &KParams::host_defaults(), |a| {
             let lanes = a[k].count() as usize;
             let v: Vec<f32> = a[k].f32s()[..lanes].iter().map(|x| *x * 0.1 + 0.01).collect();
             a[k] = c(&v);
@@ -62,17 +62,17 @@ fn arguments_are_taken_by_index() {
 
 #[test]
 fn other_layouts_and_shapes_are_refused_by_name() {
-    let e = run(8, 8, 1, &KParams::standin(), |_| {}).unwrap_err().to_string();
+    let e = run(8, 8, 1, &KParams::host_defaults(), |_| {}).unwrap_err().to_string();
     assert!(e.contains("GLINT-LAYOUT-REFUSED"), "{e}");
-    let e = run(8, 8, 3, &KParams::standin(), |a| a.truncate(6)).unwrap_err().to_string();
+    let e = run(8, 8, 3, &KParams::host_defaults(), |a| a.truncate(6)).unwrap_err().to_string();
     assert!(e.contains("takes 7 arguments"), "{e}");
 }
 
 #[test]
 fn align_parameters_default_to_zero() {
-    assert_eq!(KParams::standin().glint_align, Align::default());
-    let a = planes(run(64, 32, 3, &KParams::standin(), |_| {}).unwrap());
-    let mut kp = KParams::standin();
+    assert_eq!(KParams::host_defaults().glint_align, Align::default());
+    let a = planes(run(64, 32, 3, &KParams::host_defaults(), |_| {}).unwrap());
+    let mut kp = KParams::host_defaults();
     kp.glint_align = Align { radii_rows: 0, radii_cols: 0, boxsum: 0, blur: 0 };
     assert_eq!(a, planes(run(64, 32, 3, &kp, |_| {}).unwrap()));
 }
@@ -97,7 +97,7 @@ fn refused_requests_name_their_refusal() {
     fn args(im: &Image) -> Vec<Arg<'_>> {
         vec![Arg::Img(im), c(&[0.699997; 3]), c(&[2.688]), c(&[30.0, 60.0, 90.0]), c(&[1.0, 1.0, 1.0]), c(&[1.0, 1.0, 0.75, 0.75]), c(&[1.0, 1.0, 1.0, 1.0])]
     }
-    let e = run_any("glint", 1, &args(&im), w * h, (w, h), &KParams::standin()).unwrap_err();
+    let e = run_any("glint", 1, &args(&im), w * h, (w, h), &KParams::host_defaults()).unwrap_err();
     assert!(matches!(e, ExecError::Kernel { .. }), "{e:?}");
     assert!(e.to_string().contains("GLINT-LAYOUT-REFUSED"), "{e}");
     let g = glint_wire::op::Request {
@@ -111,7 +111,7 @@ fn refused_requests_name_their_refusal() {
         b: [1.0, 1.0, 1.0],
         pass_scale: [1.0, 1.0, 0.75, 0.75],
         pass_gain: [1.0, 1.0, 1.0, 1.0],
-        align: KParams::standin().glint_align,
+        align: KParams::host_defaults().glint_align,
         flag: 1,
     };
     let msg = glint_wire::op::render(&g).unwrap_err();

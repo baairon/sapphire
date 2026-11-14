@@ -7,7 +7,6 @@ pub mod dispatch;
 pub mod exact;
 pub mod fill;
 pub mod hash;
-mod initlist;
 pub mod sin;
 pub mod tables;
 pub mod weights;

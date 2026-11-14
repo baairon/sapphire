@@ -117,22 +117,22 @@ fn run_layout(layout: &str) -> Tally {
                 }
                 let _ = &mut start2;
                 let mut p0 = vec![f32::from_bits(SENT); n];
-                let mut p1 = vec![f32::from_bits(SENT); n];
-                if job_cell_a(w, s, (start, count), (start2, count2), &a, &tt, &mut p0, &mut p1).is_err() {
+                let mut second_plane = vec![f32::from_bits(SENT); n];
+                if job_cell_a(w, s, (start, count), (start2, count2), &a, &tt, &mut p0, &mut second_plane).is_err() {
                     t.skipped += 1; // tile outside the contract (count larger than the total): not compared
                     continue;
                 }
                 cmp(&format!("{} p0", tag), &p0, &rd(&d.join(format!("{}.out_o0.f32", c))), &mut t);
-                cmp(&format!("{} p1", tag), &p1, &rd(&d.join(format!("{}.out_o1.f32", c))), &mut t);
+                cmp(&format!("{} p1", tag), &second_plane, &rd(&d.join(format!("{}.out_o1.f32", c))), &mut t);
             } else {
                 let chs: Vec<Vec<f32>> = (0..4).map(|i| rd(&d.join(format!("{}.in_c{}.f32", c, i)))).collect();
                 let cur = rd(&d.join(format!("{}.in_cur.f32", c)));
                 let wa = rd(&d.join(format!("{}.out_a.f32", c)));
                 let wt = rd(&d.join(format!("{}.out_t.f32", c)));
-                let ctx = Ctx { w, s, nch: pi(pr, "nch"), flag_cell_b: pi(pr, "flag98"), f0: pf(pr, "f0"), f4: pf(pr, "f4"), f8: pf(pr, "f8"), fc: pf(pr, "fc"), esh2_job_ctx_a: pf(pr, "f100"), k: pf(pr, "k") };
+                let ctx = Ctx { w, s, nch: pi(pr, "nch"), flag_cell_b: pi(pr, "flag98"), d_scale: pf(pr, "f0"), ca_param: pf(pr, "f4"), e_scale: pf(pr, "f8"), fc: pf(pr, "fc"), esh2_job_ctx_a: pf(pr, "f100"), k: pf(pr, "k") };
                 let mut a = vec![f32::from_bits(SENT); n];
                 let mut tt = vec![f32::from_bits(SENT); n];
-                let mut b = Bufs { ch: [&chs[0], &chs[1], &chs[2], &chs[3]], cur: &cur, a: &mut a, t: &mut tt };
+                let mut b = Bufs { chan: [&chs[0], &chs[1], &chs[2], &chs[3]], cur: &cur, a: &mut a, t: &mut tt };
                 job_2(&ctx, start, count, &mut b).unwrap();
                 cmp(&format!("{} a", tag), &a, &wa, &mut t);
                 cmp(&format!("{} t", tag), &tt, &wt, &mut t);

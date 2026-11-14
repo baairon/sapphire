@@ -59,7 +59,7 @@ pub struct Obj {
 
 /// Image context (rdx = r15): F1 parameters (n at, tables at) plus the driver's own fields.
 pub struct Image {
-    pub f1: F1Params,
+    pub sampler_params: F1Params,
     pub w: i32,   //
     pub h: i32,   //
     pub d_cell_d: i32, //
@@ -68,8 +68,8 @@ pub struct Image {
 
 /// Entry arguments other than the object and the image.
 pub struct Args<'a> {
-    pub a1: &'a [f32],   // rcx
-    pub a2: &'a [f32],   // r8
+    pub coord_x: &'a [f32],   // rcx
+    pub coord_y: &'a [f32],   // r8
     pub const_coords: bool, // r9d != 0: coordinates only computed for pixel 1
     pub c1: &'a [f32],   // [rbx]
     pub c2: &'a [f32],   // [rbx]
@@ -158,20 +158,20 @@ pub fn wrap(recs: &mut Vec<Rec>, v: f32, dim: i32, mode: i32) -> Result<f32, Dri
 
 /// S2 scalars: (scx = [rbp], scy = [rbp])
 pub fn scales(o: &Obj) -> (f32, f32) {
-    let x13 = o.assumption_g - o.assumption_f;
-    (HALF * x13, (HALF * o.aspect_block_d) * x13)
+    let diff_13 = o.assumption_g - o.assumption_f;
+    (HALF * diff_13, (HALF * o.aspect_block_d) * diff_13)
 }
 
 /// S3: x coordinate before the wrap
-pub fn x_raw(o: &Obj, scx: f32, a1: f32) -> f32 {
-    let t = a1 + ONE;
+pub fn x_raw(o: &Obj, scx: f32, coord_x: f32) -> f32 {
+    let t = coord_x + ONE;
     let base = o.assumption_f - (o.assumption_c as f32);
     t.mul_add(scx, base) // vfmadd132ss 
 }
 
 /// S4: y coordinate before the wrap
-pub fn y_raw(o: &Obj, scy: f32, a2: f32) -> f32 {
-    let t = a2 - ONE;
+pub fn y_raw(o: &Obj, scy: f32, coord_y: f32) -> f32 {
+    let t = coord_y - ONE;
     let m = scy.mul_add(t, -o.assumption_h); // vfmsub213ss : t*scy - assumption_h
     let top = o.assumption_e - (o.assumption_d as f32);
     top - m
@@ -187,25 +187,25 @@ fn clamp_dir(c: f32, dim: i32) -> f32 {
 /// Blend weights : (w0 for [r14], wn for +n, ws for +stride, wd for the diagonal)
 pub fn weights(fx: f32, fy: f32) -> (f32, f32, f32, f32) {
     let t = fx * fy;
-    let w0 = ((ONE - fx) - fy) + t;
+    let corner_weight = ((ONE - fx) - fy) + t;
     let wn = fx - t;
     let ws = fy - t;
-    (w0, wn, ws, t)
+    (corner_weight, wn, ws, t)
 }
 
 /// One tap set blend for channel j; `vec` selects the packed formula (vfmadd231ps order), otherwise the scalar one.
-fn blend1(w: (f32, f32, f32, f32), r0: f32, rn: f32, rs: f32, rd: f32, vec: bool) -> f32 {
-    let (w0, wn, ws, wd) = w;
+fn blend1(w: (f32, f32, f32, f32), tap_sample: f32, rn: f32, rs: f32, rd: f32, vec: bool) -> f32 {
+    let (corner_weight, wn, ws, wd) = w;
     if vec {
         let v = wn * rn;
-        let v = w0.mul_add(r0, v);
+        let v = corner_weight.mul_add(tap_sample, v);
         let v = wd.mul_add(rd, v);
         ws.mul_add(rs, v)
     } else {
         let s = wd * rd;
         let t = ws * rs;
         let s = wn.mul_add(rn, s);
-        let t = w0.mul_add(r0, t);
+        let t = corner_weight.mul_add(tap_sample, t);
         s + t
     }
 }
@@ -218,13 +218,13 @@ pub fn packed_flags(n: usize) -> Vec<bool> {
     }
     let head = if n < 29 { 0 } else { HEAD };
     let nblk = (n - head) / 16;
-    let edx = head + nblk * 16;
-    for j in head..edx {
+    let copy_mode = head + nblk * 16;
+    for j in head..copy_mode {
         f[j] = true;
     }
-    let m = n - edx;
+    let m = n - copy_mode;
     if m >= 4 {
-        for j in edx..edx + (m & !3) {
+        for j in copy_mode..copy_mode + (m & !3) {
             f[j] = true;
         }
     }
@@ -233,7 +233,7 @@ pub fn packed_flags(n: usize) -> Vec<bool> {
 
 pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32>]) -> Result<Vec<Rec>, DriverError> {
     let mut recs = Vec::new();
-    let n = img.f1.n;
+    let n = img.sampler_params.n;
     let wh = img.w.wrapping_mul(img.h);
     if wh == 0 {
         for k in 0..n.max(0) {
@@ -244,18 +244,18 @@ pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32
     if a.flag != 0 && !(img.d_cell_d > 1 && img.d_cell_e > 1) {
         recs.push(Rec::AssertCellA);
     }
-    img.f1.flag_x = a.mx;
-    img.f1.flag_y = a.my;
+    img.sampler_params.flag_x = a.mx;
+    img.sampler_params.flag_y = a.my;
     let (scx, scy) = scales(o);
     let (mut x, mut y) = (0.0f32, 0.0f32); // [rbp], [rbp]
     let at = |v: &[f32], i: usize| v.get(i).copied().ok_or(DriverError::Oob);
     let packed = packed_flags(n.max(0) as usize);
-    for r12 in 1..=(o.count as i64) {
-        let pix = (r12 - 1) as usize;
-        if !(a.const_coords && r12 != 1) {
-            let xr = x_raw(o, scx, at(a.a1, pix)?);
+    for step_no in 1..=(o.count as i64) {
+        let pix = (step_no - 1) as usize;
+        if !(a.const_coords && step_no != 1) {
+            let xr = x_raw(o, scx, at(a.coord_x, pix)?);
             x = wrap(&mut recs, xr, img.w, a.mx)?;
-            let yr = y_raw(o, scy, at(a.a2, pix)?);
+            let yr = y_raw(o, scy, at(a.coord_y, pix)?);
             y = wrap(&mut recs, yr, img.h, a.my)?;
         }
         if a.flag != 0 {
@@ -279,13 +279,13 @@ pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32
                 recs.push(Rec::F1 { col: pix as i32, mx: a.mx, my: a.my, i: ip, j: jq, x: x.to_bits(), y: y.to_bits(), a: fa.to_bits(), b: fb.to_bits() });
                 let call = Call { x, y, a: fa, b: fb, col: pix as i32, i: ip, j: jq };
                 let mut refs: Vec<&mut [f32]> = out.iter_mut().map(|v| v.as_mut_slice()).collect();
-                sample(&img.f1, lat, &call, &mut refs).map_err(DriverError::F1)?;
+                sample(&img.sampler_params, lat, &call, &mut refs).map_err(DriverError::F1)?;
                 continue;
             }
         }
         // normal path 
-        let wt0 = img.f1.width_tab.first().copied().ok_or(DriverError::Oob)?;
-        let ht0 = img.f1.height_tab.first().copied().ok_or(DriverError::Oob)?;
+        let wt0 = img.sampler_params.width_tab.first().copied().ok_or(DriverError::Oob)?;
+        let ht0 = img.sampler_params.height_tab.first().copied().ok_or(DriverError::Oob)?;
         let xc = if a.mx == 0 {
             if NEG_ONE > x {
                 NEG_ONE
@@ -313,10 +313,10 @@ pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32
         recs.push(Rec::AccCellA);
         recs.push(Rec::AccCellB);
         let stride = (wt0.wrapping_add(3)).wrapping_mul(n);
-        let off0 = (n as i64) + (n.wrapping_mul(wt0.wrapping_add(3)) as i64);
-        let ecx = (ix.wrapping_sub(1)).wrapping_mul(n);
-        let r14d = (iy.wrapping_sub(1)).wrapping_mul(stride);
-        let base = off0 + (ecx as i64) + (r14d as i64);
+        let buf_start = (n as i64) + (n.wrapping_mul(wt0.wrapping_add(3)) as i64);
+        let col_offset = (ix.wrapping_sub(1)).wrapping_mul(n);
+        let row_term = (iy.wrapping_sub(1)).wrapping_mul(stride);
+        let base = buf_start + (col_offset as i64) + (row_term as i64);
         if n <= 0 {
             continue;
         }
@@ -334,11 +334,11 @@ pub fn run(o: &Obj, img: &mut Image, lat: &Lattice, a: &Args, out: &mut [Vec<f32
         let mut temp = vec![0.0f32; n as usize];
         for j in 0..(n as usize) {
             let jj = j as i64;
-            let r0 = get(base + jj)?;
+            let tap_sample = get(base + jj)?;
             let rn = get(base + n as i64 + jj)?;
             let rs = get(base + stride as i64 + jj)?;
             let rd = get(base + n as i64 + stride as i64 + jj)?;
-            temp[j] = blend1(w, r0, rn, rs, rd, packed[j]);
+            temp[j] = blend1(w, tap_sample, rn, rs, rd, packed[j]);
         }
         for (c, t) in temp.iter().enumerate() {
             let pl = out.get_mut(c).ok_or(DriverError::Oob)?;

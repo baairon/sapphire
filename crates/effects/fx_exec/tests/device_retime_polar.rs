@@ -81,18 +81,18 @@ fn xy_cases() -> Vec<XyCase> {
     }
     // the thresholds of the scalar atan2: a single lane whose exponent distance is at, below or above -54, 54 and 74, in a filtered row
     let mut bk = 0u64;
-    for &e1 in &[1i32, 250, 252, 254] {
+    for &outer_exp in &[1i32, 250, 252, 254] {
         for d in (-56..=-50).chain(52..=56).chain(72..=76) {
             for outer_is_y in [true, false] {
                 for m in [0x12_3456u32, 0x7f_ffff] {
-                    let e2 = if outer_is_y { e1 - d } else { e1 + d };
-                    if !(1..=254).contains(&e2) {
+                    let inner_exp = if outer_is_y { outer_exp - d } else { outer_exp + d };
+                    if !(1..=254).contains(&inner_exp) {
                         continue;
                     }
                     let sg = ((bk & 1) as u32) << 31;
                     let sg2 = (((bk >> 1) & 1) as u32) << 31;
-                    let outer = f32::from_bits(sg | ((e1 as u32) << 23) | m);
-                    let partner = f32::from_bits(sg2 | ((e2 as u32) << 23) | (m ^ 0x2a_aaaa));
+                    let outer = f32::from_bits(sg | ((outer_exp as u32) << 23) | m);
+                    let partner = f32::from_bits(sg2 | ((inner_exp as u32) << 23) | (m ^ 0x2a_aaaa));
                     let (mut xs, mut ys) = polar_pairs(9, 9000 + bk, &pool);
                     if outer_is_y {
                         xs[4] = partner;
@@ -322,13 +322,13 @@ const HSV_MUTANTS: &[(&str, &str, &str)] = &[
     ("operand swap of the chroma difference", "float q = rtp_sub(v, p);", "float q = rtp_sub(p, v);"),
     ("negation of a negative saturation", "float neg_s = as_float(as_uint(s) ^ 0x80000000u);", "float neg_s = s;"),
     ("constant of the half turn", "float hh = rtp_add(0x1p-1f, h);", "float hh = rtp_add(0x1p-2f, h);"),
-    ("unfused negated multiply add", "float r = fma(-d, s2, s3);\n    return isnan(r) ? rtp_pick3", "float r = s3 - d * s2;\n    return isnan(r) ? rtp_pick3"),
+    ("unfused negated multiply add", "float r = fma(-d, second, third);\n    return isnan(r) ? rtp_pick3", "float r = third - d * second;\n    return isnan(r) ? rtp_pick3"),
     ("select arm of the zero saturation", "o[2] = vb;\n    } else if (0x0p+0f > s) {", "o[2] = as_uint(0x0p+0f);\n    } else if (0x0p+0f > s) {"),
     ("compare direction of the sign test", "} else if (0x0p+0f > s) {", "} else if (s > 0x0p+0f) {"),
     ("sextant boundary of the switch", "if (idx < 3) {", "if (idx <= 3) {"),
     ("compare direction of the wrap", "if (t >= 0x1.8p+2f) {", "if (t > 0x1.8p+2f) {"),
     ("operand swap of the complement", "float w = rtp_sub(0x1p+0f, f);\n            out[0] = vb;", "float w = rtp_sub(f, 0x1p+0f);\n            out[0] = vb;"),
-    ("NaN pick order of the fused site", "float r = fma(-d, s2, s3);\n    return isnan(r) ? rtp_pick3(d, s2, s3) : r;", "float r = fma(-d, s2, s3);\n    return isnan(r) ? rtp_pick3(s3, s2, d) : r;"),
+    ("NaN pick order of the fused site", "float r = fma(-d, second, third);\n    return isnan(r) ? rtp_pick3(d, second, third) : r;", "float r = fma(-d, second, third);\n    return isnan(r) ? rtp_pick3(third, second, d) : r;"),
     ("addend of the sextant three green", "out[1] = as_uint(rtp_fnma213(p, f, v));\n        out[2] = vb;", "out[1] = as_uint(rtp_fnma213(p, f, q));\n        out[2] = vb;"),
     ("scale of the sextant", "float t = rtp_mul(0x1.8p+2f, frac);", "float t = rtp_mul(0x1.7ffffep+2f, frac);"),
 ];

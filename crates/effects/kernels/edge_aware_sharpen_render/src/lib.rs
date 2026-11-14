@@ -8,9 +8,9 @@
 use fx_common::nanop::{fma132, NanOps};
 use fx_common::x86::nx_mul;
 
-use edge_aware_sharpen_weights as j2;
+use edge_aware_sharpen_weights as weights;
 pub mod judge_keys;
-use edge_aware_sharpen_jobs as j3;
+use edge_aware_sharpen_jobs as esh_jobs;
 use edge_aware_sharpen_blur_core::{core_mode4, Args, Host};
 use edge_aware_sharpen_box_filter as pj;
 
@@ -75,7 +75,7 @@ pub struct Calls {
 }
 
 fn cvtt32(x: f32) -> i32 {
-    j3::cvtt32(x)
+    esh_jobs::cvtt32(x)
 }
 
 struct Hn<'a> {
@@ -95,7 +95,7 @@ impl<'a> Host for Hn<'a> {
     fn powf(&mut self, x: f32, y: f32) -> f32 {
         libm_powf::powf(x, y)
     }
-    fn scratch_init(&mut self, _this: u64, _bytes: i64, _ecx: u32, _r8d: u32, _g0: u64, _g1: u64, _hx: &[f32], _hy: &[f32]) -> u64 {
+    fn scratch_init(&mut self, _this: u64, _bytes: i64, _fill_count: u32, _fill_flags: u32, _g0: u64, _g1: u64, _hx: &[f32], _hy: &[f32]) -> u64 {
         1
     }
     fn pool_run(&mut self, _this: u64, job: u32, radius: u32, src: u64, dst: u64, aux: u64) {
@@ -107,7 +107,7 @@ impl<'a> Host for Hn<'a> {
             pj::job_y(self.mem, &jb, 0, self.w as i32, &mut self.calls.rec);
         }
     }
-    fn copy(&mut self, dst: u64, src: u64, _edx: u32, _w0: u64, _w1: u64, _w2: u64) {
+    fn copy(&mut self, dst: u64, src: u64, _line_mode: u32, _w0: u64, _w1: u64, _w2: u64) {
         let n = self.w * self.h;
         copy_plane(self.mem, dst as usize, src as usize, n);
     }
@@ -174,7 +174,7 @@ fn add_plane(mem: &mut [f32], dst: usize, src: usize, n: usize) {
 }
 
 /// Slot 52, flag 0 route. `mem` holds all planes; returns the call record.
-pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Result<Calls, DErr> {
+pub fn slot52(th: &This, centre_x: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Result<Calls, DErr> {
     if flag != 0 {
         return Err(DErr::FlagNotPorted(flag));
     }
@@ -183,7 +183,7 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
         return Err(DErr::NScope(n));
     }
     let nu = n as usize;
-    let (w, h) = (cx.w as usize, cx.h as usize);
+    let (w, h) = (centre_x.w as usize, centre_x.h as usize);
     let wh = w * h;
     let mut calls = Calls::default();
     // prologue 
@@ -192,7 +192,7 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
     let bc = cvtt32(th.bcflag);
     let iters = cvtt32(th.iters);
     let sigma0 = if th.sig_byte { th.sigma0 } else { 0.0f32 };
-    let width_f = cx.cw as f32;
+    let width_f = centre_x.cw as f32;
     let mut base = nx_mul(0.125f32 * th.scale, width_f); // [rbp]
     let dv = (n as f32) * th.output_a; // [rbp]
     // zero fill of each output plane (esi == 0)
@@ -204,11 +204,11 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
     if let Some(k) = in_ids.iter().position(|&i| i == NO_PLANE) {
         return Err(DErr::Tripwire(k));
     }
-    let mut pa: Vec<usize> = in_ids.clone();
-    let mut pb: Vec<usize> = (0..nu).map(|i| ids.t[i]).collect();
-    let pc: Vec<usize> = (0..nu).map(|i| ids.t[nu + i]).collect();
-    let pd: Vec<usize> = (0..nu).map(|i| ids.t[2 * nu + i]).collect();
-    let (t0, t1) = (ids.t[3 * nu], ids.t[3 * nu + 1]);
+    let mut table_a: Vec<usize> = in_ids.clone();
+    let mut table_b: Vec<usize> = (0..nu).map(|i| ids.t[i]).collect();
+    let table_c: Vec<usize> = (0..nu).map(|i| ids.t[nu + i]).collect();
+    let table_d: Vec<usize> = (0..nu).map(|i| ids.t[2 * nu + i]).collect();
+    let (first_id, second_id) = (ids.t[3 * nu], ids.t[3 * nu + 1]);
     let (wa, wt) = (ids.t[3 * nu + 2], ids.t[3 * nu + 3]);
     let curve = ids.t[3 * nu + 4];
     let flag_cell_b: i32 = if th.sig_byte { 1 } else { 0 };
@@ -217,7 +217,7 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
             return Err(DErr::Iter(iters));
         }
         for it in 0..iters as usize {
-            let s2 = step_scale(base, dv);
+            let sum_2 = step_scale(base, dv);
             // ---- pre-pass: weight planes a (wa) and t (wt)
             {
                 let take = |m: &Vec<f32>, id: usize| m[id..id + wh].to_vec();
@@ -225,22 +225,22 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
                 let mut t = take(mem, wt);
                 calls.pools.push(if variant != 0 { judge_keys::POOL_A } else { judge_keys::POOL_B });
                 if variant != 0 {
-                    let c = j2::Ctx { w: w as i32, s: h as i32, flag_cell_b, f0: s2, f4: base, f8: s2, fc: base, esh2_job_ctx_a: sigma0, k: cx.kcell };
+                    let c = weights::Ctx { w: w as i32, s: h as i32, flag_cell_b, d_scale: sum_2, ca_param: base, e_scale: sum_2, fc: base, esh2_job_ctx_a: sigma0, k: centre_x.kcell };
                     for k in 0..2 {
                         if ids.inp[k] == NO_PLANE {
                             return Err(DErr::Tripwire(k));
                         }
                     }
-                    let (p0, p1) = (take(mem, ids.inp[0]), take(mem, ids.inp[1]));
+                    let (p0, second_plane) = (take(mem, ids.inp[0]), take(mem, ids.inp[1]));
                     let cur = if flag_cell_b == 0 { take(mem, curve) } else { Vec::new() };
-                    let mut b = j2::Bufs { p0: &p0, p1: &p1, cur: &cur, a: &mut a, t: &mut t };
-                    j2::job_1(&c, 0, h as i32, 0, &mut b).map_err(|e| DErr::Job(format!("{:?}", e)))?;
+                    let mut b = weights::Bufs { p0: &p0, second_plane: &second_plane, cur: &cur, a: &mut a, t: &mut t };
+                    weights::job_1(&c, 0, h as i32, 0, &mut b).map_err(|e| DErr::Job(format!("{:?}", e)))?;
                 } else {
-                    let c = j3::Ctx { w: w as i32, s: h as i32, nch: n, flag_cell_b, f0: s2, f4: base, f8: s2, fc: base, esh2_job_ctx_a: sigma0, k: cx.kcell };
+                    let c = esh_jobs::Ctx { w: w as i32, s: h as i32, nch: n, flag_cell_b, d_scale: sum_2, ca_param: base, e_scale: sum_2, fc: base, esh2_job_ctx_a: sigma0, k: centre_x.kcell };
                     let chs: Vec<Vec<f32>> = (0..4).map(|k| if ids.inp[k] == NO_PLANE { Vec::new() } else { take(mem, ids.inp[k]) }).collect();
                     let cur = if flag_cell_b == 0 { take(mem, curve) } else { Vec::new() };
-                    let mut b = j3::Bufs { ch: [&chs[0], &chs[1], &chs[2], &chs[3]], cur: &cur, a: &mut a, t: &mut t };
-                    j3::job_2(&c, 0, h as i32, &mut b).map_err(|e| DErr::Job(format!("{:?}", e)))?;
+                    let mut b = esh_jobs::Bufs { chan: [&chs[0], &chs[1], &chs[2], &chs[3]], cur: &cur, a: &mut a, t: &mut t };
+                    esh_jobs::job_2(&c, 0, h as i32, &mut b).map_err(|e| DErr::Job(format!("{:?}", e)))?;
                 }
                 mem[wa..wa + wh].copy_from_slice(&a);
                 mem[wt..wt + wh].copy_from_slice(&t);
@@ -249,51 +249,51 @@ pub fn slot52(th: &This, cx: &Cx, ids: &Ids, mem: &mut Vec<f32>, flag: u8) -> Re
                 calls.pools.push(judge_keys::POOL_C);
                 let a = mem[wa..wa + wh].to_vec();
                 let t = mem[wt..wt + wh].to_vec();
-                let mut p0 = mem[t0..t0 + wh].to_vec();
-                let mut p1 = mem[t1..t1 + wh].to_vec();
-                j3::job_cell_a(w as i32, h as i32, (0, h as i32), (0, w as i32), &a, &t, &mut p0, &mut p1).map_err(|e| DErr::Job(format!("{:?}", e)))?;
-                mem[t0..t0 + wh].copy_from_slice(&p0);
-                mem[t1..t1 + wh].copy_from_slice(&p1);
+                let mut p0 = mem[first_id..first_id + wh].to_vec();
+                let mut second_plane = mem[second_id..second_id + wh].to_vec();
+                esh_jobs::job_cell_a(w as i32, h as i32, (0, h as i32), (0, w as i32), &a, &t, &mut p0, &mut second_plane).map_err(|e| DErr::Job(format!("{:?}", e)))?;
+                mem[first_id..first_id + wh].copy_from_slice(&p0);
+                mem[second_id..second_id + wh].copy_from_slice(&second_plane);
             } else {
-                copy_plane(mem, t0, wa, wh);
-                copy_plane(mem, t1, wt, wh);
+                copy_plane(mem, first_id, wa, wh);
+                copy_plane(mem, second_id, wt, wh);
             }
             // ---- per channel
-            for ch in 0..nu {
+            for chan in 0..nu {
                 let zero = LOW > (base as f64) && (base as f64) > -LOW;
                 if zero {
                     calls.zero_br += 1;
-                    copy_plane(mem, pb[ch], pa[ch], wh);
+                    copy_plane(mem, table_b[chan], table_a[chan], wh);
                 } else {
                     calls.core_br += 1;
-                    let args = Args { this: 0, mode, p_in: in_ids[ch] as u64, p_b: wa as u64, p_c: pb[ch] as u64, p_d: t0 as u64, p_e: t1 as u64,
-                                      roi: [cx.w, cx.h, cx.w, 0], p_f: 0, n: 3, flag: 0, sx: base, sy: base };
+                    let args = Args { this: 0, mode, p_in: in_ids[chan] as u64, p_b: wa as u64, p_c: table_b[chan] as u64, p_d: first_id as u64, p_e: second_id as u64,
+                                      roi: [centre_x.w, centre_x.h, centre_x.w, 0], p_f: 0, n: 3, flag: 0, sx: base, sy: base };
                     let mut hn = Hn { mem, w, h, calls: &mut calls };
                     core_mode4(&args, &mut hn).map_err(|e| DErr::Core(format!("{:?}", e)))?;
                 }
                 // C = B; C = fma(C, -1, 0); C += A; C = tanh-like(C, s0 = m); out += C
-                copy_plane(mem, pc[ch], pb[ch], wh);
-                for x in mem[pc[ch]..pc[ch] + wh].iter_mut() {
+                copy_plane(mem, table_c[chan], table_b[chan], wh);
+                for x in mem[table_c[chan]..table_c[chan] + wh].iter_mut() {
                     *x = x.mul_add(-1.0, 0.0);
                 }
-                add_plane(mem, pc[ch], pa[ch], wh);
-                let m = mix_factor(th.arr[it], th.arr[7 + ch]);
+                add_plane(mem, table_c[chan], table_a[chan], wh);
+                let m = mix_factor(th.arr[it], th.arr[7 + chan]);
                 calls.pools.push(judge_keys::POOL_D);
-                j3::job_3(m, 0, wh as i32, &mut mem[pc[ch]..pc[ch] + wh]).map_err(|e| DErr::Job(format!("{:?}", e)))?;
-                add_plane(mem, ids.out[ch], pc[ch], wh);
-                if pa[ch] == in_ids[ch] {
-                    pa[ch] = pb[ch];
-                    pb[ch] = pd[ch];
+                esh_jobs::job_3(m, 0, wh as i32, &mut mem[table_c[chan]..table_c[chan] + wh]).map_err(|e| DErr::Job(format!("{:?}", e)))?;
+                add_plane(mem, ids.out[chan], table_c[chan], wh);
+                if table_a[chan] == in_ids[chan] {
+                    table_a[chan] = table_b[chan];
+                    table_b[chan] = table_d[chan];
                 } else {
-                    std::mem::swap(&mut pa[ch], &mut pb[ch]);
+                    std::mem::swap(&mut table_a[chan], &mut table_b[chan]);
                 }
             }
             base = base + base;
         }
     }
     // tail: out += A
-    for ch in 0..nu {
-        add_plane(mem, ids.out[ch], pa[ch], wh);
+    for chan in 0..nu {
+        add_plane(mem, ids.out[chan], table_a[chan], wh);
     }
     Ok(calls)
 }

@@ -74,10 +74,10 @@ fn r5_prune_arms_by_hand() {
     assert_eq!(sw(2.0), Some(4));
     assert_eq!(sw(9.0), Some(5));
     // if_has_alpha img a b: 2 or 4 channels -> arm 1
-    let a4 = ArgView2 { is_const: false, lanes: [0.0; 4], n: 4, elnum: Some(4) };
-    let a3 = ArgView2 { is_const: false, lanes: [0.0; 4], n: 3, elnum: Some(3) };
-    assert_eq!(prune_arm("if_has_alpha", &[a4.clone(), av(false, 0.0, 4), av(false, 0.0, 4)]), Some(1));
-    assert_eq!(prune_arm("if_has_alpha", &[a3, av(false, 0.0, 4), av(false, 0.0, 4)]), Some(2));
+    let var_arg_a = ArgView2 { is_const: false, lanes: [0.0; 4], n: 4, elnum: Some(4) };
+    let var_arg_b = ArgView2 { is_const: false, lanes: [0.0; 4], n: 3, elnum: Some(3) };
+    assert_eq!(prune_arm("if_has_alpha", &[var_arg_a.clone(), av(false, 0.0, 4), av(false, 0.0, 4)]), Some(1));
+    assert_eq!(prune_arm("if_has_alpha", &[var_arg_b, av(false, 0.0, 4), av(false, 0.0, 4)]), Some(2));
     // a class outside the family never prunes
     assert_eq!(prune_arm("*", &[av(true, 1.0, 1), av(true, 1.0, 1)]), None);
 }
@@ -178,13 +178,13 @@ fn malformed_genotypes_error_not_panic() {
     let mut b = g.clone();
     b.dest = vec![999];
     assert!(compile(&b, &ct, &CompileOptions::default()).is_err());
-    let g2 = gen("(def_effect T ( S ) ( ) ( ) ( * S 2 ))", "T");
-    let mut c = g2.clone();
+    let parsed = gen("(def_effect T ( S ) ( ) ( ) ( * S 2 ))", "T");
+    let mut c = parsed.clone();
     let k = c.nodes.iter().position(|n| n.name == "*").unwrap();
     c.nodes[k].children = vec![0, 12345];
     assert!(compile(&c, &ct, &CompileOptions::default()).is_err());
     // empty combo table: every class unknown, still no panic
-    let cp = compile(&g2, &ComboTable::default(), &CompileOptions::default()).unwrap();
+    let cp = compile(&parsed, &ComboTable::default(), &CompileOptions::default()).unwrap();
     assert!(cp.diagnostics.iter().any(|d| d.contains("UNKNOWN-CLASS")));
     assert!(ComboTable::from_tsv("").classes.is_empty());
     assert!(ComboTable::from_tsv("garbage\nx\ty\n").classes.is_empty());
@@ -224,15 +224,15 @@ fn determinism_and_all_targets_compile() {
             let ei = c.find_effect(f[0], Some(f[1])).unwrap();
             let g = build_effect(&c, ei).unwrap();
             // HC-ZERO-LEGACY (named state A option)
-            let s1 = enumerate_branches_opt(&g, &ct, &BTreeMap::new(), true);
-            let s2 = enumerate_branches_opt(&g, &ct, &BTreeMap::new(), true);
-            assert_eq!(s1.len(), s2.len());
-            for (a, b) in s1.iter().zip(s2.iter()) {
+            let enumerate_branches_opt_1 = enumerate_branches_opt(&g, &ct, &BTreeMap::new(), true);
+            let sum_2 = enumerate_branches_opt(&g, &ct, &BTreeMap::new(), true);
+            assert_eq!(enumerate_branches_opt_1.len(), sum_2.len());
+            for (a, b) in enumerate_branches_opt_1.iter().zip(sum_2.iter()) {
                 assert_eq!(a.signature, b.signature);
             }
-            let p1 = compile(&g, &ct, &CompileOptions { hc_zero_legacy: true, ..Default::default() }).unwrap().plan_tsv();
+            let plan_text = compile(&g, &ct, &CompileOptions { hc_zero_legacy: true, ..Default::default() }).unwrap().plan_tsv();
             let p2 = compile(&g, &ct, &CompileOptions { hc_zero_legacy: true, ..Default::default() }).unwrap().plan_tsv();
-            assert_eq!(p1, p2);
+            assert_eq!(plan_text, p2);
             n += 1;
         }
         assert_eq!(n, 38);

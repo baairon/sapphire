@@ -8,7 +8,7 @@
 //! crate constants and the crate's computed tables (`device_ops_flow_solve_b_gen`).
 
 use fx_common::nanop::NanOps;
-use fx_device::cl::{Arg as ClArg, Buffer};
+use fx_device::ocl::{Arg as ClArg, Buffer};
 use fx_device::{DevError, Session};
 use optical_flow_solve::smooth::{damping, Geo, ONE};
 use optical_flow_solve::tail::{median_pair, TailHost};

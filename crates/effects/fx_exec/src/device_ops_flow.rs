@@ -14,7 +14,7 @@ use crate::device_ops_flow_solve_a as sa;
 use crate::device_ops_flow_solve_b as sb;
 use crate::types::{Arg, Image};
 use fx_common::nanop::NanOps;
-use fx_device::cl::{Arg as ClArg, Buffer};
+use fx_device::ocl::{Arg as ClArg, Buffer};
 use fx_device::{DevError, DevImage, Session};
 use optical_flow::host::{chunk, FlowServices, HelperName, HostError, ResampleTargets};
 use optical_flow::host_types::{Call, Callback as FlowCb, Ctx, Host, Rect24};
@@ -752,10 +752,10 @@ fn launch_relax(pl: &mut DevPlanes, rec: &mut Vec<Callback>, l: &Level, p: &Para
     rec.push(Callback::Relax);
     pl.touch(l.relax_first);
     pl.touch(l.relax_second);
-    let n1 = sa::RelaxNest { t: pl.buf(l.nest1_t)?, u: pl.buf(l.nest1_u)?, acc: pl.buf(l.flow_u_next)?, out: pl.buf(l.relax_first)? };
-    let n2 = sa::RelaxNest { t: pl.buf(l.nest2_t)?, u: pl.buf(l.nest2_u)?, acc: pl.buf(l.flow_v_next)?, out: pl.buf(l.relax_second)? };
+    let nest_one = sa::RelaxNest { t: pl.buf(l.nest1_t)?, u: pl.buf(l.nest1_u)?, acc: pl.buf(l.flow_u_next)?, out: pl.buf(l.relax_first)? };
+    let nest_two = sa::RelaxNest { t: pl.buf(l.nest2_t)?, u: pl.buf(l.nest2_u)?, acc: pl.buf(l.flow_v_next)?, out: pl.buf(l.relax_second)? };
     let v = if p.alt_launches != 0 { Some(pl.buf(l.copied_plane)?) } else { None };
-    sa::relax_dev(&pl.s, cw, rows, st, f32::from_bits(p.relax_scale), v, [&n1, &n2], (pl.phase(l.nest1_t) & 63) as u32, 0, rows)
+    sa::relax_dev(&pl.s, cw, rows, st, f32::from_bits(p.relax_scale), v, [&nest_one, &nest_two], (pl.phase(l.nest1_t) & 63) as u32, 0, rows)
 }
 
 fn launch_smooth(pl: &mut DevPlanes, rec: &mut Vec<Callback>, l: &Level, p: &Params) -> Result<(), DevError> {
@@ -1477,9 +1477,9 @@ pub fn case_frames(c: &FlowCase) -> (Vec<f32>, Vec<f32>) {
         seed ^= seed << 17;
         seed
     };
-    let ramp = |dx: f32, i: usize| {
+    let ramp = |x_shift: f32, i: usize| {
         let (x, y) = ((i % c.w) as f32, (i / c.w) as f32);
-        0.25 + 0.02 * (x - dx) + 0.015 * y + 0.2 * fx_common::shake_sin::sinf_1((x - dx) * 0.7)
+        0.25 + 0.02 * (x - x_shift) + 0.015 * y + 0.2 * fx_common::shake_sin::sinf_1((x - x_shift) * 0.7)
     };
     match c.kind {
         0 => ((0..n).map(|i| ramp(0.0, i)).collect(), (0..n).map(|i| ramp(1.0, i)).collect()),
@@ -1487,9 +1487,9 @@ pub fn case_frames(c: &FlowCase) -> (Vec<f32>, Vec<f32>) {
         2 => (vec![0.5; n], vec![0.5; n]),
         // Steep ramps: the gradient norm is above one at every pixel, the bottom right one included.
         4 => {
-            let steep = |dx: f32, i: usize| {
+            let steep = |x_shift: f32, i: usize| {
                 let (x, y) = ((i % c.w) as f32, (i / c.w) as f32);
-                0.25 + 1.5 * (x - dx) + 1.25 * y + 0.5 * fx_common::shake_sin::sinf_1((x - dx) * 0.7)
+                0.25 + 1.5 * (x - x_shift) + 1.25 * y + 0.5 * fx_common::shake_sin::sinf_1((x - x_shift) * 0.7)
             };
             ((0..n).map(|i| steep(0.0, i)).collect(), (0..n).map(|i| steep(1.0, i)).collect())
         }
@@ -1507,8 +1507,8 @@ pub fn case_frames(c: &FlowCase) -> (Vec<f32>, Vec<f32>) {
                 f32::INFINITY,
                 f32::NEG_INFINITY,
             ];
-            let mut mk = |dx: f32| -> Vec<f32> {
-                (0..n).map(|i| if next() % 5 == 0 { specials[(next() % specials.len() as u64) as usize] } else { ramp(dx, i) }).collect()
+            let mut mk = |x_shift: f32| -> Vec<f32> {
+                (0..n).map(|i| if next() % 5 == 0 { specials[(next() % specials.len() as u64) as usize] } else { ramp(x_shift, i) }).collect()
             };
             (mk(0.0), mk(1.0))
         }

@@ -122,12 +122,12 @@ where
         return Err(FxError::Geometry);
     }
     let r = radius(p.amount, p.ctx_width);
-    for ch in 0..n {
-        let idx = gain_index(ch, p.in_count);
+    for chan in 0..n {
+        let idx = gain_index(chan, p.in_count);
         let g = *p.gains.get(idx).ok_or(FxError::PlaneCount)?;
-        let x = dense(&src[ch]);
+        let x = dense(&src[chan]);
         let out = sharpen_plane_alias(&x, w, h, r, g, count, alias, |xs, rr| blur(xs, w, h, rr))?;
-        let d = &mut dst[ch];
+        let d = &mut dst[chan];
         for y in 0..h {
             d.row_mut(y)[..w].copy_from_slice(&out[y * w..(y + 1) * w]);
         }

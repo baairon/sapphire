@@ -117,7 +117,7 @@ fn live_pix_fmts(bins: &Binaries) -> Vec<Row> {
 #[test]
 fn table_matches_live_pix_fmts() {
     let Some(bins) = common::require("table_matches_live_pix_fmts") else { return };
-    let live = live_pix_fmts(&bins);
+    let live_fmts = live_pix_fmts(&bins);
     let table: Vec<Row> = PixFmt::all()
         .map(|f| {
             let i = f.info();
@@ -134,13 +134,13 @@ fn table_matches_live_pix_fmts() {
             }
         })
         .collect();
-    let live_names: Vec<&str> = live.iter().map(|r| r.name.as_str()).collect();
+    let live_names: Vec<&str> = live_fmts.iter().map(|r| r.name.as_str()).collect();
     let table_names: Vec<&str> = table.iter().map(|r| r.name.as_str()).collect();
     assert_eq!(
         live_names, table_names,
         "format list differs from the live ffmpeg; regenerate with scripts/gen_pixfmt.py probe, then generate"
     );
-    for (l, t) in live.iter().zip(table.iter()) {
+    for (l, t) in live_fmts.iter().zip(table.iter()) {
         assert_eq!(l, t, "descriptor mismatch for {}", l.name);
     }
 }
@@ -173,11 +173,11 @@ fn live_descriptors(bins: &Binaries) -> BTreeMap<String, BTreeMap<String, String
 #[test]
 fn ffprobe_descriptors_agree_with_the_table() {
     let Some(bins) = common::require("ffprobe_descriptors_agree_with_the_table") else { return };
-    let live = live_descriptors(&bins);
-    assert_eq!(live.len(), PixFmt::count());
+    let live_fmts = live_descriptors(&bins);
+    assert_eq!(live_fmts.len(), PixFmt::count());
     for fmt in PixFmt::all() {
         let info = fmt.info();
-        let d = live.get(info.name).unwrap_or_else(|| panic!("ffprobe does not list {}", info.name));
+        let d = live_fmts.get(info.name).unwrap_or_else(|| panic!("ffprobe does not list {}", info.name));
         let flag = |k: &str| d.get(k).map(|v| v == "1").unwrap_or(false);
         assert_eq!(flag("big_endian"), info.has(F_BIG_ENDIAN), "{} big_endian", info.name);
         assert_eq!(flag("planar"), info.has(F_PLANAR), "{} planar", info.name);
@@ -439,7 +439,7 @@ fn planar_formats_have_uniform_planes_and_the_right_byte_order() {
             if p.kind != PlaneKind::Samples {
                 continue;
             }
-            let plane = &run.stdout[p.offset..p.offset + p.size];
+            let plane = &run.stdout[p.byte_pos..p.byte_pos + p.size];
             let exempt = w % p.group_width != 0;
             if let Err(why) = plane_is_uniform(plane, p, exempt) {
                 failures.lock().unwrap().push(format!("{} {}x{} plane {}: {}", fmt, w, h, pi, why));
@@ -452,7 +452,7 @@ fn planar_formats_have_uniform_planes_and_the_right_byte_order() {
             let big = info.endian == Endian::Big;
             let is_float = fmt.name().contains("f32");
             let reference = if fmt.is_rgb() { green8 } else { luma8 };
-            let data = &run.stdout[layout.planes()[0].offset..];
+            let data = &run.stdout[layout.planes()[0].byte_pos..];
             let value = first_sample(data, word, big, is_float);
             let depth = info.bit_depths[0] as u32;
             let ok = if is_float {
@@ -504,8 +504,8 @@ fn pal8_palette_sits_after_the_pixels() {
     assert_eq!(run.stdout.len(), layout.size());
     let palette = layout.planes()[1];
     assert_eq!(palette.kind, PlaneKind::Palette);
-    assert_eq!(palette.offset, 33 * 17, "no padding between pixels and palette");
-    let entries = &run.stdout[palette.offset..palette.offset + palette.size];
+    assert_eq!(palette.byte_pos, 33 * 17, "no padding between pixels and palette");
+    let entries = &run.stdout[palette.byte_pos..palette.byte_pos + palette.size];
     assert!(entries.chunks(4).all(|e| e[3] == 0xff), "default palette is opaque");
     assert!(entries.iter().any(|&b| b != 0));
 }

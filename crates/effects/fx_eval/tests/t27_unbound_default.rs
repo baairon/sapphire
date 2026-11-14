@@ -10,8 +10,8 @@ fn blur_amount_unbound_default() {
     }
     let ns = ns_of("Blur_Color_Autogen", "blur_amount").expect("ns row");
     assert_eq!(ns, 4.0);
-    let r64 = unbound_default_record(0.4, ns, units_width(64, 1.0, 1.0), false);
-    assert_eq!(r64, 12.0f32);
-    let r50 = unbound_default_record(0.4, ns, units_width(50, 1.0, 1.0), false);
-    assert!((r50 - 15.36f32).abs() <= 2e-6, "{}", r50);
+    let value_at_width_sixty_four = unbound_default_record(0.4, ns, units_width(64, 1.0, 1.0), false);
+    assert_eq!(value_at_width_sixty_four, 12.0f32);
+    let value_at_width_fifty = unbound_default_record(0.4, ns, units_width(50, 1.0, 1.0), false);
+    assert!((value_at_width_fifty - 15.36f32).abs() <= 2e-6, "{}", value_at_width_fifty);
 }

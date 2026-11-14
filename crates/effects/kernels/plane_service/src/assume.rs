@@ -19,7 +19,7 @@ pub fn assumptions() -> Vec<Assumption> {
         a("PL1-A7", "assert (rect copy, image byte == 0) is assumed to return and execution continues as in the listing; null pointer asserts / log of are outside the contract", "ASSUMED"),
         a("PL1-A8", "copies of at least bytes with the pool flag clear take the pooled memcpy: the emulator runs it with the pool-not-ready cell = 0 (captured zero), where the worker copies the whole range; a multi tile partition (pool ready) is not emulated", "CALLEE-MODELLED"),
         a("PL1-A9", "constants of CAPTURED: = 0x0000000100000000, = 0, = 4, lane 1 = 0, = 4 (lookup_pl.tsv)", "CAPTURED"),
-        a("PL1-A10", "feature word 0x9d97ff (AVX2) served through the cell; dispatchers run in the emulator, the AVX and SSE twins are not ported (ROUTE AVX2-ONLY)", "ROUTE"),
+        a("PL1-A10", "feature word (AVX2) served through the cell; dispatchers run in the emulator, the AVX and SSE twins are not ported (ROUTE AVX2-ONLY)", "ROUTE"), // origin: 0x9d97ff
         a("PL1-A11", "channel clamp, plane and value indexing outside the arrays (negative channel, short planes, short dst) are outside the contract and return an error", "contract"),
     ]
 }

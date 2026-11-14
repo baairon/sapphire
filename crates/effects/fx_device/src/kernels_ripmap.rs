@@ -19,7 +19,7 @@
 pub const RIPMAP_MIPMAP: &str = r#"
 /* make_mipmap::mm2::base_fill, one work item per base pixel (all channels): format 2 (f32 bits) copy of source row y into
    the interior of plane (0, 0). Plane (0,0) starts at offset 0 of the ripmap buffer. */
-__kernel void ripmap_mm_base(__global const float* s0, __global const float* s1, __global const float* s2, __global const float* s3,
+__kernel void ripmap_mm_base(__global const float* s0, __global const float* src_ch1, __global const float* src_ch2, __global const float* src_ch3,
                           __global uint* rip, int w, int h, int c, uint stride) {
     uint gid = (uint)get_global_id(0);
     uint total = (uint)w * (uint)h;
@@ -31,13 +31,13 @@ __kernel void ripmap_mm_base(__global const float* s0, __global const float* s1,
     uint base = (1u + y) * stride + (1u + x) * (uint)c;
     rip[base] = as_uint(s0[gid]);
     if (c >= 2) {
-        rip[base + 1u] = as_uint(s1[gid]);
+        rip[base + 1u] = as_uint(src_ch1[gid]);
     }
     if (c >= 3) {
-        rip[base + 2u] = as_uint(s2[gid]);
+        rip[base + 2u] = as_uint(src_ch2[gid]);
     }
     if (c >= 4) {
-        rip[base + 3u] = as_uint(s3[gid]);
+        rip[base + 3u] = as_uint(src_ch3[gid]);
     }
 }
 
@@ -60,29 +60,29 @@ __kernel void ripmap_mm_padcols(__global uint* rip, uint off, int wl, int c, uin
         return;
     }
     uint y = gid / (uint)c;
-    uint ch = gid % (uint)c;
+    uint chan = gid % (uint)c;
     uint base = off + (1u + y) * stride;
-    uint first = rip[base + (uint)c + ch];
-    uint last = rip[base + (uint)wl * (uint)c + ch];
+    uint first = rip[base + (uint)c + chan];
+    uint last = rip[base + (uint)wl * (uint)c + chan];
     uint l;
-    uint r1;
+    uint edge_sample;
     uint r2;
     if (mode == 1) {
         l = last;
-        r1 = first;
+        edge_sample = first;
         r2 = first;
     } else if (mode == 2) {
         l = first;
-        r1 = last;
+        edge_sample = last;
         r2 = last;
     } else {
-        l = pad[ch];
-        r1 = pad[ch];
-        r2 = pad[ch];
+        l = pad[chan];
+        edge_sample = pad[chan];
+        r2 = pad[chan];
     }
-    rip[base + ch] = l;
-    rip[base + ((uint)wl + 1u) * (uint)c + ch] = r1;
-    rip[base + ((uint)wl + 2u) * (uint)c + ch] = r2;
+    rip[base + chan] = l;
+    rip[base + ((uint)wl + 1u) * (uint)c + chan] = edge_sample;
+    rip[base + ((uint)wl + 2u) * (uint)c + chan] = r2;
 }
 
 /* make_mipmap::pad_rows for the plane at `off` (stride floats per row, interior height h, c channels): rows 0, h+1, h+2.
@@ -178,20 +178,20 @@ uint mm_avg(uint a, uint b) {
 
 /* kernel_a: horizontal 2:1 of level l from level l-1 (row level 0), one work item per output sample of the level.
    dst = avg(b, a) with a the even source pixel and b the odd one. */
-__kernel void ripmap_mm_hor(__global uint* rip, uint soff, uint sstride, uint doff, uint dstride, int wl, int h0, int c) {
+__kernel void ripmap_mm_hor(__global uint* rip, uint soff, uint sstride, uint doff, uint dstride, int wl, int grid_h, int c) {
     uint gid = (uint)get_global_id(0);
     uint per_row = (uint)wl * (uint)c;
-    uint total = per_row * (uint)h0;
+    uint total = per_row * (uint)grid_h;
     if (gid >= total) {
         return;
     }
     uint y = gid / per_row;
     uint rem = gid % per_row;
     uint x = rem / (uint)c;
-    uint ch = rem % (uint)c;
-    uint a = rip[soff + (1u + y) * sstride + (1u + 2u * x) * (uint)c + ch];
-    uint b = rip[soff + (1u + y) * sstride + (2u + 2u * x) * (uint)c + ch];
-    rip[doff + (1u + y) * dstride + (1u + x) * (uint)c + ch] = mm_avg(b, a);
+    uint chan = rem % (uint)c;
+    uint a = rip[soff + (1u + y) * sstride + (1u + 2u * x) * (uint)c + chan];
+    uint b = rip[soff + (1u + y) * sstride + (2u + 2u * x) * (uint)c + chan];
+    rip[doff + (1u + y) * dstride + (1u + x) * (uint)c + chan] = mm_avg(b, a);
 }
 
 /* kernel_b: vertical 2:1 of plane (l, j) from plane (l, j-1), one work item per output sample: avg(b, a) with a the upper row. */
@@ -218,24 +218,24 @@ typedef struct {
     float y;
     float e2x;
     float e2y;
-    float dx;
+    float delta_x;
     float dy;
     int w;
     int h;
     int stride;
-    float k_a1_a0;
-    float k_a2_a1;
-    float k_1_a3;
+    float a_gap_first;
+    float a_gap_second;
+    float one_minus_a_last;
     uint flag;
     int mx;
     int my;
 } bw_s5;
 
 typedef struct {
-    float a0;
-    float a1;
-    float a3;
-    float a4;
+    float alpha_init;
+    float alpha_origin;
+    float tap_width;
+    float norm_num;
 } bw_in;
 
 /* the host statics: port_blk_a, cassumption_a, cassumption_b, cassumption_c, hs, ws */
@@ -256,7 +256,7 @@ typedef struct {
 } bw_plane;
 
 /* per body: nc channels; notlt 1 = the test `!(a < b)` (bodies A, B), 0 = `a >= b` (bodies C, D); acc_a 1 = body A's
-   `lerp * w + s` accumulation, 0 = the `s - fma(v0 - v1, f, -v0) * w` form of B, C, D; idx64 1 = body A's 64 bit index sums;
+   `lerp * w + s` accumulation, 0 = the `s - fma(sample_a - sample_b, f, -sample_a) * w` form of B, C, D; idx64 1 = body A's 64 bit index sums;
    spec 1 = body D's specialised X-major loop. */
 typedef struct {
     int nc;
@@ -293,8 +293,8 @@ int bw_nlt(bw_cfg g, float a, float b) {
     return a >= b;
 }
 
-int bw_n_of(int n0) {
-    int n = n0;
+int bw_n_of(int tap_span) {
+    int n = tap_span;
     if (n > 1000) {
         n = 1000;
     }
@@ -311,12 +311,12 @@ int bw_count_of(int e) {
 }
 
 /* the accumulation of one tap pair into one channel sum */
-float bw_acc(bw_cfg g, float s, float v0, float v1, float frac, float wgt) {
+float bw_acc(bw_cfg g, float s, float sample_a, float sample_b, float frac, float wgt) {
     if (g.acc_a) {
-        float lerp = fma(v1 - v0, frac, v0);
+        float lerp = fma(sample_b - sample_a, frac, sample_a);
         return lerp * wgt + s;
     }
-    float t = fma(v0 - v1, frac, -v0);
+    float t = fma(sample_a - sample_b, frac, -sample_a);
     return s - t * wgt;
 }
 
@@ -330,91 +330,91 @@ void bw_xmajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
     int mx0 = st.mx;
     int my = st.my;
     int cond_any = (mx0 != 0) || (my > 0);
-    float a0 = a.a0;
-    float a1 = a.a1;
-    float a3 = a.a3;
-    float a4 = a.a4;
+    float alpha_init = a.alpha_init;
+    float alpha_origin = a.alpha_origin;
+    float tap_width = a.tap_width;
+    float norm_num = a.norm_num;
     int M = g.nc;
     float sums[4];
-    for (int q0 = 0; q0 < 4; q0++) {
-        sums[q0] = 0x0p+0f;
+    for (int slot_no = 0; slot_no < 4; slot_no++) {
+        sums[slot_no] = 0x0p+0f;
     }
     float wsum = 0x0p+0f;
     if (st.flag != 0u) {
         float x = st.x;
         float y = st.y;
-        float dx = st.dx;
+        float delta_x = st.delta_x;
         float dy = st.dy;
         int dir;
         int c;
-        int esi;
-        int n0;
+        int tap_b;
+        int tap_span;
         float fx;
-        float c0;
+        float edge_gap;
         float dxs;
-        if (dx > 0x0p+0f) {
+        if (delta_x > 0x0p+0f) {
             float fl = floor(x);
             dir = 1;
             fx = x - fl;
             c = cvtt_i32_f(fl);
             float ce = ceil(st.e2x);
-            esi = cvtt_i32_f(ce);
-            c0 = ce - st.e2x;
-            n0 = BW_ADD(BW_SUB(esi, c), 1);
-            dxs = dx;
+            tap_b = cvtt_i32_f(ce);
+            edge_gap = ce - st.e2x;
+            tap_span = BW_ADD(BW_SUB(tap_b, c), 1);
+            dxs = delta_x;
         } else {
             float ce = ceil(x);
             dir = -1;
             c = cvtt_i32_f(ce);
             float fl = floor(st.e2x);
-            c0 = st.e2x - fl;
+            edge_gap = st.e2x - fl;
             fx = ce - x;
-            esi = cvtt_i32_f(fl);
-            n0 = BW_ADD(BW_SUB(c, esi), 1);
-            dxs = -dx;
+            tap_b = cvtt_i32_f(fl);
+            tap_span = BW_ADD(BW_SUB(c, tap_b), 1);
+            dxs = -delta_x;
         }
         float slope = dy / dxs;
         float yy = fma(-slope, fx, y);
-        float step_a = st.k_a1_a0 / ((float)n0 * a3);
-        float y5 = floor(yy);
-        float y9 = slope + st.e2y;
+        float step_a = st.a_gap_first / ((float)tap_span * tap_width);
+        float floor_y = floor(yy);
+        float y_end = slope + st.e2y;
         int b_cell_c = 0;
         int direct0 = 0;
         if (cond_any) {
-            int o = c < 0 || c >= w || 0x0p+0f > y5 || y5 >= hs || esi < 0 || esi >= w || 0x0p+0f > y9 || y9 >= hs;
+            int o = c < 0 || c >= w || 0x0p+0f > floor_y || floor_y >= hs || tap_b < 0 || tap_b >= w || 0x0p+0f > y_end || y_end >= hs;
             b_cell_c = o;
             direct0 = !o;
         }
         int b_cell_g = 0;
         if (!(direct0 || mx0 != 0)) {
-            b_cell_g = c < 0 || c >= w || esi < 0 || esi >= w;
+            b_cell_g = c < 0 || c >= w || tap_b < 0 || tap_b >= w;
         }
         int b_cell_h = 0;
         if (my == 0) {
-            b_cell_h = 0x0p+0f > y5 || y5 >= hs || 0x0p+0f > y9 || y9 >= hs;
+            b_cell_h = 0x0p+0f > floor_y || floor_y >= hs || 0x0p+0f > y_end || y_end >= hs;
         }
-        int n = bw_n_of(n0);
+        int n = bw_n_of(tap_span);
         if (n > 0) {
             if (g.spec && !b_cell_c) {
                 /* body D, specialised loops S10..S13: no edge wrap inside the loop */
                 float nf = (float)n;
-                float wlim = nf * a3;
-                float step_b = st.k_a2_a1 / (nf * st.k_1_a3);
+                float wlim = nf * tap_width;
+                float step_b = st.a_gap_second / (nf * st.one_minus_a_last);
                 float omfx = 0x1p+0f - fx;
-                float omc0 = 0x1p+0f - c0;
+                float omc0 = 0x1p+0f - edge_gap;
                 float hf = (float)h;
-                float alpha = a0;
+                float alpha = alpha_init;
                 float step = step_a;
-                int al = 0;
+                int at_limit = 0;
                 for (int k = 0; k < 1000; k++) {
                     if (k >= n) {
                         break;
                     }
-                    if (!al && (float)k >= wlim) {
+                    if (!at_limit && (float)k >= wlim) {
                         int q = k / n;
-                        alpha = fma(a3 - (float)q, step_b, a1);
+                        alpha = fma(tap_width - (float)q, step_b, alpha_origin);
                         step = step_b;
-                        al = 1;
+                        at_limit = 1;
                     }
                     float wgt;
                     if (k == 0) {
@@ -450,44 +450,44 @@ void bw_xmajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                     float tf = (float)t;
                     float frac = fr - tf;
                     int idx = BW_ADD(BW_SUB(BW_MUL(cc, 4), stride), BW_MUL(t, stride));
-                    for (int ch = 0; ch < 3; ch++) {
-                        float v0 = bw_at(P, (long)idx + (long)ch);
-                        float v1 = bw_at(P, (long)idx + (long)stride + (long)ch);
-                        sums[ch] = bw_acc(g, sums[ch], v0, v1, frac, wgt);
+                    for (int chan = 0; chan < 3; chan++) {
+                        float sample_a = bw_at(P, (long)idx + (long)chan);
+                        float sample_b = bw_at(P, (long)idx + (long)stride + (long)chan);
+                        sums[chan] = bw_acc(g, sums[chan], sample_a, sample_b, frac, wgt);
                     }
-                    float v0 = bw_at(P, (long)idx + 3L);
-                    float v1 = bw_at(P, (long)idx + (long)stride + 3L);
+                    float sample_a = bw_at(P, (long)idx + 3L);
+                    float sample_b = bw_at(P, (long)idx + (long)stride + 3L);
                     if (b_cell_h) {
-                        sums[3] = bw_acc(g, sums[3], v0, v1, frac, wgt);
+                        sums[3] = bw_acc(g, sums[3], sample_a, sample_b, frac, wgt);
                     } else {
-                        float b = fma(frac - 0x1p+0f, v0, -v1);
-                        float d = fma(tf, v1, b);
-                        float e = fma(v1, yy_old, -d);
+                        float b = fma(frac - 0x1p+0f, sample_a, -sample_b);
+                        float d = fma(tf, sample_b, b);
+                        float e = fma(sample_b, yy_old, -d);
                         sums[3] = e * wgt + sums[3];
                     }
                 }
             } else {
                 float hfi = (float)cvtt_i32_f(hs);
                 float omfx = 0x1p+0f - fx;
-                float omc0 = 0x1p+0f - c0;
+                float omc0 = 0x1p+0f - edge_gap;
                 float nf = (float)n;
-                float wlim = nf * a3;
-                float step_b = st.k_a2_a1 / (nf * st.k_1_a3);
+                float wlim = nf * tap_width;
+                float step_b = st.a_gap_second / (nf * st.one_minus_a_last);
                 float twoh = fma(0x1p+1f, hfi, -0x1p+0f);
                 int colmax = cvtt_i32_f(wf - 0x1p+0f);
                 float hf = (float)h;
-                float alpha = a0;
+                float alpha = alpha_init;
                 float step = step_a;
-                int al = 0;
+                int at_limit = 0;
                 for (int k = 0; k < 1000; k++) {
                     if (k >= n) {
                         break;
                     }
-                    if (!al && (float)k >= wlim) {
+                    if (!at_limit && (float)k >= wlim) {
                         int q = k / n;
-                        alpha = fma(a3 - (float)q, step_b, a1);
+                        alpha = fma(tap_width - (float)q, step_b, alpha_origin);
                         step = step_b;
-                        al = 1;
+                        at_limit = 1;
                     }
                     if (b_cell_c) {
                         if ((float)c >= wf) {
@@ -553,13 +553,13 @@ void bw_xmajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                     int t = cvtt_i32_f(fr);
                     float frac = fr - (float)t;
                     int idx = BW_ADD(BW_SUB(BW_MUL(cc, M), stride), BW_MUL(t, stride));
-                    for (int ch = 0; ch < 4; ch++) {
-                        if (ch >= M) {
+                    for (int chan = 0; chan < 4; chan++) {
+                        if (chan >= M) {
                             break;
                         }
-                        float v0 = bw_at(P, (long)idx + (long)ch);
-                        float v1 = bw_at(P, (long)idx + (long)stride + (long)ch);
-                        sums[ch] = bw_acc(g, sums[ch], v0, v1, frac, wgt);
+                        float sample_a = bw_at(P, (long)idx + (long)chan);
+                        float sample_b = bw_at(P, (long)idx + (long)stride + (long)chan);
+                        sums[chan] = bw_acc(g, sums[chan], sample_a, sample_b, frac, wgt);
                     }
                 }
             }
@@ -584,34 +584,34 @@ void bw_xmajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
         int cs = cvtt_i32_f(xa);
         int e = BW_SUB(cvtt_i32_f(xe), cs);
         int m = bw_count_of(e);
-        int r9 = 1;
+        int tap_a = 1;
         if (e < 0) {
-            r9 = -1;
+            tap_a = -1;
         }
         float mf = (float)m;
         float ystep = (ye - ya) / mf;
-        float step_a = st.k_a1_a0 / (mf * a3);
+        float step_a = st.a_gap_first / (mf * tap_width);
         int count = bw_n_of(m);
         if (count > 0) {
             float cf = (float)count;
-            float step_b = st.k_a2_a1 / (cf * st.k_1_a3);
-            float wlim = cf * a3;
+            float step_b = st.a_gap_second / (cf * st.one_minus_a_last);
+            float wlim = cf * tap_width;
             float hsi = (float)cvtt_i32_f(hs);
             float twoh = fma(0x1p+1f, hsi, -0x1p+0f);
             int colmax = cvtt_i32_f(wf - 0x1p+0f);
-            float alpha = a0;
+            float alpha = alpha_init;
             float step = step_a;
-            int al = 0;
+            int at_limit = 0;
             for (int k = 0; k < 1000; k++) {
                 if (k >= count) {
                     break;
                 }
                 int rown = cvtt_i32_f(ya);
-                if (!al && (float)k >= wlim) {
+                if (!at_limit && (float)k >= wlim) {
                     int q = k / count;
-                    alpha = fma(a3 - (float)q, step_b, a1);
+                    alpha = fma(tap_width - (float)q, step_b, alpha_origin);
                     step = step_b;
-                    al = 1;
+                    at_limit = 1;
                 }
                 int col = cs;
                 if (b_cell_k) {
@@ -634,22 +634,22 @@ void bw_xmajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                 } else {
                     idx = (long)BW_ADD(BW_MUL(col, M), BW_MUL(rown, stride));
                 }
-                cs = BW_ADD(cs, r9);
+                cs = BW_ADD(cs, tap_a);
                 wsum = wsum + alpha;
                 ya = ya + ystep;
-                for (int ch = 0; ch < 4; ch++) {
-                    if (ch >= M) {
+                for (int chan = 0; chan < 4; chan++) {
+                    if (chan >= M) {
                         break;
                     }
-                    float v = bw_at(P, idx + (long)ch);
+                    float v = bw_at(P, idx + (long)chan);
                     float prod = alpha * v;
-                    sums[ch] = prod + sums[ch];
+                    sums[chan] = prod + sums[chan];
                 }
                 alpha = alpha + step;
                 if (b_cell_i) {
                     if ((float)cs >= wf) {
                         if (H.pa != 0) {
-                            r9 = -1;
+                            tap_a = -1;
                             cs = colmax;
                         } else if (H.cb != 0) {
                             cs = 0;
@@ -657,7 +657,7 @@ void bw_xmajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                     } else if (cs < 0) {
                         if (H.pa != 0) {
                             cs = 0;
-                            r9 = 1;
+                            tap_a = 1;
                         } else if (H.cb != 0) {
                             cs = colmax;
                         }
@@ -681,9 +681,9 @@ void bw_xmajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
             }
         }
     }
-    float scale = a4 / wsum;
-    for (int ch = 0; ch < 4; ch++) {
-        res[ch] = sums[ch] * scale;
+    float scale = norm_num / wsum;
+    for (int chan = 0; chan < 4; chan++) {
+        res[chan] = sums[chan] * scale;
     }
 }
 
@@ -698,89 +698,89 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
     int mx0 = st.mx;
     int my = st.my;
     int cond_any = (mx0 != 0) || (my > 0);
-    float a0 = a.a0;
-    float a1 = a.a1;
-    float a3 = a.a3;
-    float a4 = a.a4;
+    float alpha_init = a.alpha_init;
+    float alpha_origin = a.alpha_origin;
+    float tap_width = a.tap_width;
+    float norm_num = a.norm_num;
     int M = g.nc;
     float sums[4];
-    for (int q0 = 0; q0 < 4; q0++) {
-        sums[q0] = 0x0p+0f;
+    for (int slot_no = 0; slot_no < 4; slot_no++) {
+        sums[slot_no] = 0x0p+0f;
     }
     float wsum = 0x0p+0f;
     if (st.flag != 0u) {
         float x = st.x;
         float y = st.y;
-        float dx = st.dx;
+        float delta_x = st.delta_x;
         float dy = st.dy;
-        int r9;
-        int esi;
-        int n0;
+        int tap_a;
+        int tap_b;
+        int tap_span;
         float fy;
-        float c0;
+        float edge_gap;
         float dys;
         int dir;
         if (dy > 0x0p+0f) {
             float fl = floor(y);
             fy = y - fl;
-            r9 = cvtt_i32_f(fl);
+            tap_a = cvtt_i32_f(fl);
             float ce = ceil(st.e2y);
-            c0 = ce - st.e2y;
-            esi = cvtt_i32_f(ce);
-            n0 = BW_ADD(BW_SUB(esi, r9), 1);
+            edge_gap = ce - st.e2y;
+            tap_b = cvtt_i32_f(ce);
+            tap_span = BW_ADD(BW_SUB(tap_b, tap_a), 1);
             dir = 1;
             dys = dy;
         } else {
             float ce = ceil(y);
-            r9 = cvtt_i32_f(ce);
+            tap_a = cvtt_i32_f(ce);
             fy = ce - y;
             float fl = floor(st.e2y);
-            c0 = st.e2y - fl;
-            esi = cvtt_i32_f(fl);
-            n0 = BW_ADD(BW_SUB(r9, esi), 1);
+            edge_gap = st.e2y - fl;
+            tap_b = cvtt_i32_f(fl);
+            tap_span = BW_ADD(BW_SUB(tap_a, tap_b), 1);
             dir = -1;
             dys = -dy;
         }
-        float slope = dx / dys;
+        float slope = delta_x / dys;
         float xx = fma(-slope, fy, x);
-        float step_a = st.k_a1_a0 / ((float)n0 * a3);
-        float x5 = floor(xx);
-        float x9 = slope + st.e2x;
+        float step_a = st.a_gap_first / ((float)tap_span * tap_width);
+        float floor_5 = floor(xx);
+        float sum_9 = slope + st.e2x;
         int b_cell_c = 0;
         int direct0 = 0;
         if (cond_any) {
-            int o = 0x0p+0f > x5 || x5 >= ws || r9 < 0 || r9 >= h || 0x0p+0f > x9 || x9 >= ws || esi < 0 || esi >= h;
+            int o = 0x0p+0f > floor_5 || floor_5 >= ws || tap_a < 0 || tap_a >= h || 0x0p+0f > sum_9 || sum_9 >= ws || tap_b < 0 || tap_b >= h;
             b_cell_c = o;
             direct0 = !o;
         }
-        int r10 = 0;
+        int outside_x = 0;
         if (!(direct0 || mx0 != 0)) {
-            r10 = 0x0p+0f > x5 || x5 >= ws || 0x0p+0f > x9 || x9 >= ws;
+            outside_x = 0x0p+0f > floor_5 || floor_5 >= ws || 0x0p+0f > sum_9 || sum_9 >= ws;
         }
-        int r11 = 0;
+        int tap_c = 0;
         if (my == 0) {
-            r11 = r9 < 0 || r9 >= h || esi < 0 || esi >= h;
+            tap_c = tap_a < 0 || tap_a >= h || tap_b < 0 || tap_b >= h;
         }
-        int n = bw_n_of(n0);
+        int n = bw_n_of(tap_span);
         if (n > 0) {
             float omfy = 0x1p+0f - fy;
-            float omc0 = 0x1p+0f - c0;
+            float omc0 = 0x1p+0f - edge_gap;
             float nf = (float)n;
-            float wlim = nf * a3;
-            float step_b = st.k_a2_a1 / (nf * st.k_1_a3);
+            float wlim = nf * tap_width;
+            float step_b = st.a_gap_second / (nf * st.one_minus_a_last);
             float twow = fma(0x1p+1f, ws, -0x1p+0f);
-            float alpha = a0;
+            float alpha = alpha_init;
             float step = step_a;
-            int al = 0;
+            int at_limit = 0;
             for (int k = 0; k < 1000; k++) {
                 if (k >= n) {
                     break;
                 }
-                if (!al && (float)k >= wlim) {
+                if (!at_limit && (float)k >= wlim) {
                     int q = k / n;
-                    alpha = fma(a3 - (float)q, step_b, a1);
+                    alpha = fma(tap_width - (float)q, step_b, alpha_origin);
                     step = step_b;
-                    al = 1;
+                    at_limit = 1;
                 }
                 if (b_cell_c) {
                     if (bw_nlt(g, xx, ws)) {
@@ -798,19 +798,19 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                             xx = xx + ws;
                         }
                     }
-                    if (r9 >= h) {
+                    if (tap_a >= h) {
                         if (H.ca != 0) {
-                            r9 = h - 1;
+                            tap_a = h - 1;
                             dir = -1;
                         } else if (H.cc != 0) {
-                            r9 = 0;
+                            tap_a = 0;
                         }
-                    } else if (r9 < 0) {
+                    } else if (tap_a < 0) {
                         if (H.ca != 0) {
-                            r9 = 0;
+                            tap_a = 0;
                             dir = 1;
                         } else if (H.cc != 0) {
-                            r9 = h - 1;
+                            tap_a = h - 1;
                         }
                     }
                 }
@@ -823,17 +823,17 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                     wgt = alpha;
                 }
                 float xc = xx;
-                if (r10) {
+                if (outside_x) {
                     if (-0x1p+0f > xx) {
                         xc = -0x1p+0f;
                     } else {
                         xc = bw_vmin(wf, xx);
                     }
                 }
-                int rr = r9;
-                if (r11) {
-                    if (r9 >= -1) {
-                        rr = r9 < h ? r9 : h;
+                int rr = tap_a;
+                if (tap_c) {
+                    if (tap_a >= -1) {
+                        rr = tap_a < h ? tap_a : h;
                     } else {
                         rr = -1;
                     }
@@ -850,14 +850,14 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                 } else {
                     idx = (long)BW_ADD(BW_MUL(rr, stride), BW_MUL(t, M));
                 }
-                r9 = BW_ADD(r9, dir);
-                for (int ch = 0; ch < 4; ch++) {
-                    if (ch >= M) {
+                tap_a = BW_ADD(tap_a, dir);
+                for (int chan = 0; chan < 4; chan++) {
+                    if (chan >= M) {
                         break;
                     }
-                    float v0 = bw_at(P, idx - (long)M + (long)ch);
-                    float v1 = bw_at(P, idx + (long)ch);
-                    sums[ch] = bw_acc(g, sums[ch], v0, v1, frac, wgt);
+                    float sample_a = bw_at(P, idx - (long)M + (long)chan);
+                    float sample_b = bw_at(P, idx + (long)chan);
+                    sums[chan] = bw_acc(g, sums[chan], sample_a, sample_b, frac, wgt);
                 }
             }
         }
@@ -878,8 +878,8 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
         if (my == 0) {
             b_cell_e = 0x0p+0f > ya || ya >= hf || 0x0p+0f > ye || ye >= hf;
         }
-        int r11 = cvtt_i32_f(ya);
-        int e = BW_SUB(cvtt_i32_f(ye), r11);
+        int tap_c = cvtt_i32_f(ya);
+        int e = BW_SUB(cvtt_i32_f(ye), tap_c);
         int m = bw_count_of(e);
         int dir = 1;
         if (e < 0) {
@@ -887,26 +887,26 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
         }
         float mf = (float)m;
         float xstep = (xe - xa) / mf;
-        float step_a = st.k_a1_a0 / (mf * a3);
+        float step_a = st.a_gap_first / (mf * tap_width);
         int count = bw_n_of(m);
         if (count > 0) {
             float cf = (float)count;
-            float step_b = st.k_a2_a1 / (cf * st.k_1_a3);
-            float wlim = cf * a3;
+            float step_b = st.a_gap_second / (cf * st.one_minus_a_last);
+            float wlim = cf * tap_width;
             float twow = fma(0x1p+1f, ws, -0x1p+0f);
-            float alpha = a0;
+            float alpha = alpha_init;
             float step = step_a;
-            int al = 0;
+            int at_limit = 0;
             float x = xa;
             for (int k = 0; k < 1000; k++) {
                 if (k >= count) {
                     break;
                 }
-                if (!al && (float)k >= wlim) {
+                if (!at_limit && (float)k >= wlim) {
                     int q = k / count;
-                    alpha = fma(a3 - (float)q, step_b, a1);
+                    alpha = fma(tap_width - (float)q, step_b, alpha_origin);
                     step = step_b;
-                    al = 1;
+                    at_limit = 1;
                 }
                 int xi = cvtt_i32_f(x);
                 int xcl = xi;
@@ -917,10 +917,10 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                         xcl = -1;
                     }
                 }
-                int rowc = r11;
+                int rowc = tap_c;
                 if (b_cell_e) {
-                    if (r11 >= -1) {
-                        rowc = r11 < h ? r11 : h;
+                    if (tap_c >= -1) {
+                        rowc = tap_c < h ? tap_c : h;
                     } else {
                         rowc = -1;
                     }
@@ -931,16 +931,16 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                 } else {
                     idx = (long)BW_ADD(BW_MUL(xcl, M), BW_MUL(rowc, stride));
                 }
-                r11 = BW_ADD(r11, dir);
+                tap_c = BW_ADD(tap_c, dir);
                 wsum = wsum + alpha;
                 x = x + xstep;
-                for (int ch = 0; ch < 4; ch++) {
-                    if (ch >= M) {
+                for (int chan = 0; chan < 4; chan++) {
+                    if (chan >= M) {
                         break;
                     }
-                    float v = bw_at(P, idx + (long)ch);
+                    float v = bw_at(P, idx + (long)chan);
                     float prod = alpha * v;
-                    sums[ch] = prod + sums[ch];
+                    sums[chan] = prod + sums[chan];
                 }
                 alpha = alpha + step;
                 if (b_cell_d) {
@@ -959,34 +959,34 @@ void bw_ymajor(bw_cfg g, bw_s5 st, bw_in a, bw_host H, bw_plane* P, float* res) 
                             x = x + ws;
                         }
                     }
-                    if (r11 >= h) {
+                    if (tap_c >= h) {
                         if (H.ca != 0) {
                             dir = -1;
-                            r11 = h - 1;
+                            tap_c = h - 1;
                         } else if (H.cc != 0) {
-                            r11 = 0;
+                            tap_c = 0;
                         }
-                    } else if (r11 < 0) {
+                    } else if (tap_c < 0) {
                         if (H.ca != 0) {
-                            r11 = 0;
+                            tap_c = 0;
                             dir = 1;
                         } else if (H.cc != 0) {
-                            r11 = h - 1;
+                            tap_c = h - 1;
                         }
                     }
                 }
             }
         }
     }
-    float scale = a4 / wsum;
-    for (int ch = 0; ch < 4; ch++) {
-        res[ch] = sums[ch] * scale;
+    float scale = norm_num / wsum;
+    for (int chan = 0; chan < 4; chan++) {
+        res[chan] = sums[chan] * scale;
     }
 }
 
-/* blur_warp_point::sample for 1 to 4 channels (the scalar element form), then the planes times a4. The CPU indexes the whole plane
+/* blur_warp_point::sample for 1 to 4 channels (the scalar element form), then the planes times norm_num. The CPU indexes the whole plane
    buffer by `i as usize` (a panic outside it, which is an error of the call): the same range test sets `bad`. */
-void bw_p1(bw_cfg g, int mode_x, int mode_y, int width, int height, int stride, float x, float y, float a4, bw_plane* P, float* res) {
+void bw_p1(bw_cfg g, int mode_x, int mode_y, int width, int height, int stride, float x, float y, float norm_num, bw_plane* P, float* res) {
     int n = g.nc;
     float xc = x;
     if (mode_x == 0) {
@@ -1004,20 +1004,20 @@ void bw_p1(bw_cfg g, int mode_x, int mode_y, int width, int height, int stride, 
             yc = bw_vmin((float)height, y);
         }
     }
-    float x1 = 0x1p+0f + xc;
-    float y1 = 0x1p+0f + yc;
-    int ix = cvtt_i32_f(x1);
-    int iy = cvtt_i32_f(y1);
-    float fx = x1 - (float)ix;
-    float fy = y1 - (float)iy;
+    float x_shifted = 0x1p+0f + xc;
+    float sum_1 = 0x1p+0f + yc;
+    int ix = cvtt_i32_f(x_shifted);
+    int iy = cvtt_i32_f(sum_1);
+    float fx = x_shifted - (float)ix;
+    float fy = sum_1 - (float)iy;
     long offx = (long)BW_MUL(BW_SUB(ix, 1), n);
     long offy = (long)BW_MUL(BW_SUB(iy, 1), stride);
     long pos = P->origin + offx + offy;
     float fxy = fx * fy;
-    float w00 = ((0x1p+0f - fx) - fy) + fxy;
-    float w10 = fx - fxy;
-    float w01 = fy - fxy;
-    float w11 = fxy;
+    float sum_00 = ((0x1p+0f - fx) - fy) + fxy;
+    float diff_10 = fx - fxy;
+    float diff_01 = fy - fxy;
+    float frac_xy = fxy;
     long st = (long)stride;
     long nl = (long)n;
     for (int j = 0; j < 4; j++) {
@@ -1040,23 +1040,23 @@ void bw_p1(bw_cfg g, int mode_x, int mode_y, int width, int height, int stride, 
         float vb = P->pl[ib];
         float vc = P->pl[ic];
         float vd = P->pl[id];
-        float s1 = w11 * vd;
-        float p = fma(w10, vb, s1);
-        float s2 = w01 * vc;
-        float r = fma(w00, va, s2);
+        float src_ch1 = frac_xy * vd;
+        float p = fma(diff_10, vb, src_ch1);
+        float src_ch2 = diff_01 * vc;
+        float r = fma(sum_00, va, src_ch2);
         res[j] = p + r;
     }
     for (int j = 0; j < 4; j++) {
         if (j >= n) {
             break;
         }
-        res[j] = a4 * res[j];
+        res[j] = norm_num * res[j];
     }
 }
 
 __kernel void ripmap_blur_warp_f32(__global const float* pl, __global const int* ip, __global const float* fp,
                                 __global const float* p1x, __global const float* p1y, __global const float* p2x, __global const float* p2y,
-                                __global float* o0, __global float* o1, __global float* o2, __global float* o3, __global uint* err) {
+                                __global float* dst_ch0, __global float* dst_ch1, __global float* dst_ch2, __global float* dst_ch3, __global uint* err) {
     uint gid = (uint)get_global_id(0);
     uint total = (uint)ip[19];
     if (gid >= total) {
@@ -1077,8 +1077,8 @@ __kernel void ripmap_blur_warp_f32(__global const float* pl, __global const int*
     int stride = ip[3];
     int img_w = ip[4];
     int img_h = ip[5];
-    int w0 = ip[6];
-    int h0 = ip[7];
+    int grid_w = ip[6];
+    int grid_h = ip[7];
     int mode_x = ip[8];
     int mode_y = ip[9];
     uint flag = (uint)ip[10];
@@ -1089,20 +1089,20 @@ __kernel void ripmap_blur_warp_f32(__global const float* pl, __global const int*
     H.cc = ip[14];
     H.hs = fp[5];
     H.ws = fp[6];
-    int p1c = ip[15];
-    int p2c = ip[16];
+    int first_is_const = ip[15];
+    int second_is_const = ip[16];
     int roi_x = ip[17];
     int roi_y = ip[18];
     bw_in a;
-    float fa0 = fp[0];
-    float fa1 = fp[1];
-    float fa2 = fp[2];
-    float fa3 = fp[3];
-    float fa4 = fp[4];
-    a.a0 = fa0;
-    a.a1 = fa1;
-    a.a3 = fa3;
-    a.a4 = fa4;
+    float param_a_first = fp[0];
+    float param_a_second = fp[1];
+    float param_a_third = fp[2];
+    float param_a_fourth = fp[3];
+    float param_a_fifth = fp[4];
+    a.alpha_init = param_a_first;
+    a.alpha_origin = param_a_second;
+    a.tap_width = param_a_fourth;
+    a.norm_num = param_a_fifth;
     float aspect = fp[7];
     float geo_e = fp[8];
     float left = fp[9];
@@ -1112,21 +1112,21 @@ __kernel void ripmap_blur_warp_f32(__global const float* pl, __global const int*
     float l_p1y = fp[13];
     float l_p2x = fp[14];
     float l_p2y = fp[15];
-    if (!p1c) {
+    if (!first_is_const) {
         l_p1x = p1x[gid];
         l_p1y = p1y[gid];
     }
-    if (!p2c) {
+    if (!second_is_const) {
         l_p2x = p2x[gid];
         l_p2y = p2y[gid];
     }
-    float k_1_a3 = 0x1p+0f - fa3;
-    float k_a1_a0 = fa1 - fa0;
-    float k_a2_a1 = fa2 - fa1;
-    float x12 = 0x1p-1f * aspect;
-    float x13 = right - left;
-    float scx = 0x1p-1f * x13;
-    float scy = x12 * x13;
+    float one_minus_a_last = 0x1p+0f - param_a_fourth;
+    float a_gap_first = param_a_second - param_a_first;
+    float a_gap_second = param_a_third - param_a_second;
+    float prod_12 = 0x1p-1f * aspect;
+    float diff_13 = right - left;
+    float scx = 0x1p-1f * diff_13;
+    float scy = prod_12 * diff_13;
     /* S2, S3 */
     float tx = l_p1x + 0x1p+0f;
     float basex = left - (float)roi_x;
@@ -1144,25 +1144,25 @@ __kernel void ripmap_blur_warp_f32(__global const float* pl, __global const int*
         res[j] = 0x0p+0f;
     }
     if (x == e2x && y == e2y) {
-        bw_p1(g, mode_x, mode_y, w0, h0, stride, x, y, fa4, &P, res);
+        bw_p1(g, mode_x, mode_y, grid_w, grid_h, stride, x, y, param_a_fifth, &P, res);
     } else {
         bw_s5 st;
         st.x = x;
         st.y = y;
         st.e2x = e2x;
         st.e2y = e2y;
-        st.dx = e2x - x;
+        st.delta_x = e2x - x;
         st.dy = e2y - y;
         st.w = img_w;
         st.h = img_h;
         st.stride = stride;
-        st.k_a1_a0 = k_a1_a0;
-        st.k_a2_a1 = k_a2_a1;
-        st.k_1_a3 = k_1_a3;
+        st.a_gap_first = a_gap_first;
+        st.a_gap_second = a_gap_second;
+        st.one_minus_a_last = one_minus_a_last;
         st.flag = flag;
         st.mx = mode_x;
         st.my = mode_y;
-        float adx = fabs(st.dx);
+        float adx = fabs(st.delta_x);
         float ady = fabs(st.dy);
         if (adx >= ady) {
             bw_xmajor(g, st, a, H, &P, res);
@@ -1174,15 +1174,15 @@ __kernel void ripmap_blur_warp_f32(__global const float* pl, __global const int*
         atomic_or(err, 1u);
         return;
     }
-    o0[gid] = res[0];
+    dst_ch0[gid] = res[0];
     if (body >= 2) {
-        o1[gid] = res[1];
+        dst_ch1[gid] = res[1];
     }
     if (body >= 3) {
-        o2[gid] = res[2];
+        dst_ch2[gid] = res[2];
     }
     if (body >= 4) {
-        o3[gid] = res[3];
+        dst_ch3[gid] = res[3];
     }
 }
 "#;

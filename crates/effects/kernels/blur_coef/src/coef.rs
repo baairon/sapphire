@@ -34,20 +34,20 @@ fn distribute(r: i32, n: usize, maxr: i32) -> [i32; 3] {
 /// `passes` is the already clamped count n (1..=3).
 pub fn radii(sigma: f32, extent: i32, passes: i32, subpixel: bool) -> Radii {
     let n = passes.clamp(1, 3) as usize;
-    let (r0, r1, frac) = if subpixel {
+    let (radius_a, radius_b, frac) = if subpixel {
         let t = cvttss2si32(sigma);
         let frac = sigma - (t as f32);
-        let r1 = cvtss2si32_rne(sigma.ceil());
-        (t, r1, frac)
+        let radius_b = cvtss2si32_rne(sigma.ceil());
+        (t, radius_b, frac)
     } else {
         let v = cvttsd2si32(sigma as f64 + 0.5);
         (v, v, 0.0f32)
     };
     if extent > 1 {
         let maxr = (extent >> 1) - 1;
-        let r0 = if r0 <= 0 { 0 } else { r0 };
-        let r1 = if r1 <= 0 { 0 } else { r1 };
-        Radii { a: distribute(r0, n, maxr), b: distribute(r1, n, maxr), frac }
+        let radius_a = if radius_a <= 0 { 0 } else { radius_a };
+        let radius_b = if radius_b <= 0 { 0 } else { radius_b };
+        Radii { a: distribute(radius_a, n, maxr), b: distribute(radius_b, n, maxr), frac }
     } else {
         Radii { a: [0; 3], b: [0; 3], frac }
     }

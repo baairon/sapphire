@@ -2,7 +2,7 @@
 //! and panic instead when `SAPPHIRE_REQUIRE_DEVICE=1`.
 //! Without a device the same kernels are covered by the simulator tests (`tests/sim.rs`) on every OS.
 
-use fx_device::cl::{Arg, Buffer};
+use fx_device::ocl::{Arg, Buffer};
 use fx_device::selfcheck::{adversarial_f32, compare_f32, SIZES};
 use fx_device::{kernels, select, Backend, DeviceKind, DevImage};
 

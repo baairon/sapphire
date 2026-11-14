@@ -7,9 +7,9 @@ fn geo(w: i32, h: i32, st: i32, c: f32) -> Geo {
 }
 
 fn run(g: &Geo, s: Option<&[f32]>, a: &[f32], p: &mut [f32], q: &mut [f32], start: i32, count: u32) {
-    let (d_src, mut vp_2, mut vq_2) = (a.to_vec(), p.to_vec(), q.to_vec());
+    let (d_src, mut p_second, mut q_second) = (a.to_vec(), p.to_vec(), q.to_vec());
     let mut one = Pass { src: a, p, q };
-    let mut two = Pass { src: &d_src, p: &mut vp_2, q: &mut vq_2 };
+    let mut two = Pass { src: &d_src, p: &mut p_second, q: &mut q_second };
     smooth_normalise(g, s, &mut one, &mut two, start, count);
 }
 
@@ -43,12 +43,12 @@ fn scaled_equals_unscaled_for_unit_scale_exact_values() {
     // 2x2 plane of small integers over powers of two: both fused orders are exact, so they agree
     let a = [1.0f32, 2.0, 3.0, 5.0];
     let s = [1.0f32; 4];
-    let (mut vp_1, mut vq_1) = ([0.5f32, 0.25, 1.0, 0.125], [0.25f32, 0.5, 0.125, 1.0]);
-    let (mut vp_2, mut vq_2) = (vp_1, vq_1);
-    run(&geo(2, 2, 2, 4.0), Some(&s), &a, &mut vp_1, &mut vq_1, 0, 2);
-    run(&geo(2, 2, 2, 4.0), None, &a, &mut vp_2, &mut vq_2, 0, 2);
-    assert_eq!(vp_1.map(f32::to_bits), vp_2.map(f32::to_bits));
-    assert_eq!(vq_1.map(f32::to_bits), vq_2.map(f32::to_bits));
+    let (mut p_first, mut q_first) = ([0.5f32, 0.25, 1.0, 0.125], [0.25f32, 0.5, 0.125, 1.0]);
+    let (mut p_second, mut q_second) = (p_first, q_first);
+    run(&geo(2, 2, 2, 4.0), Some(&s), &a, &mut p_first, &mut q_first, 0, 2);
+    run(&geo(2, 2, 2, 4.0), None, &a, &mut p_second, &mut q_second, 0, 2);
+    assert_eq!(p_first.map(f32::to_bits), p_second.map(f32::to_bits));
+    assert_eq!(q_first.map(f32::to_bits), q_second.map(f32::to_bits));
 }
 
 #[test]
@@ -101,12 +101,12 @@ fn deterministic() {
     let a: Vec<f32> = (0..35).map(|i| (i as f32) * 0.37 - 3.0).collect();
     let s: Vec<f32> = (0..35).map(|i| 1.0 + (i as f32) * 0.01).collect();
     let mk = || (a.clone(), (0..35).map(|i| i as f32 * 0.11).collect::<Vec<f32>>(), (0..35).map(|i| 2.0 - i as f32 * 0.07).collect::<Vec<f32>>());
-    let (_, mut vp_1, mut vq_1) = mk();
-    let (_, mut vp_2, mut vq_2) = mk();
-    run(&geo(7, 5, 7, 1.3), Some(&s), &a, &mut vp_1, &mut vq_1, 0, 5);
-    run(&geo(7, 5, 7, 1.3), Some(&s), &a, &mut vp_2, &mut vq_2, 0, 5);
-    assert_eq!(vp_1.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), vp_2.iter().map(|x| x.to_bits()).collect::<Vec<_>>());
-    assert_eq!(vq_1.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), vq_2.iter().map(|x| x.to_bits()).collect::<Vec<_>>());
+    let (_, mut p_first, mut q_first) = mk();
+    let (_, mut p_second, mut q_second) = mk();
+    run(&geo(7, 5, 7, 1.3), Some(&s), &a, &mut p_first, &mut q_first, 0, 5);
+    run(&geo(7, 5, 7, 1.3), Some(&s), &a, &mut p_second, &mut q_second, 0, 5);
+    assert_eq!(p_first.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), p_second.iter().map(|x| x.to_bits()).collect::<Vec<_>>());
+    assert_eq!(q_first.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), q_second.iter().map(|x| x.to_bits()).collect::<Vec<_>>());
 }
 
 #[test]

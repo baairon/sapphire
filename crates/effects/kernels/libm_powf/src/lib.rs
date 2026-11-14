@@ -66,16 +66,16 @@ pub fn powf_route(x: f32, y: f32) -> Out {
 }
 
 /// table log2, exponent range test, then either the fast exp tail or the alternative path.
-fn main_path(xb: u32, yb: u32, yd: f64, m_bits: u64, h: i32, ecx: u32) -> Out {
+fn main_path(xb: u32, yb: u32, yd: f64, m_bits: u64, h: i32, sign_flag: u32) -> Out {
     let idx = (((h as u32 & 0x7f) + 1) & 0xfe) as usize;
     let c = d(TBL[idx]);
     let lg = d(TBL[idx + 1]);
-    let x7 = d(((0x1ff80u32 + idx as u32) as u64) << 45);
+    let flag_7 = d(((0x1ff80u32 + idx as u32) as u64) << 45);
     let k = ((h.wrapping_add(0x41)) >> 7) - 0x7f;
     let kd = k as f64;
-    let r = d(m_bits) - x7;
+    let r = d(m_bits) - flag_7;
     let rp = r * c;
-    let z0 = (lg + rp) + kd;
+    let log_x = (lg + rp) + kd;
     let p_lo = d(A_LO) * rp + d(B_LO);
     let p_hi = d(A_HI) * rp + d(B_HI);
     let q = rp * rp;
@@ -86,37 +86,37 @@ fn main_path(xb: u32, yb: u32, yd: f64, m_bits: u64, h: i32, ecx: u32) -> Out {
     let ye = (((yd.to_bits() >> 48) as u32) & 0x7ff0) >> 4;
     let e = bsr.wrapping_sub(0x3e1).wrapping_add(ye);
     if e >= 0x23 {
-        return alt(xb, yb, yd, e, ecx, z0, q, p_lo, p_hi);
+        return alt(xb, yb, yd, e, sign_flag, log_x, q, p_lo, p_hi);
     }
     // fast path 
-    let zz = z0 * yd;
-    let r4 = q * q;
-    let pl = p_lo * r4;
+    let zz = log_x * yd;
+    let prod_4 = q * q;
+    let pl = p_lo * prod_4;
     let ph = p_hi * q;
     let ex = yd * (pl + ph);
-    let v = finish(zz, ex, ecx);
+    let v = finish(zz, ex, sign_flag);
     ok(v)
 }
 
 ///  onward (the exp2 reconstruction, shared by the fast path and): returns the float bits.
-fn finish(zz: f64, ex: f64, ecx: u32) -> u32 {
+fn finish(zz: f64, ex: f64, sign_flag: u32) -> u32 {
     let sh = d(SHIFT_BITS);
     let s = zz + sh;
     let n = s.to_bits() as u32 as i32;
     let zr = s - sh;
     let f = (zz - zr) + ex;
     let t = d(TBL[T2_BASE + (n & 0x1f) as usize]);
-    let edx = (n >> 1) & !0xf;
-    let e2 = (ecx | 0x3ff0).wrapping_add(edx as u32);
-    let scale = d(((e2 & 0xffff) as u64) << 48);
+    let copy_mode = (n >> 1) & !0xf;
+    let sum_2 = (sign_flag | 0x3ff0).wrapping_add(copy_mode as u32);
+    let scale = d(((sum_2 & 0xffff) as u64) << 48);
     let v_lo = d(C_LO) * f;
     let v_hi = d(C_HI) * f;
-    let f2 = f * f;
+    let prod_2 = f * f;
     let ft = f * t;
     let w_lo = d(D_LO) + v_lo;
     let w_hi = d(D_HI) + v_hi;
     let ts = t * scale;
-    let g = f2 * w_lo;
+    let g = prod_2 * w_lo;
     let fts = ft * scale;
     let acc = (w_hi + g) * fts;
     let res = ts + acc;
@@ -125,7 +125,7 @@ fn finish(zz: f64, ex: f64, ecx: u32) -> u32 {
 
 /// exponent product outside the plain window.
 #[allow(clippy::too_many_arguments)]
-fn alt(xb: u32, yb: u32, yd: f64, e: u32, ecx: u32, z0: f64, q: f64, p_lo: f64, p_hi: f64) -> Out {
+fn alt(xb: u32, yb: u32, yd: f64, e: u32, sign_flag: u32, log_x: f64, q: f64, p_lo: f64, p_hi: f64) -> Out {
     if xb == ONE_F {
         return ok(ONE_F); // also clears MXCSR flags 0x30
     }
@@ -137,46 +137,46 @@ fn alt(xb: u32, yb: u32, yd: f64, e: u32, ecx: u32, z0: f64, q: f64, p_lo: f64, 
         return yzero(xb);
     }
     if (e as i32) < 0 {
-        return ok((ecx << 16) | ONE_F); // 
+        return ok((sign_flag << 16) | ONE_F); // 
     }
     if e < 0x26 {
-        return poly2(yd, ecx, z0, q, p_lo, p_hi);
+        return poly2(yd, sign_flag, log_x, q, p_lo, p_hi);
     }
     // 
-    let edx = (xb & 0x7f80_0000).wrapping_sub(0x3f00_0000);
-    if edx <= 0x0080_0000 {
+    let copy_mode = (xb & 0x7f80_0000).wrapping_sub(0x3f00_0000);
+    if copy_mode <= 0x0080_0000 {
         // 
-        let ax = xb & 0x7fff_ffff;
-        let t = 1.0f32 - f32::from_bits(ax);
+        let abs_bits = xb & 0x7fff_ffff;
+        let t = 1.0f32 - f32::from_bits(abs_bits);
         if t.to_bits() & 0x7f80_0000 == 0 {
-            return ok((ecx << 16) | ONE_F);
+            return ok((sign_flag << 16) | ONE_F);
         }
-        let prod = yd * z0;
+        let prod = yd * log_x;
         if ((prod.to_bits() >> 48) as u32) & 0x7ff0 < 0x4070 {
-            return poly2(yd, ecx, z0, q, p_lo, p_hi);
+            return poly2(yd, sign_flag, log_x, q, p_lo, p_hi);
         }
     }
     // 
     let sgn = ((xb & 0x7f80_0000).wrapping_sub(0x3f80_0000) ^ yb) & 0x8000_0000;
     if sgn == 0 {
         // overflow, +-inf
-        let bits = ((ecx | 0x7f7f) & 0xffff) << 16;
+        let bits = ((sign_flag | 0x7f7f) & 0xffff) << 16;
         let v = f32::from_bits(bits);
         er((v + v).to_bits(), 0x1e)
     } else {
         // underflow, +-0
-        er((ecx & 0xffff) << 16, 0x1f)
+        er((sign_flag & 0xffff) << 16, 0x1f)
     }
 }
 
 /// second evaluation order, then the result class test .
-fn poly2(yd: f64, ecx: u32, z0: f64, q: f64, p_lo: f64, p_hi: f64) -> Out {
-    let r4 = q * q;
-    let pl = p_lo * r4;
+fn poly2(yd: f64, sign_flag: u32, log_x: f64, q: f64, p_lo: f64, p_hi: f64) -> Out {
+    let prod_4 = q * q;
+    let pl = p_lo * prod_4;
     let ph = p_hi * q;
-    let zz = (z0 + ph) * yd;
+    let zz = (log_x + ph) * yd;
     let ex = yd * pl;
-    let bits = finish(zz, ex, ecx);
+    let bits = finish(zz, ex, sign_flag);
     let hi = (bits >> 16) & 0x7fff;
     if hi >= 0x7f80 {
         er(bits, 0x1e)
@@ -207,19 +207,19 @@ fn special(xb: u32, yb: u32, yd: f64) -> Out {
     let e = ((yb >> 23) & 0xff) as i32 - 0x7f;
     let cnt: u32 = if e >= 0 { (e + 8).min(32) as u32 } else { 0 };
     let mant = ((yb & 0x7f_ffff) | 0x80_0000) as u64;
-    let eax = (mant << cnt) as u32;
-    let ax = xb & 0x7fff_ffff;
-    if ax >= INF_F {
+    let frac_bits = (mant << cnt) as u32;
+    let abs_bits = xb & 0x7fff_ffff;
+    if abs_bits >= INF_F {
         // +-inf or NaN
         let ypos = (ybits >> 48) & 0x8000 == 0;
         if xb == INF_F {
             return if ypos { ok(INF_F) } else { ok(0) };
         }
-        if ax > INF_F {
+        if abs_bits > INF_F {
             return ok(quiet(xb));
         }
         // -inf
-        return if eax == 0x8000_0000 {
+        return if frac_bits == 0x8000_0000 {
             if ypos { ok(0xff80_0000) } else { ok(0x8000_0000) }
         } else if ypos {
             ok(INF_F)
@@ -227,9 +227,9 @@ fn special(xb: u32, yb: u32, yd: f64) -> Out {
             ok(0)
         };
     }
-    if eax & 0x7fff_ffff != 0 {
+    if frac_bits & 0x7fff_ffff != 0 {
         // negative base, non integer exponent
-        if ax == 0 {
+        if abs_bits == 0 {
             if yb & 0x8000_0000 == 0 {
                 return ok(0);
             }
@@ -238,32 +238,32 @@ fn special(xb: u32, yb: u32, yd: f64) -> Out {
         //  = 0x7f800001 (signalling NaN) squared: quiet NaN with payload 1
         return er(0x7fc0_0001, 0x22);
     }
-    let ecx = eax >> 16;
-    if ax < 0x80_0000 {
-        return zero_or_denormal(xb, yb, ecx);
+    let sign_flag = frac_bits >> 16;
+    if abs_bits < 0x80_0000 {
+        return zero_or_denormal(xb, yb, sign_flag);
     }
     let h = ((xb >> 16) & 0x7fff) as i32;
     let m_bits = 1.0f64.to_bits() | ((xb as u64) << 29);
-    main_path(xb, yb, yd, m_bits, h, ecx)
+    main_path(xb, yb, yd, m_bits, h, sign_flag)
 }
 
 /// x is +-0 or +-denormal (ecx carries the odd integer exponent flag 0x8000 for negative x).
-fn zero_or_denormal(xb: u32, yb: u32, ecx: u32) -> Out {
+fn zero_or_denormal(xb: u32, yb: u32, sign_flag: u32) -> Out {
     let xs = f32::from_bits(xb) * f32::from_bits(0x5f80_0000);
     let xsb = xs.to_bits();
     if xsb & 0x7fff_ffff == 0 {
-        return zero_case(xb, yb, ecx);
+        return zero_case(xb, yb, sign_flag);
     }
     let hi = (xsb >> 16) & 0xffff;
     let m_bits = 1.0f64.to_bits() | ((xsb as u64) << 29);
     let h = (hi & 0x7fff) as i32 - 0x2000;
     let yd = f32::from_bits(yb) as f64;
-    main_path(xb, yb, yd, m_bits, h, ecx)
+    main_path(xb, yb, yd, m_bits, h, sign_flag)
 }
 
 /// x is +-0 (ecx<<16 selects the sign of the result).
-fn zero_case(xb: u32, yb: u32, ecx: u32) -> Out {
-    let m = ecx << 16;
+fn zero_case(xb: u32, yb: u32, sign_flag: u32) -> Out {
+    let m = sign_flag << 16;
     if yb & 0x8000_0000 != 0 {
         er((xb & m) | INF_F, 0x21)
     } else if xb & m != 0 {
@@ -278,14 +278,14 @@ fn ycase(xb: u32, yb: u32) -> Out {
     if (yb & 0x7fff_ffff) > INF_F {
         return ok(quiet(yb));
     }
-    let ecx = yb & 0x8000_0000;
+    let sign_flag = yb & 0x8000_0000;
     if xb & 0x7fff_ffff == 0 {
-        return zero_case(xb, yb, ecx);
+        return zero_case(xb, yb, sign_flag);
     }
     if xb ^ 0xbf80_0000 == 0 {
         return ok(ONE_F); // 
     }
-    if ecx == 0 {
+    if sign_flag == 0 {
         // y = +inf
         if (xb >> 16) & 0x7f80 >= 0x3f80 {
             ok(INF_F)

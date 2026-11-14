@@ -67,8 +67,8 @@ fn t24_variant_b_gate_derived() {
     assert_eq!(derived_head(4, &a).unwrap(), R4_HEAD);
     assert_eq!(derived_head(4, &SourceGate::from_owner(true, true, 0)).unwrap(), VB4_HEAD);
     // the (0, 0) state is refused by name instead of reading [row+0x58]
-    let e00 = derived_head(4, &SourceGate { row_gate_cell: 1, ctx_gate_a: 0, ctx_gate_b: 0 }).unwrap_err();
-    assert!(format!("{:?}", e00).contains("SOURCE-GATE-ROW58-UNRESOLVED"));
+    let head_err = derived_head(4, &SourceGate { row_gate_cell: 1, ctx_gate_a: 0, ctx_gate_b: 0 }).unwrap_err();
+    assert!(format!("{:?}", head_err).contains("SOURCE-GATE-ROW58-UNRESOLVED"));
     let e = derived_source(vec![0; 8], 4, &g, Some(R4_HEAD)).unwrap_err();
     assert!(format!("{:?}", e).contains("SOURCE-VARIANT-MISMATCH"));
     // variant B does not multiply by alpha: colour 2.0 with alpha 0.5 stays 2.0

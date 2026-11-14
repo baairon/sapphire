@@ -34,14 +34,14 @@ impl Lcg {
     }
 }
 /// finite planes in [0.05, 1.05]
-fn synth(ch: usize, n: usize, seed: u64) -> Image {
+fn synth(chan: usize, n: usize, seed: u64) -> Image {
     let mut g = Lcg(seed);
-    let planes = (0..ch).map(|_| (0..n).map(|_| 0.05 + (g.next() as f32 / 2147483648.0)).collect()).collect();
+    let planes = (0..chan).map(|_| (0..n).map(|_| 0.05 + (g.next() as f32 / 2147483648.0)).collect()).collect();
     Image::from_planes(planes).unwrap()
 }
 fn kp() -> KParams {
     // the t9 hand tests use the full-frame geometry binding (NV9-GEOM-OLD); the default is the dump geometry (t10)
-    let mut k = KParams::standin();
+    let mut k = KParams::host_defaults();
     k.geom_mode = GeomMode::Nv9Old;
     k
 }
@@ -93,11 +93,11 @@ fn make_mipmap_filter0_is_the_source_with_clamp_pads_by_hand() {
     let mut k = kp();
     k.pad_pixel = [7.0; 4];
     let args0 = [Arg::Img(&src), cst(&[0.0, 0.0]), cst(&[0.0])];
-    let m0 = match run_any("make_mipmap", 1, &args0, 4, (2, 2), &k).unwrap() {
+    let bits_0 = match run_any("make_mipmap", 1, &args0, 4, (2, 2), &k).unwrap() {
         Out::Mip(m) => m,
         _ => panic!(),
     };
-    let at0 = |x: isize, y: isize| f32::from_bits(m0.ripmap.planes[0][m0.ripmap.at(0, x, y, 0)]);
+    let at0 = |x: isize, y: isize| f32::from_bits(bits_0.ripmap.planes[0][bits_0.ripmap.at(0, x, y, 0)]);
     assert_eq!([at0(-1, 0), at0(2, 0), at0(3, 1)], [7.0, 7.0, 7.0]);
     assert_eq!(at0(0, 0), 1.0);
 }
@@ -141,11 +141,11 @@ fn warp_rel_by_hand_zero_and_one_pixel_shifts() {
         img(run("warp_rel", &args, 8, 2).unwrap())
     };
     assert_eq!(wr(&[0.0, 0.0]).planes[0], src.planes[0]);
-    let dx = wr(&[0.25, 0.0]);
+    let delta_x = wr(&[0.25, 0.0]);
     for y in 0..2 {
         for x in 0..8 {
             let sx = (x + 1).min(7);
-            assert_eq!(dx.planes[0][y * 8 + x], src.planes[0][y * 8 + sx], "dx at {},{}", x, y);
+            assert_eq!(delta_x.planes[0][y * 8 + x], src.planes[0][y * 8 + sx], "dx at {},{}", x, y);
         }
     }
     let dy = wr(&[0.0, 0.25]);
@@ -184,16 +184,16 @@ fn blur_warp_identity_when_both_endpoints_are_xy_on_a_power_of_two_frame() {
     assert_eq!(bits(&out), bits(&src), "zero-length path samples the source at the pixel (weights 1,0,0,0)");
     // scale_result 2 scales every plane once (MEASURED here on the zero-length path; the ratios go to out/BLUR_WARP_SCALE_OBS_NV9B.txt)
     let args2 = [Arg::Mip(&mip), Arg::Img(&xy), Arg::Img(&xy), cst(&[0.5, 0.5]), cst(&[2.0]), cst(&[0.0, 0.0]), cst(&[1.0]), cst(&[0.0])];
-    let o2 = img(run("blur_warp", &args2, w, h).unwrap());
+    let scaled_img = img(run("blur_warp", &args2, w, h).unwrap());
     let mut txt = String::from("scale_result=2, zero-length path, 8x4: ratio out/src per plane by sample index
 ");
     for k in 0..4 {
-        let r: Vec<i32> = (0..w * h).map(|i| (o2.planes[k][i] / src.planes[k][i]).round() as i32).collect();
+        let r: Vec<i32> = (0..w * h).map(|i| (scaled_img.planes[k][i] / src.planes[k][i]).round() as i32).collect();
         txt.push_str(&format!("plane {}: {:?}
 ", k, r));
-        assert!(o2.planes[k].iter().all(|x| x.is_finite()));
+        assert!(scaled_img.planes[k].iter().all(|x| x.is_finite()));
         for i in 0..w * h {
-            assert_eq!(o2.planes[k][i], 2.0 * src.planes[k][i]);
+            assert_eq!(scaled_img.planes[k][i], 2.0 * src.planes[k][i]);
         }
     }
     let _ = std::fs::write(effects_vecdir::out_dir().join("BLUR_WARP_SCALE_OBS_NV9B.txt"), txt);
@@ -229,8 +229,8 @@ fn static2_matches_its_crate_and_the_seed_matters() {
     assert_eq!(o.planes, vec![a.clone(), b]);
     let mut k = kp();
     k.static2_seed_a = 5;
-    let o5 = img(run_any("static2", 2, &[], 24, (6, 4), &k).unwrap());
-    assert_ne!(o5.planes[0], a);
+    let const_img = img(run_any("static2", 2, &[], 24, (6, 4), &k).unwrap());
+    assert_ne!(const_img.planes[0], a);
     // determinism and range: the class returns values of a 12 bit hash times 2^-12 (hand: |v| < 1)
     assert!(o.planes[0].iter().all(|x| x.abs() < 16.0 && x.is_finite()));
 }
@@ -247,8 +247,8 @@ fn monochrome_by_hand_weights_and_the_pad_route() {
     assert_eq!(o.planes[0], vec![1.0, 0.625, 2.0, 1.5]);
     // 1 channel input: the pad route (plane service copy of channel 0, NV5-A1 model)
     let one = Image { n: 4, planes: vec![vec![0.25, 0.5, 0.75, 1.0]] };
-    let o1 = img(run("monochrome", &[Arg::Img(&one)], 4, 1).unwrap());
-    assert_eq!(o1.planes[0], one.planes[0]);
+    let one_img = img(run("monochrome", &[Arg::Img(&one)], 4, 1).unwrap());
+    assert_eq!(one_img.planes[0], one.planes[0]);
 }
 
 #[test]
@@ -267,9 +267,9 @@ fn coerce_family_by_hand() {
     assert!(up.planes.iter().all(|p| *p == vec![0.5, 0.25]));
     // coerce_up of 3 channels to 4: pass EF_CELL_A copies 3 and fills alpha with 1.0
     let three = Image { n: 2, planes: four.planes[..3].to_vec() };
-    let u3 = img(run("coerce_up", &[Arg::Img(&three), cst(&[-999.0; 4])], 2, 1).unwrap());
-    assert_eq!(u3.planes[3], vec![1.0, 1.0]);
-    assert_eq!(u3.planes[..3], three.planes[..]);
+    let three_img = img(run("coerce_up", &[Arg::Img(&three), cst(&[-999.0; 4])], 2, 1).unwrap());
+    assert_eq!(three_img.planes[3], vec![1.0, 1.0]);
+    assert_eq!(three_img.planes[..3], three.planes[..]);
 }
 
 #[test]
@@ -279,13 +279,13 @@ fn rotate_by_hand() {
     }
     // angle 0: identity within the sincos table accuracy; angle 0.5 turn about the centre (1,1): (2,1) -> (0,1)
     let v = Image { n: 2, planes: vec![vec![2.0, 3.0], vec![1.0, 5.0]] };
-    let o0 = img(run("rotate", &[Arg::Img(&v), cst(&[0.0]), cst(&[0.0, 0.0])], 2, 1).unwrap());
+    let v_img = img(run("rotate", &[Arg::Img(&v), cst(&[0.0]), cst(&[0.0, 0.0])], 2, 1).unwrap());
     for i in 0..2 {
-        assert!((o0.planes[0][i] - v.planes[0][i]).abs() < 1e-6 && (o0.planes[1][i] - v.planes[1][i]).abs() < 1e-6);
+        assert!((v_img.planes[0][i] - v.planes[0][i]).abs() < 1e-6 && (v_img.planes[1][i] - v.planes[1][i]).abs() < 1e-6);
     }
-    let o5 = img(run("rotate", &[Arg::Img(&v), cst(&[0.5]), cst(&[1.0, 1.0])], 2, 1).unwrap());
-    assert!((o5.planes[0][0] - 0.0).abs() < 1e-5 && (o5.planes[1][0] - 1.0).abs() < 1e-5, "{:?}", o5.planes);
-    assert!((o5.planes[0][1] - (-1.0)).abs() < 1e-5 && (o5.planes[1][1] - (-3.0)).abs() < 1e-5, "{:?}", o5.planes);
+    let const_img = img(run("rotate", &[Arg::Img(&v), cst(&[0.5]), cst(&[1.0, 1.0])], 2, 1).unwrap());
+    assert!((const_img.planes[0][0] - 0.0).abs() < 1e-5 && (const_img.planes[1][0] - 1.0).abs() < 1e-5, "{:?}", const_img.planes);
+    assert!((const_img.planes[0][1] - (-1.0)).abs() < 1e-5 && (const_img.planes[1][1] - (-3.0)).abs() < 1e-5, "{:?}", const_img.planes);
 }
 
 #[test]
@@ -316,9 +316,9 @@ fn blur_sigma_zero_copy_and_the_edge_parameter_is_sensitive() {
     assert_eq!(bits(&o), bits(&src), "sigma 0, gain 1: a copy (blur crate T1)");
     let args = [Arg::Img(&src), cst(&[8.0, 8.0]), cst(&[1.0]), cst(&[1.0]), cst(&[0.0])];
     let m = img(run_any("blur", 1, &args, w * h, (w, h), &kp()).unwrap());
-    let mut k0 = kp();
-    k0.blur_edge = 0;
-    let z = img(run_any("blur", 1, &args, w * h, (w, h), &k0).unwrap());
+    let mut kp_edge = kp();
+    kp_edge.blur_edge = 0;
+    let z = img(run_any("blur", 1, &args, w * h, (w, h), &kp_edge).unwrap());
     assert_ne!(bits(&m), bits(&z), "edge mode zero vs mirror changes the border");
     assert!(m.planes[0].iter().all(|x| x.is_finite()));
 }
@@ -329,8 +329,8 @@ fn inputs_for(cp: &fx_eval::CompiledProgram, w: usize, h: usize, seed: u64) -> I
     let mut images = BTreeMap::new();
     for nd in &cp.nodes {
         if nd.kind == "input" {
-            let ch = if nd.elnum > 0 { nd.elnum as usize } else { 4 };
-            images.insert(nd.name.clone(), synth(ch, w * h, seed + nd.name.len() as u64));
+            let chan = if nd.elnum > 0 { nd.elnum as usize } else { 4 };
+            images.insert(nd.name.clone(), synth(chan, w * h, seed + nd.name.len() as u64));
         }
     }
     Inputs { width: w, height: h, images }
@@ -458,8 +458,8 @@ fn node_level_equals_original_plan_commands() {
             s.split(';').filter_map(|kv| kv.split_once('=')).map(|(k, v)| (k.to_string(), v.split(',').filter_map(|x| x.parse().ok()).collect())).collect()
         };
         let ov1 = sv("rotate=30;z_dist=1.2;shift=0.1,0.2;shutter_duration=0.5;shutter_shift=0.25;center=0.3,0.4");
-        let r1: Vec<(&str, Vec<f32>)> = ov1.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
-        xcheck("TaB hooked set", "Transform_and_Blur", &r1, true, true, &h("Transform_and_Blur_hcset"), &mut rows);
+        let ov_list: Vec<(&str, Vec<f32>)> = ov1.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+        xcheck("TaB hooked set", "Transform_and_Blur", &ov_list, true, true, &h("Transform_and_Blur_hcset"), &mut rows);
         let ov2 = sv("rotate=30;z_dist=1.2;shift=0.1,0.2;shutter_duration=0.5;shutter_shift=0.25");
         let r2: Vec<(&str, Vec<f32>)> = ov2.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
         xcheck("BMC hooked set", "Blur_Motion_Curves_No_Transform", &r2, true, true, &h("Blur_Motion_Curves_No_Transform_hcset"), &mut rows);
@@ -510,15 +510,15 @@ fn milestone_status_matrix_nv9() {
                             continue;
                         }
                     };
-                    let run: Vec<String> = cp.nodes.iter().filter(|n| (n.kind == "func" || n.kind == "auto") && !n.b160 && !n.folded).map(|n| n.prim.clone()).collect();
+                    let run: Vec<String> = cp.nodes.iter().filter(|n| (n.kind == "func" || n.kind == "auto") && !n.is_const_node && !n.folded).map(|n| n.prim.clone()).collect();
                     let un = unsupported_classes(&cp);
                     let inp = inputs_for(&cp, 16, 8, 100);
                     let hostf = HostFrames { prev_dest: Some(synth(4, 128, 9)), frames: [(-1, synth(4, 128, 2)), (0, synth(4, 128, 3)), (1, synth(4, 128, 4))].into_iter().collect(), frame_round_old: true, ..HostFrames::default() };
-                    let r1 = execute_compiled(&cp, &b, &inp, &hostf);
-                    let res = match &r1 {
+                    let exec_out = execute_compiled(&cp, &b, &inp, &hostf);
+                    let res = match &exec_out {
                         Ok(o) => {
-                            let o2 = execute_compiled(&cp, &b, &inp, &hostf).unwrap();
-                            format!("OK ch={} diag={} det={}", o.dest.channels(), o.diagnostics.len(), if bits(&o.dest) == bits(&o2.dest) { "Y" } else { "N" })
+                            let scaled_img = execute_compiled(&cp, &b, &inp, &hostf).unwrap();
+                            format!("OK ch={} diag={} det={}", o.dest.channels(), o.diagnostics.len(), if bits(&o.dest) == bits(&scaled_img.dest) { "Y" } else { "N" })
                         }
                         Err(e) => format!("ERR {}", e),
                     };
@@ -542,13 +542,13 @@ fn hooked_curve_sets_run_rotate_on_images_and_the_matrix_rows_extend() {
         let g = genotype("Blur_Motion_Curves_No_Transform");
         let b = binding(&ov, true, true);
         let cp = compile_for(&g, &b).unwrap();
-        let run: Vec<String> = cp.nodes.iter().filter(|n| (n.kind == "func" || n.kind == "auto") && !n.b160 && !n.folded).map(|n| n.prim.clone()).collect();
+        let run: Vec<String> = cp.nodes.iter().filter(|n| (n.kind == "func" || n.kind == "auto") && !n.is_const_node && !n.folded).map(|n| n.prim.clone()).collect();
         assert!(run.contains(&"rotate".to_string()), "{:?}", run);
         assert!(unsupported_classes(&cp).is_empty(), "{:?}", unsupported_classes(&cp));
         let o = run_program("Blur_Motion_Curves_No_Transform", &ov, true, true, 16, 8).unwrap();
         assert!(o.dest.planes.iter().all(|p| p.iter().all(|x| x.is_finite())));
-        let o2 = run_program("Blur_Motion_Curves_No_Transform", &ov, true, true, 16, 8).unwrap();
-        assert_eq!(bits(&o.dest), bits(&o2.dest));
+        let scaled_img = run_program("Blur_Motion_Curves_No_Transform", &ov, true, true, 16, 8).unwrap();
+        assert_eq!(bits(&o.dest), bits(&scaled_img.dest));
     });
 }
 
@@ -582,8 +582,8 @@ fn unsupported_classes_over_all_programs() {
                 b.const_inputs.insert("Mask".into(), vec![1.0]);
                 b.host_curves_unkeyed = true;
                 if let Ok(cp) = compile_for(&g, &b) {
-                    for cl in unsupported_classes(&cp) {
-                        let ent = by.entry(cl).or_insert((Vec::new(), 0));
+                    for class_name in unsupported_classes(&cp) {
+                        let ent = by.entry(class_name).or_insert((Vec::new(), 0));
                         ent.1 += 1;
                         if !ent.0.contains(&e.name) {
                             ent.0.push(e.name.clone());
@@ -637,10 +637,10 @@ fn host_geometry_and_pad_pixel_are_sensitive_inputs() {
         Out::Mip(m) => m,
         _ => panic!(),
     };
-    let a5 = [Arg::Mip(&mip5), Arg::Img(&xy), Arg::Img(&xy), cst(&[0.5, 0.5]), cst(&[1.0]), cst(&[0.0, 0.0]), cst(&[1.0]), cst(&[0.0])];
-    let o5 = img(run_any("blur_warp", 4, &a5, w * h, (w, h), &kpad).unwrap());
+    let lanes_5 = [Arg::Mip(&mip5), Arg::Img(&xy), Arg::Img(&xy), cst(&[0.5, 0.5]), cst(&[1.0]), cst(&[0.0, 0.0]), cst(&[1.0]), cst(&[0.0])];
+    let const_img = img(run_any("blur_warp", 4, &lanes_5, w * h, (w, h), &kpad).unwrap());
     for y in 0..h {
-        assert_eq!(o5.planes[0][y * w + (w - 1)], 5.0, "row {}", y);
+        assert_eq!(const_img.planes[0][y * w + (w - 1)], 5.0, "row {}", y);
     }
 }
 
@@ -650,15 +650,15 @@ fn fx1_blur_render_scale_defaults_to_the_frame_width() {
     for (w, h) in [(64usize, 32usize), (50, 7)] {
         let src = synth(1, w * h, 11);
         let args = [Arg::Img(&src), cst(&[4.0, 4.0]), cst(&[1.0]), cst(&[1.0]), cst(&[0.0])];
-        assert_eq!(KParams::standin().blur_render_scale, 0, "0 means the frame width");
+        assert_eq!(KParams::host_defaults().blur_render_scale, 0, "0 means the frame width");
         let d = img(run_any("blur", 1, &args, w * h, (w, h), &kp()).unwrap());
         let mut kw = kp();
         kw.blur_render_scale = w as i32;
         let e = img(run_any("blur", 1, &args, w * h, (w, h), &kw).unwrap());
         assert_eq!(bits(&d), bits(&e), "default == explicit scale W at {}x{}", w, h);
-        let mut k1 = kp();
-        k1.blur_render_scale = 1;
-        let o = img(run_any("blur", 1, &args, w * h, (w, h), &k1).unwrap());
+        let mut kp_scale = kp();
+        kp_scale.blur_render_scale = 1;
+        let o = img(run_any("blur", 1, &args, w * h, (w, h), &kp_scale).unwrap());
         assert_ne!(bits(&d), bits(&o), "the old scale 1 gives a different blur at {}x{}", w, h);
     }
 }

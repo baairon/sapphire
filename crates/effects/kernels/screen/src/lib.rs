@@ -123,14 +123,14 @@ pub fn render(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]]) -> R
 /// The whole 256-bit route of slot 53.
 pub fn run(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Mutant) -> Result<(), ScreenError> {
     // r13 = (countA == 3 && countB == 4), rbx = (countA == 4 && countB == 3)
-    let (mut r13, mut rbx) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
+    let (mut a_rgb_b_rgba, mut a_rgba_b_rgb) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
     if m == Mutant::R14Swap {
-        r13 = a.count == 4 && b.count == 3;
+        a_rgb_b_rgba = a.count == 4 && b.count == 3;
     }
     if m == Mutant::R12Off {
-        rbx = false;
+        a_rgba_b_rgb = false;
     }
-    let fixed3 = if m == Mutant::Fixed3Off { r13 || rbx } else { r13 || rbx || p.nout == 3 };
+    let fixed3 = if m == Mutant::Fixed3Off { a_rgb_b_rgba || a_rgba_b_rgb } else { a_rgb_b_rgba || a_rgba_b_rgb || p.nout == 3 };
     let mut nch: i32 = if fixed3 {
         3
     } else if p.nout > 0 {
@@ -143,30 +143,30 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Muta
     }
     let n = p.n;
     if n > 0 {
-        for ch in 0..nch {
-            if out.get(ch as usize).map_or(true, |d| d.len() < n as usize) {
+        for chan in 0..nch {
+            if out.get(chan as usize).map_or(true, |d| d.len() < n as usize) {
                 return Err(ScreenError::MissingOut);
             }
         }
-        if (r13 || rbx) && out.get(3).map_or(true, |d| d.len() < n as usize) {
+        if (a_rgb_b_rgba || a_rgba_b_rgb) && out.get(3).map_or(true, |d| d.len() < n as usize) {
             return Err(ScreenError::MissingOut);
         }
     }
     let (a_const, b_const) = (a.is_const && m != Mutant::NoConstA, b.is_const && m != Mutant::NoConstB);
-    for ch in 0..nch {
-        let mut ia = ch.min(a.count - 1);
-        let mut ib = ch.min(b.count - 1);
+    for chan in 0..nch {
+        let mut ia = chan.min(a.count - 1);
+        let mut ib = chan.min(b.count - 1);
         if m == Mutant::ClampA {
-            ia = ch.min(a.count);
+            ia = chan.min(a.count);
         }
         if m == Mutant::ClampB {
-            ib = ch.min(b.count);
+            ib = chan.min(b.count);
         }
         if n <= 0 {
             continue;
         }
         let n = n as usize;
-        let dst_i = ch as usize;
+        let dst_i = chan as usize;
         if a_const {
             // the A constant flag is tested first; the B plane is read even if B is flagged constant
             let ca = a.consts[cidx(ia)?];
@@ -191,10 +191,10 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Muta
         }
     }
     if n > 0 {
-        if r13 {
+        if a_rgb_b_rgba {
             ext(true, p, a, b, out, m)?;
         }
-        if rbx {
+        if a_rgba_b_rgb {
             ext(false, p, a, b, out, m)?;
         }
     }
@@ -291,10 +291,10 @@ fn vec_kernel(d: &mut [f32], src: &[f32], n: usize, phase: u32, m: Mutant, f: &d
 
 pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
-        ("SC-A1", "MEASURED-VALUE", "constant 1.0f (cell 0x15e850c) (value read from the reference run)"),
-        ("SC-A7", "SEMANTIC (explicit parameter vec_one)", "32 byte vector constant (cell 0x1605560) used by the (3,4) fill kernel core; basis: the scalar head and tail of the same loop store the immediate 1.0f; the tests use 1.0 and 0.75"),
+        ("SC-A1", "MEASURED-VALUE", "constant 1.0f (cell) (value read from the reference run)"), // origin: 0x15e850c
+        ("SC-A7", "SEMANTIC (explicit parameter vec_one)", "32 byte vector constant (cell) used by the (3,4) fill kernel core; basis: the scalar head and tail of the same loop store the immediate 1.0f; the tests use 1.0 and 0.75"), // origin: 0x1605560
         ("SC-A8", "ALIGN-DEPENDENT", "dst3_phase_bytes = (address of output plane 3) & 0x1f is an explicit input (matters only when vec_one != 1.0)"),
-        ("SC-A2", "ROUTE", "256-bit route only: feature word 0x9d97ff; the 128-bit route at 0x4e4aa0 and the SSE route at 0x4e5070 are not ported"),
+        ("SC-A2", "ROUTE", "256-bit route only: feature word; the 128-bit route and the SSE route are not ported"), // origin: 0x9d97ff, 0x4e4aa0, 0x4e5070
         ("SC-A3", "HOST-FP-ASSUMED", "round to nearest, no flush-to-zero, no denormals-are-zero"),
         ("SC-A4", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 (output channel count of the chosen combo entry) is an explicit parameter; combo table from the shared operator block"),
         ("SC-A5", "INFERRED", "this+0x40/+0x70 are operand channel counts, +0x44/+0x74 the constant flags, +0x4c../+0x7c.. the constants, records at +0x60/+0x90 with plane c at rec+0x20+8c"),

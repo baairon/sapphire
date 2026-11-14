@@ -311,10 +311,10 @@ pub fn ae32_dest(route: &Ae32Route, im: &Image, w: usize, h: usize) -> Result<Ve
             format14_write::CErr::BadMode(m) => ExecError::Shape(format!("DEST-MODE-LOGGED: mode {} on a {}-plane destination (the original logs and writes nothing)", m, d.planes)),
             other => ExecError::Shape(format!("code-14 destination body: {:?}", other)),
         })?;
-        if let Some(si) = d.copier_source {
-            let s = route.sources.get(si).ok_or_else(|| ExecError::MissingInput(format!("'ae32' copier source {}", si)))?;
+        if let Some(src_idx) = d.copier_source {
+            let s = route.sources.get(src_idx).ok_or_else(|| ExecError::MissingInput(format!("'ae32' copier source {}", src_idx)))?;
             if s.words.len() != 4 * w * h {
-                return Err(ExecError::Shape(format!("'ae32' copier source {} has {} words, {} needed", si, s.words.len(), 4 * w * h)));
+                return Err(ExecError::Shape(format!("'ae32' copier source {} has {} words, {} needed", src_idx, s.words.len(), 4 * w * h)));
             }
             format14_write::copy_word0(&s.words[4 * w * y..4 * w * (y + 1)], dst, w as i32).map_err(|e| ExecError::Shape(format!("row copier (14, 14): {:?}", e)))?;
         }

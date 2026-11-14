@@ -142,49 +142,49 @@ fn cidx(idx: i32) -> Result<usize, OpError> {
 /// The whole slot-53 AVX2 body of one class.
 pub fn run(k: Kind, p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Mutant) -> Result<(), OpError> {
     // r14 = (countA == 3 && countB == 4), r12 = (countA == 4 && countB == 3)
-    let (mut r14, mut r12) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
+    let (mut a_rgb_b_rgba, mut a_rgba_b_rgb) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
     if m == Mutant::R14Swap {
-        r14 = a.count == 4 && b.count == 3;
+        a_rgb_b_rgba = a.count == 4 && b.count == 3;
     }
     if m == Mutant::ExtA3Only {
-        r14 = a.count == 3;
+        a_rgb_b_rgba = a.count == 3;
     }
     if m == Mutant::R12Off {
-        r12 = false;
+        a_rgba_b_rgb = false;
     }
     // (r14|r12) != 0 or nout == 3 take the fixed 3-channel loop (no nout <= 0 test); else loop nout channels (: jle skips)
-    let fixed3 = if m == Mutant::Fixed3Off { r14 || r12 } else { r14 || r12 || p.nout == 3 };
+    let fixed3 = if m == Mutant::Fixed3Off { a_rgb_b_rgba || a_rgba_b_rgb } else { a_rgb_b_rgba || a_rgba_b_rgb || p.nout == 3 };
     let mut nch: i32 = if fixed3 { 3 } else if p.nout > 0 { p.nout } else { 0 };
     if m == Mutant::Nch2 && nch > 2 {
         nch = 2;
     }
     let n = p.n;
     if n > 0 {
-        for ch in 0..nch {
-            if out.get(ch as usize).map_or(true, |d| d.len() < n as usize) {
+        for chan in 0..nch {
+            if out.get(chan as usize).map_or(true, |d| d.len() < n as usize) {
                 return Err(OpError::MissingOut);
             }
         }
-        if (r14 || r12) && out.get(3).map_or(true, |d| d.len() < n as usize) {
+        if (a_rgb_b_rgba || a_rgba_b_rgb) && out.get(3).map_or(true, |d| d.len() < n as usize) {
             return Err(OpError::MissingOut);
         }
     }
     let (a_const, b_const) = (a.is_const && m != Mutant::NoConstA, b.is_const && m != Mutant::NoConstB);
-    for ch in 0..nch {
+    for chan in 0..nch {
         // cmp esi,eax ; cmovl edx,esi : idx = min(ch, count - 1), signed
-        let mut ia = ch.min(a.count - 1);
-        let mut ib = ch.min(b.count - 1);
+        let mut ia = chan.min(a.count - 1);
+        let mut ib = chan.min(b.count - 1);
         if m == Mutant::ClampA {
-            ia = ch.min(a.count);
+            ia = chan.min(a.count);
         }
         if m == Mutant::ClampB {
-            ib = ch.min(b.count);
+            ib = chan.min(b.count);
         }
         if n <= 0 {
             continue; // cmp [n],0; jle next channel
         }
         let n = n as usize;
-        let dst_i = ch as usize;
+        let dst_i = chan as usize;
         if a_const {
             let ca = a.consts[cidx(ia)?];
             let pb = plane(b, ib)?; // r14 = B plane (needed by the A-constant branch even if B is flagged constant)
@@ -212,10 +212,10 @@ pub fn run(k: Kind, p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]]
         }
     }
     if n > 0 {
-        if r14 {
+        if a_rgb_b_rgba {
             ext(k, true, p, a, b, out, m)?;
         }
-        if r12 {
+        if a_rgba_b_rgb {
             ext(k, false, p, a, b, out, m)?;
         }
     }
@@ -348,7 +348,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
         ("OP1-A1", "CAPTURED", "ONE 1.0f, DIV_K 1000000.0f : bytes read by lookup.py (gate/lookup_ops.tsv)"),
         ("OP1-A2", "SEMANTIC (PARAM-UNCAPTURED-style explicit parameter vec_one)", "vector constant (32 B, uncovered) used by the + and - extension kernels; basis: the scalar head and tail of the same loop use captured ONE over the same array; T2 runs 1.0 and 0.75 on both sides"),
-        ("OP1-A3", "ROUTE", "AVX2 route only: feature word 0x9d97ff selects; AVX tiers and SSE tiers not ported"),
+        ("OP1-A3", "ROUTE", "AVX2 route only: feature word selects; AVX tiers and SSE tiers not ported"), // origin: 0x9d97ff
         ("OP1-A4", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ; the emulator follows the SDM, not silicon"),
         ("OP1-A5", "ALIGN-DEPENDENT", "dst3_phase_bytes = (address of output plane 3) & 0x1f is an explicit input (only the + and - extension kernels split on it, and only matters when vec_one != 1.0); the main loops are scalar"),
         ("OP1-A6", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 (: [chosen combo] or -1) is an explicit parameter; the combo choice and the type tables of the combo builder are uncovered and not rebuilt (INFERRED: nout is the output channel count 1..4 of the chosen combo)"),

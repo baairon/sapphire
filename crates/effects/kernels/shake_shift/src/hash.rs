@@ -8,11 +8,11 @@ const LCG_ADD: u64 = 150_889;
 #[inline]
 pub fn lcg_step(x: u32) -> u32 {
     const MAGIC: i64 = 0x5dfc_9956_8187_2319_u64 as i64;
-    let rcx = (x << 12) as u64;
-    let n = rcx.wrapping_add(LCG_ADD);
+    let shifted = (x << 12) as u64;
+    let n = shifted.wrapping_add(LCG_ADD);
     let prod = (n as i64 as i128) * (MAGIC as i128);
     let q = ((prod >> 64) as u64) >> 18;
-    rcx.wrapping_add(q.wrapping_mul(0xffff_ffff_fff5_1ad7)).wrapping_add(LCG_ADD) as u32
+    shifted.wrapping_add(q.wrapping_mul(0xffff_ffff_fff5_1ad7)).wrapping_add(LCG_ADD) as u32
 }
 
 /// The 256-dword table the builder fills, plus the generator state it stores to a second cell (`tail`).
@@ -29,11 +29,11 @@ impl HashTable {
         let mut t = [0u32; HASH_TABLE_LEN];
         let mut state: u32 = 0;
         for slot in t.iter_mut() {
-            let y1 = lcg_step(state);
-            let y2 = lcg_step(y1);
-            let y3 = lcg_step(y2);
-            *slot = (y1 >> 2).wrapping_add(y2 << 8).wrapping_add(y3 << 18);
-            state = y3;
+            let lcg_step_1 = lcg_step(state);
+            let lcg_step_2 = lcg_step(lcg_step_1);
+            let lcg_step_3 = lcg_step(lcg_step_2);
+            *slot = (lcg_step_1 >> 2).wrapping_add(lcg_step_2 << 8).wrapping_add(lcg_step_3 << 18);
+            state = lcg_step_3;
         }
         HashTable { t, tail: state }
     }

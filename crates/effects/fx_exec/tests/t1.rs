@@ -32,10 +32,10 @@ impl Lcg {
 }
 
 /// Dense synthetic planes: random values in [-0.3, 1.3] with exact 0, 1, -0 and 0.5 sprinkled in.
-fn synth(ch: usize, n: usize, seed: u64, alpha01: bool) -> Image {
+fn synth(chan: usize, n: usize, seed: u64, alpha01: bool) -> Image {
     let mut g = Lcg(seed);
     let mut planes = Vec::new();
-    for c in 0..ch {
+    for c in 0..chan {
         let mut p = Vec::with_capacity(n);
         for i in 0..n {
             let r = g.next();
@@ -153,7 +153,7 @@ fn img(planes: Vec<Vec<f32>>) -> Image {
 
 fn run_cmds(cmds: &[&str], inputs: &[Image]) -> Result<Image, ExecError> {
     let v: Vec<String> = cmds.iter().map(|s| s.to_string()).collect();
-    let o = execute_commands(&v, inputs, 2, 2, &HostFrames::default(), &KParams::standin())?;
+    let o = execute_commands(&v, inputs, 2, 2, &HostFrames::default(), &KParams::host_defaults())?;
     o.dest.ok_or(ExecError::BadPlan("no convert-to-dest".into()))
 }
 
@@ -316,12 +316,12 @@ fn composite_equals_comp_rgba_render_and_original_plan() {
         let back = synth(4, n, 12, true);
         let b = binding_with(BTreeMap::new());
         let inp = inputs_of(&[("Front", front.clone()), ("Back", back.clone())], w, h);
-        let o1 = execute(&g, &b, &inp, &HostFrames::default()).unwrap();
-        let o2 = execute(&g, &b, &inp, &HostFrames::default()).unwrap();
-        assert!(bits_eq(&o1.dest, &o2.dest), "determinism");
-        assert_eq!(o1.trace.len(), 1);
-        assert_eq!(o1.trace[0].class, "comp_rgba");
-        assert!(o1.diagnostics.is_empty(), "{:?}", o1.diagnostics);
+        let first_run = execute(&g, &b, &inp, &HostFrames::default()).unwrap();
+        let second_run = execute(&g, &b, &inp, &HostFrames::default()).unwrap();
+        assert!(bits_eq(&first_run.dest, &second_run.dest), "determinism");
+        assert_eq!(first_run.trace.len(), 1);
+        assert_eq!(first_run.trace[0].class, "comp_rgba");
+        assert!(first_run.diagnostics.is_empty(), "{:?}", first_run.diagnostics);
         // S3 render of comp_rgba directly: A = Back, B = Front, (4,4)
         let p = comp_rgba::Params { ca: 4, cb: 4, flag_a: false, flag_b: false, a_vals: [0.0; 4], b_vals: [0.0; 4], n: n as i32 };
         let pa: Vec<&[f32]> = back.planes.iter().map(|x| x.as_slice()).collect();
@@ -331,11 +331,11 @@ fn composite_equals_comp_rgba_render_and_original_plan() {
             let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|x| x.as_mut_slice()).collect();
             comp_rgba::render(&p, &comp_rgba::Host { vcall_f0_handled: false }, &pa, &pb, &mut outs).unwrap();
         }
-        assert!(bits_eq(&o1.dest, &Image::from_planes(outv).unwrap()), "native Composite differs from comp_rgba's S3 render");
+        assert!(bits_eq(&first_run.dest, &Image::from_planes(outv).unwrap()), "native Composite differs from comp_rgba's S3 render");
         // the original plan's commands (inputs by index: 0 = Front, 1 = Back)
         let dump = std::fs::read_to_string(effects_vecdir::root().join("wave_s7").join("rebuild_fx_plan").join("port").join("data").join("orig").join("PLAN_ORIG_Composite_default.txt")).unwrap();
-        let oc = execute_commands(&commands_of_dump(&dump), &[front, back], w, h, &HostFrames::default(), &KParams::standin()).unwrap();
-        assert!(bits_eq(&o1.dest, oc.dest.as_ref().unwrap()), "node-level vs original plan commands");
+        let oc = execute_commands(&commands_of_dump(&dump), &[front, back], w, h, &HostFrames::default(), &KParams::host_defaults()).unwrap();
+        assert!(bits_eq(&first_run.dest, oc.dest.as_ref().unwrap()), "node-level vs original plan commands");
     });
 }
 
@@ -356,9 +356,9 @@ fn hue_sat_bright_node_level_equals_original_plan_commands_on_all_six_dumps() {
             let b = binding_with(dump_sets(&dump));
             let inp = inputs_of(&[("Source", src.clone())], w, h);
             let o = execute(&g, &b, &inp, &HostFrames::default()).unwrap_or_else(|e| panic!("{}: {}", tag, e));
-            let o2 = execute(&g, &b, &inp, &HostFrames::default()).unwrap();
-            assert!(bits_eq(&o.dest, &o2.dest));
-            let oc = execute_commands(&commands_of_dump(&dump), &[src.clone()], w, h, &HostFrames::default(), &KParams::standin()).unwrap_or_else(|e| panic!("{} cmds: {}", tag, e));
+            let second_run = execute(&g, &b, &inp, &HostFrames::default()).unwrap();
+            assert!(bits_eq(&o.dest, &second_run.dest));
+            let oc = execute_commands(&commands_of_dump(&dump), &[src.clone()], w, h, &HostFrames::default(), &KParams::host_defaults()).unwrap_or_else(|e| panic!("{} cmds: {}", tag, e));
             let eq = bits_eq(&o.dest, oc.dest.as_ref().unwrap());
             // the plan text prints constants with 6 significant digits, so a computed f32 lane such as 1.1 * 1.3 can differ
             // by one ulp from the parsed text: the bit-exact claim is for the dumps whose constants print exactly
@@ -405,7 +405,7 @@ fn try_program(name: &str, tag: &str, ov: BTreeMap<String, Vec<f32>>, g: &Genoty
         hf.frames.insert(off, synth(4, w * h, 100 + (off + 10) as u64, true));
     }
     let inp = Inputs { width: w, height: h, images };
-    let run: Vec<String> = cp.nodes.iter().filter(|n| (n.kind == "func" || n.kind == "auto") && !n.b160 && !n.folded).map(|n| n.prim.clone()).collect();
+    let run: Vec<String> = cp.nodes.iter().filter(|n| (n.kind == "func" || n.kind == "auto") && !n.is_const_node && !n.folded).map(|n| n.prim.clone()).collect();
     let un = unsupported_classes(&cp);
     match execute_compiled(&cp, &b, &inp, &hf) {
         Ok(o) => {

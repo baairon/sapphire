@@ -152,9 +152,9 @@ impl<'a> Parser<'a> {
                             let h = std::str::from_utf8(self.s.get(self.i..self.i + 4).ok_or("bad \\u")?).map_err(|_| "bad \\u")?;
                             let cp = u32::from_str_radix(h, 16).map_err(|_| "bad \\u")?;
                             self.i += 4;
-                            let ch = char::from_u32(cp).unwrap_or('?');
+                            let chan = char::from_u32(cp).unwrap_or('?');
                             let mut b = [0u8; 4];
-                            out.extend_from_slice(ch.encode_utf8(&mut b).as_bytes());
+                            out.extend_from_slice(chan.encode_utf8(&mut b).as_bytes());
                         }
                         _ => return self.err("bad escape"),
                     }

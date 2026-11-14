@@ -46,10 +46,10 @@ fn c0_matte_unbound_flags_1_1_counts_1_1_arm_3() {
     let cp = compile_for(&g, &b).expect("compile");
     let tr = fx_eval::compile::ifneq_trace_take();
     assert_eq!(tr.len(), 1, "{:?}", tr);
-    let (_, f0, f1, n0, n1, arm) = tr[0];
-    assert_eq!((f0 as u8, f1 as u8, n0, n1, arm), (1, 1, 1, 1, Some(3)), "{:?}", tr);
+    let (_, tr_a, tr_b, tr_c, tr_d, arm) = tr[0];
+    assert_eq!((tr_a as u8, tr_b as u8, tr_c, tr_d, arm), (1, 1, 1, 1, Some(3)), "{:?}", tr);
     assert!(cp.plan_tsv().contains("ifneqc\t3"), "{}", cp.plan_tsv());
-    println!("C0-CONTROL\tflags {} {}\tcounts {} {}\tarm {:?}", f0 as u8, f1 as u8, n0, n1, arm);
+    println!("C0-CONTROL\tflags {} {}\tcounts {} {}\tarm {:?}", tr_a as u8, tr_b as u8, tr_c, tr_d, arm);
 }
 
 #[test]
