@@ -80,7 +80,7 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Nineteen of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 92475,
+  "bytes": 96781,
   "generated": false
  },
  {
@@ -283,7 +283,7 @@
   "path": "docs/guide.md",
   "title": "Using the effects",
   "line": "This page shows how to run the nineteen native effects on a video or on raw frames, how to find their parameters, and what the results are claimed to match.",
-  "bytes": 32841,
+  "bytes": 33020,
   "generated": false
  },
  {
@@ -353,7 +353,7 @@
   "path": "docs/stages.md",
   "title": "Adding a provider",
   "line": "A provider is a program that offers stages over raw frames; twixtor's `vfx` and `sapphire` are two.",
-  "bytes": 47050,
+  "bytes": 47217,
   "generated": false
  }
 ]
