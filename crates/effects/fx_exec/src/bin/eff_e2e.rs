@@ -29,11 +29,11 @@ struct Tally {
     diff: usize,
     nan_vs_num: usize,
     first: Vec<String>,
-    per_ch: [usize; 4],
+    per_chan: [usize; 4],
 }
 
-fn tally(native: &[f32], orig: &[f32], w: usize, src: &[f32], label: &str, ch_of: impl Fn(usize) -> usize) -> Tally {
-    let mut t = Tally { total: 0, eq: 0, nan_payload: 0, diff: 0, nan_vs_num: 0, first: vec![], per_ch: [0; 4] };
+fn tally(native: &[f32], orig: &[f32], w: usize, src: &[f32], label: &str, chan_of: impl Fn(usize) -> usize) -> Tally {
+    let mut t = Tally { total: 0, eq: 0, nan_payload: 0, diff: 0, nan_vs_num: 0, first: vec![], per_chan: [0; 4] };
     for (i, (x, y)) in native.iter().zip(orig.iter()).enumerate() {
         t.total += 1;
         if x.to_bits() == y.to_bits() {
@@ -45,12 +45,12 @@ fn tally(native: &[f32], orig: &[f32], w: usize, src: &[f32], label: &str, ch_of
             if x.is_nan() != y.is_nan() {
                 t.nan_vs_num += 1;
             }
-            t.per_ch[ch_of(i) & 3] += 1;
+            t.per_chan[chan_of(i) & 3] += 1;
             if t.first.len() < 8 {
                 let p = i / 4;
                 t.first.push(format!(
                     "{} idx{} (x{} y{} c{}) native {:08x} ({:e}) original {:08x} ({:e}) src=[{:08x} {:08x} {:08x} {:08x}]",
-                    label, i, p % w, p / w, ch_of(i), x.to_bits(), x, y.to_bits(), y, src[4 * p].to_bits(), src[4 * p + 1].to_bits(), src[4 * p + 2].to_bits(), src[4 * p + 3].to_bits()
+                    label, i, p % w, p / w, chan_of(i), x.to_bits(), x, y.to_bits(), y, src[4 * p].to_bits(), src[4 * p + 1].to_bits(), src[4 * p + 2].to_bits(), src[4 * p + 3].to_bits()
                 ));
             }
         }
@@ -126,7 +126,7 @@ fn run(a: Vec<String>) -> i32 {
         i += 1;
     }
     let prefill = vec![f32::from_bits(0xaaaa_aaaa); 4 * n];
-    let hc = HostConvert { src: vec![src.clone()], mode, dest_prefill: prefill, cell: 1, margin: 0, ae32: None };
+    let hc = HostConvert { src: vec![src.clone()], mode, dest_prefill: prefill, cell: 1, margin: 0, claim_route: None };
     let o = match execute_host(&g, &b, &hc, "Source", &BTreeMap::new(), w, hh, &hf) {
         Ok(o) => o,
         Err(e) => {
@@ -152,12 +152,12 @@ fn run(a: Vec<String>) -> i32 {
             }
         }
         let tp = tally(&nat, &org, w, &src, "plane", |i| (i / w) % 4);
-        plane_txt = format!("planes: total={} eq={} nan_payload={} diff={} nan_vs_num={} per_ch={:?}", tp.total, tp.eq, tp.nan_payload, tp.diff, tp.nan_vs_num, tp.per_ch);
+        plane_txt = format!("planes: total={} eq={} nan_payload={} diff={} nan_vs_num={} per_ch={:?}", tp.total, tp.eq, tp.nan_payload, tp.diff, tp.nan_vs_num, tp.per_chan);
         plane_first = tp.first;
     }
     println!(
         "{}\t{}\t{}\tmode{}\thost: total={} eq={} nan_payload={} diff={} nan_vs_num={} per_ch(B,G,R,A)={:?}\t{}\t{}\twrote={}",
-        prog, a[3], sets_txt, mode_byte, ta.total, ta.eq, ta.nan_payload, ta.diff, ta.nan_vs_num, ta.per_ch, plane_txt, verdict, o.wrote
+        prog, a[3], sets_txt, mode_byte, ta.total, ta.eq, ta.nan_payload, ta.diff, ta.nan_vs_num, ta.per_chan, plane_txt, verdict, o.wrote
     );
     println!("  DESTPLANES {}", nplanes_dest);
     for d in ta.first.iter().chain(plane_first.iter()) {

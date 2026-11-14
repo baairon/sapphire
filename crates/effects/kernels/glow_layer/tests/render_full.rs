@@ -83,15 +83,15 @@ fn t1_composition_equals_stages() {
     let plane = mk(w, h, 5);
     let p = params(1);
     let got = run(&p, &[plane.clone()], w, h);
-    let mut bp = vec![0.0f32; w * h];
+    let mut b_planes = vec![0.0f32; w * h];
     {
         let src = [Plane { data: &plane, width: w, height: h, stride: w }];
-        let mut dst = [PlaneMut { data: &mut bp, width: w, height: h, stride: w }];
+        let mut dst = [PlaneMut { data: &mut b_planes, width: w, height: h, stride: w }];
         bright_pass(&BrightParams { thresholds: [p.thresholds[0], 0.0, 0.0] }, &src, &mut dst).unwrap();
     }
     let (sx, sy) = glow_sigmas(&p);
     let mut want = vec![0.0f32; w * h];
-    blur::blur_core(&bp, &mut want, w, h, sx[0], sy[0], p.brightness[0], blur::Edge::Mirror, 3, false, None).unwrap();
+    blur::blur_core(&b_planes, &mut want, w, h, sx[0], sy[0], p.brightness[0], blur::Edge::Mirror, 3, false, None).unwrap();
     assert_eq!(bits(&got), bits(&[want]));
 }
 
@@ -147,12 +147,12 @@ fn t1_errors_and_clamped_inputs() {
     // three planes with one input plane: all outputs come from src[0]
     let mut p3 = params(3);
     p3.show_threshold = 1;
-    let mut o3: Vec<Vec<f32>> = (0..3).map(|_| vec![0.0; 64]).collect();
-    let mut d3: Vec<PlaneMut> = o3.iter_mut().map(|d| PlaneMut { data: d, width: 8, height: 8, stride: 8 }).collect();
+    let mut bits_3: Vec<Vec<f32>> = (0..3).map(|_| vec![0.0; 64]).collect();
+    let mut d3: Vec<PlaneMut> = bits_3.iter_mut().map(|d| PlaneMut { data: d, width: 8, height: 8, stride: 8 }).collect();
     render_full(&p3, &src, &mut d3).unwrap();
-    let (a, b) = (bits(&o3[..1]), bits(&o3[1..2]));
+    let (a, b) = (bits(&bits_3[..1]), bits(&bits_3[1..2]));
     let _ = (a, b); // thresholds differ per lane, so only the shape is checked here
-    assert!(o3.iter().all(|pl| pl.len() == 64));
+    assert!(bits_3.iter().all(|pl| pl.len() == 64));
 }
 
 #[test]

@@ -18,9 +18,9 @@ fn device() -> Option<std::sync::Arc<fx_device::DeviceCtx>> {
     }
 }
 
-fn synth(ch: usize, n: usize, seed: u64) -> Image {
+fn synth(chan: usize, n: usize, seed: u64) -> Image {
     let mut s = seed;
-    let planes = (0..ch)
+    let planes = (0..chan)
         .map(|_| {
             (0..n)
                 .map(|_| {
@@ -46,7 +46,7 @@ fn device_backend_admits_the_starter_ops() {
 fn device_backend_declines_with_the_right_reason() {
     let Some(ctx) = device() else { return };
     let mut b = DeviceBackend::new(ctx);
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let img = Val::Img(Rc::new(synth(3, 12, 1)));
     let call = |class: &'static str, tag| NodeCall { idx: 0, class, tag, n: 12, dims: (4, 3), kp: &kp };
     // no kernel at all

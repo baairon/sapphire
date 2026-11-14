@@ -36,8 +36,8 @@ fn the_neighbourhood_kernels_pass_the_self_check_against_the_cpu() {
 
 mod esh_units {
     use super::*;
-    use edge_aware_sharpen_jobs as j3;
-    use fx_device::cl::Arg as ClArg;
+    use edge_aware_sharpen_jobs as esh_jobs;
+    use fx_device::ocl::Arg as ClArg;
     use fx_device::DevImage;
 
     fn rng(seed: u64) -> impl FnMut() -> f32 {
@@ -74,47 +74,47 @@ mod esh_units {
                         let mut r = rng(cs * 1000 + (w * 31 + h * 7 + nch) as u64);
                         let chs: Vec<Vec<f32>> = (0..4).map(|_| (0..n).map(|_| r()).collect()).collect();
                         let cur: Vec<f32> = (0..n).map(|_| r()).collect();
-                        let s2 = base / (nch as f32 * 1.5);
+                        let sum_2 = base / (nch as f32 * 1.5);
                         let k = if cs % 2 == 0 { 1.0f32 } else { 0.5 };
                         let sigma0 = [0.4f32, 1e-12, 2.0, 0.9999999999][(cs as usize) % 4];
                         // CPU
-                        let ctx = j3::Ctx { w: w as i32, s: h as i32, nch: nch as i32, flag_cell_b: if mode_b { 0 } else { 1 }, f0: s2, f4: base, f8: s2, fc: base, esh2_job_ctx_a: sigma0, k };
+                        let ctx = esh_jobs::Ctx { w: w as i32, s: h as i32, nch: nch as i32, flag_cell_b: if mode_b { 0 } else { 1 }, d_scale: sum_2, ca_param: base, e_scale: sum_2, fc: base, esh2_job_ctx_a: sigma0, k };
                         let mut a = vec![f32::from_bits(0x7fc0_1234); n];
                         let mut t = vec![f32::from_bits(0x7fc0_1234); n];
                         {
-                            let mut b = j3::Bufs { ch: [&chs[0], &chs[1], &chs[2], &chs[3]], cur: &cur, a: &mut a, t: &mut t };
-                            j3::job_2(&ctx, 0, h as i32, &mut b).unwrap();
+                            let mut b = esh_jobs::Bufs { chan: [&chs[0], &chs[1], &chs[2], &chs[3]], cur: &cur, a: &mut a, t: &mut t };
+                            esh_jobs::job_2(&ctx, 0, h as i32, &mut b).unwrap();
                         }
                         // device (the host computes the constant mode values as esh_run does)
-                        let ca = j3::c_a(base);
-                        let cb = j3::c_a(base);
+                        let ca = esh_jobs::c_a(base);
+                        let cb = esh_jobs::c_a(base);
                         let kcb = k * cb;
-                        let (mut c10, mut c11) = (0.0f32, 0.0f32);
+                        let (mut d_const, mut e_const) = (0.0f32, 0.0f32);
                         if !mode_b {
-                            c10 = ca;
+                            d_const = ca;
                             let bd = sigma0 as f64;
-                            if j3::LOW > bd {
-                                c11 = k * cb;
-                            } else if bd > j3::HIGH {
-                                c10 = j3::ONE;
-                                c11 = k;
+                            if esh_jobs::LOW > bd {
+                                e_const = k * cb;
+                            } else if bd > esh_jobs::HIGH {
+                                d_const = esh_jobs::ONE;
+                                e_const = k;
                             } else {
-                                let x = j3::ONE / sigma0;
-                                c10 = j3::minss(x, c10);
-                                c11 = k * j3::minss(x, cb);
+                                let x = esh_jobs::ONE / sigma0;
+                                d_const = esh_jobs::minss(x, d_const);
+                                e_const = k * esh_jobs::minss(x, cb);
                             }
                         }
                         let up = |v: &Vec<f32>| DevImage::upload(&s, &[v.as_slice()]).unwrap();
-                        let (d0, d1, d2, dcur) = (up(&chs[0]), up(&chs[1]), up(&chs[2]), up(&cur));
+                        let (up_ch0, fp33_sub_1, d2, dcur) = (up(&chs[0]), up(&chs[1]), up(&chs[2]), up(&cur));
                         let da = DevImage::alloc(&s, 1, n).unwrap();
                         let dt = DevImage::alloc(&s, 1, n).unwrap();
                         s.launch(
                             "esh_weights_f32",
                             n,
                             &[
-                                d0.plane(0).arg(), d1.plane(0).arg(), d2.plane(0).arg(), ClArg::I32(nch as i32), dcur.plane(0).arg(), ClArg::I32(mode_b as i32),
-                                da.plane(0).arg(), dt.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32), ClArg::F32(s2), ClArg::F32(s2), ClArg::F32(k),
-                                ClArg::F32(ca), ClArg::F32(cb), ClArg::F32(kcb), ClArg::F32(c10), ClArg::F32(c11),
+                                up_ch0.plane(0).arg(), fp33_sub_1.plane(0).arg(), d2.plane(0).arg(), ClArg::I32(nch as i32), dcur.plane(0).arg(), ClArg::I32(mode_b as i32),
+                                da.plane(0).arg(), dt.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32), ClArg::F32(sum_2), ClArg::F32(sum_2), ClArg::F32(k),
+                                ClArg::F32(ca), ClArg::F32(cb), ClArg::F32(kcb), ClArg::F32(d_const), ClArg::F32(e_const),
                             ],
                         )
                         .unwrap();
@@ -124,14 +124,14 @@ mod esh_units {
                         assert_eq!(bits(&gt), bits(&t), "weights t {w}x{h} nch {nch} mode_b {mode_b} base {base}");
                         // running sums
                         let mut p0 = vec![0f32; n];
-                        let mut p1 = vec![0f32; n];
-                        j3::job_cell_a(w as i32, h as i32, (0, h as i32), (0, w as i32), &a, &t, &mut p0, &mut p1).unwrap();
+                        let mut cpu_p1 = vec![0f32; n];
+                        esh_jobs::job_cell_a(w as i32, h as i32, (0, h as i32), (0, w as i32), &a, &t, &mut p0, &mut cpu_p1).unwrap();
                         let dp0 = DevImage::alloc(&s, 1, n).unwrap();
                         let dp1 = DevImage::alloc(&s, 1, n).unwrap();
                         s.launch("esh_cumsum_x_f32", h, &[da.plane(0).arg(), dp0.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32)]).unwrap();
                         s.launch("esh_cumsum_y_f32", w, &[dt.plane(0).arg(), dp1.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32)]).unwrap();
                         assert_eq!(bits(&dp0.download().unwrap()[0]), bits(&p0), "cumsum x {w}x{h}");
-                        assert_eq!(bits(&dp1.download().unwrap()[0]), bits(&p1), "cumsum y {w}x{h}");
+                        assert_eq!(bits(&dp1.download().unwrap()[0]), bits(&cpu_p1), "cumsum y {w}x{h}");
                         // filters: guide = the running sums, radii around 1 to 6
                         for radius in [0.5f32, 1.0, 1.5, 2.0, 2.5, 3.75, 6.0, 40.0] {
                             for src_plane in 0..1 {
@@ -154,7 +154,7 @@ mod esh_units {
                                 let mut mem: Vec<f32> = Vec::new();
                                 mem.extend_from_slice(srcv);
                                 mem.extend(std::iter::repeat(f32::from_bits(0x7fc0_4321)).take(n));
-                                mem.extend_from_slice(&p1);
+                                mem.extend_from_slice(&cpu_p1);
                                 let mut rec = edge_aware_sharpen_box_filter::Rec::default();
                                 edge_aware_sharpen_box_filter::job_y(&mut mem, &job, 0, w as i32, &mut rec);
                                 let want_y = mem[n..2 * n].to_vec();
@@ -211,57 +211,57 @@ mod esh_units {
                     sc[i] = f32::from_bits(nans[(next() >> 8) as usize % 6]);
                 }
             }
-            let [s2d, base, s2e, fc, sigma0, k] = sc;
-            let ctx = j3::Ctx { w: w as i32, s: h as i32, nch: nch as i32, flag_cell_b: if mode_b { 0 } else { 1 }, f0: s2d, f4: base, f8: s2e, fc, esh2_job_ctx_a: sigma0, k };
+            let [elem_2_d, base, elem_2_e, fc, sigma0, k] = sc;
+            let ctx = esh_jobs::Ctx { w: w as i32, s: h as i32, nch: nch as i32, flag_cell_b: if mode_b { 0 } else { 1 }, d_scale: elem_2_d, ca_param: base, e_scale: elem_2_e, fc, esh2_job_ctx_a: sigma0, k };
             let mut a = vec![0f32; n];
             let mut t = vec![0f32; n];
             {
-                let mut b = j3::Bufs { ch: [&chs[0], &chs[1], &chs[2], &chs[3]], cur: &cur, a: &mut a, t: &mut t };
-                j3::job_2(&ctx, 0, h as i32, &mut b).unwrap();
+                let mut b = esh_jobs::Bufs { chan: [&chs[0], &chs[1], &chs[2], &chs[3]], cur: &cur, a: &mut a, t: &mut t };
+                esh_jobs::job_2(&ctx, 0, h as i32, &mut b).unwrap();
             }
-            let ca = j3::c_a(base);
-            let cb = j3::c_a(fc);
+            let ca = esh_jobs::c_a(base);
+            let cb = esh_jobs::c_a(fc);
             let kcb = k.fmul(cb);
-            let (mut c10, mut c11) = (0.0f32, 0.0f32);
+            let (mut d_const, mut e_const) = (0.0f32, 0.0f32);
             if !mode_b {
-                c10 = ca;
+                d_const = ca;
                 let bd = sigma0 as f64;
-                if j3::LOW > bd {
-                    c11 = k.fmul(cb);
-                } else if bd > j3::HIGH {
-                    c10 = j3::ONE;
-                    c11 = k;
+                if esh_jobs::LOW > bd {
+                    e_const = k.fmul(cb);
+                } else if bd > esh_jobs::HIGH {
+                    d_const = esh_jobs::ONE;
+                    e_const = k;
                 } else {
-                    let x = j3::ONE / sigma0;
-                    c10 = j3::minss(x, c10);
-                    c11 = k.fmul(j3::minss(x, cb));
+                    let x = esh_jobs::ONE / sigma0;
+                    d_const = esh_jobs::minss(x, d_const);
+                    e_const = k.fmul(esh_jobs::minss(x, cb));
                 }
             }
             let up = |v: &Vec<f32>| DevImage::upload(&s, &[v.as_slice()]).unwrap();
-            let (d0, d1, d2, dcur) = (up(&chs[0]), up(&chs[1]), up(&chs[2]), up(&cur));
+            let (up_ch0, fp33_sub_1, d2, dcur) = (up(&chs[0]), up(&chs[1]), up(&chs[2]), up(&cur));
             let da = DevImage::alloc(&s, 1, n).unwrap();
             let dt = DevImage::alloc(&s, 1, n).unwrap();
             s.launch(
                 "esh_weights_f32",
                 n,
                 &[
-                    d0.plane(0).arg(), d1.plane(0).arg(), d2.plane(0).arg(), ClArg::I32(nch as i32), dcur.plane(0).arg(), ClArg::I32(mode_b as i32),
-                    da.plane(0).arg(), dt.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32), ClArg::F32(s2d), ClArg::F32(s2e), ClArg::F32(k),
-                    ClArg::F32(ca), ClArg::F32(cb), ClArg::F32(kcb), ClArg::F32(c10), ClArg::F32(c11),
+                    up_ch0.plane(0).arg(), fp33_sub_1.plane(0).arg(), d2.plane(0).arg(), ClArg::I32(nch as i32), dcur.plane(0).arg(), ClArg::I32(mode_b as i32),
+                    da.plane(0).arg(), dt.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32), ClArg::F32(elem_2_d), ClArg::F32(elem_2_e), ClArg::F32(k),
+                    ClArg::F32(ca), ClArg::F32(cb), ClArg::F32(kcb), ClArg::F32(d_const), ClArg::F32(e_const),
                 ],
             )
             .unwrap();
             assert_eq!(bits(&da.download().unwrap()[0]), bits(&a), "strict weights a round {round}");
             assert_eq!(bits(&dt.download().unwrap()[0]), bits(&t), "strict weights t round {round}");
             let mut p0 = vec![0f32; n];
-            let mut p1 = vec![0f32; n];
-            j3::job_cell_a(w as i32, h as i32, (0, h as i32), (0, w as i32), &a, &t, &mut p0, &mut p1).unwrap();
+            let mut cpu_p1 = vec![0f32; n];
+            esh_jobs::job_cell_a(w as i32, h as i32, (0, h as i32), (0, w as i32), &a, &t, &mut p0, &mut cpu_p1).unwrap();
             let dp0 = DevImage::alloc(&s, 1, n).unwrap();
             let dp1 = DevImage::alloc(&s, 1, n).unwrap();
             s.launch("esh_cumsum_x_f32", h, &[da.plane(0).arg(), dp0.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32)]).unwrap();
             s.launch("esh_cumsum_y_f32", w, &[dt.plane(0).arg(), dp1.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32)]).unwrap();
             assert_eq!(bits(&dp0.download().unwrap()[0]), bits(&p0), "strict cumsum x round {round}");
-            assert_eq!(bits(&dp1.download().unwrap()[0]), bits(&p1), "strict cumsum y round {round}");
+            assert_eq!(bits(&dp1.download().unwrap()[0]), bits(&cpu_p1), "strict cumsum y round {round}");
             // filters on the NaN-bearing source with the NaN-bearing sums as guide
             for radius in [1.5f32, 3.75, 6.0] {
                 let srcv = &chs[0];
@@ -279,13 +279,13 @@ mod esh_units {
                 mem.extend_from_slice(&p0);
                 let mut want = vec![0f32; n];
                 for row in 0..h {
-                    let mut m2: Vec<f32> = Vec::new();
-                    m2.extend_from_slice(&mem[row * w..(row + 1) * w]);
-                    m2.extend(std::iter::repeat(0f32).take(w));
-                    m2.extend_from_slice(&mem[2 * n + row * w..2 * n + (row + 1) * w]);
+                    let mut padded_row: Vec<f32> = Vec::new();
+                    padded_row.extend_from_slice(&mem[row * w..(row + 1) * w]);
+                    padded_row.extend(std::iter::repeat(0f32).take(w));
+                    padded_row.extend_from_slice(&mem[2 * n + row * w..2 * n + (row + 1) * w]);
                     let mut rec = edge_aware_sharpen_box_filter::Rec::default();
-                    edge_aware_sharpen_box_filter::filter3(&mut m2, 0, w, 2 * w, w as i64, p, &mut rec);
-                    want[row * w..(row + 1) * w].copy_from_slice(&m2[w..2 * w]);
+                    edge_aware_sharpen_box_filter::filter3(&mut padded_row, 0, w, 2 * w, w as i64, p, &mut rec);
+                    want[row * w..(row + 1) * w].copy_from_slice(&padded_row[w..2 * w]);
                 }
                 let ddst = DevImage::alloc(&s, 1, n).unwrap();
                 s.launch("esh_filter_x_f32", h, &[dsrc.plane(0).arg(), ddst.plane(0).arg(), dp0.plane(0).arg(), ClArg::U32(w as u32), ClArg::U32(h as u32), ClArg::F32(p[0]), ClArg::F32(p[1]), ClArg::F32(p[2])]).unwrap();
@@ -320,7 +320,7 @@ mod esh_units {
             for i in 0..n {
                 let c = bb[i].mul_add(-1.0, 0.0);
                 let c = c + aa[i];
-                let c = j3::exp_tanh_elem(s0, c);
+                let c = esh_jobs::exp_tanh_elem(s0, c);
                 want[i] += c;
             }
             let up = |v: &Vec<f32>| DevImage::upload(&s, &[v.as_slice()]).unwrap();
@@ -436,7 +436,7 @@ fn cpu_words_and_vals(class: &'static str, c: &fx_exec::device_ops::SelfCase) ->
             _ => unreachable!(),
         })
         .collect();
-    let kp = c.kp.unwrap_or_else(KParams::standin);
+    let kp = c.kp.unwrap_or_else(KParams::host_defaults);
     let n = c.dims.0 * c.dims.1;
     let want = match fx_exec::kernels::run_any(class, c.tag, &args, n, c.dims, &kp).expect("the CPU kernel runs the case") {
         fx_exec::kernels2::Out::Img(i) => i.planes.iter().map(|p| p.iter().map(|v| v.to_bits()).collect()).collect(),
@@ -485,7 +485,7 @@ fn a_nan_output_of_the_neighbourhood_nan_exact_ops_stays_on_the_device_with_the_
             if !want.iter().flatten().any(|w| (*w & 0x7fff_ffff) > 0x7f80_0000) {
                 continue;
             }
-            let kp = c.kp.unwrap_or_else(KParams::standin);
+            let kp = c.kp.unwrap_or_else(KParams::host_defaults);
             let call = fx_exec::backend::NodeCall { idx: 0, class: op.class, tag: c.tag, n: c.dims.0 * c.dims.1, dims: c.dims, kp: &kp };
             let got = b.try_run(&call, &vals);
             let Ok(Val::Dev(d)) = got else { panic!("{name} {}: expected a device result, got {:?}", c.name, got.err()) };
@@ -509,7 +509,7 @@ fn sharpen_at_gain_one_returns_a_lone_blurred_nan_quieted_with_its_own_sign() {
     for word in [0x7fa0_0001u32, 0xff80_0007, 0x7fc0_0003, 0xffc0_0009] {
         let mut x: Vec<f32> = (0..w).map(|i| 0.25 + i as f32 / 64.0).collect();
         x[10] = f32::from_bits(word);
-        let mut kp = KParams::standin();
+        let mut kp = KParams::host_defaults();
         kp.sharpen_count = Some(w * h);
         let case = fx_exec::device_ops::SelfCase {
             name: format!("gain one lone NaN {word:08x}"),

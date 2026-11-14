@@ -65,14 +65,14 @@ impl CompileContext {
             a.get(p + 1).map(|s| s.as_str()).ok_or_else(|| format!("{} needs a value", k))
         };
         let t: f32 = get("--ctx-time")?.parse().map_err(|_| "--ctx-time must be a float".to_string())?;
-        let w2 = match get("--ctx-word2")? {
+        let stack_word = match get("--ctx-word2")? {
             "0" => false,
             "1" => true,
             _ => return Err("--ctx-word2 must be 0 or 1".into()),
         };
         let o: u8 = get(crate::judge_keys::OPT_CTX_OWNER_MODE)?.parse().map_err(|_| format!("{} must be an integer", crate::judge_keys::OPT_CTX_OWNER_MODE))?;
         let hd = u32::from_str_radix(get("--ctx-has-data")?.trim_start_matches("0x"), 16).map_err(|_| "--ctx-has-data must be hex".to_string())?;
-        Ok(CompileContext { host_time: t, stack_word2: w2, owner_mode_byte: o, has_data: hd })
+        Ok(CompileContext { host_time: t, stack_word2: stack_word, owner_mode_byte: o, has_data: hd })
     }
     /// the check of a caller that carries `stack_word2` and `has_data` into `CompileOptions::{ctx_word2, ctx_has_data}` (plancmp). Word 2 = 1 is then planned by
     /// the preserve-group model (`preserve.rs`); the only other difference from `check_native` is that the word 2 refusal is lifted.

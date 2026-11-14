@@ -22,16 +22,16 @@ fn planes(o: Out) -> Vec<Vec<u32>> {
         _ => panic!("blur must give an image"),
     }
 }
-fn blur(a0: Arg, w: usize, h: usize) -> Result<Out, ExecError> {
-    let args = [a0, cst(2, 0.0302124), cst(1, 3.0), cst(1, 0.739105), cst(1, 1.0)];
-    run_wired("blur", 1, &args, w * h, (w, h), &KParams::standin())
+fn blur(src: Arg, w: usize, h: usize) -> Result<Out, ExecError> {
+    let args = [src, cst(2, 0.0302124), cst(1, 3.0), cst(1, 0.739105), cst(1, 1.0)];
+    run_wired("blur", 1, &args, w * h, (w, h), &KParams::host_defaults())
 }
 
 #[test]
 fn blur_on_mip_operand_equals_blur_on_base_image() {
     for &(w, h) in &[(16usize, 8usize), (13, 5)] {
         let base = img(w, h);
-        let mm = match run_wired("make_mipmap", 1, &[Arg::Img(&base), cst(2, 0.0), cst(1, 0.0)], w * h, (w, h), &KParams::standin()).unwrap() {
+        let mm = match run_wired("make_mipmap", 1, &[Arg::Img(&base), cst(2, 0.0), cst(1, 0.0)], w * h, (w, h), &KParams::host_defaults()).unwrap() {
             Out::Mip(m) => m,
             _ => panic!("make_mipmap must give a ripmap"),
         };

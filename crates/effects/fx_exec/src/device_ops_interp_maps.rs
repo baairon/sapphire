@@ -14,7 +14,7 @@ use crate::backend::NodeCall;
 use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use crate::types::Image;
 use fx_common::nanop::NanOps;
-use fx_device::cl::{Access, Arg as ClArg, Buffer};
+use fx_device::ocl::{Access, Arg as ClArg, Buffer};
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
 use std::sync::Arc;
@@ -249,9 +249,9 @@ fn flow_planes(form: usize, n: usize, w: usize, scale: f32, seed: u64) -> (Vec<f
                         _ => base,
                     }
                 };
-                let bx = r.unit() * 4.0 - 2.0;
+                let jitter_x = r.unit() * 4.0 - 2.0;
                 let by = r.unit() * 4.0 - 2.0;
-                (pick(&mut r, bx), pick(&mut r, by))
+                (pick(&mut r, jitter_x), pick(&mut r, by))
             }
             4 => ((r.unit() - 0.5) * (4.0 * w as f32), (r.unit() - 0.5) * (4.0 * w as f32)),
             // x components on and within three ulps of the values whose scaled sum with the pixel centre falls on an integer: the
@@ -298,9 +298,9 @@ fn colour_planes(form: usize, count: usize, n: usize, seed: u64) -> Vec<Vec<f32>
         .collect()
 }
 
-fn one_case(w: usize, h: usize, tag: i32, ch_extra: usize, cform: usize, fform: usize, scale: f32, seed: u64) -> SelfCase {
+fn one_case(w: usize, h: usize, tag: i32, extra_chans: usize, cform: usize, fform: usize, scale: f32, seed: u64) -> SelfCase {
     let n = w * h;
-    let chans = tag as usize + ch_extra;
+    let chans = tag as usize + extra_chans;
     let (fa, fb) = flow_planes(fform, n, w, scale, seed);
     SelfCase {
         name: format!("{w}x{h} tag {tag} planes {chans} colour {cform} flow {fform} scale {:08x}", scale.to_bits()),
@@ -315,7 +315,7 @@ fn one_case(w: usize, h: usize, tag: i32, ch_extra: usize, cform: usize, fform: 
 fn im_corpus() -> Vec<SelfCase> {
     let mut out = Vec::new();
     let mut k = 0usize;
-    for (di, &(w, h)) in DIMS_IM.iter().enumerate() {
+    for (dim_idx, &(w, h)) in DIMS_IM.iter().enumerate() {
         // the large frames run fewer combinations (the serial kernels are slow on a CPU device)
         let big = w * h > 1000;
         for tag in 1..=4i32 {
@@ -324,29 +324,29 @@ fn im_corpus() -> Vec<SelfCase> {
                 if big && (tag != 3 && fform != 0 || fform > 3) {
                     continue;
                 }
-                let cform = (k + di) % 4;
-                let scale = SCALES[(k * 3 + di) % SCALES.len()];
+                let cform = (k + dim_idx) % 4;
+                let scale = SCALES[(k * 3 + dim_idx) % SCALES.len()];
                 let extra = usize::from(k % 5 == 0);
-                out.push(one_case(w, h, tag, extra, cform, fform, scale, (di * 977 + k) as u64));
+                out.push(one_case(w, h, tag, extra, cform, fform, scale, (dim_idx * 977 + k) as u64));
             }
         }
     }
     // the fill cap: a single covered pixel on frames wider than 25 passes can spread
-    for (di, &(w, h)) in [(64usize, 32usize), (50, 7), (33, 3), (16, 16)].iter().enumerate() {
-        out.push(one_case(w, h, 3, 0, 0, 6, 0.5, 4000 + di as u64));
-        out.push(one_case(w, h, 1, 0, 1, 6, 1.0, 4100 + di as u64));
+    for (dim_idx, &(w, h)) in [(64usize, 32usize), (50, 7), (33, 3), (16, 16)].iter().enumerate() {
+        out.push(one_case(w, h, 3, 0, 0, 6, 0.5, 4000 + dim_idx as u64));
+        out.push(one_case(w, h, 1, 0, 1, 6, 1.0, 4100 + dim_idx as u64));
     }
     // fused against separately rounded x target of the splat
-    for (di, &(w, h)) in [(33usize, 3usize), (64, 4), (9, 7)].iter().enumerate() {
-        for (si, &sc) in [0.75f32, 0.3, 0.9, 1.7, 0.6].iter().enumerate() {
-            out.push(one_case(w, h, 1 + (si % 3) as i32, 0, 1, 7, sc, 8000 + (di * 10 + si) as u64));
+    for (dim_idx, &(w, h)) in [(33usize, 3usize), (64, 4), (9, 7)].iter().enumerate() {
+        for (set_idx, &sc) in [0.75f32, 0.3, 0.9, 1.7, 0.6].iter().enumerate() {
+            out.push(one_case(w, h, 1 + (set_idx % 3) as i32, 0, 1, 7, sc, 8000 + (dim_idx * 10 + set_idx) as u64));
         }
     }
     // every scale value on a frame with ties and with specials
-    for (si, &sc) in SCALES.iter().enumerate() {
-        out.push(one_case(9, 7, 3, 0, 1, 1, sc, 5000 + si as u64));
-        out.push(one_case(16, 16, 4, 0, 2, 3, sc, 6000 + si as u64));
-        out.push(one_case(7, 3, 1, 0, 3, 0, sc, 7000 + si as u64));
+    for (set_idx, &sc) in SCALES.iter().enumerate() {
+        out.push(one_case(9, 7, 3, 0, 1, 1, sc, 5000 + set_idx as u64));
+        out.push(one_case(16, 16, 4, 0, 2, 3, sc, 6000 + set_idx as u64));
+        out.push(one_case(7, 3, 1, 0, 3, 0, sc, 7000 + set_idx as u64));
     }
     out
 }

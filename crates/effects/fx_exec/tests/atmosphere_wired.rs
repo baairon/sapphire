@@ -23,7 +23,7 @@ fn out(o: Out) -> Image {
 fn append_joins_planes_and_broadcasts_the_constant() {
     let (w, h) = (3usize, 2usize);
     let a = img(vec![(0..6).map(|i| i as f32).collect(), (0..6).map(|i| 10.0 + i as f32).collect()]);
-    let r = out(run_any("append", 3, &[Arg::Img(&a), cst(&[0.1])], w * h, (w, h), &KParams::standin()).unwrap());
+    let r = out(run_any("append", 3, &[Arg::Img(&a), cst(&[0.1])], w * h, (w, h), &KParams::host_defaults()).unwrap());
     assert_eq!(r.channels(), 3);
     assert_eq!(r.planes[0], a.planes[0]);
     assert_eq!(r.planes[1], a.planes[1]);

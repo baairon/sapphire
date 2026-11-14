@@ -260,13 +260,13 @@ impl Track {
     fn bezier_at(&self, a: &Key, b: &Key, u: f64, n: f64) -> Vec<f64> {
         match self.shape {
             Shape::Point if a.lanes.len() == 2 && b.lanes.len() == 2 => {
-                let (dx, dy) = (b.lanes[0] - a.lanes[0], b.lanes[1] - a.lanes[1]);
-                let l = (dx * dx + dy * dy).sqrt();
+                let (delta_x, dy) = (b.lanes[0] - a.lanes[0], b.lanes[1] - a.lanes[1]);
+                let l = (delta_x * delta_x + dy * dy).sqrt();
                 if l == 0.0 {
                     return a.lanes.clone();
                 }
                 let f = bezier(u, n, 0.0, l, a, b) / l;
-                vec![a.lanes[0] + dx * f, a.lanes[1] + dy * f]
+                vec![a.lanes[0] + delta_x * f, a.lanes[1] + dy * f]
             }
             Shape::Float { min, max } => a
                 .lanes
@@ -295,12 +295,12 @@ impl Track {
 
 /// The cubic Bezier of one segment `n` ticks long at progress `u`, from `va` to `va + d3`.
 fn bezier(u: f64, n: f64, va: f64, d3: f64, a: &Key, b: &Key) -> f64 {
-    let (x1, d1) = match a.ease_out {
+    let (sum_1, fp33_sub_1) = match a.ease_out {
         Some(h) => (h.influence / 100.0, (h.speed * (h.influence / 100.0)) * n),
         None if a.ease => (1.0 / 3.0, 0.0),
         None => (1.0 / 3.0, d3 / 3.0),
     };
-    let (x2, d2) = match b.ease_in {
+    let (ease_in_w, d2) = match b.ease_in {
         Some(h) => (1.0 - h.influence / 100.0, d3 - (h.speed * (h.influence / 100.0)) * n),
         None if b.ease => (1.0 - 1.0 / 3.0, d3),
         None => (1.0 - 1.0 / 3.0, d3 - d3 / 3.0),
@@ -309,7 +309,7 @@ fn bezier(u: f64, n: f64, va: f64, d3: f64, a: &Key, b: &Key) -> f64 {
     for _ in 0..64 {
         let m = (lo + hi) * 0.5;
         let r = 1.0 - m;
-        let x = ((3.0 * r * r * m) * x1 + (3.0 * r * m * m) * x2) + m * m * m;
+        let x = ((3.0 * r * r * m) * sum_1 + (3.0 * r * m * m) * ease_in_w) + m * m * m;
         if x < u {
             lo = m;
         } else {
@@ -318,7 +318,7 @@ fn bezier(u: f64, n: f64, va: f64, d3: f64, a: &Key, b: &Key) -> f64 {
     }
     let s = (lo + hi) * 0.5;
     let r = 1.0 - s;
-    va + (((3.0 * r * r * s) * d1 + (3.0 * r * s * s) * d2) + (s * s * s) * d3)
+    va + (((3.0 * r * r * s) * fp33_sub_1 + (3.0 * r * s * s) * d2) + (s * s * s) * d3)
 }
 
 /// Progress along a segment reshaped by the easing of its two keys.

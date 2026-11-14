@@ -13,7 +13,7 @@ use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use crate::device_ops_neighbourhood::{blur_dev, const_n, cst, edge_of, frame_ok, img, is_const, lane, plane_channels, render_scale, BlurJob};
 use crate::kernels2::cvt_i32;
 use crate::types::{Image, KParams};
-use fx_device::cl::Arg as ClArg;
+use fx_device::ocl::Arg as ClArg;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
 use glow_layer::{GlowParams, GLOW_PASSES};
@@ -37,7 +37,7 @@ fn glow_accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
         return Err("the combination tag is not 1 or 3");
     }
     match plane_channels(&a[0]) {
-        Some(ch) if ch >= c.tag as usize => {}
+        Some(chan) if chan >= c.tag as usize => {}
         Some(_) => return Err("fewer channels than the combination tag"),
         None => return Err("the source is not a plain image"),
     }
@@ -208,7 +208,7 @@ fn plane_values(n: usize, seed: u64, t: &[f32], plain: bool) -> Vec<f32> {
 }
 
 fn kp_of(set: &GlowSet) -> KParams {
-    let mut kp = KParams::standin();
+    let mut kp = KParams::host_defaults();
     kp.blur_render_scale = set.rs;
     kp.blur_aspect = set.aspect;
     kp
@@ -220,22 +220,22 @@ fn consts_of(set: &GlowSet) -> Vec<(usize, usize, [u32; 4])> {
 
 fn glow_corpus() -> Vec<SelfCase> {
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_GLOW.iter().enumerate() {
+    for (dim_idx, &(w, h)) in DIMS_GLOW.iter().enumerate() {
         let n = w * h;
-        for (si, set) in SETS.iter().enumerate() {
+        for (set_idx, set) in SETS.iter().enumerate() {
             if set.show == 0.0 && set.edge != 0.0 && set.edge != 1.0 {
                 continue; // the CPU reports an error for this edge mode
             }
             // (tag, source channels): tag 1 from 1 and 2 planes, tag 3 from 3 and 4 planes
-            for (vi, &(tag, ch)) in [(1usize, 1usize), (1, 2), (3, 3), (3, 4)].iter().enumerate() {
-                if n > 1000 && (di + si + vi) % 2 == 1 {
+            for (vi, &(tag, chan)) in [(1usize, 1usize), (1, 2), (3, 3), (3, 4)].iter().enumerate() {
+                if n > 1000 && (dim_idx + set_idx + vi) % 2 == 1 {
                     continue;
                 }
-                let plain = (si + vi) % 2 == 0 || set.show == 0.0 && vi % 2 == 0;
-                let seed = (di * 131 + si * 17 + vi) as u64;
-                let src = Image { n, planes: (0..ch).map(|p| plane_values(n, seed * 7 + p as u64, set.thresholds, plain)).collect() };
+                let plain = (set_idx + vi) % 2 == 0 || set.show == 0.0 && vi % 2 == 0;
+                let seed = (dim_idx * 131 + set_idx * 17 + vi) as u64;
+                let src = Image { n, planes: (0..chan).map(|p| plane_values(n, seed * 7 + p as u64, set.thresholds, plain)).collect() };
                 out.push(SelfCase {
-                    name: format!("{w}x{h} set {si} tag {tag} from {ch} planes{}", if plain { "" } else { " specials" }),
+                    name: format!("{w}x{h} set {set_idx} tag {tag} from {chan} planes{}", if plain { "" } else { " specials" }),
                     dims: (w, h),
                     tag: tag as i32,
                     args: vec![src],
@@ -247,11 +247,11 @@ fn glow_corpus() -> Vec<SelfCase> {
     }
     // a constant source per tag (the CPU lays it out as constant planes)
     for &(w, h) in &[(3usize, 2usize), (16, 16), (45, 23)] {
-        for (lanes, si) in [(&[0.7f32][..], 0usize), (&[0.9, 0.2, 0.6][..], 1), (&[0.9, 0.2, 0.6][..], 8)] {
-            let set = &SETS[si];
+        for (lanes, set_idx) in [(&[0.7f32][..], 0usize), (&[0.9, 0.2, 0.6][..], 1), (&[0.9, 0.2, 0.6][..], 8)] {
+            let set = &SETS[set_idx];
             let mut consts = consts_of(set);
             consts.insert(0, cst(0, lanes));
-            out.push(SelfCase { name: format!("{w}x{h} constant source {} set {si}", lanes.len()), dims: (w, h), tag: if lanes.len() == 1 { 1 } else { 3 }, args: vec![], consts, kp: Some(kp_of(set)) });
+            out.push(SelfCase { name: format!("{w}x{h} constant source {} set {set_idx}", lanes.len()), dims: (w, h), tag: if lanes.len() == 1 { 1 } else { 3 }, args: vec![], consts, kp: Some(kp_of(set)) });
         }
     }
     out.extend(bright_corpus());
@@ -283,11 +283,11 @@ pub fn bright_corpus() -> Vec<SelfCase> {
     for &(w, h) in &[(1usize, 1usize), (7, 1), (16, 16), (45, 23), (257, 1)] {
         let n = w * h;
         for (ti, t) in thresholds.iter().enumerate() {
-            for (vi, &(tag, ch)) in [(1usize, 1usize), (1, 2), (3, 3), (3, 4)].iter().enumerate() {
+            for (vi, &(tag, chan)) in [(1usize, 1usize), (1, 2), (3, 3), (3, 4)].iter().enumerate() {
                 let seed = (w * 7 + h * 3 + ti * 29 + vi) as u64 + 9000;
-                let src = Image { n, planes: (0..ch).map(|p| plane_values(n, seed * 5 + p as u64, t, vi % 2 == 1 && ti % 3 == 0)).collect() };
+                let src = Image { n, planes: (0..chan).map(|p| plane_values(n, seed * 5 + p as u64, t, vi % 2 == 1 && ti % 3 == 0)).collect() };
                 out.push(SelfCase {
-                    name: format!("{w}x{h} bright pass thresholds {ti} tag {tag} from {ch} planes"),
+                    name: format!("{w}x{h} bright pass thresholds {ti} tag {tag} from {chan} planes"),
                     dims: (w, h),
                     tag: tag as i32,
                     args: vec![src],

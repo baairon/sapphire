@@ -94,18 +94,18 @@ fn form_of(e: usize, n: usize, peel: usize) -> Form {
     if n < p + 16 {
         return Form::S;
     }
-    let r15 = n - ((n - p) & 15);
+    let vec_end = n - ((n - p) & 15);
     if e < p {
         return Form::S;
     }
-    if e < r15 {
+    if e < vec_end {
         return Form::V;
     }
-    let rest = n - r15;
+    let rest = n - vec_end;
     if rest < 4 {
         return Form::S;
     }
-    if e < r15 + (rest & !3) {
+    if e < vec_end + (rest & !3) {
         Form::V
     } else {
         Form::S
@@ -126,10 +126,10 @@ fn nest(
     peel: usize,
 ) -> Result<Vec<f32>, F1Error> {
     let t = fn_ * fs;
-    let w0 = if first_is_stride { ((ONE - fs) - fn_) + t } else { ((ONE - fn_) - fs) + t };
-    let w1 = fn_ - t;
-    let w2 = fs - t;
-    let w3 = t;
+    let corner_weight = if first_is_stride { ((ONE - fs) - fn_) + t } else { ((ONE - fn_) - fs) + t };
+    let diff_1 = fn_ - t;
+    let edge_weight = fs - t;
+    let diag_weight = t;
     let rd = |o: i64| -> Result<f32, F1Error> {
         if o < 0 {
             return Err(F1Error::Oob);
@@ -140,18 +140,18 @@ fn nest(
     let st = stride as i64;
     for e in 0..n {
         let o = start + e as i64;
-        let (s0, s1, s2, s3) = (rd(o)?, rd(o + n as i64)?, rd(o + st)?, rd(o + n as i64 + st)?);
+        let (s0, sum_1, s_st, s_nst) = (rd(o)?, rd(o + n as i64)?, rd(o + st)?, rd(o + n as i64 + st)?);
         let v = match form_of(e, n, peel) {
             Form::S => {
-                let p5 = fma(w1, s1, w3 * s3);
-                let p6 = fma(w0, s0, w2 * s2);
-                p5 + p6
+                let fused_5 = fma(diff_1, sum_1, diag_weight * s_nst);
+                let fused_6 = fma(corner_weight, s0, edge_weight * s_st);
+                fused_5 + fused_6
             }
             Form::V => {
-                let v = w1 * s1;
-                let v = fma(w0, s0, v);
-                let v = fma(w3, s3, v);
-                fma(w2, s2, v)
+                let v = diff_1 * sum_1;
+                let v = fma(corner_weight, s0, v);
+                let v = fma(diag_weight, s_nst, v);
+                fma(edge_weight, s_st, v)
             }
         };
         out.push(v);
@@ -170,43 +170,43 @@ fn clamp_pair(raw: f32, w: i32) -> f32 {
 /// F1 AVX2 variant. `out[k]` is output plane k (k < n); element `col` of each is written.
 pub fn sample(p: &Params, l: &Lattice, c: &Call, out: &mut [&mut [f32]]) -> Result<(), F1Error> {
     // A: prologue and clamps
-    let n32 = p.n;
+    let count_word = p.n;
     let (i, j) = (c.i, c.j);
     let sx = HALF + c.x;
     let ti = idx(&p.t, i as i64)?;
-    let t6_raw = fma(sx, ti, -HALF);
+    let x_offset_raw = fma(sx, ti, -HALF);
     let t1i = idx(&p.t, i as i64 + 1)?;
     let u_raw = fma(sx, t1i, -HALF);
-    let (t6, u) = if p.flag_x == 0 {
-        (clamp_pair(t6_raw, idx(&p.width_tab, i as i64)?), clamp_pair(u_raw, idx(&p.width_tab, i as i64 + 1)?))
+    let (x_off, u) = if p.flag_x == 0 {
+        (clamp_pair(x_offset_raw, idx(&p.width_tab, i as i64)?), clamp_pair(u_raw, idx(&p.width_tab, i as i64 + 1)?))
     } else {
-        (t6_raw, u_raw)
+        (x_offset_raw, u_raw)
     };
     let sy = HALF + c.y;
     let tj = idx(&p.t, j as i64)?;
-    let t7_raw = fma(sy, tj, -HALF);
+    let y_offset_raw = fma(sy, tj, -HALF);
     let t1j = idx(&p.t, j as i64 + 1)?;
     let v_raw = fma(sy, t1j, -HALF);
-    let (t7, v) = if p.flag_y == 0 {
-        (clamp_pair(t7_raw, idx(&p.height_tab, j as i64)?), clamp_pair(v_raw, idx(&p.height_tab, j as i64 + 1)?))
+    let (y_off, v) = if p.flag_y == 0 {
+        (clamp_pair(y_offset_raw, idx(&p.height_tab, j as i64)?), clamp_pair(v_raw, idx(&p.height_tab, j as i64 + 1)?))
     } else {
-        (t7_raw, v_raw)
+        (y_offset_raw, v_raw)
     };
-    let s3 = ONE + t6;
-    let s6 = ONE + t7;
-    let s2 = ONE + u;
-    let s1 = ONE + v;
-    let (p0, p1, p2, p3) = (cvttss2si32(s3), cvttss2si32(s6), cvttss2si32(s2), cvttss2si32(s1));
-    let fx_a = s3 - p0 as f32;
-    let fy_a = s6 - p1 as f32;
-    let fx_b = s2 - p2 as f32;
-    let fy_b = s1 - p3 as f32;
+    let x_shift = ONE + x_off;
+    let sum_6 = ONE + y_off;
+    let u_shift = ONE + u;
+    let sum_1 = ONE + v;
+    let (p0, y_int, p2, p3) = (cvttss2si32(x_shift), cvttss2si32(sum_6), cvttss2si32(u_shift), cvttss2si32(sum_1));
+    let fx_a = x_shift - p0 as f32;
+    let fy_a = sum_6 - y_int as f32;
+    let fx_b = u_shift - p2 as f32;
+    let fy_b = sum_1 - p3 as f32;
     // A7: the temp rows live in 16 byte stack slots (rbp, rbp), so n > 4 overruns into the next slot
     // (MEASURED by T2: channels 4.. differ for n = 5..8). Outside the contract; refused.
-    if n32 > 4 {
+    if count_word > 4 {
         return Err(F1Error::Oob);
     }
-    let n = if n32 > 0 { n32 as usize } else { 0 };
+    let n = if count_word > 0 { count_word as usize } else { 0 };
     let col = c.col as i64;
     let put = |out: &mut [&mut [f32]], k: usize, v: f32| -> Result<(), F1Error> {
         if col < 0 {
@@ -216,18 +216,18 @@ pub fn sample(p: &Params, l: &Lattice, c: &Call, out: &mut [&mut [f32]]) -> Resu
         *pl.get_mut(col as usize).ok_or(F1Error::Oob)? = v;
         Ok(())
     };
-    let m1 = |a: i32| a.wrapping_sub(1);
+    let bits_1 = |a: i32| a.wrapping_sub(1);
     // B: acquire(i, j) then release(i)
-    let (b1, base1) = acquire(p, l, i, j)?;
+    let (lat_b, base1) = acquire(p, l, i, j)?;
     let st1 = release(p, i)?;
-    let start_b = base1 + m1(p0).wrapping_mul(n32) as i64 + m1(p1).wrapping_mul(st1) as i64;
-    let t1 = if n > 0 { nest(b1, start_b, n, st1, fx_a, fy_a, false, 0)? } else { Vec::new() };
+    let start_b = base1 + bits_1(p0).wrapping_mul(count_word) as i64 + bits_1(y_int).wrapping_mul(st1) as i64;
+    let taps_b = if n > 0 { nest(lat_b, start_b, n, st1, fx_a, fy_a, false, 0)? } else { Vec::new() };
     // C: acquire(i+1, j+1)
-    let (b2, base2) = acquire(p, l, i.wrapping_add(1), j.wrapping_add(1))?;
+    let (lat_c, base2) = acquire(p, l, i.wrapping_add(1), j.wrapping_add(1))?;
     let st2 = release(p, i.wrapping_add(1))?;
-    let c_n_off = m1(p2).wrapping_mul(n32);
-    let start_c = base2 + c_n_off as i64 + m1(p3).wrapping_mul(st2) as i64;
-    let t2 = if n > 0 { nest(b2, start_c, n, st2, fx_b, fy_b, false, 4)? } else { Vec::new() };
+    let c_n_off = bits_1(p2).wrapping_mul(count_word);
+    let start_c = base2 + c_n_off as i64 + bits_1(p3).wrapping_mul(st2) as i64;
+    let sum_2 = if n > 0 { nest(lat_c, start_c, n, st2, fx_b, fy_b, false, 4)? } else { Vec::new() };
     // G: n <= 0 exits after the nests
     if n == 0 {
         return Ok(());
@@ -235,36 +235,36 @@ pub fn sample(p: &Params, l: &Lattice, c: &Call, out: &mut [&mut [f32]]) -> Resu
     let (a, b) = (c.a, c.b);
     if a > b {
         // F: acquire(i+1, j)
-        let (b4, base4) = acquire(p, l, i.wrapping_add(1), j)?;
+        let (lat_f, base4) = acquire(p, l, i.wrapping_add(1), j)?;
         let st4 = release(p, i.wrapping_add(1))?;
-        let start_f = base4 + c_n_off as i64 + m1(p1).wrapping_mul(st4) as i64;
-        let t3 = nest(b4, start_f, n, st4, fx_b, fy_a, true, 0)?;
-        let w1 = ONE - a;
-        let w0 = a - b;
+        let start_f = base4 + c_n_off as i64 + bits_1(y_int).wrapping_mul(st4) as i64;
+        let nest_out = nest(lat_f, start_f, n, st4, fx_b, fy_a, true, 0)?;
+        let diff_1 = ONE - a;
+        let corner_weight = a - b;
         for k in 0..n {
-            let v = b * t2[k];
-            let v = fma(w1, t1[k], v);
-            let v = fma(w0, t3[k], v);
+            let v = b * sum_2[k];
+            let v = fma(diff_1, taps_b[k], v);
+            let v = fma(corner_weight, nest_out[k], v);
             put(out, k, v)?;
         }
     } else if b > a {
         // E: acquire(i, j+1)
-        let (b3, base3) = acquire(p, l, i, j.wrapping_add(1))?;
+        let (lat_e, base3) = acquire(p, l, i, j.wrapping_add(1))?;
         let st3 = release(p, i)?;
-        let start_e = base3 + m1(p0).wrapping_mul(n32) as i64 + m1(p3).wrapping_mul(st3) as i64;
-        let t3 = nest(b3, start_e, n, st3, fx_a, fy_b, false, 0)?;
-        let w1 = ONE - b;
-        let w0 = b - a;
+        let start_e = base3 + bits_1(p0).wrapping_mul(count_word) as i64 + bits_1(p3).wrapping_mul(st3) as i64;
+        let nest_out = nest(lat_e, start_e, n, st3, fx_a, fy_b, false, 0)?;
+        let diff_1 = ONE - b;
+        let corner_weight = b - a;
         for k in 0..n {
-            let v = a * t2[k];
-            let v = fma(w1, t1[k], v);
-            let v = fma(w0, t3[k], v);
+            let v = a * sum_2[k];
+            let v = fma(diff_1, taps_b[k], v);
+            let v = fma(corner_weight, nest_out[k], v);
             put(out, k, v)?;
         }
     } else {
         // D: lerp of the first two samples by a
         for k in 0..n {
-            let v = fma(t2[k] - t1[k], a, t1[k]);
+            let v = fma(sum_2[k] - taps_b[k], a, taps_b[k]);
             put(out, k, v)?;
         }
     }

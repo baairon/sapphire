@@ -25,9 +25,9 @@ fn genotype(name: &str) -> Genotype {
     let ei = c.find_effect(name, None).unwrap_or_else(|| panic!("effect {} not found", name));
     build_effect(&c, ei).unwrap()
 }
-fn synth(ch: usize, n: usize, seed: u64) -> Image {
+fn synth(chan: usize, n: usize, seed: u64) -> Image {
     let mut s = seed;
-    let planes = (0..ch)
+    let planes = (0..chan)
         .map(|_| {
             (0..n)
                 .map(|_| {
@@ -59,8 +59,8 @@ fn inputs_for(cp: &fx_eval::CompiledProgram, w: usize, h: usize, seed: u64) -> I
     let mut images = BTreeMap::new();
     for nd in &cp.nodes {
         if nd.kind == "input" {
-            let ch = if nd.elnum > 0 { nd.elnum as usize } else { 4 };
-            images.insert(nd.name.clone(), synth(ch, w * h, seed + nd.name.len() as u64));
+            let chan = if nd.elnum > 0 { nd.elnum as usize } else { 4 };
+            images.insert(nd.name.clone(), synth(chan, w * h, seed + nd.name.len() as u64));
         }
     }
     Inputs { width: w, height: h, images }
@@ -90,18 +90,18 @@ fn dump_geometry_by_hand() {
     assert_eq!((g.left, g.right, g.assumption_e, g.assumption_h, g.aspect, g.roi_x, g.roi_y), (-0.5, 63.5, 0.0, -16.5, 1.0, 0, 0));
     assert_eq!(Geom::dump_f_cell_a(64, 32, 1.0), 47.5);
     // a = 2: u = 64/4 = 16 => assumption_h = -0.5, geom33_a = 31.5, aspect_block_d = 0.5
-    let g2 = Geom::dump(64, 32, 2.0);
-    assert_eq!((g2.assumption_h, g2.aspect), (-0.5, 0.5));
+    let geom_dump = Geom::dump(64, 32, 2.0);
+    assert_eq!((geom_dump.assumption_h, geom_dump.aspect), (-0.5, 0.5));
     assert_eq!(Geom::dump_f_cell_a(64, 32, 2.0), 31.5);
     // odd size 50 x 7: t = 3, u = 50/2 = 25 => assumption_h = -22
-    let g3 = Geom::dump(50, 7, 1.0);
-    assert_eq!((g3.right, g3.assumption_h), (49.5, -22.0));
+    let late_in = Geom::dump(50, 7, 1.0);
+    assert_eq!((late_in.right, late_in.assumption_h), (49.5, -22.0));
     // the old binding for contrast (NV9-GEOM-OLD): left 0, right W, assumption_h 0, assumption_e = (H - W)/2
     let o = Geom::full_frame(64, 32);
     assert_eq!((o.left, o.right, o.assumption_h, o.assumption_e), (0.0, 64.0, 0.0, -16.0));
     // KParams default is the dump binding
-    assert_eq!(KParams::standin().geom_mode, GeomMode::Dump);
-    assert_eq!(kernels2::geom_of(&KParams::standin(), 64, 32), g);
+    assert_eq!(KParams::host_defaults().geom_mode, GeomMode::Dump);
+    assert_eq!(kernels2::geom_of(&KParams::host_defaults(), 64, 32), g);
 }
 
 #[test]
@@ -133,7 +133,7 @@ fn blur_warp_identity_on_the_dump_geometry_and_half_pixel_shift_of_the_old_plane
     }
     for (w, h) in [(8usize, 4usize), (16, 8)] {
         let src = synth(4, w * h, 21);
-        let k = KParams::standin();
+        let k = KParams::host_defaults();
         let mip = match run_with("make_mipmap", &[Arg::Img(&src), cst(&[0.0, 0.0]), cst(&[0.0])], w, h, &k) {
             Out::Mip(m) => m,
             _ => panic!(),
@@ -143,7 +143,7 @@ fn blur_warp_identity_on_the_dump_geometry_and_half_pixel_shift_of_the_old_plane
         let out = run_with("blur_warp", &args, w, h, &k).into_image().unwrap();
         assert_eq!(bits(&out), bits(&src), "{}x{}: pixel-centre plane on the dump geometry is the identity", w, h);
         // NV9-GEOM-OLD: the old plane with the old geometry is the identity too ...
-        let mut ko = KParams::standin();
+        let mut ko = KParams::host_defaults();
         ko.geom_mode = GeomMode::Nv9Old;
         let xo = xy_grid(w, h, &Geom::full_frame(w, h), 0.0);
         let argso = [Arg::Mip(&mip), Arg::Img(&xo), Arg::Img(&xo), cst(&[0.5, 0.5]), cst(&[1.0]), cst(&[0.0, 0.0]), cst(&[1.0]), cst(&[0.0])];
@@ -299,13 +299,13 @@ fn mode_row(label: &str, prog: &str, ov: &[(&str, Vec<f32>)], hc: bool, mask_con
             (_, Err(e)) => format!("CMD-ERR {}", e.chars().take(80).collect::<String>()),
         }
     };
-    let c0 = cell(&res[0], &mut ok);
+    let cell_value = cell(&res[0], &mut ok);
     let c1 = cell(&res[1], &mut ok);
     let m2m = match (&res[0], &res[1]) {
         (Ok(a), Ok(b)) => if bits(a) == bits(b) { "BIT-EQUAL".to_string() } else { "DIFF".to_string() },
         _ => "-".to_string(),
     };
-    rows.push(format!("{}\t{}\t{}\t{}/{}\t{}\t{}\t{}", label, prog, run.join(" "), ncmd[0], ncmd[1], c0, c1, m2m));
+    rows.push(format!("{}\t{}\t{}\t{}/{}\t{}\t{}\t{}", label, prog, run.join(" "), ncmd[0], ncmd[1], cell_value, c1, m2m));
     ok
 }
 

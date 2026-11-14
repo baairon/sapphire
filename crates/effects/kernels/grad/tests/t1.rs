@@ -7,9 +7,9 @@ fn base() -> GradParams {
 
 fn run(p: &GradParams, src: &[f32], w: usize, h: usize) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     let n = w * h;
-    let (mut aux, mut dx, mut dy) = (vec![f32::NAN; n], vec![f32::NAN; n], vec![f32::NAN; n]);
-    render(p, src, w, h, &mut aux, &mut dx, &mut dy).unwrap();
-    (aux, dx, dy)
+    let (mut aux, mut delta_x, mut dy) = (vec![f32::NAN; n], vec![f32::NAN; n], vec![f32::NAN; n]);
+    render(p, src, w, h, &mut aux, &mut delta_x, &mut dy).unwrap();
+    (aux, delta_x, dy)
 }
 
 const M3: [f32; 9] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0];
@@ -35,10 +35,10 @@ fn copy_path_is_identity_at_gain_one() {
 #[test]
 fn hand_gradient_3x3_scale2() {
     // info_aspect clear: xmm5 = 2.0, xmm1 = 4.0. Middle row factor 0.5 * 2.0 = 1.0, first and last row factor 0.5 * 4.0 = 2.0.
-    let (_, dx, dy) = run(&base(), &M3, 3, 3);
-    assert_eq!(&dx[0..3], &[2.0, 3.0, 4.0 * 0.0 + 4.0]); // row 0: (2-1)*2, 4-1, (4-2)*2
-    assert_eq!(&dx[3..6], &[16.0, 24.0, 32.0]);
-    assert_eq!(&dx[6..9], &[128.0, 192.0, 256.0]);
+    let (_, delta_x, dy) = run(&base(), &M3, 3, 3);
+    assert_eq!(&delta_x[0..3], &[2.0, 3.0, 4.0 * 0.0 + 4.0]); // row 0: (2-1)*2, 4-1, (4-2)*2
+    assert_eq!(&delta_x[3..6], &[16.0, 24.0, 32.0]);
+    assert_eq!(&delta_x[6..9], &[128.0, 192.0, 256.0]);
     // row 0: up = own row, down = row 1: (1-8, 2-16, 4-32) = (-7, -14, -28); columns 0 and 2: ((v * 0.5) * 4.0); column 1: v * (0.5 * 4.0)
     assert_eq!(&dy[0..3], &[-14.0, -28.0, -56.0]);
     // row 1: up row 0 minus down row 2 = (-63, -126, -252), factor 1.0 (columns 0, 2: (v*0.5)*2.0)
@@ -52,8 +52,8 @@ fn hand_gradient_3x3_scale1() {
     // info_aspect set and cell 0x1addc04 nonzero: xmm5 = 1.0, xmm1 = 2.0: middle row factor 0.5, first and last row factor 1.0
     let mut p = base();
     p.info_aspect_set = true;
-    let (_, dx, dy) = run(&p, &M3, 3, 3);
-    assert_eq!(&dx[3..6], &[16.0, 24.0, 32.0]); // dx does not depend on xmm5
+    let (_, delta_x, dy) = run(&p, &M3, 3, 3);
+    assert_eq!(&delta_x[3..6], &[16.0, 24.0, 32.0]); // dx does not depend on xmm5
     assert_eq!(&dy[3..6], &[-31.5, -63.0, -126.0]);
     assert_eq!(&dy[0..3], &[-7.0, -14.0, -28.0]);
     // cell cleared: xmm5 = 2.0 whatever info_aspect says
@@ -65,8 +65,8 @@ fn hand_gradient_3x3_scale1() {
 #[test]
 fn width_two_and_one() {
     let p = base();
-    let (_, dx, _) = run(&p, &[1.0, 5.0, 2.0, 11.0], 2, 2);
-    assert_eq!(dx, vec![8.0, 8.0, 18.0, 18.0]); // (p1 - p0) * 2.0 in both columns
+    let (_, delta_x, _) = run(&p, &[1.0, 5.0, 2.0, 11.0], 2, 2);
+    assert_eq!(delta_x, vec![8.0, 8.0, 18.0, 18.0]); // (p1 - p0) * 2.0 in both columns
     // width 1: p[1] is the next row, the last row reads past_end
     let mut q = base();
     q.past_end = 100.0;
@@ -85,12 +85,12 @@ fn odd_and_even_widths_agree_with_the_definition() {
     for w in 2..=12usize {
         let h = 4usize;
         let src: Vec<f32> = (0..w * h).map(|i| ((i * 7 + 3) % 13) as f32).collect();
-        let (_, dx, _) = run(&base(), &src, w, h);
+        let (_, delta_x, _) = run(&base(), &src, w, h);
         for y in 0..h {
             let r = &src[y * w..(y + 1) * w];
             for x in 0..w {
                 let want = if x == 0 { (r[1] - r[0]) * 2.0 } else if x == w - 1 { (r[w - 1] - r[w - 2]) * 2.0 } else { r[x + 1] - r[x - 1] };
-                assert_eq!(dx[y * w + x], want, "w {w} y {y} x {x}");
+                assert_eq!(delta_x[y * w + x], want, "w {w} y {y} x {x}");
             }
         }
     }
@@ -119,12 +119,12 @@ fn determinism_and_nan_propagation() {
 #[test]
 fn errors_and_empty() {
     let mut aux = vec![0.0f32; 4];
-    let (mut dx, mut dy) = (vec![0.0f32; 4], vec![0.0f32; 4]);
+    let (mut delta_x, mut dy) = (vec![0.0f32; 4], vec![0.0f32; 4]);
     let mut p = base();
-    assert!(render(&p, &[0.0; 3], 2, 2, &mut aux, &mut dx, &mut dy).is_err());
+    assert!(render(&p, &[0.0; 3], 2, 2, &mut aux, &mut delta_x, &mut dy).is_err());
     p.edge_mode = 5;
     p.amount = 1.0;
-    assert!(render(&p, &[0.0; 4], 2, 2, &mut aux, &mut dx, &mut dy).is_err());
+    assert!(render(&p, &[0.0; 4], 2, 2, &mut aux, &mut delta_x, &mut dy).is_err());
     assert!(render(&base(), &[], 0, 5, &mut [], &mut [], &mut []).is_ok());
 }
 

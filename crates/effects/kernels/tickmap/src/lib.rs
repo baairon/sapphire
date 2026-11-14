@@ -274,14 +274,14 @@ fn scaled_size(n: i32, d: i32, size: i32) -> f32 {
 fn k_size_round() -> f64 { kp::SIZE_ROUND }
 
 /// The unit step of the point route for a given lane (nibbles 4 and 5 ported, 0 and 8..15 identity).
-fn point_unit(rec: &ParamRec, pinfo: &Pinfo, lane: usize, v: f32, x1: f32, x2: f32) -> Result<f32, Error> {
+fn point_unit(rec: &ParamRec, pinfo: &Pinfo, lane: usize, v: f32, unit_origin: f32, sy_int: f32) -> Result<f32, Error> {
     let nib = (rec.subtype_byte & 0xf) as u32;
     if nib == 0 || nib >= 8 {
         Ok(v)
     } else if nib == k::N4_NIBBLE {
-        Ok(unit_nibble4(v, lane, kp::UNIT_FLAGS, x1, x2, pinfo.unit_x3))
+        Ok(unit_nibble4(v, lane, kp::UNIT_FLAGS, unit_origin, sy_int, pinfo.unit_x3))
     } else if nib == k::N5_NIBBLE {
-        Ok(unit_nibble5(v, lane, &UnitIn { x1, rec_unit_value: rec.rec_unit_value, x3: pinfo.unit_x3, d4: pinfo.unit_d4, d5: pinfo.unit_d5 }))
+        Ok(unit_nibble5(v, lane, &UnitIn { unit_origin, rec_unit_value: rec.rec_unit_value, unit_x: pinfo.unit_x3, unit_d: pinfo.unit_d4, unit_dd: pinfo.unit_d5 }))
     } else {
         Err(Error::UnitConversion)
     }
@@ -329,19 +329,19 @@ pub fn map_point_param(
     };
     let (px, py) = host.checkout_point(h.effect_ref, rec.index as i32, h.cur_time, h.time_step, h.time_scale);
     host.checkin(h.effect_ref);
-    let x1 = cvtt_ss2si(sx) as f32;
-    let x2 = cvtt_ss2si(sy) as f32;
+    let unit_origin = cvtt_ss2si(sx) as f32;
+    let sy_int = cvtt_ss2si(sy) as f32;
     let fx = k::SCALE_16_16 * (px as f32);
     let fy = k::SCALE_16_16 * (py as f32);
-    let mut v0 = fx;
-    let mut v1 = x2 - fy;
+    let mut x_rel = fx;
+    let mut y_rel = sy_int - fy;
     if global_id != kp::GLOBAL_NO_OFFSET && (h.off_a as i64).abs() <= kp::OFFSET_LIMIT && (h.off_b as i64).abs() <= kp::OFFSET_LIMIT {
-        v0 -= h.off_a as f32;
-        v1 += h.off_b as f32;
+        x_rel -= h.off_a as f32;
+        y_rel += h.off_b as f32;
     }
-    let r0 = point_unit(rec, pinfo, 0, v0, x1, x2)?;
-    let r1 = point_unit(rec, pinfo, 1, v1, x1, x2)?;
-    Ok(Some([r0, r1]))
+    let unit_x_out = point_unit(rec, pinfo, 0, x_rel, unit_origin, sy_int)?;
+    let unit_y_out = point_unit(rec, pinfo, 1, y_rel, unit_origin, sy_int)?;
+    Ok(Some([unit_x_out, unit_y_out]))
 }
 
 /// `vcvttss2si` (32 bit): truncate toward zero; NaN and out of range give 0x80000000.
@@ -390,14 +390,14 @@ fn n5_term(d: f64) -> f32 {
 #[derive(Clone, Copy, Debug)]
 pub struct UnitIn {
     /// (float)a host field (xmm1 at the call a listed site)
-    pub x1: f32,
+    pub unit_origin: f32,
     /// a host field (f32)
     pub rec_unit_value: f32,
     /// a host field (f32, xmm3)
-    pub x3: f32,
+    pub unit_x: f32,
     /// a host field] and (doubles narrowed to f32 at a listed site, then clamped)
-    pub d4: f64,
-    pub d5: f64,
+    pub unit_d: f64,
+    pub unit_dd: f64,
 }
 
 use fx_common::x86::{nx_add, nx_div, nx_mul, nx_sub};
@@ -405,30 +405,30 @@ use fx_common::x86::{nx_add, nx_div, nx_mul, nx_sub};
 /// Unit conversion a listed site at subtype nibble 5 (jump table index 4, arm a listed site, MEASURED table):
 /// r = v * ((K / x1) * rec_unit_value); lane 1 only: r = r * ((t5 * x3) / (-t4)).
 pub fn unit_nibble5(v: f32, lane: usize, u: &UnitIn) -> f32 {
-    let t4 = n5_term(u.d4);
-    let t5 = n5_term(u.d5);
-    let scale = nx_mul(nx_div(k::N5_K, u.x1), u.rec_unit_value);
+    let d_poly = n5_term(u.unit_d);
+    let dd_poly = n5_term(u.unit_dd);
+    let scale = nx_mul(nx_div(k::N5_K, u.unit_origin), u.rec_unit_value);
     let r = nx_mul(v, scale);
     if lane != k::N5_LANE {
         r
     } else {
-        let den = f32::from_bits(t4.to_bits() ^ k::NEG_MASK);
-        nx_mul(r, nx_div(nx_mul(t5, u.x3), den))
+        let den = f32::from_bits(d_poly.to_bits() ^ k::NEG_MASK);
+        nx_mul(r, nx_div(nx_mul(dd_poly, u.unit_x), den))
     }
 }
 
 /// Unit conversion a listed site at subtype nibble 4 (jump table index 3, arm a listed site; lane 1 arm a listed site):
 /// s = K / x1; lane != 1: (v - x1 * 0.5) * s; lane 1, flags bit 1: -(((v + x2 * 0.5) * s) * x3);
 /// lane 1, flags bit 1 clear: ((v - x2 * 0.5) * s) * x3.  x1 and x2 are the two sizes as f32, x3 = a host field.
-pub fn unit_nibble4(v: f32, lane: usize, flags: u32, x1: f32, x2: f32, x3: f32) -> f32 {
-    let s = nx_div(k::N5_K, x1);
+pub fn unit_nibble4(v: f32, lane: usize, flags: u32, unit_origin: f32, sy_int: f32, unit_x: f32) -> f32 {
+    let s = nx_div(k::N5_K, unit_origin);
     if lane != k::N4_LANE {
-        nx_mul(nx_sub(v, nx_mul(x1, k::N4_HALF)), s)
+        nx_mul(nx_sub(v, nx_mul(unit_origin, k::N4_HALF)), s)
     } else if flags & k::N4_FLAG_NEG != 0 {
-        let r = nx_mul(nx_mul(nx_add(v, nx_mul(x2, k::N4_HALF)), s), x3);
+        let r = nx_mul(nx_mul(nx_add(v, nx_mul(sy_int, k::N4_HALF)), s), unit_x);
         f32::from_bits(r.to_bits() ^ k::NEG_MASK)
     } else {
-        nx_mul(nx_mul(nx_sub(v, nx_mul(x2, k::N4_HALF)), s), x3)
+        nx_mul(nx_mul(nx_sub(v, nx_mul(sy_int, k::N4_HALF)), s), unit_x)
     }
 }
 
@@ -440,7 +440,7 @@ fn finish_numeric(rec: &ParamRec, pinfo: &Pinfo, lane: Option<(usize, f32, f32)>
     if (1..=7).contains(&nib) {
         match lane {
             Some(_) if nib == k::N4_NIBBLE => return Err(Error::N4GenericUnrecorded),
-            Some((l, x1, _)) if nib == k::N5_NIBBLE => v = unit_nibble5(v, l, &UnitIn { x1, rec_unit_value: rec.rec_unit_value, x3: pinfo.unit_x3, d4: pinfo.unit_d4, d5: pinfo.unit_d5 }),
+            Some((l, unit_origin, _)) if nib == k::N5_NIBBLE => v = unit_nibble5(v, l, &UnitIn { unit_origin, rec_unit_value: rec.rec_unit_value, unit_x: pinfo.unit_x3, unit_d: pinfo.unit_d4, unit_dd: pinfo.unit_d5 }),
             _ => return Err(Error::UnitConversion),
         }
     }

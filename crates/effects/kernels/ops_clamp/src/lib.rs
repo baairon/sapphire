@@ -90,7 +90,7 @@ fn lt(a: f32, b: f32) -> u32 {
 fn andm(a: f32, m: u32) -> f32 {
     f32::from_bits(a.to_bits() & m)
 }
-fn bl(a: f32, b: f32, m: u32) -> f32 {
+fn blend(a: f32, b: f32, m: u32) -> f32 {
     if m >> 31 != 0 {
         b
     } else {
@@ -126,9 +126,9 @@ pub fn shape_of(fa: bool, fb: bool, fc: bool) -> Shape {
 #[derive(Clone, Copy)]
 struct El {
     p0: f32,
-    p1: f32,
+    src_ch1: f32,
     p2: f32,
-    c0: f32,
+    clamp_ch0: f32,
     c1: f32,
     c2: f32,
 }
@@ -137,47 +137,47 @@ fn scalar(s: Shape, e: El, m: Mutant) -> f32 {
     match s {
         // x = B plane, c2 = C const (xmm8), c0 = A const (xmm0)
         Shape::S101 => {
-            let (x, c2, c0) = if m == Mutant::Swap101 { (e.p1, e.c0, e.c2) } else { (e.p1, e.c2, e.c0) };
+            let (x, c2, clamp_ch0) = if m == Mutant::Swap101 { (e.src_ch1, e.clamp_ch0, e.c2) } else { (e.src_ch1, e.c2, e.clamp_ch0) };
             if c2 > x {
-                if x > c0 {
+                if x > clamp_ch0 {
                     x
                 } else {
-                    minss(c2, c0)
+                    minss(c2, clamp_ch0)
                 }
-            } else if c2 > c0 {
+            } else if c2 > clamp_ch0 {
                 c2
             } else {
-                minss(x, c0)
+                minss(x, clamp_ch0)
             }
         }
         // x = B plane, y = C plane, c0
         Shape::S100 => {
-            let (x, y) = if m == Mutant::Swap100 { (e.p2, e.p1) } else { (e.p1, e.p2) };
+            let (x, y) = if m == Mutant::Swap100 { (e.p2, e.src_ch1) } else { (e.src_ch1, e.p2) };
             if y > x {
-                if x > e.c0 {
+                if x > e.clamp_ch0 {
                     x
                 } else {
-                    minss(y, e.c0)
+                    minss(y, e.clamp_ch0)
                 }
-            } else if y > e.c0 {
+            } else if y > e.clamp_ch0 {
                 y
             } else {
-                minss(x, e.c0)
+                minss(x, e.clamp_ch0)
             }
         }
         // x = C plane, c1 (xmm9), c0 (xmm0)
         Shape::S11 => {
-            let (x, c1, c0) = (e.p2, if m == Mutant::Swap11 { e.c0 } else { e.c1 }, if m == Mutant::Swap11 { e.c1 } else { e.c0 });
+            let (x, c1, clamp_ch0) = (e.p2, if m == Mutant::Swap11 { e.clamp_ch0 } else { e.c1 }, if m == Mutant::Swap11 { e.c1 } else { e.clamp_ch0 });
             if x > c1 {
-                if c1 > c0 {
+                if c1 > clamp_ch0 {
                     c1
                 } else {
-                    minss(x, c0)
+                    minss(x, clamp_ch0)
                 }
-            } else if x > c0 {
+            } else if x > clamp_ch0 {
                 x
             } else {
-                minss(c1, c0)
+                minss(c1, clamp_ch0)
             }
         }
         //  (c2 > c1) and (else): x = A plane, c1, c2
@@ -212,7 +212,7 @@ fn scalar(s: Shape, e: El, m: Mutant) -> f32 {
         }
         // b = B plane (xmm1), a = A plane (xmm0), c2
         Shape::S001 => {
-            let (a, b) = if m == Mutant::Swap001 { (e.p1, e.p0) } else { (e.p0, e.p1) };
+            let (a, b) = if m == Mutant::Swap001 { (e.src_ch1, e.p0) } else { (e.p0, e.src_ch1) };
             if e.c2 > b {
                 if b > a {
                     b
@@ -227,7 +227,7 @@ fn scalar(s: Shape, e: El, m: Mutant) -> f32 {
         }
         // b = B plane (xmm2), c = C plane (xmm0), a = A plane (xmm1)
         Shape::S000 => {
-            let (b, c, a) = if m == Mutant::Swap000 { (e.p2, e.p1, e.p0) } else { (e.p1, e.p2, e.p0) };
+            let (b, c, a) = if m == Mutant::Swap000 { (e.p2, e.src_ch1, e.p0) } else { (e.src_ch1, e.p2, e.p0) };
             if c > b {
                 if b > a {
                     b
@@ -248,136 +248,136 @@ fn lane(s: Shape, e: El, k: u32) -> f32 {
     match s {
         // 
         Shape::S101 => {
-            let (x, c0, c2) = (e.p1, e.c0, e.c2);
-            let m2 = lt(c0, c2);
-            let v3 = minss(c2, c0);
-            let m5 = m2 ^ k;
-            let m14 = lt(x, c2);
-            let m10 = lt(c0, x);
-            let m9 = m14 & m10;
-            let m11 = k ^ m10;
-            let v12 = andm(x, m9);
-            let m13 = m14 & m11;
-            let m10b = k ^ m14;
-            let v15 = bl(v12, v3, m13);
-            let v1 = minss(x, c0);
-            let m9b = m10b & m2;
-            let v11 = bl(v15, c2, m9b);
-            let m12 = m10b & m5;
-            bl(v11, v1, m12)
+            let (x, clamp_ch0, c2) = (e.src_ch1, e.clamp_ch0, e.c2);
+            let less_2 = lt(clamp_ch0, c2);
+            let v3 = minss(c2, clamp_ch0);
+            let bits_5 = less_2 ^ k;
+            let less_14 = lt(x, c2);
+            let less_10 = lt(clamp_ch0, x);
+            let bits_9 = less_14 & less_10;
+            let bits_11 = k ^ less_10;
+            let masked_12 = andm(x, bits_9);
+            let bits_13 = less_14 & bits_11;
+            let bits_10_b = k ^ less_14;
+            let blend_15 = blend(masked_12, v3, bits_13);
+            let min_1 = minss(x, clamp_ch0);
+            let bits_9_b = bits_10_b & less_2;
+            let blend_11 = blend(blend_15, c2, bits_9_b);
+            let bits_12 = bits_10_b & bits_5;
+            blend(blend_11, min_1, bits_12)
         }
         // 
         Shape::S100 => {
-            let (x, y, c0) = (e.p1, e.p2, e.c0);
-            let m5 = lt(c0, x);
-            let m10 = lt(x, y);
-            let v8 = minss(y, c0);
-            let m14 = lt(c0, y);
-            let m4 = m10 & m5;
-            let m6 = k ^ m5;
-            let v7 = andm(x, m4);
-            let m9 = m10 & m6;
-            let m15 = k ^ m10;
-            let v11 = bl(v7, v8, m9);
-            let v1 = minss(x, c0);
-            let m13 = m15 & m14;
-            let m14b = k ^ m14;
-            let v4 = bl(v11, y, m13);
-            let m5b = m15 & m14b;
-            bl(v4, v1, m5b)
+            let (x, y, clamp_ch0) = (e.src_ch1, e.p2, e.clamp_ch0);
+            let bits_5 = lt(clamp_ch0, x);
+            let less_10 = lt(x, y);
+            let min_8 = minss(y, clamp_ch0);
+            let less_14 = lt(clamp_ch0, y);
+            let bits_4 = less_10 & bits_5;
+            let bits_6 = k ^ bits_5;
+            let masked_7 = andm(x, bits_4);
+            let bits_9 = less_10 & bits_6;
+            let bits_15 = k ^ less_10;
+            let blend_11 = blend(masked_7, min_8, bits_9);
+            let min_1 = minss(x, clamp_ch0);
+            let bits_13 = bits_15 & less_14;
+            let bits_14_b = k ^ less_14;
+            let v4 = blend(blend_11, y, bits_13);
+            let bits_5_b = bits_15 & bits_14_b;
+            blend(v4, min_1, bits_5_b)
         }
         // 
         Shape::S11 => {
-            let (x, c1, c0) = (e.p2, e.c1, e.c0);
-            let m3 = lt(c0, c1);
-            let v6 = minss(c1, c0);
-            let m2 = m3 ^ k;
-            let m13 = lt(c1, x);
-            let v11 = minss(x, c0);
-            let m8 = m13 & m3;
-            let v10 = andm(c1, m8);
-            let m8b = lt(c0, x);
-            let m12 = m13 & m2;
-            let v14 = bl(v10, v11, m12);
-            let m10 = k ^ m13;
-            let m15 = m10 & m8b;
-            let v11b = bl(v14, x, m15);
-            let m1 = k ^ m8b;
-            let m12b = m10 & m1;
-            bl(v11b, v6, m12b)
+            let (x, c1, clamp_ch0) = (e.p2, e.c1, e.clamp_ch0);
+            let less_3 = lt(clamp_ch0, c1);
+            let min_6 = minss(c1, clamp_ch0);
+            let less_2 = less_3 ^ k;
+            let bits_13 = lt(c1, x);
+            let blend_11 = minss(x, clamp_ch0);
+            let bits_8 = bits_13 & less_3;
+            let masked_10 = andm(c1, bits_8);
+            let less_8_b = lt(clamp_ch0, x);
+            let bits_12 = bits_13 & less_2;
+            let blend_14 = blend(masked_10, blend_11, bits_12);
+            let less_10 = k ^ bits_13;
+            let bits_15 = less_10 & less_8_b;
+            let blend_11_b = blend(blend_14, x, bits_15);
+            let bits_1 = k ^ less_8_b;
+            let bits_12_b = less_10 & bits_1;
+            blend(blend_11_b, min_6, bits_12_b)
         }
         //  (c2 > c1) and (else)
         Shape::S011 => {
             let x = e.p0;
             if e.c2 > e.c1 {
-                let m4 = lt(x, e.c1);
+                let bits_4 = lt(x, e.c1);
                 let v3 = minss(e.c2, x);
-                bl(v3, e.c1, m4)
+                blend(v3, e.c1, bits_4)
             } else {
-                let m4 = lt(x, e.c2);
+                let bits_4 = lt(x, e.c2);
                 let v3 = minss(e.c1, x);
-                bl(v3, e.c2, m4)
+                blend(v3, e.c2, bits_4)
             }
         }
         // 
         Shape::S010 => {
             let (x, y, c1) = (e.p0, e.p2, e.c1);
-            let m10 = lt(c1, y);
-            let m4 = lt(x, c1);
-            let v7 = minss(y, x);
-            let m14 = lt(x, y);
-            let v0 = minss(c1, x);
-            let m3 = m10 & m4;
-            let m5 = k ^ m4;
-            let v6 = andm(c1, m3);
-            let m8 = m10 & m5;
-            let m15 = k ^ m10;
-            let v11 = bl(v6, v7, m8);
-            let m13 = m15 & m14;
-            let m14b = k ^ m14;
-            let v3 = bl(v11, y, m13);
-            let m4b = m15 & m14b;
-            bl(v3, v0, m4b)
+            let less_10 = lt(c1, y);
+            let bits_4 = lt(x, c1);
+            let masked_7 = minss(y, x);
+            let less_14 = lt(x, y);
+            let min_0 = minss(c1, x);
+            let less_3 = less_10 & bits_4;
+            let bits_5 = k ^ bits_4;
+            let min_6 = andm(c1, less_3);
+            let bits_8 = less_10 & bits_5;
+            let bits_15 = k ^ less_10;
+            let blend_11 = blend(min_6, masked_7, bits_8);
+            let bits_13 = bits_15 & less_14;
+            let bits_14_b = k ^ less_14;
+            let v3 = blend(blend_11, y, bits_13);
+            let bits_4_b = bits_15 & bits_14_b;
+            blend(v3, min_0, bits_4_b)
         }
         // 
         Shape::S001 => {
-            let (a, b, c2) = (e.p0, e.p1, e.c2);
-            let m11 = lt(b, c2);
-            let m5 = lt(a, b);
-            let v9 = minss(c2, a);
-            let m14 = lt(a, c2);
-            let v0 = minss(b, a);
-            let m4 = m11 & m5;
-            let m6 = k ^ m5;
-            let v7 = andm(b, m4);
-            let m10 = m11 & m6;
-            let m15 = k ^ m11;
-            let v12 = bl(v7, v9, m10);
-            let m13 = m15 & m14;
-            let m14b = k ^ m14;
-            let v4 = bl(v12, c2, m13);
-            let m1 = m15 & m14b;
-            bl(v4, v0, m1)
+            let (a, b, c2) = (e.p0, e.src_ch1, e.c2);
+            let bits_11 = lt(b, c2);
+            let bits_5 = lt(a, b);
+            let min_9 = minss(c2, a);
+            let less_14 = lt(a, c2);
+            let min_0 = minss(b, a);
+            let bits_4 = bits_11 & bits_5;
+            let bits_6 = k ^ bits_5;
+            let masked_7 = andm(b, bits_4);
+            let less_10 = bits_11 & bits_6;
+            let bits_15 = k ^ bits_11;
+            let masked_12 = blend(masked_7, min_9, less_10);
+            let bits_13 = bits_15 & less_14;
+            let bits_14_b = k ^ less_14;
+            let v4 = blend(masked_12, c2, bits_13);
+            let bits_1 = bits_15 & bits_14_b;
+            blend(v4, min_0, bits_1)
         }
         // 
         Shape::S000 => {
-            let (b, c, a) = (e.p1, e.p2, e.p0);
-            let m7 = lt(b, c);
-            let m2 = lt(a, b);
-            let v5 = minss(c, a);
-            let m13 = lt(a, c);
-            let m1 = m7 & m2;
-            let m3 = k ^ m2;
-            let v4 = andm(b, m1);
-            let m6 = m7 & m3;
-            let m14 = k ^ m7;
-            let v8 = bl(v4, v5, m6);
+            let (b, c, a) = (e.src_ch1, e.p2, e.p0);
+            let less_7 = lt(b, c);
+            let less_2 = lt(a, b);
+            let min_5 = minss(c, a);
+            let bits_13 = lt(a, c);
+            let bits_1 = less_7 & less_2;
+            let less_3 = k ^ less_2;
+            let v4 = andm(b, bits_1);
+            let bits_6 = less_7 & less_3;
+            let less_14 = k ^ less_7;
+            let min_8 = blend(v4, min_5, bits_6);
             let v2 = minss(b, a);
-            let m10 = m14 & m13;
-            let m15 = k ^ m13;
-            let v1 = bl(v8, c, m10);
-            let m3b = m14 & m15;
-            bl(v1, v2, m3b)
+            let less_10 = less_14 & bits_13;
+            let bits_15 = k ^ bits_13;
+            let min_1 = blend(min_8, c, less_10);
+            let bits_3_b = less_14 & bits_15;
+            blend(min_1, v2, bits_3_b)
         }
     }
 }
@@ -441,86 +441,86 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, c: &Operand, out: &mut [&mut [f
     let k = if m == Mutant::KIgnored { !0u32 } else { p.allones };
     let s = shape_of(a.is_const, b.is_const, c.is_const);
     let nn = p.n;
-    for ch in 0..nch {
+    for chan in 0..nch {
         // cmp edx,esi ; cmovl esi,edx : idx = min(ch, count - 1), signed
-        let mut ia = ch.min(a.count - 1);
-        let mut ib = ch.min(b.count - 1);
-        let mut ic = ch.min(c.count - 1);
+        let mut ia = chan.min(a.count - 1);
+        let mut ib = chan.min(b.count - 1);
+        let mut ic = chan.min(c.count - 1);
         if m == Mutant::ClampA {
-            ia = ch.min(a.count);
+            ia = chan.min(a.count);
         }
         if m == Mutant::ClampB {
-            ib = ch.min(b.count);
+            ib = chan.min(b.count);
         }
         if m == Mutant::ClampC {
-            ic = ch.min(c.count);
+            ic = chan.min(c.count);
         }
         if nn <= 0 {
             continue;
         }
         let n = nn as usize;
-        let d = out.get_mut(ch as usize).ok_or(OpError::MissingOut)?;
+        let d = out.get_mut(chan as usize).ok_or(OpError::MissingOut)?;
         if d.len() < n {
             return Err(OpError::MissingOut);
         }
         // constants are indexed by the channel itself (this+4ch, 0x7c+4ch, 0xac+4ch), not by the clamped index
-        let cx = |o: &Operand, i: i32| -> Result<f32, OpError> {
-            let j = if m == Mutant::ConstClamped { i } else { ch };
+        let centre_x = |o: &Operand, i: i32| -> Result<f32, OpError> {
+            let j = if m == Mutant::ConstClamped { i } else { chan };
             if (0..=3).contains(&j) {
                 Ok(o.consts[j as usize])
             } else {
                 Err(OpError::ConstIndex)
             }
         };
-        let (mut c0, mut c1, mut c2) = (0.0f32, 0.0f32, 0.0f32);
-        let (mut p0, mut p1, mut p2): (&[f32], &[f32], &[f32]) = (&[], &[], &[]);
+        let (mut clamp_ch0, mut c1, mut c2) = (0.0f32, 0.0f32, 0.0f32);
+        let (mut p0, mut src_ch1, mut p2): (&[f32], &[f32], &[f32]) = (&[], &[], &[]);
         match s {
             Shape::S101 => {
-                c0 = cx(a, ia)?;
-                c2 = cx(c, ic)?;
-                p1 = plane(b, ib, n)?;
+                clamp_ch0 = centre_x(a, ia)?;
+                c2 = centre_x(c, ic)?;
+                src_ch1 = plane(b, ib, n)?;
             }
             Shape::S100 => {
-                c0 = cx(a, ia)?;
-                p1 = plane(b, ib, n)?;
+                clamp_ch0 = centre_x(a, ia)?;
+                src_ch1 = plane(b, ib, n)?;
                 p2 = plane(c, ic, n)?;
             }
             Shape::S11 => {
-                c0 = cx(a, ia)?;
-                c1 = cx(b, ib)?;
+                clamp_ch0 = centre_x(a, ia)?;
+                c1 = centre_x(b, ib)?;
                 p2 = plane(c, ic, n)?;
             }
             Shape::S011 => {
-                c1 = cx(b, ib)?;
-                c2 = cx(c, ic)?;
+                c1 = centre_x(b, ib)?;
+                c2 = centre_x(c, ic)?;
                 p0 = plane(a, ia, n)?;
             }
             Shape::S010 => {
-                c1 = cx(b, ib)?;
+                c1 = centre_x(b, ib)?;
                 p0 = plane(a, ia, n)?;
                 p2 = plane(c, ic, n)?;
             }
             Shape::S001 => {
-                c2 = cx(c, ic)?;
+                c2 = centre_x(c, ic)?;
                 p0 = plane(a, ia, n)?;
-                p1 = plane(b, ib, n)?;
+                src_ch1 = plane(b, ib, n)?;
             }
             Shape::S000 => {
                 p0 = plane(a, ia, n)?;
-                p1 = plane(b, ib, n)?;
+                src_ch1 = plane(b, ib, n)?;
                 p2 = plane(c, ic, n)?;
             }
         }
         let el = |i: usize| El {
             p0: p0.get(i).copied().unwrap_or(0.0),
-            p1: p1.get(i).copied().unwrap_or(0.0),
+            src_ch1: src_ch1.get(i).copied().unwrap_or(0.0),
             p2: p2.get(i).copied().unwrap_or(0.0),
-            c0,
+            clamp_ch0,
             c1,
             c2,
         };
         let thr = if s == Shape::S011 && m != Mutant::Thr011Plain { 0x45d } else { 0x4b0 };
-        let (peel, e) = split(n, p.dst_phase_bytes[(ch as usize) & 3], thr, m);
+        let (peel, e) = split(n, p.dst_phase_bytes[(chan as usize) & 3], thr, m);
         if e == 0 {
             for i in 0..n {
                 d[i] = scalar(s, el(i), m);
@@ -544,7 +544,7 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, c: &Operand, out: &mut [&mut [f
 pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
         ("IN2C-A1", "MEASURED-DYLIB", "vector constant (32 B, uncovered in the image) = 0xffffffff x8, the xor constant of every lane mask inversion (vxorps K,mask); explicit parameter allones; T2 runs all-ones and an alternate value, so a wrong value shows"),
-        ("IN2C-A2", "ROUTE", "AVX2 route only: feature word 0x9d97ff selects; AVX tier and SSE tier are not ported"),
+        ("IN2C-A2", "ROUTE", "AVX2 route only: feature word selects; AVX tier and SSE tier are not ported"), // origin: 0x9d97ff
         ("IN2C-A3", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ; compares and min/max only (no arithmetic), the emulator follows the SDM, not silicon"),
         ("IN2C-A4", "ALIGN-DEPENDENT", "dst_phase_bytes[c] = (address of output plane c) & 0x1f is an explicit input; only n >= 0x4b0 (shape 011: 0x45d) peels, below it the vector core starts at element 0"),
         ("IN2C-A5", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 is an explicit parameter (hooked ret_const in R-PARITY); it is called again after every channel and treated as constant; combo choice and the 9 entry combo table of the own builder (words 1,2,2,3,3,3,4,4 and terminator) are not rebuilt (INFERRED: operand channel count triples)"),

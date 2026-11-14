@@ -308,12 +308,12 @@ fn frame_and_plan_rows(tools: &Tools, vfx: &Path) {
             a.extend(strings(&["--depth", &depth.to_string(), "-o", &out.to_string_lossy(), "--force"]));
             a
         };
-        let (p1, p2, r1) = (dir.join(format!("lossy_py1_{}_{}.mp4", effect, depth)), dir.join(format!("lossy_py2_{}_{}.mp4", effect, depth)), dir.join(format!("lossy_rs_{}_{}.mp4", effect, depth)));
-        let a1 = tools.apply(&build(&p1), &vfx);
-        let a2 = tools.apply(&build(&p2), &vfx);
-        let rs = tools.ours(&build(&r1), &vfx);
-        assert_eq!((a1.code, a2.code, rs.code), (0, 0, 0), "{} {} {}", a1.stderr, a2.stderr, rs.stderr);
-        let (d1, d2, dr) = (decode_raw(&p1, "rgb24"), decode_raw(&p2, "rgb24"), decode_raw(&r1, "rgb24"));
+        let (py_dir_a, p2, rs_dir) = (dir.join(format!("lossy_py1_{}_{}.mp4", effect, depth)), dir.join(format!("lossy_py2_{}_{}.mp4", effect, depth)), dir.join(format!("lossy_rs_{}_{}.mp4", effect, depth)));
+        let py_out_a = tools.apply(&build(&py_dir_a), &vfx);
+        let py_out_b = tools.apply(&build(&p2), &vfx);
+        let rs = tools.ours(&build(&rs_dir), &vfx);
+        assert_eq!((py_out_a.code, py_out_b.code, rs.code), (0, 0, 0), "{} {} {}", py_out_a.stderr, py_out_b.stderr, rs.stderr);
+        let (fp33_sub_1, d2, dr) = (decode_raw(&py_dir_a, "rgb24"), decode_raw(&p2, "rgb24"), decode_raw(&rs_dir, "rgb24"));
         let stat = |x: &[u8], y: &[u8]| -> (u32, f64) {
             let mut max = 0u32;
             let mut sum = 0u64;
@@ -324,15 +324,15 @@ fn frame_and_plan_rows(tools: &Tools, vfx: &Path) {
             }
             (max, sum as f64 / x.len().max(1) as f64)
         };
-        let (max_noise, mean_noise) = stat(&d1, &d2);
-        let (max_diff, mean_diff) = stat(&d1, &dr);
-        let facts_equal = facts(&tools.ffprobe, &p1) == facts(&tools.ffprobe, &r1);
-        let same_len = d1.len() == dr.len() && d1.len() == d2.len();
+        let (max_noise, mean_noise) = stat(&fp33_sub_1, &d2);
+        let (max_diff, mean_diff) = stat(&fp33_sub_1, &dr);
+        let facts_equal = facts(&tools.ffprobe, &py_dir_a) == facts(&tools.ffprobe, &rs_dir);
+        let same_len = fp33_sub_1.len() == dr.len() && fp33_sub_1.len() == d2.len();
         let ok = facts_equal && same_len && mean_diff <= 0.5;
         let mut cmd_py = vec!["python".to_string(), "tools/apply.py".to_string()];
-        cmd_py.extend(build(&p1));
+        cmd_py.extend(build(&py_dir_a));
         let mut cmd_rs = vec!["sapphire".to_string()];
-        cmd_rs.extend(build(&r1));
+        cmd_rs.extend(build(&rs_dir));
         let frame_bytes = 160 * 96 * 3;
         ROWS.lock().unwrap().push(vec![
             "frames".into(),
@@ -343,14 +343,14 @@ fn frame_and_plan_rows(tools: &Tools, vfx: &Path) {
             "lossy".into(),
             shorten(&cmd_py.join(" "), &dir),
             shorten(&cmd_rs.join(" "), &dir),
-            a1.code.to_string(),
+            py_out_a.code.to_string(),
             rs.code.to_string(),
-            (d1.len() / frame_bytes).to_string(),
+            (fp33_sub_1.len() / frame_bytes).to_string(),
             (dr.len() / frame_bytes).to_string(),
             frame_bytes.to_string(),
             ok.to_string(),
             format!("pipeline vs apply.py: max {} mean {:.3}; apply.py vs itself: max {} mean {:.3}", max_diff, mean_diff, max_noise, mean_noise),
-            format!("{:016x}", fnv1a64(&d1)),
+            format!("{:016x}", fnv1a64(&fp33_sub_1)),
             format!("{:016x}", fnv1a64(&dr)),
             format!("decoded rgb24; libx264 is not reproducible, so equal means: stream facts equal ({}) and mean absolute difference at most 0.5", facts_equal),
         ]);

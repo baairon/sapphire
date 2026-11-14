@@ -16,7 +16,7 @@
 //! * [`route_selfcheck`]: [`slot33_run`] against `slot33_warp` for every filter class, frame and host aspect.
 
 use crate::kernels2::cvt_i32;
-use fx_device::cl::{Arg as ClArg, Buffer};
+use fx_device::ocl::{Arg as ClArg, Buffer};
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::sim::Rng;
 use fx_device::{DevError, DevImage, Session};
@@ -34,7 +34,7 @@ pub struct Slot33Plan {
     /// the flag byte the driver reads: 1 when the prefill runs (filter word nonzero), else 0 (c1 and c2 are then not read)
     pub flag_byte: u8,
     /// plane scales (f32 bits): v1 for the u plane (c1), v2 for the v plane (c2)
-    pub v1: u32,
+    pub quarter_span: u32,
     pub v2: u32,
     /// min variant (1) or sum variant (0) of each plane
     pub min1: u32,
@@ -56,16 +56,16 @@ pub fn slot33_plan(w: usize, h: usize, filter: f32, host_aspect: f32) -> Result<
     let prim = Prim33 { n: cvt_i32(filter), cc: 0 };
     let rec = slot33_record(w, h);
     let flag = prim.n != 0 && prim.cc == 0;
-    let r8 = if prim.n >= 3 {
+    let route_int_7 = if prim.n >= 3 {
         2
     } else if prim.n >= 2 {
         1
     } else {
         0
     };
-    let v1 = mul_ss(sub_ss(rec.assumption_g, rec.assumption_f), QUARTER);
+    let quarter_span = mul_ss(sub_ss(rec.assumption_g, rec.assumption_f), QUARTER);
     let v2 = mul_ss(sub_ss(rec.geom33_a, rec.assumption_h), QUARTER);
-    Ok(Slot33Plan { flag_byte: flag as u8, v1, v2, min1: (r8 > 0) as u32, min2: (r8 > 1) as u32 })
+    Ok(Slot33Plan { flag_byte: flag as u8, quarter_span, v2, min1: (route_int_7 > 0) as u32, min2: (route_int_7 > 1) as u32 })
 }
 
 fn frame_ok(w: usize, h: usize) -> Result<usize, DevError> {
@@ -80,7 +80,7 @@ fn frame_ok(w: usize, h: usize) -> Result<usize, DevError> {
 
 /// One launch of `fp_prefill_u32`: `dst` = the log2 of gradient map of `src` (both w x h, row stride w).
 #[allow(clippy::too_many_arguments)]
-pub fn prefill_launch<T: fx_device::cl::Pod, U: fx_device::cl::Pod>(s: &Session, src: &Buffer<T>, dst: &Buffer<U>, w: usize, h: usize, v: u32, pre_a: u32, pre_b: u32, min: u32) -> Result<(), DevError> {
+pub fn prefill_launch<T: fx_device::ocl::Pod, U: fx_device::ocl::Pod>(s: &Session, src: &Buffer<T>, dst: &Buffer<U>, w: usize, h: usize, v: u32, pre_a: u32, pre_b: u32, min: u32) -> Result<(), DevError> {
     let n = frame_ok(w, h)?;
     if src.len() < n || dst.len() < n {
         return Err(unsup("prefill plane shorter than the frame"));
@@ -105,7 +105,7 @@ pub fn slot33_run(s: &Arc<Session>, w: usize, h: usize, filter: f32, host_aspect
     }
     let n = frame_ok(w, h)?;
     let c = DevImage::alloc(s, 2, n)?;
-    prefill_launch(s, u, c.plane(0), w, h, plan.v1, 0, 0, plan.min1)?;
+    prefill_launch(s, u, c.plane(0), w, h, plan.quarter_span, 0, 0, plan.min1)?;
     prefill_launch(s, v, c.plane(1), w, h, plan.v2, 0, 0, plan.min2)?;
     Ok(Slot33Dev { plan, c: Some(c) })
 }
@@ -197,24 +197,24 @@ pub(crate) fn fp_lattice<'a>(s: &Arc<Session>, m: &crate::device_ops_warp::MipRe
 /// plane (0, 0) elsewhere. `coords` = the two coordinate planes, `pre` = the prefill maps (plane 0 = c1, plane 1 = c2), `out` the
 /// result (ch planes). A tap or index outside what the CPU reads declines (the CPU kernel reports its error).
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn fp_warp_launch(s: &Arc<Session>, rel: bool, w: usize, h: usize, ch: usize, lat: &FpLattice, coords: &DevImage, pre: &DevImage, mx: i32, my: i32, g: &crate::types::Geom, out: &DevImage) -> Result<(), DevError> {
+pub(crate) fn fp_warp_launch(s: &Arc<Session>, rel: bool, w: usize, h: usize, chan: usize, lat: &FpLattice, coords: &DevImage, pre: &DevImage, mx: i32, my: i32, g: &crate::types::Geom, out: &DevImage) -> Result<(), DevError> {
     let n = w * h;
-    if !(1..=4).contains(&ch) || w == 0 || h == 0 || w >= (1 << 24) || h >= (1 << 24) || n >= i32::MAX as usize {
+    if !(1..=4).contains(&chan) || w == 0 || h == 0 || w >= (1 << 24) || h >= (1 << 24) || n >= i32::MAX as usize {
         return Err(unsup("frame outside the footprint kernel's range"));
     }
-    if coords.n != n || pre.n != n || out.n != n || coords.channels() != 2 || pre.channels() != 2 || out.channels() != ch {
+    if coords.n != n || pre.n != n || out.n != n || coords.channels() != 2 || pre.channels() != 2 || out.channels() != chan {
         return Err(unsup("footprint operands of another size"));
     }
     let ctx = &s.context;
-    let ro = fx_device::cl::Access::ReadOnly;
+    let ro = fx_device::ocl::Access::ReadOnly;
     let nz = |v: &[u32]| if v.is_empty() { vec![0u32] } else { v.to_vec() };
     let offs = Buffer::from_slice(ctx, &lat.offs, ro)?;
     let plen = Buffer::from_slice(ctx, &lat.plen, ro)?;
     let wtab = Buffer::from_slice(ctx, &lat.wtab, ro)?;
     let htab = Buffer::from_slice(ctx, &lat.htab, ro)?;
     let ttab = Buffer::from_slice(ctx, &nz(&lat.t), ro)?;
-    let err = Buffer::from_slice(ctx, &[0u32], fx_device::cl::Access::ReadWrite)?;
-    let o = |k: usize| out.plane(k.min(ch - 1));
+    let err = Buffer::from_slice(ctx, &[0u32], fx_device::ocl::Access::ReadWrite)?;
+    let o = |k: usize| out.plane(k.min(chan - 1));
     s.launch(
         "fp_warp_f32",
         n,
@@ -236,7 +236,7 @@ pub(crate) fn fp_warp_launch(s: &Arc<Session>, rel: bool, w: usize, h: usize, ch
             o(1).arg(),
             o(2).arg(),
             o(3).arg(),
-            ClArg::I32(ch as i32),
+            ClArg::I32(chan as i32),
             ClArg::I32(w as i32),
             ClArg::I32(h as i32),
             ClArg::I32(mx),
@@ -351,7 +351,7 @@ fn plane_kind(r: &mut Rng, kind: usize, w: usize, h: usize) -> Vec<u32> {
 fn param_sets(w: usize, h: usize) -> Vec<(u32, u32, u32)> {
     let p = slot33_plan(w, h, 1.0, 1.0).expect("host aspect 1.0");
     vec![
-        (p.v1, 0, 0),
+        (p.quarter_span, 0, 0),
         (p.v2, 0, 0),
         (0.25f32.to_bits(), 0, 0),
         (0x0000_0003, 0, 0),
@@ -574,19 +574,19 @@ pub fn route_selfcheck(s: &Arc<Session>) -> Result<PrefillTally, String> {
 /// Single edit mutants of `FOOTPRINT_PREFILL` (name, text replaced once, replacement): each must make one of the three
 /// self-checks fail when built in place of the real source.
 pub const MUTANTS: &[(&str, &str, &str)] = &[
-    ("hardware_nan_fma213", "    if (fp33_isn(dst)) {\n        return dst | 0x400000u;\n    }\n    if (fp33_isn(s2)) {\n        return s2 | 0x400000u;\n    }\n    if (fp33_isn(s3)) {\n        return s3 | 0x400000u;\n    }\n    float c = sub ? -as_float(s3) : as_float(s3);\n    return fp33_fix(fma(as_float(s2), as_float(dst), c));", "    float c = sub ? -as_float(s3) : as_float(s3);\n    return as_uint(fma(as_float(s2), as_float(dst), c));"),
-    ("nan_priority_swap_fma213", "    if (fp33_isn(dst)) {\n        return dst | 0x400000u;\n    }\n    if (fp33_isn(s2)) {\n        return s2 | 0x400000u;\n    }\n    if (fp33_isn(s3)) {\n        return s3 | 0x400000u;\n    }\n    float c", "    if (fp33_isn(s2)) {\n        return s2 | 0x400000u;\n    }\n    if (fp33_isn(dst)) {\n        return dst | 0x400000u;\n    }\n    if (fp33_isn(s3)) {\n        return s3 | 0x400000u;\n    }\n    float c"),
+    ("hardware_nan_fma213", "    if (fp33_isn(dst)) {\n        return dst | 0x400000u;\n    }\n    if (fp33_isn(factor)) {\n        return factor | 0x400000u;\n    }\n    if (fp33_isn(addend)) {\n        return addend | 0x400000u;\n    }\n    float c = sub ? -as_float(addend) : as_float(addend);\n    return fp33_fix(fma(as_float(factor), as_float(dst), c));", "    float c = sub ? -as_float(addend) : as_float(addend);\n    return as_uint(fma(as_float(factor), as_float(dst), c));"),
+    ("nan_priority_swap_fma213", "    if (fp33_isn(dst)) {\n        return dst | 0x400000u;\n    }\n    if (fp33_isn(factor)) {\n        return factor | 0x400000u;\n    }\n    if (fp33_isn(addend)) {\n        return addend | 0x400000u;\n    }\n    float c", "    if (fp33_isn(factor)) {\n        return factor | 0x400000u;\n    }\n    if (fp33_isn(dst)) {\n        return dst | 0x400000u;\n    }\n    if (fp33_isn(addend)) {\n        return addend | 0x400000u;\n    }\n    float c"),
     ("variant_swap", "        if (flag != 0) {\n            uint mx", "        if (flag == 0) {\n            uint mx"),
     ("edge_row_scale_one", "uint s = (y == 0 || y == h - 1) ? 0x40000000u : 0x3f800000u;", "uint s = (y == 0) ? 0x40000000u : 0x3f800000u;"),
-    ("last_column_unfused", "uint nv = fp33_fma213(sy, dn, hb8, 1) & 0x7fffffffu;", "uint nv = fp33_sub(fp33_mul(sy, dn), hb8) & 0x7fffffffu;"),
-    ("finish_single", "uint m32 = fp33_cvtsd2ss(r);", "uint m32 = fp33_fix((float)as_double(xa) + (float)as_double(d) * 0x1p-1f);"),
+    ("last_column_unfused", "uint nv = fp33_fma213(sy, dn, pre_b_halved, 1) & 0x7fffffffu;", "uint nv = fp33_sub(fp33_mul(sy, dn), pre_b_halved) & 0x7fffffffu;"),
+    ("finish_single", "uint narrowed = fp33_cvtsd2ss(r);", "uint narrowed = fp33_fix((float)as_double(xa) + (float)as_double(d) * 0x1p-1f);"),
     ("finish_compare_lt", "if (as_double(xa) > as_double(d)) {", "if (as_double(xa) < as_double(d)) {"),
-    ("exponent_bias_127", "int e = (int)((m32 >> 23) & 0xffu) - 128;", "int e = (int)((m32 >> 23) & 0xffu) - 127;"),
-    ("operand_swap_dl", "uint dl = fp33_sub(cx, cp);", "uint dl = fp33_sub(cp, cx);"),
+    ("exponent_bias_127", "int e = (int)((narrowed >> 23) & 0xffu) - 128;", "int e = (int)((narrowed >> 23) & 0xffu) - 127;"),
+    ("operand_swap_dl", "uint delta_lo = fp33_sub(centre_x, cp);", "uint delta_lo = fp33_sub(cp, centre_x);"),
     ("sum_order_finish", "r = fp33_fma213_sd(xa, 0x3fe0000000000000ul, d);", "r = fp33_fma213_sd(d, 0x3fe0000000000000ul, xa);"),
     ("select_arm_prev", "__global const uint* prev = (y == 0) ? cur : cur - w;", "__global const uint* prev = (y == 0) ? cur + w : cur - w;"),
     ("constant_two_v", "uint two_v = fp33_mul(0x40000000u, v);", "uint two_v = fp33_mul(0x3f800000u, v);"),
-    ("finish_zero_test", "if (!(as_float(m32) > 0x0p+0f)) {", "if (as_float(m32) < 0x0p+0f) {"),
+    ("finish_zero_test", "if (!(as_float(narrowed) > 0x0p+0f)) {", "if (as_float(narrowed) < 0x0p+0f) {"),
     ("min_equal_arm", "    return (as_float(a) < as_float(b)) ? a : b;", "    return (as_float(a) <= as_float(b)) ? a : b;"),
 ];
 
@@ -611,11 +611,11 @@ pub const DRIVER_FRAMES: &[(usize, usize)] = &[(1, 1), (1, 3), (2, 1), (2, 3), (
 /// `kernels2::warp_rel_k`, flag byte 1. None when the CPU reports an error.
 #[allow(clippy::too_many_arguments)]
 fn cpu_driver(rel: bool, mip: &crate::types::MipImage, w: usize, h: usize, kp: &crate::types::KParams, a: (&[f32], &[f32]), c: (&[f32], &[f32]), mx: i32, my: i32) -> Option<Vec<Vec<f32>>> {
-    let ch = mip.channels;
+    let chan = mip.channels;
     let g = crate::kernels2::geom_of(kp, w, h);
     let (nl, np) = (mip.ripmap.nl(), mip.ripmap.np());
     let mk = || warp_sampler::Params {
-        n: ch as i32,
+        n: chan as i32,
         width_tab: mip.ripmap.widths.iter().map(|&v| v as i32).collect(),
         height_tab: mip.ripmap.heights.iter().map(|&v| v as i32).collect(),
         t: mip.scale.as_ref().map(|s| s.iter().map(|b| f32::from_bits(*b)).collect()).unwrap_or_default(),
@@ -625,21 +625,21 @@ fn cpu_driver(rel: bool, mip: &crate::types::MipImage, w: usize, h: usize, kp: &
     let lat = warp_sampler::Lattice {
         bufs: (0..nl).map(|l| (0..np).map(|j| mip.ripmap.planes[mip.ripmap.idx(l, j)].iter().map(|b| f32::from_bits(*b)).collect()).collect()).collect(),
     };
-    let mut out: Vec<Vec<f32>> = vec![vec![0.0; w * h]; ch];
+    let mut out: Vec<Vec<f32>> = vec![vec![0.0; w * h]; chan];
     for y in 0..h {
-        let mut row: Vec<Vec<f32>> = vec![vec![0.0; w]; ch];
+        let mut row: Vec<Vec<f32>> = vec![vec![0.0; w]; chan];
         if rel {
-            let prim = warp_rel::Prim { const_coords: false, const_a1: 0.0, const_a2: 0.0, a1_arr: a.0.to_vec(), a2_arr: a.1.to_vec(), c1_arr: c.0.to_vec(), c2_arr: c.1.to_vec(), flag: 1, mx, my };
-            let mut img = warp_rel::Image { f1: mk(), w: w as i32, h: h as i32, d_cell_d: nl as i32, d_cell_e: np as i32, host: warp_rel::Host::Mode0 };
-            let fr = crate::kernels2::warp_rel_row(&g, w, y, ch);
+            let prim = warp_rel::Prim { const_coords: false, const_a1: 0.0, const_a2: 0.0, lanes_a_first: a.0.to_vec(), lanes_a_second: a.1.to_vec(), lanes_c_first: c.0.to_vec(), lanes_c_second: c.1.to_vec(), flag: 1, mx, my };
+            let mut img = warp_rel::Image { sampler_params: mk(), w: w as i32, h: h as i32, d_cell_d: nl as i32, d_cell_e: np as i32, host: warp_rel::Host::Mode0 };
+            let fr = crate::kernels2::warp_rel_row(&g, w, y, chan);
             warp_rel::render(&prim, &fr, &mut img, &lat, &mut row).ok()?;
         } else {
-            let prim = warp_render::WarpPrim { const_coords: false, const_a1: 0.0, const_a2: 0.0, a1_arr: a.0.to_vec(), a2_arr: a.1.to_vec(), c1_arr: c.0.to_vec(), c2_arr: c.1.to_vec(), flag: 1, mx, my };
-            let mut img = warp_render::DriverImage { f1: mk(), w: w as i32, h: h as i32, d_cell_d: nl as i32, d_cell_e: np as i32 };
+            let prim = warp_render::WarpPrim { const_coords: false, const_a1: 0.0, const_a2: 0.0, lanes_a_first: a.0.to_vec(), lanes_a_second: a.1.to_vec(), lanes_c_first: c.0.to_vec(), lanes_c_second: c.1.to_vec(), flag: 1, mx, my };
+            let mut img = warp_render::DriverImage { sampler_params: mk(), w: w as i32, h: h as i32, d_cell_d: nl as i32, d_cell_e: np as i32 };
             let rec = crate::kernels2::warp_row_rec(&g, w, y);
             warp_render::slot53_warp(&prim, &rec, None, &mut img, &lat, &mut row).ok()?;
         }
-        for k in 0..ch {
+        for k in 0..chan {
             out[k][y * w..(y + 1) * w].copy_from_slice(&row[k]);
         }
     }
@@ -652,7 +652,7 @@ fn cpu_driver(rel: bool, mip: &crate::types::MipImage, w: usize, h: usize, kp: &
 /// corner with a > b) and kind 6 (an all -0.0 source with c2 = -0.0).
 fn c_plane(r: &mut Rng, kind: usize, n: usize, levels: usize, twin: Option<&[f32]>) -> Vec<f32> {
     let lv = levels as f32;
-    let sp = adversarial_f32(30, r.next_u64());
+    let samples = adversarial_f32(30, r.next_u64());
     (0..n)
         .map(|i| match kind {
             0 => unit(r) * lv,
@@ -668,7 +668,7 @@ fn c_plane(r: &mut Rng, kind: usize, n: usize, levels: usize, twin: Option<&[f32
                     let w = NAN_WORDS.iter().chain(SPECIAL_WORDS).copied().collect::<Vec<u32>>();
                     f32::from_bits(w[r.next_u32() as usize % w.len()])
                 } else if r.below(6) == 0 {
-                    sp[r.next_u32() as usize % sp.len()]
+                    samples[r.next_u32() as usize % samples.len()]
                 } else {
                     unit(r) * lv
                 }
@@ -699,28 +699,28 @@ pub fn driver_selfcheck(s: &Arc<Session>, rel: bool) -> Result<PrefillTally, Str
     let mut k = 0usize;
     for &(w, h) in DRIVER_FRAMES {
         let n = w * h;
-        for ch in 1..=4usize {
+        for chan in 1..=4usize {
             for &(mx, my) in modes {
                 for kind in 0..7usize {
                     k += 1;
-                    let mut kp = KParams::standin();
+                    let mut kp = KParams::host_defaults();
                     if kind == 5 {
                         // unit scale and no offset: the coordinate planes give x and y directly near the top left corner
                         kp.geom = Some(crate::types::Geom { left: -1.0, right: 1.0, aspect: 1.0, assumption_e: 0.0, assumption_h: 0.0, roi_x: 0, roi_y: 0 });
                     } else if k % 3 == 1 {
                         kp.geom = Some(crate::types::Geom { left: -0.5, right: w as f32 - 0.5, aspect: 1.0, assumption_e: 0.25, assumption_h: 0.75, roi_x: 3, roi_y: -2 });
                     }
-                    let src = Image { n, planes: (0..ch).map(|_| (0..n).map(|_| if kind == 6 { -0.0 } else { unit(&mut r) * 2.0 - 0.5 }).collect()).collect() };
+                    let src = Image { n, planes: (0..chan).map(|_| (0..n).map(|_| if kind == 6 { -0.0 } else { unit(&mut r) * 2.0 - 0.5 }).collect()).collect() };
                     let wrap = [mx.clamp(0, 2) as f32, my.clamp(0, 2) as f32, 0.0, 0.0];
                     let margs = [Arg::Img(&src), Arg::Const { n: 2, lanes: [wrap[0].to_bits(), wrap[1].to_bits(), 0, 0] }, Arg::Const { n: 1, lanes: [1.0f32.to_bits(), 0, 0, 0] }];
-                    let mip = match crate::kernels::run_any("make_mipmap", ch as i32, &margs, n, (w, h), &kp) {
+                    let mip = match crate::kernels::run_any("make_mipmap", chan as i32, &margs, n, (w, h), &kp) {
                         Ok(crate::kernels2::Out::Mip(m)) => m,
                         _ => continue,
                     };
                     let (nl, np) = (mip.ripmap.nl(), mip.ripmap.np());
                     let spread = if kind == 1 { 6.0 } else { 1.2 };
-                    let mut a1: Vec<f32> = (0..n).map(|_| (unit(&mut r) * 2.0 - 1.0) * spread).collect();
-                    let mut a2: Vec<f32> = (0..n).map(|_| (unit(&mut r) * 2.0 - 1.0) * spread).collect();
+                    let mut delta_x_plane: Vec<f32> = (0..n).map(|_| (unit(&mut r) * 2.0 - 1.0) * spread).collect();
+                    let mut delta_y_plane: Vec<f32> = (0..n).map(|_| (unit(&mut r) * 2.0 - 1.0) * spread).collect();
                     let mut c1 = c_plane(&mut r, kind.min(4), n, nl, None);
                     let mut c2 = c_plane(&mut r, kind.min(4), n, np, if kind == 3 { Some(&c1) } else { None });
                     if kind == 5 {
@@ -729,11 +729,11 @@ pub fn driver_selfcheck(s: &Arc<Session>, rel: bool) -> Result<PrefillTally, Str
                             let (xi, yi) = ((i % w) as f32, (i / w) as f32);
                             let (tx, ty) = (unit(&mut r) * 1.3 - 0.9, unit(&mut r) * 1.3 - 0.9);
                             if rel {
-                                a1[i] = tx - xi;
-                                a2[i] = yi - ty;
+                                delta_x_plane[i] = tx - xi;
+                                delta_y_plane[i] = yi - ty;
                             } else {
-                                a1[i] = tx;
-                                a2[i] = 1.0 - ty;
+                                delta_x_plane[i] = tx;
+                                delta_y_plane[i] = 1.0 - ty;
                             }
                             let lo = (nl - 1).max(1) as f32;
                             c1[i] = (r.below((nl as u64).saturating_sub(1).max(1)) as f32) + 0.5 + unit(&mut r) * 0.49;
@@ -752,15 +752,15 @@ pub fn driver_selfcheck(s: &Arc<Session>, rel: bool) -> Result<PrefillTally, Str
                             *v = 0.5 + unit(&mut r) * 0.4;
                         }
                     }
-                    let want = cpu_driver(rel, &mip, w, h, &kp, (&a1, &a2), (&c1, &c2), mx, my);
-                    let name = format!("{class} driver {w}x{h} ch{ch} mode({mx},{my}) kind{kind}");
+                    let want = cpu_driver(rel, &mip, w, h, &kp, (&delta_x_plane, &delta_y_plane), (&c1, &c2), mx, my);
+                    let name = format!("{class} driver {w}x{h} ch{chan} mode({mx},{my}) kind{kind}");
                     let dev = (|| -> Result<Vec<Vec<f32>>, DevError> {
-                        let coords = DevImage::upload(s, &[a1.as_slice(), a2.as_slice()])?;
+                        let coords = DevImage::upload(s, &[delta_x_plane.as_slice(), delta_y_plane.as_slice()])?;
                         let pre = DevImage::upload(s, &[c1.as_slice(), c2.as_slice()])?;
                         // even cases: the device resident ripmap of make_mipmap (its own buffer and offsets); odd: the host one uploaded
                         let resident = if k % 2 == 0 {
                             let sd = DevImage::upload(s, &src.planes.iter().map(|p| p.as_slice()).collect::<Vec<_>>())?;
-                            let call = crate::backend::NodeCall { idx: 0, class: "make_mipmap", tag: ch as i32, n, dims: (w, h), kp: &kp };
+                            let call = crate::backend::NodeCall { idx: 0, class: "make_mipmap", tag: chan as i32, n, dims: (w, h), kp: &kp };
                             let dargs = [crate::device_ops::DevArg::Img(&sd), crate::device_ops::DevArg::Const { n: 2, lanes: [wrap[0].to_bits(), wrap[1].to_bits(), 0, 0] }, crate::device_ops::DevArg::Const { n: 1, lanes: [1.0f32.to_bits(), 0, 0, 0] }];
                             let out = crate::device_ops_ripmap::make_mipmap_run(s, &call, &dargs)?;
                             Some(crate::device_ops_ripmap::wrap_ripmap(&call, &dargs, out)?)
@@ -772,9 +772,9 @@ pub fn driver_selfcheck(s: &Arc<Session>, rel: bool) -> Result<PrefillTally, Str
                             None => crate::device_ops_warp::MipRef::Host(&mip),
                         };
                         let lat = fp_lattice(s, &mref)?;
-                        let out = DevImage::alloc(s, ch, n)?;
+                        let out = DevImage::alloc(s, chan, n)?;
                         let g = crate::kernels2::geom_of(&kp, w, h);
-                        fp_warp_launch(s, rel, w, h, ch, &lat, &coords, &pre, mx, my, &g, &out)?;
+                        fp_warp_launch(s, rel, w, h, chan, &lat, &coords, &pre, mx, my, &g, &out)?;
                         Ok(out.download()?)
                     })();
                     match (want, dev) {
@@ -810,14 +810,14 @@ pub const WARP_MUTANTS: &[(&str, &str, &str)] = &[
     ("clamp_dir_one", "double d = (double)dim - as_double(0x3ff028f5c28f5c29ul);", "double d = (double)dim - 0x1p+0;"),
     ("c2pos_no_nan", "int c2pos = (0x0p+0f < cv2) || isnan(cv2);", "int c2pos = (0x0p+0f < cv2);"),
     ("q_strict_compare", "if ((0x0p+0f <= cv2) || isnan(cv2)) {", "if ((0x0p+0f < cv2) || isnan(cv2)) {"),
-    ("t_index_j_for_x", "float t6 = fma(sx, as_float(ttab[il]), -0x1p-1f);", "float t6 = fma(sx, as_float(ttab[jl]), -0x1p-1f);"),
+    ("t_index_j_for_x", "float fused_6 = fma(sx, as_float(ttab[il]), -0x1p-1f);", "float fused_6 = fma(sx, as_float(ttab[jl]), -0x1p-1f);"),
     ("clamp_pair_always", "if (fx == 0) {", "if (fx >= 0) {"),
     ("f_branch_plane_ij1", "uint pf = (uint)((il + 1) * (long)np + jl);", "uint pf = (uint)(il * (long)np + jl + 1);"),
-    ("nest_v_form", "float p5 = fma(w1, s1, w3 * s3);\n            float p6 = fma(w0, s0, w2 * s2);\n            t[e] = p5 + p6;", "t[e] = fma(w2, s2, fma(w3, s3, fma(w0, s0, w1 * s1)));"),
-    ("blend_weight_a", "float w1 = 0x1p+0f - a;", "float w1 = a;"),
+    ("nest_v_form", "float fused_5 = fma(diff_1, sum_1, diag_weight * addend);\n            float fused_tail = fma(corner_weight, s0, edge_weight * factor);\n            t[e] = fused_5 + fused_tail;", "t[e] = fma(edge_weight, factor, fma(diag_weight, addend, fma(corner_weight, s0, diff_1 * sum_1)));"),
+    ("blend_weight_a", "float diff_1 = 0x1p+0f - a;", "float diff_1 = a;"),
     ("operand_swap_fa", "float fa = p - (float)ip;", "float fa = (float)ip - p;"),
-    ("lerp_unfused", "fma(t2[k] - t1[k], a, t1[k])", "(t2[k] - t1[k]) * a + t1[k]"),
-    ("nest_weight_sum_order", "w0 = ((0x1p+0f - fn) - fs) + tt;", "w0 = (0x1p+0f - fn) - (fs - tt);"),
+    ("lerp_unfused", "fma(sum_2[k] - taps_back[k], a, taps_back[k])", "(sum_2[k] - taps_back[k]) * a + taps_back[k]"),
+    ("nest_weight_sum_order", "corner_weight = ((0x1p+0f - fn) - fs) + tt;", "corner_weight = (0x1p+0f - fn) - (fs - tt);"),
     ("select_arm_negative_c1", "p = 0x0p+0f;", "p = fpw_clamp_dir(cv1, nl);"),
     ("compare_direction_ab", "if (a > b) {", "if (a < b) {"),
     ("constant_half_x", "float sx = 0x1p-1f + x;", "float sx = 0x1p+0f + x;"),
@@ -830,7 +830,7 @@ pub const WARP_MUTANTS: &[(&str, &str, &str)] = &[
 /// * `f_nest_first_is_stride_off`: the weight `((1 - fs) - fn) + t` against `((1 - fn) - fs) + t`. Every sampler fraction is
 ///   `s - trunc(s)` of `s = 1 + t` in single precision, so it is a multiple of 2^-24, and of 2^-23 when negative; then `1 - fs`
 ///   and `1 - fn` are exact, and both orders round the same exact value `1 - fs - fn` once. NaN operands give a NaN either way.
-pub const WARP_EQUIVALENT_MUTANTS: &[(&str, &str, &str)] = &[("f_nest_first_is_stride_off", "fxb, fya, 1, t3)", "fxb, fya, 0, t3)")];
+pub const WARP_EQUIVALENT_MUTANTS: &[(&str, &str, &str)] = &[("f_nest_first_is_stride_off", "fxb, fya, 1, taps_front)", "fxb, fya, 0, taps_front)")];
 
 #[cfg(test)]
 mod tests {
@@ -843,7 +843,7 @@ mod tests {
             let p = slot33_plan(w, h, 1.0, 1.0).unwrap();
             assert_eq!(p.flag_byte, 1);
             assert_eq!((p.min1, p.min2), (0, 0));
-            assert_eq!(p.v1, (w as f32 * 0.25).to_bits());
+            assert_eq!(p.quarter_span, (w as f32 * 0.25).to_bits());
             assert_eq!(p.v2, (w as f32 * 0.25).to_bits());
         }
         assert_eq!(slot33_plan(8, 8, 2.0, 1.0).unwrap().min1, 1);

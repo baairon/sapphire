@@ -14,20 +14,20 @@ fn eval(c: &[&str], e: &[String]) -> Option<bool> {
     let eh: Vec<u32> = e[2..6].iter().map(|s| hx(s)).collect();
     Some(match c[1] {
         "F" => {
-            let scalar: i32 = c[2].parse().unwrap(); let r8: i32 = c[3].parse().unwrap();
+            let scalar: i32 = c[2].parse().unwrap(); let route_int_7: i32 = c[3].parse().unwrap();
             let w: i32 = c[4].parse().unwrap(); let h: i32 = c[5].parse().unwrap();
             let lanes: Vec<f32> = if c.len() > 7 && !c[7].is_empty() { c[7].split(',').map(fb).collect() } else { vec![] };
             let n = w.wrapping_mul(h);
             // the lane array in the stored set is exactly as long as the emulator read; a mutant that reads more would index past it: guard
-            let (lo, hi) = if scalar != 0 { frame_range_scalar(lanes[0], r8 != 0) } else {
+            let (lo, hi) = if scalar != 0 { frame_range_scalar(lanes[0], route_int_7 != 0) } else {
                 let need = if n > 0 { n as usize } else { 0 };
                 if need > lanes.len() { return Some(false); }
-                frame_range_lanes(w, h, &lanes, r8 != 0) };
+                frame_range_lanes(w, h, &lanes, route_int_7 != 0) };
             lo as u32 == eh[0] && hi as u32 == eh[1]
         }
         "C" => {
             let i = CheckoutIn { f: c[2].parse().unwrap(), big_f: fb(c[3]), dur_frames: fb(c[4]), lim_global: c[5].parse().unwrap(),
-                step: if c[9] == "1" { Some(c[6].parse().unwrap()) } else { None }, kind: c[7].parse().unwrap(), f4: c[8].parse().unwrap() };
+                step: if c[9] == "1" { Some(c[6].parse().unwrap()) } else { None }, kind: c[7].parse().unwrap(), ctx_cell: c[8].parse().unwrap() };
             match checkout_request(i) { Ok(r) => r.stored.to_bits() == eh[0] && r.trunc_x as u32 == eh[1] && r.frame as u32 == eh[2], Err(_) => false }
         }
         "D" => {
@@ -107,9 +107,9 @@ fn twf3_all() {
         let var: i32 = c[2].parse().unwrap(); let cur: i32 = c[4].parse().unwrap(); let st: i32 = c[5].parse().unwrap(); let last: i32 = c[6].parse().unwrap();
         let ar = if var == 0 { Arith::Fma } else { Arith::MulAdd };
         let (w, lim) = limit_window(cur, last, st, ar);
-        let (w2, lim2) = limit_window(cur, last, st, if var == 0 { Arith::MulAdd } else { Arith::Fma });
-        if w != w2 || lim.to_bits() != lim2.to_bits() { fma_vs_mul += 1; }
-        if w != w2 { dec_diff += 1; if dd_first.is_empty() { dd_first = format!("{} cur={cur} step={st} last={last}", c[0]); } }
+        let (win_out, lim2) = limit_window(cur, last, st, if var == 0 { Arith::MulAdd } else { Arith::Fma });
+        if w != win_out || lim.to_bits() != lim2.to_bits() { fma_vs_mul += 1; }
+        if w != win_out { dec_diff += 1; if dd_first.is_empty() { dd_first = format!("{} cur={cur} step={st} last={last}", c[0]); } }
         let ok = (if w { 1u32 } else { 2 }) == hx(&e[2]) && lim.to_bits() == hx(&e[3]);
         ln += 1; if w { win += 1; }
         if !ok { lbad += 1; if first_bad.len() < 10 { first_bad.push(format!("{} nat win={w} lim={:08x} emu {} {}", c[0], lim.to_bits(), e[2], e[3])); } }
@@ -128,24 +128,24 @@ fn twf3_all() {
     assert_eq!(render_entry_limit(&mut h, &mk(14, 1, 0)), Some(14));  // 14 >= 12 + 1.9: a jump restarts the run
     assert_eq!(render_entry_limit(&mut h, &mk(14, 1, 0)), Some(14));  // cur == last: restart (jle)
     assert_eq!(render_entry_limit(&mut h, &mk(13, 1, 0)), Some(13));  // backwards: restart
-    let mut i2 = mk(15, 1, 0); i2.settings = (3, 0);
-    assert_eq!(render_entry_limit(&mut h, &i2), Some(15));            // settings words differ (0x274600 returns 1): restart although in window
-    let mut i3 = mk(16, 1, 0); i3.flag_cell_a_4 = false;
-    assert_eq!(render_entry_limit(&mut h, &i3), Some(0));             // bit 2 of [s+0x59e] clear: the cell is zeroed
-    let mut i4 = mk(17, 1, 0); i4.entry_in_a = 0; i4.entry_in_c = 0; i4.entry_in_b = 0; i4.entry_in_d = 0; i4.layer_empty = true;
-    assert_eq!(render_entry_limit(&mut h, &i4), None);                // early-out path 0x70152f: no cell write
+    let mut mk_settings = mk(15, 1, 0); mk_settings.settings = (3, 0);
+    assert_eq!(render_entry_limit(&mut h, &mk_settings), Some(15));            // settings words differ (0x274600 returns 1): restart although in window
+    let mut mk_cleared = mk(16, 1, 0); mk_cleared.flag_cell_a_4 = false;
+    assert_eq!(render_entry_limit(&mut h, &mk_cleared), Some(0));             // bit 2 of [s+0x59e] clear: the cell is zeroed
+    let mut mk_early = mk(17, 1, 0); mk_early.entry_in_a = 0; mk_early.entry_in_c = 0; mk_early.entry_in_b = 0; mk_early.entry_in_d = 0; mk_early.layer_empty = true;
+    assert_eq!(render_entry_limit(&mut h, &mk_early), None);                // early-out path 0x70152f: no cell write
     // host id 2 and 9 select record 1 through bit 0
-    let mut h2 = OwnerHist::fresh();
-    let mut i5 = mk(100, 1, 2); i5.host_arg_value = 130;
-    render_entry_limit(&mut h2, &i5); assert!(h2.bit0 && h2.cur == 1);
-    i5.host_arg_value = 140; render_entry_limit(&mut h2, &i5); assert!(!h2.bit0 && h2.cur == 0);
-    let mut i6 = mk(100, 1, 9); i6.entry_in_e = 1; i6.entry_in_f = 5; i6.entry_in_g = 1; i6.entry_in_h = 13;
-    render_entry_limit(&mut h2, &i6); assert!(h2.bit0);
+    let mut hist = OwnerHist::fresh();
+    let mut mk_arg = mk(100, 1, 2); mk_arg.host_arg_value = 130;
+    render_entry_limit(&mut hist, &mk_arg); assert!(hist.bit0 && hist.cur == 1);
+    mk_arg.host_arg_value = 140; render_entry_limit(&mut hist, &mk_arg); assert!(!hist.bit0 && hist.cur == 0);
+    let mut mk_entries = mk(100, 1, 9); mk_entries.entry_in_e = 1; mk_entries.entry_in_f = 5; mk_entries.entry_in_g = 1; mk_entries.entry_in_h = 13;
+    render_entry_limit(&mut hist, &mk_entries); assert!(hist.bit0);
     // sequence writer: consecutive frames keep the anchor
-    let mut h3 = OwnerHist::fresh();
-    render_entry_seq(&mut h3, 5, (0, 0), true); assert_eq!(h3.rec[0].anchor, 5);
-    render_entry_seq(&mut h3, 6, (0, 0), true); assert_eq!(h3.rec[0].anchor, 5);
-    render_entry_seq(&mut h3, 8, (0, 0), true); assert_eq!(h3.rec[0].anchor, 8);
+    let mut seq_hist = OwnerHist::fresh();
+    render_entry_seq(&mut seq_hist, 5, (0, 0), true); assert_eq!(seq_hist.rec[0].anchor, 5);
+    render_entry_seq(&mut seq_hist, 6, (0, 0), true); assert_eq!(seq_hist.rec[0].anchor, 5);
+    render_entry_seq(&mut seq_hist, 8, (0, 0), true); assert_eq!(seq_hist.rec[0].anchor, 8);
     // cache lifetime
     let mut c = FrameCache::default();
     assert_eq!(c.checkout(200, 7, true), None); assert_eq!(c.checkout(200, 9, true), Some(7)); // same key, other host value: stale hit inside a render
@@ -153,7 +153,7 @@ fn twf3_all() {
     c.end_of_render(false, true); assert_eq!(c.checkout(200, 11, true), Some(9));                       // [ctx+0x788] != 0: persists into the next render
     let mut c2 = FrameCache::default();
     assert_eq!(c2.checkout(200, 7, false), None); assert_eq!(c2.checkout(200, 9, false), None); assert_eq!(c2.count, 0); // flag80 clear: inert
-    let r = checkout_request(CheckoutIn { f: 3, big_f: 2.5, dur_frames: 100.0, lim_global: 0, step: Some(1), kind: 0, f4: 0 }).unwrap();
+    let r = checkout_request(CheckoutIn { f: 3, big_f: 2.5, dur_frames: 100.0, lim_global: 0, step: Some(1), kind: 0, ctx_cell: 0 }).unwrap();
     assert_eq!(r.x, 3.5); assert_eq!(r.frame, 3);
     writeln!(out, "UNIT TESTS: history, record, sequence writer and cache models pass").unwrap();
     std::fs::write(effects_vecdir::out_dir().join("t3_summary.txt"), &out).unwrap();

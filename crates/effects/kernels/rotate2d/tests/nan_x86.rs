@@ -17,16 +17,16 @@ fn run(v: Vec2, a: Angle, c: Vec2) -> [u32; 2] {
 fn fresh_nan_words_are_the_x86_words() {
     let inf = f32::INFINITY;
     let (vx, vy) = ([inf], [inf]);
-    let (cx, cy) = ([inf], [-inf]);
+    let (centre_x, cy) = ([inf], [-inf]);
     let ang = [0.25f32];
     let mut got: Vec<u32> = Vec::new();
     // angle constant: planes against planes, planes against a constant centre
-    got.extend(run(Vec2::Planes(&vx, &vy), Angle::Const(0.125), Vec2::Planes(&cx, &cy)));
+    got.extend(run(Vec2::Planes(&vx, &vy), Angle::Const(0.125), Vec2::Planes(&centre_x, &cy)));
     got.extend(run(Vec2::Planes(&vx, &vy), Angle::Const(0.125), Vec2::Const(inf, inf)));
     // angle plane: all four operand shapes with an infinite v
-    got.extend(run(Vec2::Planes(&vx, &vy), Angle::Plane(&ang), Vec2::Planes(&cx, &cy)));
+    got.extend(run(Vec2::Planes(&vx, &vy), Angle::Plane(&ang), Vec2::Planes(&centre_x, &cy)));
     got.extend(run(Vec2::Planes(&vx, &vy), Angle::Plane(&ang), Vec2::Const(inf, 0.0)));
-    got.extend(run(Vec2::Const(inf, 1.0), Angle::Plane(&ang), Vec2::Planes(&cx, &cy)));
+    got.extend(run(Vec2::Const(inf, 1.0), Angle::Plane(&ang), Vec2::Planes(&centre_x, &cy)));
     got.extend(run(Vec2::Const(inf, 1.0), Angle::Plane(&ang), Vec2::Const(inf, 1.0)));
     assert_eq!(format!("{got:08x?}"), format!("{EXPECT:08x?}"));
 }

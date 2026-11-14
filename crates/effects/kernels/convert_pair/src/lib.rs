@@ -53,9 +53,9 @@ impl AlphaMode {
 /// `owner_override` = dword [owner] (nonzero wins), `program_mode` = dword [program], `ctx_mode_dword` = dword [ctx],
 /// `dest_field_cell_a` = dword [[ctx]], `planes` = plane count of the image (odd count: mode 1 -> 3).
 pub fn derive_alpha_mode(owner_override: i32, program_mode: i32, ctx_mode_dword: i32, dest_field_cell_a: i32, planes: usize) -> i8 {
-    let r8 = if (owner_override != 0) != mu(16) { owner_override } else { program_mode } as i8;
-    let mut m = r8;
-    if r8 == if mu(17) { 1 } else { 2 } {
+    let route_int_7 = if (owner_override != 0) != mu(16) { owner_override } else { program_mode } as i8;
+    let mut m = route_int_7;
+    if route_int_7 == if mu(17) { 1 } else { 2 } {
         if (ctx_mode_dword == 0) != mu(18) {
             m = 3;
         } else if dest_field_cell_a == if mu(19) { 2 } else { 3 } {
@@ -114,14 +114,14 @@ pub fn convert_from_source_line(mem: &[f32], planes: &mut [Vec<f32>; 4], n: usiz
         p.resize(n, 0.0);
     }
     for i in 0..n {
-        let m0 = mem[4 * i];
-        let m1 = mem[4 * i + 1];
-        let m2 = mem[4 * i + 2];
-        let m3 = mem[4 * i + 3];
-        let a = if mu(5) { m3 } else { finite_or_zero(m3) };
-        let r = if mu(6) { m2 } else { finite_or_zero(m2) };
-        let g = finite_or_zero(m1);
-        let b = finite_or_zero(m0);
+        let prod_0 = mem[4 * i];
+        let bits_1 = mem[4 * i + 1];
+        let prod_2 = mem[4 * i + 2];
+        let prod_3 = mem[4 * i + 3];
+        let a = if mu(5) { prod_3 } else { finite_or_zero(prod_3) };
+        let r = if mu(6) { prod_2 } else { finite_or_zero(prod_2) };
+        let g = finite_or_zero(bits_1);
+        let b = finite_or_zero(prod_0);
         planes[0][i] = if mu(7) { r } else { r * a };
         planes[1][i] = if mu(8) { g * g } else { g * a };
         planes[2][i] = if mu(9) { b * a.abs() } else { b * a };
@@ -230,14 +230,14 @@ pub fn convert_from_source_line_3(mem: &[f32], planes: &mut [Vec<f32>; 4], n: us
     }
     planes[3].clear();
     for i in 0..n {
-        let m0 = mem[4 * i];
-        let m1 = mem[4 * i + 1];
-        let m2 = mem[4 * i + 2];
-        let m3 = mem[4 * i + 3];
-        let a = if mu(24) { m3 } else { finite_or_zero(m3) };
-        let r = if mu(25) { m2 } else { finite_or_zero(m2) };
-        let g = finite_or_zero(m1);
-        let b = finite_or_zero(m0);
+        let prod_0 = mem[4 * i];
+        let bits_1 = mem[4 * i + 1];
+        let prod_2 = mem[4 * i + 2];
+        let prod_3 = mem[4 * i + 3];
+        let a = if mu(24) { prod_3 } else { finite_or_zero(prod_3) };
+        let r = if mu(25) { prod_2 } else { finite_or_zero(prod_2) };
+        let g = finite_or_zero(bits_1);
+        let b = finite_or_zero(prod_0);
         let (p0, p2) = if mu(22) { (b * a, r * a) } else { (r * a, b * a) };
         planes[0][i] = p0;
         planes[1][i] = if mu(23) { g } else { g * a };
@@ -388,18 +388,18 @@ pub fn convert_to_dest_line_2(planes: &[Vec<f32>; 4], p: ToDestParams, dest: &mu
 /// Convert-to-dest for a result image with `image_planes` planes (1 or 2 handled here, 3 and 4 by the existing arms): picks the writer arm like the converter.
 /// `to_dest_params_a` = dword [ctx]. Returns the writer's edx and the outcome.
 pub fn convert_to_dest_line_n12(image_planes: i32, to_dest_params_a: i32, mode_byte: i8, planes: &[Vec<f32>; 4], dest: &mut [f32], n: usize) -> (i32, Dest12) {
-    let (edx, m) = writer_args(image_planes, to_dest_params_a, mode_byte);
+    let (copy_mode, m) = writer_args(image_planes, to_dest_params_a, mode_byte);
     let mode = match AlphaMode::from_byte(m) {
         Some(x) => x,
-        None => return (edx, Dest12::NotWritten),
+        None => return (copy_mode, Dest12::NotWritten),
     };
     let p = ToDestParams { mode };
-    let o = match edx {
+    let o = match copy_mode {
         1 => convert_to_dest_line_1(planes, p, dest, n),
         2 => convert_to_dest_line_2(planes, p, dest, n),
         _ => Dest12::NotReachable,
     };
-    (edx, o)
+    (copy_mode, o)
 }
 
 /// Whole-frame helper for planes already produced (host stand-in for the executor): `lines[y]` holds the planes of row y; band replication as the converter.

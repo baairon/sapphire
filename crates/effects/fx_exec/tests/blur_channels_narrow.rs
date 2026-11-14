@@ -24,7 +24,7 @@ fn run(src: &Image, tag: i32, w: usize, h: usize) -> Result<Vec<Vec<u32>>, ExecE
         Arg::Const { n: 3, lanes: lanes([2.0; 4]) },
         Arg::Const { n: 1, lanes: lanes([1.0; 4]) },
     ];
-    match run_wired("blur_channels", tag, &args, w * h, (w, h), &KParams::standin())? {
+    match run_wired("blur_channels", tag, &args, w * h, (w, h), &KParams::host_defaults())? {
         Out::Img(i) => Ok(i.planes.iter().map(|p| p.iter().map(|v| v.to_bits()).collect()).collect()),
         _ => panic!("blur_channels must give an image"),
     }

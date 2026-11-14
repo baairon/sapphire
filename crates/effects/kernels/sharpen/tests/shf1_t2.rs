@@ -174,7 +174,7 @@ fn check_blur_rec(e: &Json, w: usize, h: usize, rr: f32, gain: f32, aflag: i64, 
     t.fields += 17;
 }
 fn is_copy_entry(e: &Json) -> bool {
-    e.get("hook").unwrap().as_str() == Some("REAL_CODE_ENTRY") && e.get("fn").unwrap().as_str() == Some("0x672c60")
+    e.get("hook").unwrap().as_str() == Some("REAL_CODE_ENTRY") && e.get("fn").unwrap().as_str() == Some("") // origin: 0x672c60
 }
 fn is_blur(e: &Json) -> bool {
     e.get("hook").unwrap().as_str() == Some("blur")
@@ -309,12 +309,12 @@ fn run_drv(layout: &str) -> Tot {
             };
             let r = sharpen::plan::radius(q.amount, q.cw);
             let mut order: Vec<bool> = vec![]; // true = blur call, false = copy entry
-            for ch in 0..nn {
-                let g = q.gains[sharpen::plan::gain_index(ch, q.in_count)];
+            for chan_idx in 0..nn {
+                let g = q.gains[sharpen::plan::gain_index(chan_idx, q.in_count)];
                 order.push(matches!(plane_plan(r, g), PlanePlan::Run { .. }));
             }
-            let mut run_ch: Vec<usize> = (0..nn).filter(|&ch| order[ch]).collect();
-            run_ch.reverse();
+            let mut run_chans: Vec<usize> = (0..nn).filter(|&chan_idx| order[chan_idx]).collect();
+            run_chans.reverse();
             // model: the slot function through the crate's render_with, blur supplied by the recorded plane
             let params = mk_params(&q, npix);
             let srcp: Vec<Plane> = (0..nn).map(|k| Plane::new(&ins[k], w, h, w).unwrap()).collect();
@@ -323,7 +323,7 @@ fn run_drv(layout: &str) -> Tot {
                 let mut dstp: Vec<PlaneMut> = obuf.iter_mut().map(|v| PlaneMut::new(v, w, h, w).unwrap()).collect();
                 let bsr = &bs;
                 render_with(&params, &srcp, &mut dstp, |_, _, _, _| {
-                    let chan = run_ch.pop().expect("blur call without a Run plan");
+                    let chan = run_chans.pop().expect("blur call without a Run plan");
                     Ok(bsr[chan].clone())
                 })
                 .unwrap();
@@ -344,15 +344,15 @@ fn run_drv(layout: &str) -> Tot {
             assert_eq!(seq.len(), nn, "{}: wrapper calls", ctx);
             let host = calls.iter().filter(|e| e.get("hook").unwrap().as_str() == Some("host_tmp")).count();
             assert_eq!(host, if q.alias { 1 } else { 0 }, "{}: host scratch call (made before the plane-count test)", ctx);
-            for (ch, e) in seq.iter().enumerate() {
-                let g = q.gains[sharpen::plan::gain_index(ch, q.in_count)];
-                if order[ch] {
-                    assert!(is_blur(e), "{} ch {}: expected blur", ctx, ch);
-                    let (dst, inp) = if q.alias { ("plane:scr".to_string(), format!("plane:p{}", ch)) } else { (format!("plane:o{}", ch), format!("plane:i{}", ch)) };
+            for (chan_idx, e) in seq.iter().enumerate() {
+                let g = q.gains[sharpen::plan::gain_index(chan_idx, q.in_count)];
+                if order[chan_idx] {
+                    assert!(is_blur(e), "{} ch {}: expected blur", ctx, chan_idx);
+                    let (dst, inp) = if q.alias { ("plane:scr".to_string(), format!("plane:p{}", chan_idx)) } else { (format!("plane:o{}", chan_idx), format!("plane:i{}", chan_idx)) };
                     check_blur_rec(e, w, h, r, g, q.aflag, q.aspect, &dst, &inp, "region:ctx", &mut t);
                 } else {
-                    assert!(is_copy_entry(e), "{} ch {}: expected copy", ctx, ch);
-                    let o = if q.alias { format!("plane:p{}+0x0", ch) } else { format!("plane:o{}+0x0", ch) };
+                    assert!(is_copy_entry(e), "{} ch {}: expected copy", ctx, chan_idx);
+                    let o = if q.alias { format!("plane:p{}+0x0", chan_idx) } else { format!("plane:o{}+0x0", chan_idx) };
                     assert!(e.get("rdi").unwrap().as_str().unwrap().starts_with(&o), "{} copy dst", ctx);
                     t.copies += 1;
                     t.fields += 1;

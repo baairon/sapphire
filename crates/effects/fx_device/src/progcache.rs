@@ -15,7 +15,7 @@
 //! and by the NaN rule and the per-node CPU fallback in the executor. The self-check cache is keyed on the digest of
 //! that binary, so a replaced entry reruns the self-check.
 
-use crate::cl::{self, ClError, Context, Program};
+use crate::ocl::{self, ClError, Context, Program};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -39,16 +39,16 @@ pub fn fnv_update(mut h: u64, bytes: &[u8]) -> u64 {
 }
 
 /// What identifies the compiler of `device`: platform, device and driver names and versions.
-pub fn device_key(device: &cl::Device) -> String {
+pub fn device_key(device: &ocl::Device) -> String {
     let p = device.platform();
     let q = |r: Result<String, ClError>| r.unwrap_or_default();
     [
-        q(p.info_string(cl::CL_PLATFORM_NAME)),
-        q(p.info_string(cl::CL_PLATFORM_VERSION)),
-        q(device.info_string(cl::CL_DEVICE_NAME)),
-        q(device.info_string(cl::CL_DEVICE_VENDOR)),
-        q(device.info_string(cl::CL_DEVICE_VERSION)),
-        q(device.info_string(cl::CL_DRIVER_VERSION)),
+        q(p.info_string(ocl::CL_PLATFORM_NAME)),
+        q(p.info_string(ocl::CL_PLATFORM_VERSION)),
+        q(device.info_string(ocl::CL_DEVICE_NAME)),
+        q(device.info_string(ocl::CL_DEVICE_VENDOR)),
+        q(device.info_string(ocl::CL_DEVICE_VERSION)),
+        q(device.info_string(ocl::CL_DRIVER_VERSION)),
     ]
     .join("\n")
 }
@@ -139,8 +139,8 @@ pub fn store(path: &Path, bytes: &[u8]) {
 
 /// `Program::build(context, source, options)`, from the cached binary when there is a matching
 /// one (see the module documentation).
-pub fn build(context: &Context, device: &cl::Device, source: &str, options: &str) -> Result<Program, ClError> {
-    let _create = cl::serialize_creation();
+pub fn build(context: &Context, device: &ocl::Device, source: &str, options: &str) -> Result<Program, ClError> {
+    let _create = ocl::serialize_creation();
     if !enabled() {
         return Program::build(context, source, options);
     }

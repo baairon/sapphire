@@ -6,7 +6,7 @@
 use crate::backend::NodeCall;
 use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use crate::types::{Image, KParams};
-use fx_device::cl::Arg as ClArg;
+use fx_device::ocl::Arg as ClArg;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
 use std::cell::RefCell;
@@ -123,13 +123,13 @@ fn bin_plan(c: &NodeCall, args: &[ArgShape]) -> Result<BinPlan, &'static str> {
     if a_const && b_const {
         return Err("both operands constant: the CPU kernel reads a plane of a constant");
     }
-    let r14 = ca == 3 && cb == 4;
-    let r12 = ca == 4 && cb == 3;
-    let nch = if r14 || r12 || tag == 3 { 3 } else { tag };
-    if nch > tag || ((r14 || r12) && tag < 4) {
+    let a_rgb_b_rgba = ca == 3 && cb == 4;
+    let a_rgba_b_rgb = ca == 4 && cb == 3;
+    let nch = if a_rgb_b_rgba || a_rgba_b_rgb || tag == 3 { 3 } else { tag };
+    if nch > tag || ((a_rgb_b_rgba || a_rgba_b_rgb) && tag < 4) {
         return Err("fewer output planes than the kernel writes");
     }
-    Ok(BinPlan { nch, ext_b_side: if r14 { Some(true) } else if r12 { Some(false) } else { None } })
+    Ok(BinPlan { nch, ext_b_side: if a_rgb_b_rgba { Some(true) } else if a_rgba_b_rgb { Some(false) } else { None } })
 }
 
 fn bin_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], op: u32) -> Result<DevImage, DevError> {
@@ -146,18 +146,18 @@ fn bin_run_k(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], op: u32, kmain: &s
     let (ca, cb) = (count_of(&shapes[0]).map_err(unsup)?.0 as i32, count_of(&shapes[1]).map_err(unsup)?.0 as i32);
     let tag = c.tag as usize;
     let out = DevImage::alloc(s, tag, c.n)?;
-    for ch in 0..plan.nch {
-        let ia = (ch as i32).min(ca - 1) as usize;
-        let ib = (ch as i32).min(cb - 1) as usize;
-        let o = out.plane(ch).arg();
+    for chan_idx in 0..plan.nch {
+        let ia = (chan_idx as i32).min(ca - 1) as usize;
+        let ib = (chan_idx as i32).min(cb - 1) as usize;
+        let o = out.plane(chan_idx).arg();
         if is_const(a) {
             let pb = plane(b, ib)?;
-            let pb2 = plane(b, ib)?;
-            s.launch(kmain, c.n, &[pb, pb2, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(1), ClArg::U32(lanes(a)[ia]), ClArg::U32(0)])?;
+            let b_plane_arg = plane(b, ib)?;
+            s.launch(kmain, c.n, &[pb, b_plane_arg, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(1), ClArg::U32(lanes(a)[ia]), ClArg::U32(0)])?;
         } else if is_const(b) {
             let pa = plane(a, ia)?;
-            let pa2 = plane(a, ia)?;
-            s.launch(kmain, c.n, &[pa, pa2, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(2), ClArg::U32(0), ClArg::U32(lanes(b)[ib])])?;
+            let a_plane_arg = plane(a, ia)?;
+            s.launch(kmain, c.n, &[pa, a_plane_arg, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(2), ClArg::U32(0), ClArg::U32(lanes(b)[ib])])?;
         } else {
             s.launch(kmain, c.n, &[plane(a, ia)?, plane(b, ib)?, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
         }
@@ -165,8 +165,8 @@ fn bin_run_k(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], op: u32, kmain: &s
     if let Some(b_side) = plan.ext_b_side {
         let src = if b_side { b } else { a };
         let (cbits, cflag) = if is_const(src) { (lanes(src)[3], 1) } else { (0, 0) };
-        let sp = if is_const(src) { plane(if b_side { a } else { b }, 0)? } else { plane(src, 3)? };
-        s.launch(kext, c.n, &[sp, out.plane(3).arg(), ClArg::U32(n), ClArg::U32(op), ClArg::U32(u32::from(b_side)), ClArg::U32(cflag), ClArg::U32(cbits)])?;
+        let src_arg = if is_const(src) { plane(if b_side { a } else { b }, 0)? } else { plane(src, 3)? };
+        s.launch(kext, c.n, &[src_arg, out.plane(3).arg(), ClArg::U32(n), ClArg::U32(op), ClArg::U32(u32::from(b_side)), ClArg::U32(cflag), ClArg::U32(cbits)])?;
     }
     let written = if plan.ext_b_side.is_some() { 4 } else { plan.nch };
     for p in written..tag {
@@ -243,18 +243,18 @@ fn sel_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], kind: u32) -> Result
     let cnt = |i: usize| count_of(&shapes[i]).map(|v| v.0 as i32).map_err(unsup);
     let out = DevImage::alloc(s, tag, c.n)?;
     let dummy = args.iter().find(|a| !is_const(a));
-    let (cx, cy) = (cnt(ix)?, cnt(iy)?);
+    let (centre_x, cy) = (cnt(ix)?, cnt(iy)?);
     let sel = ChanSel {
         cond_const: is_const(&args[ia]) && ib.map_or(true, |b| is_const(&args[b])),
-        two_x: tag > 2 && cx == 2,
+        two_x: tag > 2 && centre_x == 2,
         two_y: tag > 2 && cy == 2,
     };
-    for ch in 0..tag {
-        let chi = ch as i32;
+    for chan_idx in 0..tag {
+        let chi = chan_idx as i32;
         let (mut xconst, mut yconst) = (is_const(&args[ix]), is_const(&args[iy]));
-        let (mut xc, mut yc) = (lanes(&args[ix])[ch], lanes(&args[iy])[ch]);
-        if ch == 3 {
-            if (cx - 1) & 1 == 0 {
+        let (mut xc, mut yc) = (lanes(&args[ix])[chan_idx], lanes(&args[iy])[chan_idx]);
+        if chan_idx == 3 {
+            if (centre_x - 1) & 1 == 0 {
                 xc = ONE_BITS;
                 xconst = true;
             }
@@ -264,16 +264,16 @@ fn sel_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], kind: u32) -> Result
             }
         }
         let pidx = |k: i32, two: bool| -> usize { if two { (chi - 2).max(0) as usize } else { chi.min(k - 1) as usize } };
-        let o = out.plane(ch).arg();
+        let o = out.plane(chan_idx).arg();
         if sel.cond_const {
-            let av = f32::from_bits(lanes(&args[ia])[ch]);
+            let av = f32::from_bits(lanes(&args[ia])[chan_idx]);
             let cv = match ib {
                 None => av > 0.0,
-                Some(b) => av > f32::from_bits(lanes(&args[b])[ch]),
+                Some(b) => av > f32::from_bits(lanes(&args[b])[chan_idx]),
             };
             let (aconst, aval, ao, two) = if cv { (xconst, xc, ix, sel.two_x) } else { (yconst, yc, iy, sel.two_y) };
             if aconst {
-                fill(s, &out, ch, aval, n)?;
+                fill(s, &out, chan_idx, aval, n)?;
             } else {
                 let k = cnt(ao)?;
                 s.launch("copy_f32", c.n, &[plane(&args[ao], pidx(k, two))?, o, ClArg::U32(n)])?;
@@ -286,7 +286,7 @@ fn sel_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], kind: u32) -> Result
         let (mut wa, mut wb, mut wx, mut wy) = (0u32, 0u32, 0u32, 0u32);
         let pa = if is_const(&args[ia]) {
             cm |= 1;
-            wa = lanes(&args[ia])[ch];
+            wa = lanes(&args[ia])[chan_idx];
             plane(d, 0)?
         } else {
             plane(&args[ia], aidx(ia)?)?
@@ -294,7 +294,7 @@ fn sel_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], kind: u32) -> Result
         let pb = match ib {
             Some(b) if is_const(&args[b]) => {
                 cm |= 2;
-                wb = lanes(&args[b])[ch];
+                wb = lanes(&args[b])[chan_idx];
                 plane(d, 0)?
             }
             Some(b) => plane(&args[b], aidx(b)?)?,
@@ -305,7 +305,7 @@ fn sel_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], kind: u32) -> Result
             wx = xc;
             plane(d, 0)?
         } else {
-            plane(&args[ix], pidx(cx, sel.two_x))?
+            plane(&args[ix], pidx(centre_x, sel.two_x))?
         };
         let py = if yconst {
             cm |= 8;
@@ -362,57 +362,57 @@ fn clamp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage
     let cnt = |i: usize| count_of(&shapes[i]).map(|v| v.0 as i32).map_err(unsup);
     let out = DevImage::alloc(s, tag, c.n)?;
     let dummy = args.iter().find(|a| !is_const(a)).ok_or_else(|| unsup("no image operand"))?;
-    for ch in 0..tag {
-        let chi = ch as i32;
+    for chan_idx in 0..tag {
+        let chi = chan_idx as i32;
         let idx = |i: usize| -> Result<usize, DevError> { Ok(chi.min(cnt(i)? - 1) as usize) };
-        let cw = |i: usize| lanes(&args[i])[ch];
+        let cw = |i: usize| lanes(&args[i])[chan_idx];
         // roles per shape: which operand supplies p0, p1, p2 and c0, c1, c2
-        let (mut p0, mut p1, mut p2) = (plane(dummy, 0)?, plane(dummy, 0)?, plane(dummy, 0)?);
-        let (mut w0, mut w1, mut w2) = (0u32, 0u32, 0u32);
+        let (mut p0, mut src_ch1, mut p2) = (plane(dummy, 0)?, plane(dummy, 0)?, plane(dummy, 0)?);
+        let (mut clamp_bits_ch0, mut diff_1, mut clamp_bits_ch2) = (0u32, 0u32, 0u32);
         match shape {
             0 => {
-                w0 = cw(0);
-                w2 = cw(2);
-                p1 = plane(&args[1], idx(1)?)?;
+                clamp_bits_ch0 = cw(0);
+                clamp_bits_ch2 = cw(2);
+                src_ch1 = plane(&args[1], idx(1)?)?;
             }
             1 => {
-                w0 = cw(0);
-                p1 = plane(&args[1], idx(1)?)?;
+                clamp_bits_ch0 = cw(0);
+                src_ch1 = plane(&args[1], idx(1)?)?;
                 p2 = plane(&args[2], idx(2)?)?;
             }
             2 => {
-                w0 = cw(0);
-                w1 = cw(1);
+                clamp_bits_ch0 = cw(0);
+                diff_1 = cw(1);
                 if is_const(&args[2]) {
                     return Err(unsup("operand C is a constant in shape 11x"));
                 }
                 p2 = plane(&args[2], idx(2)?)?;
             }
             3 => {
-                w1 = cw(1);
-                w2 = cw(2);
+                diff_1 = cw(1);
+                clamp_bits_ch2 = cw(2);
                 p0 = plane(&args[0], idx(0)?)?;
             }
             4 => {
-                w1 = cw(1);
+                diff_1 = cw(1);
                 p0 = plane(&args[0], idx(0)?)?;
                 p2 = plane(&args[2], idx(2)?)?;
             }
             5 => {
-                w2 = cw(2);
+                clamp_bits_ch2 = cw(2);
                 p0 = plane(&args[0], idx(0)?)?;
-                p1 = plane(&args[1], idx(1)?)?;
+                src_ch1 = plane(&args[1], idx(1)?)?;
             }
             _ => {
                 p0 = plane(&args[0], idx(0)?)?;
-                p1 = plane(&args[1], idx(1)?)?;
+                src_ch1 = plane(&args[1], idx(1)?)?;
                 p2 = plane(&args[2], idx(2)?)?;
             }
         }
         s.launch(
             "pointwise_clamp_f32",
             c.n,
-            &[p0, p1, p2, out.plane(ch).arg(), ClArg::U32(n), ClArg::U32(shape), ClArg::U32(vend), ClArg::U32(w0), ClArg::U32(w1), ClArg::U32(w2), ClArg::U32(CLAMP_ALLONES)],
+            &[p0, src_ch1, p2, out.plane(chan_idx).arg(), ClArg::U32(n), ClArg::U32(shape), ClArg::U32(vend), ClArg::U32(clamp_bits_ch0), ClArg::U32(diff_1), ClArg::U32(clamp_bits_ch2), ClArg::U32(CLAMP_ALLONES)],
         )?;
     }
     Ok(out)
@@ -450,11 +450,11 @@ pub(crate) fn route_check(shapes: &[ArgShape], recipe: &[(usize, Src)]) -> Resul
                 ArgShape::Const { n } => (*n as i32, true),
                 ArgShape::Mip => return Err("a ripmap operand"),
             };
-            let ch = chan.min(count);
-            if is_c && ch >= 4 {
+            let chan_idx = chan.min(count);
+            if is_c && chan_idx >= 4 {
                 return Err("constant lane out of range");
             }
-            if !is_c && ch >= count {
+            if !is_c && chan_idx >= count {
                 return Err("channel beyond the operand's planes");
             }
         }
@@ -487,12 +487,12 @@ pub(crate) fn route_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], recipe:
             Src::Fill(v) => fill(s, &out, *p, service_fill_bits(v, c.n, c.kp.in_pool), n)?,
             Src::Chan { arg, chan } => match &args[arg] {
                 DevArg::Img(img) => {
-                    let ch = (chan as usize).min(img.channels());
-                    s.launch("copy_f32", c.n, &[img.plane(ch).arg(), out.plane(*p).arg(), ClArg::U32(n)])?;
+                    let chan_idx = (chan as usize).min(img.channels());
+                    s.launch("copy_f32", c.n, &[img.plane(chan_idx).arg(), out.plane(*p).arg(), ClArg::U32(n)])?;
                 }
                 DevArg::Const { n: cn, lanes } => {
-                    let ch = (chan as usize).min(*cn);
-                    let v = lanes[ch];
+                    let chan_idx = (chan as usize).min(*cn);
+                    let v = lanes[chan_idx];
                     let v = if direct_const_fill { v } else { service_fill_bits(v, c.n, c.kp.in_pool) };
                     fill(s, &out, *p, v, n)?;
                 }
@@ -528,45 +528,45 @@ fn vec_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], k: usize) -> Result<
 use ops_coerce::Pass;
 
 fn coerce_recipe(pass: Pass, tag: usize, count: i32) -> Vec<(usize, Src)> {
-    let ch = |c: i32| Src::Chan { arg: 0, chan: c };
+    let chan_idx = |c: i32| Src::Chan { arg: 0, chan: c };
     let mut r: Vec<(usize, Src)> = Vec::new();
     match pass {
         Pass::C_CELL_A => {
             for c in 0..tag {
-                r.push((c, ch(c as i32)));
+                r.push((c, chan_idx(c as i32)));
             }
         }
         Pass::D_CELL_A => {
             for c in 0..tag {
-                r.push((c, ch(0)));
+                r.push((c, chan_idx(0)));
             }
         }
         Pass::DE_CELL_A => {
-            r.push((0, ch(0)));
-            r.push((1, ch(1)));
+            r.push((0, chan_idx(0)));
+            r.push((1, chan_idx(1)));
             r.push((2, Src::Fill(0)));
         }
         Pass::E_CELL_A => {
             if tag > 1 {
                 for c in 0..tag - 1 {
-                    r.push((c, ch(0)));
+                    r.push((c, chan_idx(0)));
                 }
             }
             r.push((tag - 1, Src::Fill(ONE_BITS)));
         }
         Pass::EF_CELL_A => {
             for c in 0..3 {
-                r.push((c, ch(c as i32)));
+                r.push((c, chan_idx(c as i32)));
             }
             r.push((3, Src::Fill(ONE_BITS)));
         }
         Pass::F_CELL_A => {
             for c in 0..4 {
-                r.push((c, ch(0)));
+                r.push((c, chan_idx(0)));
             }
-            r.push((3, ch(1)));
+            r.push((3, chan_idx(1)));
         }
-        Pass::P_CELL_A => r.push((0, ch(count.wrapping_sub(1)))),
+        Pass::P_CELL_A => r.push((0, chan_idx(count.wrapping_sub(1)))),
     }
     r
 }
@@ -602,8 +602,8 @@ fn coerce_plan(class: &str, tag: i32, args: &[ArgShape]) -> Result<Vec<(usize, S
             ArgShape::Mip => return Err("a ripmap operand"),
         });
     }
-    let (pass, rtag) = if let Some(cl) = coerce_class(class) {
-        let combo = ops_coerce::select(cl, &counts).ok_or("no combination row for these operand counts")?;
+    let (pass, rtag) = if let Some(ocl) = coerce_class(class) {
+        let combo = ops_coerce::select(ocl, &counts).ok_or("no combination row for these operand counts")?;
         (combo.pass, combo.tag as i32)
     } else {
         let table: &[(i32, i32, Pass)] = match class {
@@ -770,9 +770,9 @@ fn element_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevIma
         r.push((0, Src::Chan { arg: 0, chan: 0 }));
         return route_run(s, c, args, &r, tag, false);
     }
-    for ch in 0..tag {
-        let k = element_fold(count, cvtt(f32::from_bits(idx[ch])));
-        r.push((ch, Src::Chan { arg: 0, chan: k }));
+    for chan_idx in 0..tag {
+        let k = element_fold(count, cvtt(f32::from_bits(idx[chan_idx])));
+        r.push((chan_idx, Src::Chan { arg: 0, chan: k }));
     }
     // a constant source fills directly (no pooled zero rule) for count >= 2
     route_run(s, c, args, &r, tag, true)
@@ -871,9 +871,9 @@ fn lane_in(args: &[DevArg], arg: usize, lane: usize) -> In {
     In::Word(lanes(&args[arg])[lane])
 }
 
-fn src_in(args: &[DevArg], shapes: &[ArgShape], arg: usize, ch: usize) -> Result<In, DevError> {
+fn src_in(args: &[DevArg], shapes: &[ArgShape], arg: usize, chan_idx: usize) -> Result<In, DevError> {
     let cnt = count_of(&shapes[arg]).map_err(unsup)?.0;
-    Ok(if is_const(&args[arg]) { In::Plane { arg, idx: 0 } } else { In::Plane { arg, idx: ch.min(cnt - 1) } })
+    Ok(if is_const(&args[arg]) { In::Plane { arg, idx: 0 } } else { In::Plane { arg, idx: chan_idx.min(cnt - 1) } })
 }
 
 // ---- interp ------------------------------------------------------------------------------------------------------------
@@ -907,23 +907,23 @@ fn interp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImag
     let tag = c.tag as usize;
     let out = DevImage::alloc(s, tag, c.n)?;
     let holder = dummy_holder(s, args)?;
-    let dh = dummy_arg(args, &holder)?;
-    for ch in 0..tag {
-        let alpha = ch == 3;
+    let holder_plane = dummy_arg(args, &holder)?;
+    for chan_idx in 0..tag {
+        let alpha = chan_idx == 3;
         let ins_ab = |arg: usize| -> Result<(In, bool, f32), DevError> {
             let forced = alpha && k[arg].0 - 1 < 3;
             if forced {
                 Ok((In::Word(ONE_BITS), true, 1.0))
             } else if k[arg].1 {
-                let w = lanes(&args[arg])[ch];
+                let w = lanes(&args[arg])[chan_idx];
                 Ok((In::Word(w), true, f32::from_bits(w)))
             } else {
-                Ok((src_in(args, &shapes, arg, ch)?, false, 0.0))
+                Ok((src_in(args, &shapes, arg, chan_idx)?, false, 0.0))
             }
         };
         let (ia, fa, xa) = ins_ab(0)?;
         let (ib, fb, xb) = ins_ab(1)?;
-        let it = if k[2].1 { lane_in(args, 2, ch) } else { src_in(args, &shapes, 2, ch)? };
+        let it = if k[2].1 { lane_in(args, 2, chan_idx) } else { src_in(args, &shapes, 2, chan_idx)? };
         let ft = k[2].1;
         let in_window = {
             let (a, b) = (xa as f64, xb as f64);
@@ -931,9 +931,9 @@ fn interp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImag
         };
         if fa && fb && !ft && in_window {
             let In::Plane { arg, idx } = it else { return Err(unsup("matte plane")) };
-            s.launch("copy_f32", c.n, &[plane(&args[arg], idx)?, out.plane(ch).arg(), ClArg::U32(n)])?;
+            s.launch("copy_f32", c.n, &[plane(&args[arg], idx)?, out.plane(chan_idx).arg(), ClArg::U32(n)])?;
         } else {
-            launch3(s, c, "pointwise_interp_f32", args, dh, [ia, ib, it], out.plane(ch).arg(), &[])?;
+            launch3(s, c, "pointwise_interp_f32", args, holder_plane, [ia, ib, it], out.plane(chan_idx).arg(), &[])?;
         }
     }
     Ok(out)
@@ -952,22 +952,22 @@ fn dissolve_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevIm
     let tag = c.tag as usize;
     let out = DevImage::alloc(s, tag, c.n)?;
     let holder = dummy_holder(s, args)?;
-    let dh = dummy_arg(args, &holder)?;
-    for ch in 0..tag {
+    let holder_plane = dummy_arg(args, &holder)?;
+    for chan_idx in 0..tag {
         let pick = |arg: usize| -> In {
             let (count, is_c) = k[arg];
-            if ch == 3 && (count - 1) & 1 == 0 {
+            if chan_idx == 3 && (count - 1) & 1 == 0 {
                 return In::Word(ONE_BITS);
             }
             if is_c {
-                return In::Word(lanes(&args[arg])[ch]);
+                return In::Word(lanes(&args[arg])[chan_idx]);
             }
             let rule = tag > 2 && count == 2;
-            let idx = if rule { ch.saturating_sub(2) } else { ch.min(count - 1) };
+            let idx = if rule { chan_idx.saturating_sub(2) } else { chan_idx.min(count - 1) };
             In::Plane { arg, idx }
         };
-        let it = if k[2].1 { lane_in(args, 2, ch) } else { In::Plane { arg: 2, idx: ch.min(k[2].0 - 1) } };
-        launch3(s, c, "pointwise_dissolve_f32", args, dh, [pick(0), pick(1), it], out.plane(ch).arg(), &[])?;
+        let it = if k[2].1 { lane_in(args, 2, chan_idx) } else { In::Plane { arg: 2, idx: chan_idx.min(k[2].0 - 1) } };
+        launch3(s, c, "pointwise_dissolve_f32", args, holder_plane, [pick(0), pick(1), it], out.plane(chan_idx).arg(), &[])?;
     }
     Ok(out)
 }
@@ -976,20 +976,20 @@ fn dissolve_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevIm
 
 enum PremChan {
     FillOne,
-    Compute { ins: [In; 3], c3: bool },
+    Compute { ins: [In; 3], neg_t_form: bool },
 }
 
 fn prem_plan(c: &NodeCall, args: &[ArgShape], lane: &dyn Fn(usize, usize) -> u32) -> Result<Vec<PremChan>, &'static str> {
     let k = three_ops(c, args, false)?;
     let tag = c.tag as usize;
     let mut r = Vec::new();
-    for ch in 0..tag {
+    for chan_idx in 0..tag {
         let (ca, a_const) = k[0];
         let (cb, b_const0) = k[1];
         let (ct, t_const) = k[2];
         let mut b_const = b_const0;
         let mut b_from_t = false;
-        if ch == 3 {
+        if chan_idx == 3 {
             if ca - 1 == 2 {
                 r.push(PremChan::FillOne);
                 return Ok(r);
@@ -999,20 +999,20 @@ fn prem_plan(c: &NodeCall, args: &[ArgShape], lane: &dyn Fn(usize, usize) -> u32
                 b_const = t_const;
             }
         }
-        let t_idx = ch.min(ct - 1);
-        let a_in = if a_const { In::Word(lane(0, ch)) } else { In::Plane { arg: 0, idx: ch.min(ca - 1) } };
-        let t_in = if t_const { In::Word(lane(2, ch)) } else { In::Plane { arg: 2, idx: t_idx } };
+        let t_idx = chan_idx.min(ct - 1);
+        let a_in = if a_const { In::Word(lane(0, chan_idx)) } else { In::Plane { arg: 0, idx: chan_idx.min(ca - 1) } };
+        let t_in = if t_const { In::Word(lane(2, chan_idx)) } else { In::Plane { arg: 2, idx: t_idx } };
         let b_in = if b_const {
-            In::Word(lane(1, ch))
+            In::Word(lane(1, chan_idx))
         } else if b_from_t {
             In::Plane { arg: 2, idx: t_idx }
         } else {
-            In::Plane { arg: 1, idx: ch.min(cb - 1) }
+            In::Plane { arg: 1, idx: chan_idx.min(cb - 1) }
         };
         if a_const && b_const && t_const {
             return Err("every input of a channel is constant (the CPU rounds through an integer)");
         }
-        r.push(PremChan::Compute { ins: [a_in, b_in, t_in], c3: a_const && !b_const && t_const });
+        r.push(PremChan::Compute { ins: [a_in, b_in, t_in], neg_t_form: a_const && !b_const && t_const });
     }
     Ok(r)
 }
@@ -1029,13 +1029,13 @@ fn prem_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage,
     let tag = c.tag as usize;
     let out = DevImage::alloc(s, tag, c.n)?;
     let holder = dummy_holder(s, args)?;
-    let dh = dummy_arg(args, &holder)?;
+    let holder_plane = dummy_arg(args, &holder)?;
     let mut written = vec![false; tag];
-    for (ch, p) in plan.iter().enumerate() {
-        written[ch] = true;
+    for (chan_idx, p) in plan.iter().enumerate() {
+        written[chan_idx] = true;
         match p {
-            PremChan::FillOne => fill(s, &out, ch, ONE_BITS, n)?,
-            PremChan::Compute { ins, c3 } => launch3(s, c, "pointwise_prem_f32", args, dh, *ins, out.plane(ch).arg(), &[u32::from(*c3)])?,
+            PremChan::FillOne => fill(s, &out, chan_idx, ONE_BITS, n)?,
+            PremChan::Compute { ins, neg_t_form } => launch3(s, c, "pointwise_prem_f32", args, holder_plane, *ins, out.plane(chan_idx).arg(), &[u32::from(*neg_t_form)])?,
         }
     }
     for p in 0..tag {
@@ -1147,11 +1147,11 @@ fn comp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage,
             let n = n_u32(c)?;
             let out = DevImage::alloc(s, tag, c.n)?;
             let holder = dummy_holder(s, args)?;
-            let dh = dummy_arg(args, &holder)?;
-            for (ch, p) in v.iter().enumerate() {
+            let holder_plane = dummy_arg(args, &holder)?;
+            for (chan_idx, p) in v.iter().enumerate() {
                 match p {
-                    CompChan::FillOne => fill(s, &out, ch, ONE_BITS, n)?,
-                    CompChan::Compute { ins, mode } => launch3(s, c, "pointwise_comp_f32", args, dh, *ins, out.plane(ch).arg(), &[*mode])?,
+                    CompChan::FillOne => fill(s, &out, chan_idx, ONE_BITS, n)?,
+                    CompChan::Compute { ins, mode } => launch3(s, c, "pointwise_comp_f32", args, holder_plane, *ins, out.plane(chan_idx).arg(), &[*mode])?,
                 }
             }
             for p in v.len()..tag {
@@ -1327,14 +1327,14 @@ fn rgb_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], op: u32) -> Result<D
     let out = DevImage::alloc(s, tag, c.n)?;
     let mut written = vec![false; tag];
     let (a, b) = (&args[0], &args[1]);
-    for ch in 0..nch {
-        if ch >= tag {
+    for chan_idx in 0..nch {
+        if chan_idx >= tag {
             continue;
         }
-        written[ch] = true;
-        let kin = ch.min(ni - 1);
-        let kout = ch.min(no - 1);
-        let o = out.plane(ch).arg();
+        written[chan_idx] = true;
+        let kin = chan_idx.min(ni - 1);
+        let kout = chan_idx.min(no - 1);
+        let o = out.plane(chan_idx).arg();
         if fa {
             let pb = plane(b, kout)?;
             s.launch("pointwise_bin_f32", c.n, &[plane(b, kout)?, pb, o, ClArg::U32(n), ClArg::U32(op), ClArg::U32(1), ClArg::U32(lanes(a)[kin]), ClArg::U32(0)])?;
@@ -1368,12 +1368,12 @@ fn pad_into(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], out: &DevImage, rec
             Src::Fill(v) => fill(s, out, *p, service_fill_bits(v, c.n, c.kp.in_pool), n)?,
             Src::Chan { arg, chan } => match &args[arg] {
                 DevArg::Img(img) => {
-                    let ch = (chan as usize).min(img.channels());
-                    s.launch("copy_f32", c.n, &[img.plane(ch).arg(), out.plane(*p).arg(), ClArg::U32(n)])?;
+                    let chan_idx = (chan as usize).min(img.channels());
+                    s.launch("copy_f32", c.n, &[img.plane(chan_idx).arg(), out.plane(*p).arg(), ClArg::U32(n)])?;
                 }
                 DevArg::Const { n: cn, lanes } => {
-                    let ch = (chan as usize).min(*cn);
-                    fill(s, out, *p, service_fill_bits(lanes[ch], c.n, c.kp.in_pool), n)?;
+                    let chan_idx = (chan as usize).min(*cn);
+                    fill(s, out, *p, service_fill_bits(lanes[chan_idx], c.n, c.kp.in_pool), n)?;
                 }
                 DevArg::Mip(_) | DevArg::DevMip(_) => return Err(unsup("a ripmap operand")),
             },
@@ -1404,20 +1404,20 @@ fn round_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage
     check_len(c, args)?;
     let n = n_u32(c)?;
     let tag = c.tag as usize;
-    let r12 = ni == 3 && no == 4;
-    let r14 = ni == 4 && no == 3;
-    let eff = if r12 || r14 || tag == 3 { 3 } else { tag };
+    let a_rgba_b_rgb = ni == 3 && no == 4;
+    let a_rgb_b_rgba = ni == 4 && no == 3;
+    let eff = if a_rgba_b_rgb || a_rgb_b_rgba || tag == 3 { 3 } else { tag };
     let out = DevImage::alloc(s, tag, c.n)?;
     let (a, b) = (&args[0], &args[1]);
     let mut written = vec![false; tag];
-    for ch in 0..eff {
-        let kin = ch.min(ni - 1);
-        let kout = ch.min(no - 1);
-        if ch >= tag {
+    for chan_idx in 0..eff {
+        let kin = chan_idx.min(ni - 1);
+        let kout = chan_idx.min(no - 1);
+        if chan_idx >= tag {
             continue;
         }
-        written[ch] = true;
-        let o = out.plane(ch).arg();
+        written[chan_idx] = true;
+        let o = out.plane(chan_idx).arg();
         if fa {
             s.launch("pointwise_round_f32", c.n, &[plane(b, kout)?, plane(b, kout)?, o, ClArg::U32(n), ClArg::U32(0), ClArg::U32(1), ClArg::U32(lanes(a)[kin]), ClArg::U32(0)])?;
         } else if fb {
@@ -1427,7 +1427,7 @@ fn round_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage
         }
     }
     if tag >= 4 {
-        if r12 {
+        if a_rgba_b_rgb {
             written[3] = true;
             let o = out.plane(3).arg();
             if fb {
@@ -1436,7 +1436,7 @@ fn round_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevImage
                 s.launch("pointwise_round_f32", c.n, &[plane(b, 3)?, plane(b, 3)?, o, ClArg::U32(n), ClArg::U32(1), ClArg::U32(0), ClArg::U32(0), ClArg::U32(0)])?;
             }
         }
-        if r14 {
+        if a_rgb_b_rgba {
             written[3] = true;
             let o = out.plane(3).arg();
             if fa {
@@ -1504,18 +1504,18 @@ fn colour_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], kernel: &str, whi
         let mut o = [vec![0.0f32; 15], vec![0.0f32; 15], vec![0.0f32; 15]];
         hue_shift_preserve_luma::render(&p, None, None, &mut o).map_err(|e| unsup(format!("{e:?}")))?;
         let nn = c.n;
-        let m8 = if nn >= 8 { nn & !7 } else { 0 };
+        let bits_8 = if nn >= 8 { nn & !7 } else { 0 };
         let mut regions: Vec<(usize, usize, usize)> = Vec::new();
-        if m8 > 0 {
-            regions.push((0, m8, 0));
+        if bits_8 > 0 {
+            regions.push((0, bits_8, 0));
         }
-        let mut idx = m8;
-        if nn > m8 {
-            let rest = nn - m8;
+        let mut idx = bits_8;
+        if nn > bits_8 {
+            let rest = nn - bits_8;
             if rest >= 4 {
-                let m4 = rest & !3;
-                regions.push((idx, idx + m4, 8));
-                idx += m4;
+                let bits_4 = rest & !3;
+                regions.push((idx, idx + bits_4, 8));
+                idx += bits_4;
             }
             if idx < nn {
                 regions.push((idx, nn, 12));
@@ -1556,12 +1556,12 @@ fn mono_accepts(c: &NodeCall, args: &[ArgShape], alpha: bool) -> Result<(), &'st
     if args.len() != 1 {
         return Err("one operand expected");
     }
-    let (ch, is_c) = count_of(&args[0])?;
+    let (chan_idx, is_c) = count_of(&args[0])?;
     if is_c {
         return Err("constant operand");
     }
     if alpha {
-        let want = match ch {
+        let want = match chan_idx {
             1 => 1,
             2 => 2,
             3 => 1,
@@ -1579,17 +1579,17 @@ fn mono_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg], alpha: bool) -> Res
     mono_accepts(c, &shapes, alpha).map_err(unsup)?;
     check_len(c, args)?;
     let n = n_u32(c)?;
-    let ch = count_of(&shapes[0]).map_err(unsup)?.0;
+    let chan_idx = count_of(&shapes[0]).map_err(unsup)?.0;
     let DevArg::Img(src) = &args[0] else { return Err(unsup("operand is not an image")) };
     let planes = if alpha && c.tag >= 2 { 2 } else { 1 };
     let out = DevImage::alloc(s, planes, c.n)?;
-    if ch <= 2 {
+    if chan_idx <= 2 {
         s.launch("copy_f32", c.n, &[src.plane(0).arg(), out.plane(0).arg(), ClArg::U32(n)])?;
     } else {
         s.launch("pointwise_luma_f32", c.n, &[src.plane(0).arg(), src.plane(1).arg(), src.plane(2).arg(), out.plane(0).arg(), ClArg::U32(n)])?;
     }
-    if alpha && (ch == 2 || ch == 4) {
-        s.launch("copy_f32", c.n, &[src.plane(ch - 1).arg(), out.plane(1).arg(), ClArg::U32(n)])?;
+    if alpha && (chan_idx == 2 || chan_idx == 4) {
+        s.launch("copy_f32", c.n, &[src.plane(chan_idx - 1).arg(), out.plane(1).arg(), ClArg::U32(n)])?;
     }
     Ok(out)
 }
@@ -1636,8 +1636,8 @@ fn case_args(ods: &[Od], n: usize, flavor: usize, salt: usize, vals: &[f32]) -> 
     ods.iter()
         .enumerate()
         .map(|(k, od)| match *od {
-            Od::Img(ch) => {
-                let planes = (0..ch).map(|p| (0..n).map(|i| pick(vals, flavor, i * 7 + (k * 4 + p) * 13 + n * 3 + salt)).collect()).collect();
+            Od::Img(chan_idx) => {
+                let planes = (0..chan_idx).map(|p| (0..n).map(|i| pick(vals, flavor, i * 7 + (k * 4 + p) * 13 + n * 3 + salt)).collect()).collect();
                 Image { n, planes }
             }
             Od::Const(nl) => {
@@ -1655,7 +1655,7 @@ fn case_args(ods: &[Od], n: usize, flavor: usize, salt: usize, vals: &[f32]) -> 
 /// takes them, then thinned evenly to at most `cap` cases. `dims` picks the frame shapes.
 pub fn gen_cases(class: &'static str, accepts: Acc, templates: &[Vec<Od>], tags: &[i32], dims: &[(usize, usize)], cap: usize) -> Vec<SelfCase> {
     let vals = adversarial_f32(1500, 77);
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let mut keys: Vec<(usize, i32, (usize, usize), usize)> = Vec::new();
     for (ti, t) in templates.iter().enumerate() {
         let shapes: Vec<ArgShape> = t.iter().map(|o| match *o { Od::Img(c) => ArgShape::Img { channels: c }, Od::Const(c) => ArgShape::Const { n: c } }).collect();
@@ -1773,13 +1773,13 @@ pub(crate) fn all_templates(nargs: usize, allow_const: bool) -> Vec<Vec<Od>> {
     for _ in 0..nargs {
         let mut next = Vec::new();
         for t in &out {
-            for ch in 1..=4usize {
+            for chan_idx in 1..=4usize {
                 let mut a = t.clone();
-                a.push(Od::Img(ch));
+                a.push(Od::Img(chan_idx));
                 next.push(a);
                 if allow_const {
                     let mut b = t.clone();
-                    b.push(Od::Const(ch));
+                    b.push(Od::Const(chan_idx));
                     next.push(b);
                 }
             }
@@ -1882,7 +1882,7 @@ pub fn wide_cases(class: &'static str, accepts: Acc, templates: &[Vec<Od>], tags
     const W: usize = 64;
     const H: usize = 24;
     let n = W * H;
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let triples = luma_sensitive_triples(n);
     let mut rng = fx_device::sim::Rng::new(0x71de_c0de ^ class.len() as u64);
     let mut out = Vec::new();
@@ -1898,11 +1898,11 @@ pub fn wide_cases(class: &'static str, accepts: Acc, templates: &[Vec<Od>], tags
                     .iter()
                     .enumerate()
                     .map(|(k, od)| match *od {
-                        Od::Img(ch) => {
-                            let mut planes: Vec<Vec<f32>> = (0..ch).map(|_| (0..n).map(|_| wide_f32(&mut rng)).collect()).collect();
+                        Od::Img(chan_idx) => {
+                            let mut planes: Vec<Vec<f32>> = (0..chan_idx).map(|_| (0..n).map(|_| wide_f32(&mut rng)).collect()).collect();
                             if mode == 1 && k == 0 {
                                 for (i, tr) in triples.iter().cycle().take(n).enumerate() {
-                                    for (p, v) in tr.iter().enumerate().take(ch) {
+                                    for (p, v) in tr.iter().enumerate().take(chan_idx) {
                                         planes[p][i] = *v;
                                     }
                                 }
@@ -2052,10 +2052,10 @@ pub const ELEMENT_OF: DeviceOp = DeviceOp {
     run: element_run,
     corpus: || {
         let mut t = Vec::new();
-        for ch in 1..=4usize {
-            t.push(vec![Od::Img(ch), Od::Const(4)]);
-            t.push(vec![Od::Const(ch), Od::Const(4)]);
-            t.push(vec![Od::Img(ch), Od::Const(1)]);
+        for chan_idx in 1..=4usize {
+            t.push(vec![Od::Img(chan_idx), Od::Const(4)]);
+            t.push(vec![Od::Const(chan_idx), Od::Const(4)]);
+            t.push(vec![Od::Img(chan_idx), Od::Const(1)]);
         }
         gen_cases("element_of", element_accepts, &t, &[1, 2, 3, 4], DIMS_SMALL, 240)
     },
@@ -2240,8 +2240,8 @@ pub const ADD_RGB: DeviceOp = DeviceOp {
 
 fn colour_templates() -> Vec<Vec<Od>> {
     let mut t = Vec::new();
-    for ch in 1..=4usize {
-        for s in [Od::Img(ch), Od::Const(ch)] {
+    for chan_idx in 1..=4usize {
+        for s in [Od::Img(chan_idx), Od::Const(chan_idx)] {
             t.push(vec![s, Od::Const(1)]);
             t.push(vec![s, Od::Img(1)]);
         }

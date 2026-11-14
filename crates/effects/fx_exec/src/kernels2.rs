@@ -127,7 +127,7 @@ fn make_mipmap_k(args: &[Arg], w: usize, h: usize, kp: &KParams) -> Result<MipIm
     let wx = cvt_i32(const_lane(&args[1], 0, "make_mipmap", "wrap")?);
     let wy = cvt_i32(const_lane(&args[1], 1, "make_mipmap", "wrap")?);
     let filter = cvt_i32(const_lane(&args[2], 0, "make_mipmap", "filter")?);
-    let o = make_mipmap::mm2::ObjParams { w: w as i32, h: h as i32, c, d0: 1 };
+    let o = make_mipmap::mm2::ObjParams { w: w as i32, h: h as i32, c, obj_scale: 1 };
     let (alloc, mut rm) = make_mipmap::mm2::slot33(&o, filter, 0, make_mipmap::mm2::Mut2::None).map_err(|e| kerr("make_mipmap", e))?;
     let pad: Vec<u32> = (0..c).map(|k| kp.pad_pixel[k].to_bits()).collect();
     for y in 0..h {
@@ -157,8 +157,8 @@ fn blur_warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resu
     need(args, 8, "blur_warp")?;
     let mip = mip_of(&args[0], "blur_warp", w, h)?;
     let g = geom_of(kp, w, h);
-    let (p1c, p1x, p1y) = endpoint(&args[1], "blur_warp")?;
-    let (p2c, p2x, p2y) = endpoint(&args[2], "blur_warp")?;
+    let (first_is_const, p1x, p1y) = endpoint(&args[1], "blur_warp")?;
+    let (second_is_const, p2x, p2y) = endpoint(&args[2], "blur_warp")?;
     let f_cc = const_lane(&args[3], 0, "blur_warp", "argument 3")?;
     let assumption_a = const_lane(&args[3], 1, "blur_warp", "argument 3")?;
     let assumption_b = const_lane(&args[4], 0, "blur_warp", "scale_result")?;
@@ -172,7 +172,7 @@ fn blur_warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resu
     }
     let n = w * h;
     let plane00: Vec<f32> = mip.ripmap.planes[0].iter().map(|b| f32::from_bits(*b)).collect();
-    let img = blur_warp::ImageObj { width: w as i32, height: h as i32, n: c as i32, w0: mip.ripmap.widths[0] as i32, h0: mip.ripmap.heights[0] as i32, plane00: std::sync::Arc::new(plane00) };
+    let img = blur_warp::ImageObj { width: w as i32, height: h as i32, n: c as i32, plane_width: mip.ripmap.widths[0] as i32, plane_height: mip.ripmap.heights[0] as i32, plane00: std::sync::Arc::new(plane00) };
     // the original worker (E1 route, band cell 1) calls the body once per line with count = W. kp.bw_whole_frame (env
     // NV10_BW_WHOLE=1) keeps one call with count = W * H; the vector head/tail split then falls at other columns.
     let whole = std::env::var("NV10_BW_WHOLE").map(|v| v == "1").unwrap_or(false);
@@ -182,12 +182,12 @@ fn blur_warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resu
         let lo = r * cnt;
         let sl = |v: &Vec<f32>, k: bool| if k { v.clone() } else { v[lo..lo + cnt].to_vec() };
         let this = blur_warp::ThisObj {
-            p1_const: p1c as u8,
-            p1x: sl(&p1x, p1c),
-            p1y: sl(&p1y, p1c),
-            p2_const: p2c as u8,
-            p2x: sl(&p2x, p2c),
-            p2y: sl(&p2y, p2c),
+            first_end_const: first_is_const as u8,
+            p1x: sl(&p1x, first_is_const),
+            p1y: sl(&p1y, first_is_const),
+            second_end_const: second_is_const as u8,
+            p2x: sl(&p2x, second_is_const),
+            p2y: sl(&p2y, second_is_const),
             f_cc,
             assumption_a,
             assumption_b,
@@ -247,7 +247,7 @@ fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resul
     let mx = cvt_i32(const_lane(&args[2], 0, "warp_rel", "wrap")?);
     let my = cvt_i32(const_lane(&args[2], 1, "warp_rel", "wrap")?);
     let flag_arg = const_lane(&args[3], 0, "warp_rel", "argument 3")?;
-    let (const_coords, ca1, ca2, a1, a2) = match &args[1] {
+    let (const_coords, coord_a_first, coord_a_second, lanes_first, lanes_second) = match &args[1] {
         Arg::Const { .. } => {
             let f = args[1].f32s();
             (true, f[0], f[1], Vec::new(), Vec::new())
@@ -258,33 +258,33 @@ fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resul
     // warp_rel's vtable slot 33 is the same function as class warp's (vtables/class_vtable_pairs.tsv), so the recorded slot33_warp serves
     // the footprint path here too (argument 3 nonzero with image coordinates). Same labels as warp_k: ([P] = the flag lane, INFERRED), (ctx STAND-IN).
     let n = w * h;
-    let mut c1_arr = vec![0.0f32; n];
-    let mut c2_arr = vec![0.0f32; n];
+    let mut lanes_c_first = vec![0.0f32; n];
+    let mut lanes_c_second = vec![0.0f32; n];
     let mut flag_byte = 0u8;
     if footprint_taken(flag_arg, const_coords) {
-        let g33 = geom_of(kp, w, h);
+        let warp_geom = geom_of(kp, w, h);
         let bits = |v: &Vec<f32>| v.iter().map(|x| x.to_bits()).collect::<Vec<u32>>();
-        let (ub, vb) = (bits(&a1), bits(&a2));
-        let mut c1b = vec![warp_log_gradient::SENT; n];
-        let mut c2b = vec![warp_log_gradient::SENT; n];
+        let (ub, vb) = (bits(&lanes_first), bits(&lanes_second));
+        let mut coord_first_buf = vec![warp_log_gradient::SENT; n];
+        let mut coord_second_buf = vec![warp_log_gradient::SENT; n];
         let prim33 = warp_log_gradient::Prim33 { n: cvt_i32(flag_arg), cc: 0 };
-        let rec33 = slot33_rec(w, h); if kp.host_aspect != 1.0 { return Err(unsupported("warp_rel", "slot 33 geometry cells ctx measured only at host aspect 1.0")); } // A10: the measured cells replace the withdrawn stand-in
+        let warp_cells = slot33_rec(w, h); if kp.host_aspect != 1.0 { return Err(unsupported("warp_rel", "slot 33 geometry cells ctx measured only at host aspect 1.0")); } // A10: the measured cells replace the withdrawn stand-in
         let mut pool = warp_log_gradient::Pool::default();
         let th = warp_log_gradient::Threads { nthr: 1, nthr2: 1, tid: 0 };
         let mut ev = Vec::new();
-        let o = warp_log_gradient::slot33_warp(warp_log_gradient::FW_AVX2, &prim33, Some(&rec33), None, (&ub, &vb), &mut c1b, &mut c2b, &mut pool, &th, &mut ev).map_err(|e| kerr("warp_rel slot 33", e))?;
+        let o = warp_log_gradient::slot33_warp(warp_log_gradient::FW_AVX2, &prim33, Some(&warp_cells), None, (&ub, &vb), &mut coord_first_buf, &mut coord_second_buf, &mut pool, &th, &mut ev).map_err(|e| kerr("warp_rel slot 33", e))?;
         flag_byte = o.flag_byte;
-        c1_arr = c1b.iter().map(|b| f32::from_bits(*b)).collect();
-        c2_arr = c2b.iter().map(|b| f32::from_bits(*b)).collect();
+        lanes_c_first = coord_first_buf.iter().map(|b| f32::from_bits(*b)).collect();
+        lanes_c_second = coord_second_buf.iter().map(|b| f32::from_bits(*b)).collect();
     }
     let c = mip.channels;
     if c as i32 != tag {
         return Err(ExecError::Shape(format!("warp_rel: tag {} but the ripmap has {} channels", tag, c)));
     }
-    let prim = warp_rel::Prim { const_coords, const_a1: ca1, const_a2: ca2, a1_arr: a1, a2_arr: a2, c1_arr, c2_arr, flag: flag_byte, mx, my };
+    let prim = warp_rel::Prim { const_coords, const_a1: coord_a_first, const_a2: coord_a_second, lanes_a_first: lanes_first, lanes_a_second: lanes_second, lanes_c_first, lanes_c_second, flag: flag_byte, mx, my };
     let nl = mip.ripmap.nl();
     let np = mip.ripmap.np();
-    let f1 = warp_sampler::Params {
+    let sampler_params = warp_sampler::Params {
         n: c as i32,
         width_tab: mip.ripmap.widths.iter().map(|&v| v as i32).collect(),
         height_tab: mip.ripmap.heights.iter().map(|&v| v as i32).collect(),
@@ -294,13 +294,13 @@ fn warp_rel_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Resul
     };
     let (nl_i, np_i) = (nl as i32, np as i32);
     let (w_i, h_i) = (w as i32, h as i32);
-    let mk_f1 = || warp_sampler::Params { n: f1.n, width_tab: f1.width_tab.clone(), height_tab: f1.height_tab.clone(), t: f1.t.clone(), flag_x: 0, flag_y: 0 };
+    let make_params = || warp_sampler::Params { n: sampler_params.n, width_tab: sampler_params.width_tab.clone(), height_tab: sampler_params.height_tab.clone(), t: sampler_params.t.clone(), flag_x: 0, flag_y: 0 };
     let lat = warp_sampler::Lattice {
         bufs: (0..nl).map(|l| (0..np).map(|j| mip.ripmap.planes[mip.ripmap.idx(l, j)].iter().map(|b| f32::from_bits(*b)).collect()).collect()).collect(),
     };
     let nt = crate::par::threads_for(h, n);
     let parts = crate::par::row_bands(h, nt, |lo, hi| {
-        let mut wimg = warp_rel::Image { f1: mk_f1(), w: w_i, h: h_i, d_cell_d: nl_i, d_cell_e: np_i, host: warp_rel::Host::Mode0 };
+        let mut wimg = warp_rel::Image { sampler_params: make_params(), w: w_i, h: h_i, d_cell_d: nl_i, d_cell_e: np_i, host: warp_rel::Host::Mode0 };
         let mut band: Vec<Vec<f32>> = vec![vec![0.0; (hi - lo) * w]; c];
         for y in lo..hi {
             let fr = warp_rel_row(&g, w, y, c);
@@ -346,11 +346,11 @@ fn monochrome_k(args: &[Arg], n: usize, kp: &KParams) -> Result<Image, ExecError
     let src = &src_owned;
     let c = src.channels();
     let p = monochrome::Params { channels: c as i32, n: n as i32, dst_phase: 0 };
-    let s3 = if c >= 3 { Some([src.planes[0].as_slice(), src.planes[1].as_slice(), src.planes[2].as_slice()]) } else { None };
+    let rgb_planes = if c >= 3 { Some([src.planes[0].as_slice(), src.planes[1].as_slice(), src.planes[2].as_slice()]) } else { None };
     let mut out = vec![0.0f32; n];
-    let calls = monochrome::render(&p, s3, &mut out).map_err(|e| kerr("monochrome", e))?;
-    for cl in calls {
-        match cl {
+    let calls = monochrome::render(&p, rgb_planes, &mut out).map_err(|e| kerr("monochrome", e))?;
+    for call_item in calls {
+        match call_item {
             monochrome::Call::Fill => pad_fill(kp, &args[0], 0, &mut out, n)?,
         }
     }
@@ -358,7 +358,7 @@ fn monochrome_k(args: &[Arg], n: usize, kp: &KParams) -> Result<Image, ExecError
 }
 
 fn coerce_k(class: &str, args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
-    let cl = match class {
+    let call_item = match class {
         "coerce_up" => ops_coerce::Class::CoerceUp,
         "coerce_up_a1" => ops_coerce::Class::CoerceUpA1,
         "coerce_to" => ops_coerce::Class::CoerceTo,
@@ -368,7 +368,7 @@ fn coerce_k(class: &str, args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Resu
         return Err(ExecError::BadPlan(format!("{} without an argument", class)));
     }
     let counts: Vec<i32> = args.iter().map(|a| a.count()).collect();
-    let combo = ops_coerce::select(cl, &counts).ok_or(ExecError::NoCombo { class: class.into(), operands: counts.clone() })?;
+    let combo = ops_coerce::select(call_item, &counts).ok_or(ExecError::NoCombo { class: class.into(), operands: counts.clone() })?;
     if combo.tag as i32 != tag {
         return Err(ExecError::Kernel { class: class.into(), msg: format!("selector tag {} differs from the crate's combo tag {}", tag, combo.tag) });
     }
@@ -443,9 +443,9 @@ fn v3_to_v4_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, E
     if tag != 4 {
         return Err(ExecError::Kernel { class: "v3_to_v4".into(), msg: format!("selector tag {} differs from the class row tag 4", tag) });
     }
-    let (p0, p1) = (args[0].planes(), args[1].planes());
-    let (v0, v1) = (args[0].bits().to_vec(), args[1].bits().to_vec());
-    let blocks = [block_of(&args[0], &p0, &v0), block_of(&args[1], &p1, &v1)];
+    let (p0, mid_weight) = (args[0].planes(), args[1].planes());
+    let (bits_a, bits_b) = (args[0].bits().to_vec(), args[1].bits().to_vec());
+    let blocks = [block_of(&args[0], &p0, &bits_a), block_of(&args[1], &mid_weight, &bits_b)];
     let p = v3_to_v4_if4::Params { combo: 0, host: ps::Host { in_pool: kp.in_pool }, roi: flat_roi(n) };
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; 4];
     {
@@ -470,7 +470,7 @@ fn sharpen_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result
     if !args[1].is_const() || !args[2].is_const() {
         return Err(unsupported("sharpen", "gains and amount must be constants (record cells read as scalars)"));
     }
-    let sp = sharpen::Params {
+    let sharpen_params = sharpen::Params {
         amount: args[2].f32s()[0],
         gains: args[1].f32s().to_vec(),
         in_count: c,
@@ -485,7 +485,7 @@ fn sharpen_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result
         for v in outv.iter_mut() {
             dp.push(fx_common::plane::PlaneMut::new(v.as_mut_slice(), w, h, w).map_err(|e| kerr("sharpen", e))?);
         }
-        sharpen::render_alias(&sp, &planes, &mut dp, kp.sharpen_alias).map_err(|e| kerr("sharpen", e))?;
+        sharpen::render_alias(&sharpen_params, &planes, &mut dp, kp.sharpen_alias).map_err(|e| kerr("sharpen", e))?;
     }
     Ok(Image { n: w * h, planes: outv })
 }
@@ -532,10 +532,10 @@ fn edge_aware_sharpen_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams
     if nch != tag {
         return Err(ExecError::Shape(format!("edge_aware_sharpen: source has {} channels, combo tag {}", nch, tag)));
     }
-    let cx = e::CompileCtx { tag, flag: 0, nch, cw: if kp.blur_render_scale > 0 { kp.blur_render_scale } else { w as i32 }, w: w as i32, h: h as i32, kcell: kp.host_aspect };
+    let centre_x = e::CompileCtx { tag, flag: 0, nch, cw: if kp.blur_render_scale > 0 { kp.blur_render_scale } else { w as i32 }, w: w as i32, h: h as i32, kcell: kp.host_aspect };
     let srefs: Vec<&[f32]> = src.planes.iter().map(|p| p.as_slice()).collect();
     let inp = e::Inputs { source: &srefs, mask: mask_img.as_deref() };
-    match e::run(&cx, &ops, &inp, e::Scratch::Zero) {
+    match e::run(&centre_x, &ops, &inp, e::Scratch::Zero) {
         Ok(o) => Ok(Image { n: w * h, planes: o.planes }),
         Err(er) => {
             let name = match &er {
@@ -568,16 +568,16 @@ fn monochrome_a_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Imag
         channels: c as i32,
         n: n as i32,
         dst_phase: 0,
-        scalar: monochrome_a::Weights { p0: 0.3125, p1: 0.5, p2: 0.1875 },
+        scalar: monochrome_a::Weights { p0: 0.3125, mid_weight: 0.5, p2: 0.1875 },
         vec_w: [[0.3125; 4], [0.5; 4], [0.1875; 4]],
     };
-    let s3 = if c >= 3 { Some([src.planes[0].as_slice(), src.planes[1].as_slice(), src.planes[2].as_slice()]) } else { None };
+    let rgb_planes = if c >= 3 { Some([src.planes[0].as_slice(), src.planes[1].as_slice(), src.planes[2].as_slice()]) } else { None };
     let mut out0 = vec![0.0f32; n];
     let mut out1 = vec![0.0f32; n];
-    let calls = monochrome_a::render(&p, s3, &mut out0).map_err(|e| kerr("monochrome_a", e))?;
-    for cl in calls {
-        let dst = if cl.out == 0 { &mut out0 } else { &mut out1 };
-        pad_fill(kp, &args[0], cl.chan, dst, n)?;
+    let calls = monochrome_a::render(&p, rgb_planes, &mut out0).map_err(|e| kerr("monochrome_a", e))?;
+    for call_item in calls {
+        let dst = if call_item.out == 0 { &mut out0 } else { &mut out1 };
+        pad_fill(kp, &args[0], call_item.chan, dst, n)?;
     }
     let planes = if tag >= 2 { vec![out0, out1] } else { vec![out0] };
     Ok(Image { n, planes })
@@ -644,17 +644,17 @@ fn grad_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     }
     let n = w * h;
     let mut aux = vec![0.0f32; n];
-    let mut dx = vec![0.0f32; n];
+    let mut delta_x = vec![0.0f32; n];
     let mut dy = vec![0.0f32; n];
-    let sp = if mu(33) { src_owned.planes.len() - 1 } else { 0 };
-    grad::render(&gp, &src_owned.planes[sp], w, h, &mut aux, &mut dx, &mut dy).map_err(|e| kerr("grad", e))?;
+    let sharpen_params = if mu(33) { src_owned.planes.len() - 1 } else { 0 };
+    grad::render(&gp, &src_owned.planes[sharpen_params], w, h, &mut aux, &mut delta_x, &mut dy).map_err(|e| kerr("grad", e))?;
     if mu(25) {
-        return Ok(Image { n, planes: vec![dy, dx] });
+        return Ok(Image { n, planes: vec![dy, delta_x] });
     }
     if mu(26) {
-        return Ok(Image { n, planes: vec![dx.clone(), dx] });
+        return Ok(Image { n, planes: vec![delta_x.clone(), delta_x] });
     }
-    Ok(Image { n, planes: vec![dx, dy] })
+    Ok(Image { n, planes: vec![delta_x, dy] })
 }
 
 /// class `edge_detect` (slot 52, CPU route, crate `edge_detect`). Operands in program order, as the Glow_Edges text reads
@@ -784,7 +784,7 @@ fn masked_blur_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Re
     let amount = [const_lane(&args[2], 0, "masked_blur", "amount")?, const_lane(&args[2], 1, "masked_blur", "amount")?];
     let shape = cvt_i32(const_lane(&args[3], 0, "masked_blur", "filter_shape")?);
     let subpixel = cvt_i32(const_lane(&args[4], 0, "masked_blur", "subpixel")?);
-    let bp = masked_blur::MaskedBlurParams {
+    let blur_params = masked_blur::MaskedBlurParams {
         amount,
         filter_shape: shape,
         subpixel,
@@ -793,7 +793,7 @@ fn masked_blur_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Re
         aspect: None,
         mask_threshold: masked_blur::MASK_THRESHOLD,
     };
-    let sp: Vec<fx_common::plane::Plane> = (0..c).map(|k| fx_common::plane::Plane::new(&src_owned.planes[k], w, h, w)).collect::<Result<_, _>>().map_err(|e| kerr("masked_blur", e))?;
+    let sharpen_params: Vec<fx_common::plane::Plane> = (0..c).map(|k| fx_common::plane::Plane::new(&src_owned.planes[k], w, h, w)).collect::<Result<_, _>>().map_err(|e| kerr("masked_blur", e))?;
     let mp = fx_common::plane::Plane::new(&mask_owned.planes[0], w, h, w).map_err(|e| kerr("masked_blur", e))?;
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; w * h]; c];
     {
@@ -801,7 +801,7 @@ fn masked_blur_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Re
         for v in outv.iter_mut() {
             dp.push(fx_common::plane::PlaneMut::new(v.as_mut_slice(), w, h, w).map_err(|e| kerr("masked_blur", e))?);
         }
-        masked_blur::render(&bp, &sp, Some(&mp), &mut dp).map_err(|e| kerr("masked_blur", e))?;
+        masked_blur::render(&blur_params, &sharpen_params, Some(&mp), &mut dp).map_err(|e| kerr("masked_blur", e))?;
     }
     Ok(Image { n: w * h, planes: outv })
 }
@@ -988,7 +988,7 @@ fn blur_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     let shape = cvt_i32(const_lane(&args[2], 0, "blur", "filter_shape")?);
     let sc = if args[3].is_const() { args[3].f32s() } else { return Err(unsupported("blur", "scale must be a constant")) };
     let subpixel = cvt_i32(const_lane(&args[4], 0, "blur", "subpixel")?);
-    let bp = blur::BlurParams {
+    let blur_params = blur::BlurParams {
         amount,
         filter_shape: shape,
         scale: sc,
@@ -999,14 +999,14 @@ fn blur_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
         render_scale: if kp.blur_render_scale > 0 { kp.blur_render_scale } else { w as i32 },
         aspect: kp.blur_aspect, //: the host input, no constant
     };
-    let sp: Vec<fx_common::plane::Plane> = (0..c).map(|k| fx_common::plane::Plane::new(&src.planes[k], w, h, w)).collect::<Result<_, _>>().map_err(|e| kerr("blur", e))?;
+    let sharpen_params: Vec<fx_common::plane::Plane> = (0..c).map(|k| fx_common::plane::Plane::new(&src.planes[k], w, h, w)).collect::<Result<_, _>>().map_err(|e| kerr("blur", e))?;
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; w * h]; c];
     {
         let mut dp: Vec<fx_common::plane::PlaneMut> = Vec::new();
         for v in outv.iter_mut() {
             dp.push(fx_common::plane::PlaneMut::new(v.as_mut_slice(), w, h, w).map_err(|e| kerr("blur", e))?);
         }
-        blur::render(&bp, &sp, &mut dp).map_err(|e| kerr("blur", e))?;
+        blur::render(&blur_params, &sharpen_params, &mut dp).map_err(|e| kerr("blur", e))?;
     }
     Ok(Image { n: w * h, planes: outv })
 }
@@ -1180,16 +1180,16 @@ fn rows_of(w: usize, h: usize) -> Vec<(usize, usize, usize)> {
 
 /// the same with the plane base phase (bytes mod 32) of the output plane as an explicit per-run host input (ALIGN-HOST-PER-RUN, MEASURED
 /// 0 or 16 in the E1 runs); `base` is read from env WPG1_PBASE (perspective out2) or WPG1_ABASE (perspective_alpha out1), default 0 = the pre-WPE3 behaviour.
-fn rows_of_b(w: usize, h: usize, base: usize) -> Vec<(usize, usize, usize)> {
-    rows_of_p(w, h, base, false)
+fn rows_of_b(w: usize, h: usize, start_phase: usize) -> Vec<(usize, usize, usize)> {
+    rows_of_p(w, h, start_phase, false)
 }
 
 /// `rowbuf` = the destination is one row buffer reused for every row (constant phase `base`), else a plane (base + row x W x 4)
-pub(crate) fn rows_of_p(w: usize, h: usize, base: usize, rowbuf: bool) -> Vec<(usize, usize, usize)> {
+pub(crate) fn rows_of_p(w: usize, h: usize, start_phase: usize, rowbuf: bool) -> Vec<(usize, usize, usize)> {
     if std::env::var("WPG1_PERSP_WHOLE").map(|v| v == "1").unwrap_or(false) {
         return vec![(0, w * h, 0)];
     }
-    (0..h).map(|y| (y * w, w, if rowbuf { base & 0x1f } else { (base + y * w * 4) & 0x1f })).collect()
+    (0..h).map(|y| (y * w, w, if rowbuf { start_phase & 0x1f } else { (start_phase + y * w * 4) & 0x1f })).collect()
 }
 
 fn env_base(name: &str) -> usize {
@@ -1200,17 +1200,17 @@ fn perspective_k(args: &[Arg], w: usize, h: usize, kp: &KParams) -> Result<Image
     let (a, gpu_call_a, b) = persp_scalars(args, "perspective")?;
     let n = w * h;
     let (u, v) = uv_of(args, "perspective", n)?;
-    let (mut o1, mut o2) = (vec![0.0f32; n], vec![0.0f32; n]);
+    let (mut out1_plane, mut out2_plane) = (vec![0.0f32; n], vec![0.0f32; n]);
     for (lo, cnt, ph) in rows_of_p(w, h, if kp.persp_base >= 0 { kp.persp_base as usize } else { env_base("WPG1_PBASE") }, kp.persp_rowbuf) {
         let t = warp_render::PerspThis { a, gpu_call_a, b, inputs: Some((&u[lo..lo + cnt], &v[lo..lo + cnt])) };
         // out2 is written at its row start; the glue takes the phase of that start
-        let mut r1 = vec![0.0f32; cnt];
+        let mut out1_part = vec![0.0f32; cnt];
         let mut r2 = vec![0.0f32; cnt];
-        warp_render::slot52_perspective(WPG1_FW, &t, false, cnt as i32, ph as u32, &mut r1, &mut r2).map_err(|e| kerr("perspective", e))?;
-        o1[lo..lo + cnt].copy_from_slice(&r1);
-        o2[lo..lo + cnt].copy_from_slice(&r2);
+        warp_render::slot52_perspective(WPG1_FW, &t, false, cnt as i32, ph as u32, &mut out1_part, &mut r2).map_err(|e| kerr("perspective", e))?;
+        out1_plane[lo..lo + cnt].copy_from_slice(&out1_part);
+        out2_plane[lo..lo + cnt].copy_from_slice(&r2);
     }
-    Ok(Image { n, planes: vec![o1, o2] })
+    Ok(Image { n, planes: vec![out1_plane, out2_plane] })
 }
 
 /// perspective_alpha needs three host values read from [[rec]] (i32, i32, f64) that no measured source supplies
@@ -1219,7 +1219,7 @@ fn perspective_alpha_k(args: &[Arg], w: usize, h: usize, kp: &KParams) -> Result
     let (a, gpu_call_a, b) = persp_scalars(args, "perspective_alpha")?;
     let n = w * h;
     let (_u, v) = uv_of(args, "perspective_alpha", n)?;
-    let (s8, port_info_b, port_info_a) = match kp.palpha_cells {
+    let (alpha_cells, port_info_b, port_info_a) = match kp.palpha_cells {
         Some((x, y, z)) => (x, y, z),
         None => match (env_f("WPG1_S8"), env_f("WPG1_S48"), env_f("WPG1_S30")) {
         (Some(x), Some(y), Some(z)) => (x as i32, y as i32, z),
@@ -1231,7 +1231,7 @@ fn perspective_alpha_k(args: &[Arg], w: usize, h: usize, kp: &KParams) -> Result
     let par = warp_render::AlphaParams { params_b: gpu_call_a, params_a: a, params_c: b };
     let mut out = vec![0.0f32; n];
     for (lo, cnt, ph) in rows_of_p(w, h, if kp.palpha_base >= 0 { kp.palpha_base as usize } else { env_base("WPG1_ABASE") }, kp.palpha_rowbuf) {
-        let info = warp_render::AlphaInfo { n: cnt as i32, roi_form: 0, port_blk_a: 0, port_blk_b: 0, port_blk_c: 0, s8, port_info_b, port_info_a };
+        let info = warp_render::AlphaInfo { n: cnt as i32, roi_form: 0, port_blk_a: 0, port_blk_b: 0, port_blk_c: 0, alpha_cells, port_info_b, port_info_a };
         let mut dst = vec![0.0f32; cnt];
         let o = warp_render::slot52_perspective_alpha(WPG1_FW, &par, &info, false, &v[lo..lo + cnt], &mut dst, ph).map_err(|e| kerr("perspective_alpha", e))?;
         if let warp_render::AlphaRoute::Fill { .. } = o.route {
@@ -1287,7 +1287,7 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     }
     let filter = const_lane(&args[3], 0, "warp", "argument 3 (filter)")?;
     let n = w * h;
-    let (const_coords, ca1, ca2, a1, a2) = match &args[1] {
+    let (const_coords, coord_a_first, coord_a_second, lanes_first, lanes_second) = match &args[1] {
         Arg::Const { .. } => {
             let f = args[1].f32s();
             (true, f[0], f[1], Vec::new(), Vec::new())
@@ -1297,24 +1297,24 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     };
     // (last): slot 33 (over, partition as real code, callback) supplies c1/c2 for the footprint path, once per frame
     // (chunking: whole frame for slot 33, rows for slot 53, INFERRED). [P] = the filter lane (INFERRED). ctx has NO measured source: STAND-IN below.
-    let mut c1_arr = vec![0.0f32; n];
-    let mut c2_arr = vec![0.0f32; n];
+    let mut lanes_c_first = vec![0.0f32; n];
+    let mut lanes_c_second = vec![0.0f32; n];
     let mut flag_byte = 0u8;
     if filter != 0.0 && !const_coords {
-        let g33 = geom_of(kp, w, h);
+        let warp_geom = geom_of(kp, w, h);
         let bits = |v: &Vec<f32>| v.iter().map(|x| x.to_bits()).collect::<Vec<u32>>();
-        let (ub, vb) = (bits(&a1), bits(&a2));
-        let mut c1b = vec![warp_log_gradient::SENT; n];
-        let mut c2b = vec![warp_log_gradient::SENT; n];
+        let (ub, vb) = (bits(&lanes_first), bits(&lanes_second));
+        let mut coord_first_buf = vec![warp_log_gradient::SENT; n];
+        let mut coord_second_buf = vec![warp_log_gradient::SENT; n];
         let prim33 = warp_log_gradient::Prim33 { n: cvt_i32(filter), cc: 0 };
-        let rec33 = slot33_rec(w, h); if kp.host_aspect != 1.0 { return Err(unsupported("warp", "slot 33 geometry cells ctx measured only at host aspect 1.0")); } // A10: the measured cells replace the withdrawn stand-in
+        let warp_cells = slot33_rec(w, h); if kp.host_aspect != 1.0 { return Err(unsupported("warp", "slot 33 geometry cells ctx measured only at host aspect 1.0")); } // A10: the measured cells replace the withdrawn stand-in
         let mut pool = warp_log_gradient::Pool::default(); // captured state: g_cell_b = 0, serial callback
         let th = warp_log_gradient::Threads { nthr: 1, nthr2: 1, tid: 0 };
         let mut ev = Vec::new();
-        let o = warp_log_gradient::slot33_warp(warp_log_gradient::FW_AVX2, &prim33, Some(&rec33), None, (&ub, &vb), &mut c1b, &mut c2b, &mut pool, &th, &mut ev).map_err(|e| kerr("warp slot 33", e))?;
+        let o = warp_log_gradient::slot33_warp(warp_log_gradient::FW_AVX2, &prim33, Some(&warp_cells), None, (&ub, &vb), &mut coord_first_buf, &mut coord_second_buf, &mut pool, &th, &mut ev).map_err(|e| kerr("warp slot 33", e))?;
         flag_byte = o.flag_byte;
-        c1_arr = c1b.iter().map(|b| f32::from_bits(*b)).collect();
-        c2_arr = c2b.iter().map(|b| f32::from_bits(*b)).collect();
+        lanes_c_first = coord_first_buf.iter().map(|b| f32::from_bits(*b)).collect();
+        lanes_c_second = coord_second_buf.iter().map(|b| f32::from_bits(*b)).collect();
     }
     let c = mip.channels;
     if c as i32 != tag {
@@ -1322,7 +1322,7 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     }
     let nl = mip.ripmap.nl();
     let np = mip.ripmap.np();
-    let f1 = warp_render::F1Params {
+    let sampler_params = warp_render::F1Params {
         n: c as i32,
         width_tab: mip.ripmap.widths.iter().map(|&v| v as i32).collect(),
         height_tab: mip.ripmap.heights.iter().map(|&v| v as i32).collect(),
@@ -1331,7 +1331,7 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
         flag_y: 0,
     };
     let mk_img = || warp_render::DriverImage {
-        f1: warp_render::F1Params { n: f1.n, width_tab: f1.width_tab.clone(), height_tab: f1.height_tab.clone(), t: f1.t.clone(), flag_x: 0, flag_y: 0 },
+        sampler_params: warp_render::F1Params { n: sampler_params.n, width_tab: sampler_params.width_tab.clone(), height_tab: sampler_params.height_tab.clone(), t: sampler_params.t.clone(), flag_x: 0, flag_y: 0 },
         w: w as i32,
         h: h as i32,
         d_cell_d: nl as i32,
@@ -1340,7 +1340,7 @@ fn warp_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
     let lat = warp_render::Lattice {
         bufs: (0..nl).map(|l| (0..np).map(|j| mip.ripmap.planes[mip.ripmap.idx(l, j)].iter().map(|b| f32::from_bits(*b)).collect()).collect()).collect(),
     };
-    let prim = warp_render::WarpPrim { const_coords, const_a1: ca1, const_a2: ca2, a1_arr: a1, a2_arr: a2, c1_arr, c2_arr, flag: flag_byte, mx, my };
+    let prim = warp_render::WarpPrim { const_coords, const_a1: coord_a_first, const_a2: coord_a_second, lanes_a_first: lanes_first, lanes_a_second: lanes_second, lanes_c_first, lanes_c_second, flag: flag_byte, mx, my };
     let nt = crate::par::threads_for(h, n);
     let parts = crate::par::row_bands(h, nt, |lo, hi| {
         let mut img = mk_img();
@@ -1410,9 +1410,9 @@ fn v3_to_v4_if4_a_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Im
     if v3_to_v4_if4_a::COMBOS[combo].out as i32 != tag {
         return Err(ExecError::Kernel { class: "v3_to_v4_if4_a".into(), msg: format!("selector tag {} differs from the row result count {}", tag, v3_to_v4_if4_a::COMBOS[combo].out) });
     }
-    let (p0, p1) = (args[0].planes(), args[1].planes());
-    let (v0, v1) = (args[0].bits().to_vec(), args[1].bits().to_vec());
-    let blocks = [block_of(&args[0], &p0, &v0), block_of(&args[1], &p1, &v1)];
+    let (p0, mid_weight) = (args[0].planes(), args[1].planes());
+    let (bits_a, bits_b) = (args[0].bits().to_vec(), args[1].bits().to_vec());
+    let blocks = [block_of(&args[0], &p0, &bits_a), block_of(&args[1], &mid_weight, &bits_b)];
     let p = v3_to_v4_if4_a::Params { combo, host: ps::Host { in_pool: kp.in_pool }, roi: flat_roi(n), this_nch: args[1].count() };
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; tag.max(0) as usize];
     {
@@ -1429,8 +1429,8 @@ fn get_alpha_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, 
         return Err(ExecError::Kernel { class: "get_alpha".into(), msg: format!("selector tag {} differs from the single result plane", tag) });
     }
     let p0 = args[0].planes();
-    let v0 = args[0].bits().to_vec();
-    let blocks = [block_of(&args[0], &p0, &v0)];
+    let bits_a = args[0].bits().to_vec();
+    let blocks = [block_of(&args[0], &p0, &bits_a)];
     let p = get_alpha::Params { count: args[0].count(), host: ps::Host { in_pool: kp.in_pool }, roi: flat_roi(n) };
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; 1];
     {
@@ -1471,11 +1471,11 @@ fn glow_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Result<Im
         render_scale,
         aspect: kp.blur_aspect,
     };
-    let sp: Vec<glow_layer::Plane> = (0..c).map(|k| glow_layer::Plane { data: &src.planes[k], width: w, height: h, stride: w }).collect();
+    let sharpen_params: Vec<glow_layer::Plane> = (0..c).map(|k| glow_layer::Plane { data: &src.planes[k], width: w, height: h, stride: w }).collect();
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; w * h]; c];
     {
         let mut dp: Vec<glow_layer::PlaneMut> = outv.iter_mut().map(|v| glow_layer::PlaneMut { data: v.as_mut_slice(), width: w, height: h, stride: w }).collect();
-        glow_layer::render_full(&gp, &sp, &mut dp).map_err(|e| kerr("glow", e))?;
+        glow_layer::render_full(&gp, &sharpen_params, &mut dp).map_err(|e| kerr("glow", e))?;
     }
     Ok(Image { n: w * h, planes: outv })
 }

@@ -21,7 +21,7 @@ fn lines(sx: i32, sy: i32) -> String {
 fn centre(sx: i32, sy: i32) -> [u32; 2] {
     let mut h = HostCurveValues::parse(&lines(sx, sy)).unwrap();
     h.time_frames = Some(0.0);
-    h.ae32 = true;
+    h.claim_route = true;
     let mut d = Vec::new();
     let r = fold("Transform_and_Blur_Autogen", "center", 0.0, &[0.0, 0.0], 2, &h, &mut d).unwrap_or_else(|| panic!("{:?}", d));
     [r[0].to_bits(), r[1].to_bits()]

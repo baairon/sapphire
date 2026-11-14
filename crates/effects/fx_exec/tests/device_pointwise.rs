@@ -77,7 +77,7 @@ fn postdivide_copy_alpha_arm_on_the_device() {
     let cases = (op.corpus)();
     let tally = fx_exec::device_ops::selfcheck(&ctx.session, op).expect("postdivide equals the CPU kernel");
     println!("postdivide full self-check: {} cases, {} outputs compared, nan payloads {:?}", cases.len(), tally.outputs, tally.nan_payloads);
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let (w, h) = (9usize, 3usize);
     let n = w * h;
     let src: Vec<Vec<f32>> = (0..3).map(|p| (0..n).map(|i| (i * 3 + p) as f32 * 0.37 - 2.0).collect()).collect();

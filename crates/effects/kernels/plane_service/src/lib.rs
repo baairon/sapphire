@@ -117,7 +117,7 @@ pub fn plane_service(host: &Host, sel: Sel, mode: i32, chan: i32, dst: &mut [f32
         Sel::Virtual { block } => block,
     };
     // r12d = min(chan, *maxch) (cmp edx,r12d; cmovl r12d,edx)
-    let ch = if m(1) {
+    let src_chan = if m(1) {
         chan.max(blk.maxch)
     } else if m(2) {
         chan
@@ -126,13 +126,13 @@ pub fn plane_service(host: &Host, sel: Sel, mode: i32, chan: i32, dst: &mut [f32
     } else {
         chan
     };
-    if ch < 0 {
+    if src_chan < 0 {
         return Err(PlError::NegativeChannel);
     }
-    let ch = ch as usize;
+    let src_chan = src_chan as usize;
     let enable = if m(4) { !blk.enable } else { blk.enable };
     if enable {
-        let raw = *blk.values.get(ch).ok_or(PlError::ValuesShort)?;
+        let raw = *blk.values.get(src_chan).ok_or(PlError::ValuesShort)?;
         // cvtsi2ss when the byte at is set, plain movss otherwise
         let value: u32 = if blk.is_int && !m(3) { (raw as i32 as f32).to_bits() } else { raw };
         let desc = descriptor(roi);
@@ -174,10 +174,10 @@ pub fn plane_service(host: &Host, sel: Sel, mode: i32, chan: i32, dst: &mut [f32
         return Ok(Action::FillInline { value, count });
     }
     // copy path
-    let src_plane = *blk.planes.get(ch).ok_or(PlError::PlaneMissing)?;
+    let src_plane = *blk.planes.get(src_chan).ok_or(PlError::PlaneMissing)?;
     if roi.mode != 0 {
         let assert_called = !blk.img_valid && !m(17);
-        return Ok(Action::CopyRect { chan: ch, desc: descriptor(roi), assert_called });
+        return Ok(Action::CopyRect { chan: src_chan, desc: descriptor(roi), assert_called });
     }
     if roi.n < 0 {
         return Err(PlError::NegativeCount);

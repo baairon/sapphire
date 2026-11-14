@@ -87,7 +87,7 @@ pub fn call_service(svc: &Svc, count: i32, planes: &[&[f32]], chan: i32, dst: &m
 pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
         ("EM1-A1", "CAPTURED/none", "the three AVX2 bodies read no data cells (MEASURED scan: only the feature word cell and assert strings); no ONE, no vector constant"),
-        ("EM1-A2", "ROUTE", "AVX2 route only (feature word 0x9d97ff): bodies,; AVX and SSE tiers not compared"),
+        ("EM1-A2", "ROUTE", "AVX2 route only (feature word): bodies,; AVX and SSE tiers not compared"), // origin: 0x9d97ff
         ("EM1-A3", "HOST-FP-ASSUMED", "MXCSR round to nearest; the bodies only compare and copy, no rounding"),
         ("EM1-A4", "CALLEE-MODELLED/PL1", "plane service is the finished native; its descriptor-0 block (class virtual returns [this]) is an explicit input (Svc), host fill INFERRED"),
         ("EM1-A5", "PARAM-UNCAPTURED", "Svc.in_pool (pool flag cell): both values run; matters only for a constant fill of >= 512 floats (-0.0 becomes +0.0)"),

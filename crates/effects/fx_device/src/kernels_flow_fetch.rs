@@ -13,12 +13,12 @@ pub const FLOW_FETCH: &str = r#"
 
 float flow_b_neg(float x) { return as_float(as_uint(x) ^ 0x80000000u); }
 float flow_b_abs(float x) { return as_float(as_uint(x) & 0x7fffffffu); }
-float flow_b_f213(float d, float s2, float s3) { float r = fma(d, s2, s3); return isnan(r) ? nanx_pick3(d, s2, s3) : r; }
-float flow_b_m213(float d, float s2, float s3) { float r = fma(d, s2, -s3); return isnan(r) ? nanx_pick3(d, s2, s3) : r; }
-float flow_b_f231(float d, float s2, float s3) { float r = fma(s2, s3, d); return isnan(r) ? nanx_pick3(d, s2, s3) : r; }
-float flow_b_m231(float d, float s2, float s3) { float r = fma(s2, s3, -d); return isnan(r) ? nanx_pick3(d, s2, s3) : r; }
-float flow_b_n213(float d, float s2, float s3) { float r = fma(-d, s2, s3); return isnan(r) ? nanx_pick3(d, s2, s3) : r; }
-float flow_b_n231(float d, float s2, float s3) { float r = fma(-s2, s3, d); return isnan(r) ? nanx_pick3(d, s2, s3) : r; }
+float flow_b_f213(float d, float second, float third) { float r = fma(d, second, third); return isnan(r) ? nanx_pick3(d, second, third) : r; }
+float flow_b_m213(float d, float second, float third) { float r = fma(d, second, -third); return isnan(r) ? nanx_pick3(d, second, third) : r; }
+float flow_b_f231(float d, float second, float third) { float r = fma(second, third, d); return isnan(r) ? nanx_pick3(d, second, third) : r; }
+float flow_b_m231(float d, float second, float third) { float r = fma(second, third, -d); return isnan(r) ? nanx_pick3(d, second, third) : r; }
+float flow_b_n213(float d, float second, float third) { float r = fma(-d, second, third); return isnan(r) ? nanx_pick3(d, second, third) : r; }
+float flow_b_n231(float d, float second, float third) { float r = fma(-second, third, d); return isnan(r) ? nanx_pick3(d, second, third) : r; }
 
 /* vcvtss2si of the rounded value: round to nearest even, then the integer indefinite outside the range and for NaN */
 int flow_b_cvt_rne(float x) {
@@ -86,13 +86,13 @@ __kernel void flow_b_deriv_x(__global const float* inp, __global float* out, int
     int vec = (all == 0) && ((long)i >= head) && ((long)i < vend);
     float r;
     if (vec != 0) {
-        int p1 = i - 1; if (p1 < 0) { p1 = 0; }
+        int prev_idx = i - 1; if (prev_idx < 0) { prev_idx = 0; }
         int p2 = i - 2; if (p2 < 0) { p2 = 0; }
-        int n1 = i + 1; if (n1 > w - 1) { n1 = w - 1; }
-        int n2 = i + 2; if (n2 > w - 1) { n2 = w - 1; }
-        float t = flow_b_m231(inp[(long)roff + p2], inp[(long)roff + p1], cv);
-        t = flow_b_n231(t, inp[(long)roff + n1], cv);
-        float s = nanx_add(t, inp[(long)roff + n2]);
+        int next_idx = i + 1; if (next_idx > w - 1) { next_idx = w - 1; }
+        int after_next_idx = i + 2; if (after_next_idx > w - 1) { after_next_idx = w - 1; }
+        float t = flow_b_m231(inp[(long)roff + p2], inp[(long)roff + prev_idx], cv);
+        t = flow_b_n231(t, inp[(long)roff + next_idx], cv);
+        float s = nanx_add(t, inp[(long)roff + after_next_idx]);
         r = nanx_mul(kv, s);
     } else {
         int lo1 = i - 1; if (lo1 < 0) { lo1 = 0; }
@@ -125,13 +125,13 @@ __kernel void flow_b_deriv_y(__global const float* inp, __global float* out, int
     int vec = (stride != 0) && (h >= 8) && (y < (h & ~7));
     float r;
     if (vec != 0) {
-        int p1 = y - 1; if (p1 < 0) { p1 = 0; }
+        int prev_idx = y - 1; if (prev_idx < 0) { prev_idx = 0; }
         int p2 = y - 2; if (p2 < 0) { p2 = 0; }
-        int n1 = y + 1; if (n1 > h - 1) { n1 = h - 1; }
-        int n2 = y + 2; if (n2 > h - 1) { n2 = h - 1; }
-        float t = flow_b_m231(inp[(long)flow_b_idx(p2, stride) + col], inp[(long)flow_b_idx(p1, stride) + col], cv);
-        t = flow_b_n231(t, inp[(long)flow_b_idx(n1, stride) + col], cv);
-        float s = nanx_add(t, inp[(long)flow_b_idx(n2, stride) + col]);
+        int next_idx = y + 1; if (next_idx > h - 1) { next_idx = h - 1; }
+        int after_next_idx = y + 2; if (after_next_idx > h - 1) { after_next_idx = h - 1; }
+        float t = flow_b_m231(inp[(long)flow_b_idx(p2, stride) + col], inp[(long)flow_b_idx(prev_idx, stride) + col], cv);
+        t = flow_b_n231(t, inp[(long)flow_b_idx(next_idx, stride) + col], cv);
+        float s = nanx_add(t, inp[(long)flow_b_idx(after_next_idx, stride) + col]);
         r = nanx_mul(kv, s);
     } else {
         int lo1 = y - 1; if (lo1 < 0) { lo1 = 0; }
@@ -158,15 +158,15 @@ int flow_b_clamp_idx(int v, int dim) {
 float flow_b_bilinear(__global const float* src, int width, int height, int stride, int ix0, int iy0, float fx, float fy) {
     int ix1 = (int)((uint)ix0 + 1u);
     int iy1 = (int)((uint)iy0 + 1u);
-    float t00 = src[(long)flow_b_idx(flow_b_clamp_idx(iy0, height), stride) + flow_b_clamp_idx(ix0, width)];
-    float t10 = src[(long)flow_b_idx(flow_b_clamp_idx(iy0, height), stride) + flow_b_clamp_idx(ix1, width)];
-    float t01 = src[(long)flow_b_idx(flow_b_clamp_idx(iy1, height), stride) + flow_b_clamp_idx(ix0, width)];
-    float t11 = src[(long)flow_b_idx(flow_b_clamp_idx(iy1, height), stride) + flow_b_clamp_idx(ix1, width)];
-    float top_diff = nanx_sub(t10, t00);
-    float bottom_diff = nanx_sub(t11, t01);
-    float left_diff = nanx_sub(t00, t01);
+    float tap_top_left = src[(long)flow_b_idx(flow_b_clamp_idx(iy0, height), stride) + flow_b_clamp_idx(ix0, width)];
+    float tap_top_right = src[(long)flow_b_idx(flow_b_clamp_idx(iy0, height), stride) + flow_b_clamp_idx(ix1, width)];
+    float tap_bot_left = src[(long)flow_b_idx(flow_b_clamp_idx(iy1, height), stride) + flow_b_clamp_idx(ix0, width)];
+    float tap_bot_right = src[(long)flow_b_idx(flow_b_clamp_idx(iy1, height), stride) + flow_b_clamp_idx(ix1, width)];
+    float top_diff = nanx_sub(tap_top_right, tap_top_left);
+    float bottom_diff = nanx_sub(tap_bot_right, tap_bot_left);
+    float left_diff = nanx_sub(tap_top_left, tap_bot_left);
     float cross_diff = nanx_sub(bottom_diff, top_diff);
-    float top = flow_b_f213(top_diff, fx, t00);
+    float top = flow_b_f213(top_diff, fx, tap_top_left);
     float cross = flow_b_m213(cross_diff, fx, left_diff);
     return flow_b_f213(fy, cross, top);
 }
@@ -298,26 +298,26 @@ __kernel void flow_b_flow_stencil_rows(__global float* out, __global const float
     }
     long i = (long)x - 1;
     int vec = (i >= head) && (i < vend);
-    float g1;
+    float fwd_diff;
     if (i == (long)width - 2) {
-        g1 = flow_b_neg(b[ro + i]);
+        fwd_diff = flow_b_neg(b[ro + i]);
     } else {
-        g1 = nanx_sub(b[ro + i + 1], b[ro + i]);
+        fwd_diff = nanx_sub(b[ro + i + 1], b[ro + i]);
     }
     float r;
     if (kind == 0) {
-        r = flow_b_f213(nanx_add(g1, c[cur]), scale, d[cur]);
+        r = flow_b_f213(nanx_add(fwd_diff, c[cur]), scale, d[cur]);
     } else if (kind == 2) {
         if (vec != 0) {
-            r = flow_b_f213(nanx_add(g1, flow_b_neg(c[prv])), scale, d[cur]);
+            r = flow_b_f213(nanx_add(fwd_diff, flow_b_neg(c[prv])), scale, d[cur]);
         } else {
-            r = flow_b_n213(nanx_sub(c[prv], g1), scale, d[cur]);
+            r = flow_b_n213(nanx_sub(c[prv], fwd_diff), scale, d[cur]);
         }
     } else {
         if (vec != 0) {
-            r = flow_b_f213(nanx_add(g1, nanx_sub(c[cur], c[prv])), scale, d[cur]);
+            r = flow_b_f213(nanx_add(fwd_diff, nanx_sub(c[cur], c[prv])), scale, d[cur]);
         } else {
-            float t = flow_b_f213(g1, scale, d[cur]);
+            float t = flow_b_f213(fwd_diff, scale, d[cur]);
             r = flow_b_f213(nanx_sub(c[cur], c[prv]), scale, t);
         }
     }
@@ -413,12 +413,12 @@ __kernel void flow_b_sum_rows(__global const float* data, __global float* dst, i
                 }
             }
         }
-        float x0 = nanx_add(y[0], y[4]);
-        float x1 = nanx_add(y[1], y[5]);
-        float x2 = nanx_add(y[2], y[6]);
-        float x3 = nanx_add(y[3], y[7]);
-        float pair_even = nanx_add(x0, x2);
-        float pair_odd = nanx_add(x1, x3);
+        float pair_a = nanx_add(y[0], y[4]);
+        float pair_b = nanx_add(y[1], y[5]);
+        float pair_c = nanx_add(y[2], y[6]);
+        float pair_d = nanx_add(y[3], y[7]);
+        float pair_even = nanx_add(pair_a, pair_c);
+        float pair_odd = nanx_add(pair_b, pair_d);
         total = nanx_add(nanx_add(pair_even, pair_odd), total);
     }
     dst[0] = total;
@@ -442,10 +442,10 @@ __kernel void flow_b_scan_range(__global const float* pl, __global float* dst, i
                 if (k >= pw2) {
                     break;
                 }
-                float x0 = pl[row_base + 2 * k];
-                if (mn > x0) { mn = x0; } else if (x0 > mx) { mx = x0; }
-                float x1 = pl[row_base + 2 * k + 1];
-                if (mn > x1) { mn = x1; } else if (x1 > mx) { mx = x1; }
+                float pair_a = pl[row_base + 2 * k];
+                if (mn > pair_a) { mn = pair_a; } else if (pair_a > mx) { mx = pair_a; }
+                float pair_b = pl[row_base + 2 * k + 1];
+                if (mn > pair_b) { mn = pair_b; } else if (pair_b > mx) { mx = pair_b; }
             }
             if ((uint)w > 2u * (uint)pw2) {
                 float xt = pl[(long)y * (long)pitch + 2 * (long)pw2];
@@ -580,15 +580,15 @@ float flow_b_kv(float t, int down) {
     return 0x0p+0f;
 }
 
-/* lane reduction ((l0+l4)+(l2+l6)) + ((l1+l5)+(l3+l7)) */
+/* lane reduction ((lane0+lane4)+(lane2+lane6)) + ((l1+lane5)+(lane3+lane7)) */
 float flow_b_reduce8(float* l) {
-    float a0 = nanx_add(l[0], l[4]);
-    float a1 = nanx_add(l[1], l[5]);
-    float a2 = nanx_add(l[2], l[6]);
-    float a3 = nanx_add(l[3], l[7]);
-    float b0 = nanx_add(a0, a2);
-    float b1 = nanx_add(a1, a3);
-    return nanx_add(b0, b1);
+    float pair0 = nanx_add(l[0], l[4]);
+    float pair1 = nanx_add(l[1], l[5]);
+    float pair2 = nanx_add(l[2], l[6]);
+    float pair3 = nanx_add(l[3], l[7]);
+    float quad0 = nanx_add(pair0, pair2);
+    float quad1 = nanx_add(pair1, pair3);
+    return nanx_add(quad0, quad1);
 }
 
 /* resample_h, output element x of row (row_start + r). tbl holds (lo, hi, start_t bits) per output x, computed on the host with the

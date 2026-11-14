@@ -35,50 +35,50 @@ fn a_old_plus_zero_new_minus_zero_keeps_plus_zero() {
     if !effects_vecdir::have_all(&["fx_eval/data", "fx_eval/data/TEST_DROP_SHADOW.txt"]) {
         return;
     }
-    let (b1, h1) = run(None, "shadow_opacity", Some(0.0));
-    assert_eq!(b1, PZ);
-    let (b2, _) = run(Some(h1), "shadow_opacity", Some(-0.0));
-    assert_eq!(b2, PZ);
+    let (first_bits, first_state) = run(None, "shadow_opacity", Some(0.0));
+    assert_eq!(first_bits, PZ);
+    let (second_bits, _) = run(Some(first_state), "shadow_opacity", Some(-0.0));
+    assert_eq!(second_bits, PZ);
 }
 #[test]
 fn b_old_one_new_minus_zero_stores_minus_zero() {
     if !effects_vecdir::have_all(&["fx_eval/data", "fx_eval/data/TEST_DROP_SHADOW.txt"]) {
         return;
     }
-    let (b1, h1) = run(None, "shadow_opacity", Some(1.0));
-    assert_eq!(b1, 0x3f80_0000);
-    let (b2, _) = run(Some(h1), "shadow_opacity", Some(-0.0));
-    assert_eq!(b2, NZ);
+    let (first_bits, first_state) = run(None, "shadow_opacity", Some(1.0));
+    assert_eq!(first_bits, 0x3f80_0000);
+    let (second_bits, _) = run(Some(first_state), "shadow_opacity", Some(-0.0));
+    assert_eq!(second_bits, NZ);
 }
 #[test]
 fn c_old_minus_zero_new_negative_clamps_to_plus_zero_keeps_minus_zero() {
     if !effects_vecdir::have_all(&["fx_eval/data", "fx_eval/data/TEST_DROP_SHADOW.txt"]) {
         return;
     }
-    let (_, h1) = run(None, "shadow_opacity", Some(-0.0));
-    let (b2, _) = run(Some(h1), "shadow_opacity", Some(-0.5));
-    assert_eq!(b2, NZ);
+    let (_, first_state) = run(None, "shadow_opacity", Some(-0.0));
+    let (second_bits, _) = run(Some(first_state), "shadow_opacity", Some(-0.5));
+    assert_eq!(second_bits, NZ);
 }
 #[test]
 fn d_old_minus_zero_new_plus_zero_keeps_minus_zero() {
     if !effects_vecdir::have_all(&["fx_eval/data", "fx_eval/data/TEST_DROP_SHADOW.txt"]) {
         return;
     }
-    let (_, h1) = run(None, "shadow_opacity", Some(-0.0));
-    let (b2, _) = run(Some(h1), "shadow_opacity", Some(0.0));
-    assert_eq!(b2, NZ);
+    let (_, first_state) = run(None, "shadow_opacity", Some(-0.0));
+    let (second_bits, _) = run(Some(first_state), "shadow_opacity", Some(0.0));
+    assert_eq!(second_bits, NZ);
 }
 #[test]
 fn e_nan_is_stored_in_both_directions() {
     if !effects_vecdir::have_all(&["fx_eval/data", "fx_eval/data/TEST_DROP_SHADOW.txt"]) {
         return;
     }
-    let (b1, h1) = run(None, "shadow_opacity", Some(f32::NAN));
-    assert!(f32::from_bits(b1).is_nan());
-    let (b2, h2) = run(Some(h1), "shadow_opacity", Some(0.0));
-    assert_eq!(b2, PZ);
-    let (b3, _) = run(Some(h2), "shadow_opacity", Some(f32::NAN));
-    assert!(f32::from_bits(b3).is_nan());
+    let (first_bits, first_state) = run(None, "shadow_opacity", Some(f32::NAN));
+    assert!(f32::from_bits(first_bits).is_nan());
+    let (second_bits, second_state) = run(Some(first_state), "shadow_opacity", Some(0.0));
+    assert_eq!(second_bits, PZ);
+    let (third_bits, _) = run(Some(second_state), "shadow_opacity", Some(f32::NAN));
+    assert!(f32::from_bits(third_bits).is_nan());
 }
 #[test]
 fn f_sentinel_bounds_are_not_enforced() {

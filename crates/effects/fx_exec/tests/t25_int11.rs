@@ -112,12 +112,12 @@ fn t25_opacity_loop_bcj2_blur_color() {
     assert_ne!(without.ctx_postdiv_cell, 1, "without the loop the arm must fail the recorded cell");
     // the owner cells themselves (setup_arm) equal record
     let o = fx_exec::owner_loop::setup_arm(false, false, &[fx_exec::owner_loop::ParamView { name: "opacity".into(), kind: 4, value: 1.0 }]).unwrap();
-    assert_eq!((o.ae32_ready_c, o.ae32_ready_d, o.late_out_c, o.late_out_d), (1, 0, 1, 1));
+    assert_eq!((o.claim_setup_first, o.claim_setup_second, o.late_out_c, o.late_out_d), (1, 0, 1, 1));
     // the value classes of rule 4: m = 0 (answer 1) gives 1358 = 3 and v = 0; m = 2 (answer 3) v = 0; Diffuse (no opacity parameter) v = 0
-    let m0 = owner_arm(&OwnerArm { opacity_bits: Some(0.0f32.to_bits()), ..rec });
-    assert_eq!(m0, ArmCells { ctx_gate_a: 0, ctx_gate_b: 1, ctx_postdiv_cell: 0 });
-    let m2 = owner_arm(&OwnerArm { opacity_bits: Some(2.0f32.to_bits()), ..rec });
-    assert_eq!(m2, ArmCells { ctx_gate_a: 0, ctx_gate_b: 1, ctx_postdiv_cell: 0 });
+    let owner_arm_0 = owner_arm(&OwnerArm { opacity_bits: Some(0.0f32.to_bits()), ..rec });
+    assert_eq!(owner_arm_0, ArmCells { ctx_gate_a: 0, ctx_gate_b: 1, ctx_postdiv_cell: 0 });
+    let owner_arm_2 = owner_arm(&OwnerArm { opacity_bits: Some(2.0f32.to_bits()), ..rec });
+    assert_eq!(owner_arm_2, ArmCells { ctx_gate_a: 0, ctx_gate_b: 1, ctx_postdiv_cell: 0 });
     assert_eq!(owner_arm(&OwnerArm { opacity_bits: None, ..rec }), ArmCells { ctx_gate_a: 0, ctx_gate_b: 1, ctx_postdiv_cell: 0 });
     // bit 2 set: the loop leaves v = 0
     assert_eq!(owner_arm(&OwnerArm { owner_arm_bit2: true, ..rec }).ctx_postdiv_cell, 0);

@@ -22,8 +22,8 @@ fn one(a: Operand, b: Operand, t: Operand) -> u32 {
 #[test]
 fn fresh_nan_words_are_the_x86_words() {
     let inf = f32::INFINITY;
-    let bp = [[0.5f32]];
-    let bs: Vec<&[f32]> = bp.iter().map(|x| &x[..]).collect();
+    let b_vals = [[0.5f32]];
+    let bs: Vec<&[f32]> = b_vals.iter().map(|x| &x[..]).collect();
     let mut got: Vec<u32> = Vec::new();
     // A constant, B plane, T constant: B + fma(-t, A, A)
     for (a, t) in [(inf, 0.5), (-inf, 1.0), (inf, 0.25)] {

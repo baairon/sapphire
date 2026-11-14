@@ -17,8 +17,8 @@ fn run(tag: &str, variant: &[&str], pd_xy: (&str, &str), sets: &[&str]) -> (Opti
         let x = ((k * 7 + 3) % 31) as f32 / 31.0;
         src.extend_from_slice(&x.to_le_bytes());
     }
-    let sp = d.join("src.u32");
-    std::fs::write(&sp, src).unwrap();
+    let src_path = d.join("src.u32");
+    std::fs::write(&src_path, src).unwrap();
     let pp = d.join("prior.u32");
     std::fs::write(&pp, vec![0u8; n * 16]).unwrap();
     let os = d.join("o").to_str().unwrap().to_string();
@@ -30,7 +30,7 @@ fn run(tag: &str, variant: &[&str], pd_xy: (&str, &str), sets: &[&str]) -> (Opti
     if !pd_xy.1.is_empty() {
         cmd.args(["--xy-base-list", pd_xy.1]);
     }
-    cmd.args(["--ae32-src", &format!("Source={}", sp.display()), "--ae32-prior", pp.to_str().unwrap(), "--ae32-out", &format!("{}.out.u32", os)]);
+    cmd.args(["--ae32-src", &format!("Source={}", src_path.display()), "--ae32-prior", pp.to_str().unwrap(), "--ae32-out", &format!("{}.out.u32", os)]);
     cmd.args(["--geom", "-0.5,63.5,1.0,0.0,-16.5,0,0", "--host-frame", "0", "--host-param", "blur_mask=0", "--host-param", "blur_mocha_mask=0"]);
     cmd.args(["--host-param", "shift_mocha_mask=0,0", "--set", "invert_mask=0", "--set", "mask_use=0"]);
     // the variant options replace the defaults of the 4-plane arrangement

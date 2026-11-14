@@ -18,7 +18,7 @@
 use crate::backend::NodeCall;
 use crate::kernels;
 use crate::types::{Arg, Image, KParams};
-use fx_device::cl::Arg as ClArg;
+use fx_device::ocl::Arg as ClArg;
 use fx_device::selfcheck::{adversarial_f32, compare_f32, Mismatch, NanPayloads, Tally};
 use fx_device::{DevError, DevImage, Session};
 use crate::device_ops_warp as warp;
@@ -322,7 +322,7 @@ pub fn selfcheck(session: &Arc<Session>, op: &DeviceOp) -> Result<Tally, String>
 /// shape outside the op's coverage, for example a constant mode word set to a NaN); any bit difference is still a mismatch.
 fn check_case(session: &Arc<Session>, op: &DeviceOp, case: &SelfCase, twin: bool, tally: &mut Tally) -> Result<(), String> {
     {
-        let kp = case.kp.unwrap_or_else(KParams::standin);
+        let kp = case.kp.unwrap_or_else(KParams::host_defaults);
         let n = case.dims.0 * case.dims.1;
         let call = NodeCall { idx: 0, class: op.class, tag: case.tag, n, dims: case.dims, kp: &kp };
         let total = case.args.len() + case.consts.len();

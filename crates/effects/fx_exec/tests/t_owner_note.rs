@@ -83,14 +83,14 @@ fn owner_opacity_note_prints_on_an_unbound_row_with_a_set() {
     if !effects_vecdir::have_all(&["record_extract/programs/programs.tsv"]) {
         return;
     }
-    let (rc0, err0, meta0, words0) = run("noset", &[]);
-    assert_eq!(rc0, Some(0), "{}", err0);
+    let (exit_code_first, err0, meta0, words0) = run("noset", &[]);
+    assert_eq!(exit_code_first, Some(0), "{}", err0);
     assert!(meta0.lines().any(|l| l.starts_with(NOTE_OUT) && l.contains("output_opacity")), "{}", meta0);
-    let (rc1, err1, meta1, words1) = run("withset", &["--set", "output_opacity=0"]);
-    assert_eq!(rc1, Some(0), "{}", err1);
-    let n0: Vec<&str> = meta0.lines().filter(|l| l.starts_with(NOTE_OUT) && l.contains("output_opacity")).collect();
-    let n1: Vec<&str> = meta1.lines().filter(|l| l.starts_with(NOTE_OUT) && l.contains("output_opacity")).collect();
-    assert_eq!(n1.len(), 1, "{}", meta1);
-    assert_eq!(n0, n1);
+    let (exit_code_second, err1, meta1, words1) = run("withset", &["--set", "output_opacity=0"]);
+    assert_eq!(exit_code_second, Some(0), "{}", err1);
+    let note_lines: Vec<&str> = meta0.lines().filter(|l| l.starts_with(NOTE_OUT) && l.contains("output_opacity")).collect();
+    let flag_1: Vec<&str> = meta1.lines().filter(|l| l.starts_with(NOTE_OUT) && l.contains("output_opacity")).collect();
+    assert_eq!(flag_1.len(), 1, "{}", meta1);
+    assert_eq!(note_lines, flag_1);
     assert!(!words0.is_empty() && words0 == words1, "no word change");
 }

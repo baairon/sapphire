@@ -60,7 +60,7 @@ pub struct Assumption {
 pub fn assumptions() -> Vec<Assumption> {
     vec![
         Assumption { id: "A1", tier: "ROUTE", text: "the block getter is the base slot 45 (blocks[mode], stride 0x60 from [this+0x38]); the real getter runs in the emulator run" },
-        Assumption { id: "A2", tier: "SEMANTIC-XF", text: "0x553e50 is the executing body of the class (slot 52 is the only overridden pixel slot, no slot 53/54, no member pass pointer); its caller and the meaning of this+0x40 (argument channel count) are INFERRED" },
+        Assumption { id: "A2", tier: "SEMANTIC-XF", text: " is the executing body of the class (slot 52 is the only overridden pixel slot, no slot 53/54, no member pass pointer); its caller and the meaning of this+0x40 (argument channel count) are INFERRED" }, // origin: 0x553e50
         Assumption { id: "A3", tier: "PARAM-UNCAPTURED", text: "pool flag of the plane service: Host.in_pool, both values run" },
         Assumption { id: "A4", tier: "PARAM-UNCAPTURED", text: "parameter block contents are written by the argument binding; explicit inputs" },
         Assumption { id: "A5", tier: "NOT REBUILT", text: "rect modes of the plane service (roi.mode != 0): record only; the CPU route only (the GPU twin is not ported)" },

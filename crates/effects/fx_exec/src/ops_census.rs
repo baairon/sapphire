@@ -25,12 +25,12 @@ fn by_idx(cp: &CompiledProgram) -> BTreeMap<usize, &PlanNode> {
 
 /// A node executed as a run-primitive (the executor's own test, exec.rs: func or auto, not a constant).
 pub fn is_run_primitive(n: &PlanNode) -> bool {
-    (n.kind == "func" || n.kind == "auto") && !(n.b160 || n.folded)
+    (n.kind == "func" || n.kind == "auto") && !(n.is_const_node || n.folded)
 }
 
 /// An operand that is not a plane: a constant node, a folded node or an alias to a constant .
 pub fn is_non_plane(n: &PlanNode) -> bool {
-    n.kind == "const" || n.b160 || n.folded
+    n.kind == "const" || n.is_const_node || n.folded
 }
 
 fn lanes_text(n: &PlanNode) -> String {

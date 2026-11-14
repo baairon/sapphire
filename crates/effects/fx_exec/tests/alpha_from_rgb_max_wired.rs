@@ -22,7 +22,7 @@ fn four_channel_input_gives_copies_and_the_maximum() {
     assert_eq!(counts, vec![4, 1, 4]);
     let tag = Tables::embedded().select_counts("alpha_from_rgb_max", &counts);
     assert_eq!(tag, 4);
-    let out = kernels::run_any("alpha_from_rgb_max", tag, &args, 3, (3, 1), &KParams::standin()).unwrap().into_image().unwrap();
+    let out = kernels::run_any("alpha_from_rgb_max", tag, &args, 3, (3, 1), &KParams::host_defaults()).unwrap().into_image().unwrap();
     assert_eq!(out.planes.len(), 4);
     assert_eq!(out.planes[0], vec![0.25, 2.0, -1.0]);
     assert_eq!(out.planes[1], vec![0.5, 1.0, -3.0]);
@@ -35,7 +35,7 @@ fn amount_scales_the_maximum_and_zero_clears_it() {
     let img = Image { n: 2, planes: vec![vec![1.0, 2.0], vec![3.0, 1.0], vec![2.0, 0.5], vec![0.0, 0.0]] };
     let run = |s: f32| {
         let args = [Arg::Img(&img), cst(&[s]), cst(&[0.0, 0.0, 0.0, 0.0])];
-        kernels::run_any("alpha_from_rgb_max", 4, &args, 2, (2, 1), &KParams::standin()).unwrap().into_image().unwrap().planes[3].clone()
+        kernels::run_any("alpha_from_rgb_max", 4, &args, 2, (2, 1), &KParams::host_defaults()).unwrap().into_image().unwrap().planes[3].clone()
     };
     assert_eq!(run(0.5), vec![1.5, 1.0]);
     assert_eq!(run(0.0), vec![0.0, 0.0]);
@@ -45,5 +45,5 @@ fn amount_scales_the_maximum_and_zero_clears_it() {
 fn other_output_counts_are_refused() {
     let img = Image { n: 1, planes: vec![vec![1.0], vec![1.0], vec![1.0], vec![1.0]] };
     let args = [Arg::Img(&img), cst(&[1.0]), cst(&[0.0, 0.0, 0.0])];
-    assert!(kernels::run_any("alpha_from_rgb_max", 3, &args, 1, (1, 1), &KParams::standin()).is_err());
+    assert!(kernels::run_any("alpha_from_rgb_max", 3, &args, 1, (1, 1), &KParams::host_defaults()).is_err());
 }

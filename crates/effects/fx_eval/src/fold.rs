@@ -73,8 +73,8 @@ pub fn args_equal(a: &[ArgView2], i: usize, j: usize) -> bool {
 pub fn is_complex_one(a: &[ArgView2], i: usize) -> bool {
     match arg(a, i) {
         Some(x) if x.is_const => {
-            let l0 = x.lanes[0] as f64;
-            if !(ONE_HI > l0 && l0 > ONE_LO) {
+            let first_lane = x.lanes[0] as f64;
+            if !(ONE_HI > first_lane && first_lane > ONE_LO) {
                 return false;
             }
             if x.n < 2 {
@@ -249,9 +249,9 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
         // READ: scale_rgb slot 38 . cnt0 = [this] (arg 0 channels), cnt1 = [this] (arg 1 channels).
         // If cnt0 is odd or cnt0 == cnt1: arg 0 zero -> 0, arg 1 zero -> 1. Then: arg 1 one -> 0, arg 0 one -> 1.
         "scale_rgb" => {
-            let c0 = a.first().and_then(|x| x.elnum).unwrap_or(-99);
+            let elnum_first = a.first().and_then(|x| x.elnum).unwrap_or(-99);
             let c1 = a.get(1).and_then(|x| x.elnum).unwrap_or(-98);
-            if (c0 & 1) != 0 || c0 == c1 {
+            if (elnum_first & 1) != 0 || elnum_first == c1 {
                 if z(a, 0) {
                     return Some(0);
                 }
@@ -319,15 +319,15 @@ pub fn collapse_arm(class: &str, a: &[ArgView2], out_el: Option<i32>) -> Option<
         // READ: cmult slot 38, c0 = [this], c1 = [this]: arg 1 complex-one and c0 == 2 -> 0;
         // arg 0 complex-one and c1 == 2 -> 1; arg 0 zero and c0 == 2 -> 0; arg 1 zero and c0 == 2 -> 1.
         "cmult" => {
-            let c0 = a.first().and_then(|x| x.elnum).unwrap_or(-99);
+            let elnum_first = a.first().and_then(|x| x.elnum).unwrap_or(-99);
             let c1 = a.get(1).and_then(|x| x.elnum).unwrap_or(-98);
-            if is_complex_one(a, 1) && c0 == 2 {
+            if is_complex_one(a, 1) && elnum_first == 2 {
                 Some(0)
             } else if is_complex_one(a, 0) && c1 == 2 {
                 Some(1)
-            } else if z(a, 0) && c0 == 2 {
+            } else if z(a, 0) && elnum_first == 2 {
                 Some(0)
-            } else if z(a, 1) && c0 == 2 {
+            } else if z(a, 1) && elnum_first == 2 {
                 Some(1)
             } else {
                 None
@@ -455,7 +455,7 @@ fn lane(a: &ArgView2, i: usize) -> f32 {
 }
 
 /// complex view of an argument: two lanes are (re, im), a scalar is (x, 0) (MEASURED: `cmult alpha I` gives (0, alpha))
-fn cx(a: &ArgView2) -> (f32, f32) {
+fn centre_x(a: &ArgView2) -> (f32, f32) {
     (a.lanes[0], if a.n >= 2 { a.lanes[1] } else { 0.0 })
 }
 
@@ -490,21 +490,21 @@ pub fn v3_form(a: &[ArgView2], out_el: i32) -> &'static str {
     if a.len() < 2 {
         return "UNMEASURED-FORM";
     }
-    let k1 = a[1].n.clamp(1, 4);
-    let a1_zero = (0..k1).all(|j| a[1].lanes[j].to_bits() == 0);
-    let a1_equal = (0..k1).all(|j| a[1].lanes[j].to_bits() == a[1].lanes[0].to_bits());
+    let lane_count = a[1].n.clamp(1, 4);
+    let second_arg_zero = (0..lane_count).all(|j| a[1].lanes[j].to_bits() == 0);
+    let second_arg_uniform = (0..lane_count).all(|j| a[1].lanes[j].to_bits() == a[1].lanes[0].to_bits());
     match n {
         4 => "M4",
-        3 if a[0].n <= 1 && a1_zero => "M3Z",
+        3 if a[0].n <= 1 && second_arg_zero => "M3Z",
         // widening: any 3-lane argument 0 (bindings A and B, distinct lanes); argument 1 other than 1.0 stays refused
-        3 if a[0].n == 3 && a1_equal && a[1].lanes[0].to_bits() == 0x3f80_0000 => "M3V",
+        3 if a[0].n == 3 && second_arg_uniform && a[1].lanes[0].to_bits() == 0x3f80_0000 => "M3V",
         // FLD3-FORM: n = 3, a one-lane argument 0 and a one-lane argument 1. records (Blur_Color_Autogen node 67; brightness 1.0,
         // 1.21 and 1.21 with scale_opacity 1.0, 1.0 and 0.6875): the folded constant is argument 0 broadcast to lanes 0 to 2 and argument 1 in lane 3.
         3 if a[0].n <= 1 && a[1].n <= 1 && !cfg!(feature = "fld3_form_kept_mut") => "M3B",
         // FLD3M (node 68 records gA to gD): n = 1 and one-lane arguments: the folded constant is the pair [a0 a1] (measured [1 1], [1 0.6875] and
         // [1.21 0.6875]; lane 0 is argument 0 (brightness), lane 1 argument 1 (scale_opacity)). Any other shape stays refused.
         1 if a[0].n <= 1 && a[1].n <= 1 && !cfg!(feature = "fld3m_kept_mut") => "M1P",
-        2 if a[0].n <= 1 && (a[1].n <= 1 || a1_equal) => "M2S",
+        2 if a[0].n <= 1 && (a[1].n <= 1 || second_arg_uniform) => "M2S",
         _ => "UNMEASURED-FORM",
     }
 }
@@ -519,10 +519,10 @@ thread_local! {
 pub fn v3_note(id: usize, a: &[ArgView2], out_el: i32, res: &[u32; 4]) {
     let n = out_el.clamp(1, 4) as usize;
     let a0n = a.first().map(|x| x.n).unwrap_or(0);
-    let a1: Vec<u32> = a.get(1).map(|x| (0..x.n.clamp(1, 4)).map(|j| x.lanes[j].to_bits()).collect()).unwrap_or_default();
+    let second_arg_bits: Vec<u32> = a.get(1).map(|x| (0..x.n.clamp(1, 4)).map(|j| x.lanes[j].to_bits()).collect()).unwrap_or_default();
     let f = v3_form(a, out_el);
-    let a0: Vec<u32> = a.first().map(|x| (0..x.n.clamp(1, 4)).map(|j| x.lanes[j].to_bits()).collect()).unwrap_or_default();
-    V3_FOLDS.with(|v| v.borrow_mut().push((id, n, a0n, a1, *res, f, a0)));
+    let first_arg_bits: Vec<u32> = a.first().map(|x| (0..x.n.clamp(1, 4)).map(|j| x.lanes[j].to_bits()).collect()).unwrap_or_default();
+    V3_FOLDS.with(|v| v.borrow_mut().push((id, n, a0n, second_arg_bits, *res, f, first_arg_bits)));
 }
 
 /// The folds noted since the last take, reset.
@@ -532,7 +532,7 @@ pub fn v3_take() -> Vec<(usize, usize, usize, Vec<u32>, [u32; 4], &'static str, 
 
 /// The value of one shake_shift node at constant arguments (None when fewer than twelve arguments are bound or the weight table has no zero entry).
 pub fn shake_shift_value(a: &[ArgView2]) -> Option<f32> {
-    use shake_shift::body::{shake_shift_body, Config, Frame, Globals, Params, TAB_LEN};
+    use shake_shift::body::{shake_shift_body, Config, Globals, Params, TAB_LEN};
     if a.len() < 12 {
         return None;
     }
@@ -546,13 +546,12 @@ pub fn shake_shift_value(a: &[ArgView2]) -> Option<f32> {
         return None;
     }
     let x = |k: usize| a[k].lanes[0];
-    let p = Params { p4c: x(0), p7c: x(1), pac: x(2), pdc: x(3), p10c: x(4), p13c: x(5), p16c: x(6), p19c: x(7), p1cc: x(8), p1fc: x(9), p22c: x(10), p25c: x(11) };
+    let p = Params { seed_x: x(0), time: x(1), amp_x: x(2), rate_x: x(3), sine_amp: x(4), sine_freq: x(5), amp_y: x(6), rate_y: x(7), seed_y: x(8), route: x(9), limit_gap: x(10), gain: x(11) };
     // the entry past the table holds zero in the original
     let mut g = Globals { guard: 0, tab: vec![[0; 3]; TAB_LEN], tail: [0; 3], weights: weights.clone(), scale: *scale };
     let mut sv = shake_shift::RefServices::new();
-    let mut fr = Frame::new();
     // a table index outside the modelled range is a refusal to fold, not a failure of the compile
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| shake_shift_body(&p, &Config::default(), &mut g, &mut sv, &mut fr))).ok()
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| shake_shift_body(&p, &Config::default(), &mut g, &mut sv))).ok()
 }
 
 fn noise_tables() -> &'static warp_noise::Tables {
@@ -613,19 +612,19 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
             }
         }
         FoldKind::Unary => {
-            let x0 = a.first()?;
+            let first_arg = a.first()?;
             for i in 0..n {
-                out[i] = math1(class, lane(x0, i));
+                out[i] = math1(class, lane(first_arg, i));
             }
         }
         FoldKind::Broadcast => {
-            let x0 = a.first()?;
+            let first_arg = a.first()?;
             if coerce_old() {
                 for i in 0..n {
-                    out[i] = lane(x0, i);
+                    out[i] = lane(first_arg, i);
                 }
             } else {
-                out = coerce_lanes(class, x0, n);
+                out = coerce_lanes(class, first_arg, n);
             }
         }
         FoldKind::Concat => {
@@ -742,25 +741,25 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
         }
         FoldKind::Complex => match class {
             "cmult" => {
-                let ((ar, ai), (br, bi)) = (cx(a.first()?), cx(a.get(1)?));
+                let ((ar, ai), (br, bi)) = (centre_x(a.first()?), centre_x(a.get(1)?));
                 out[0] = nx_sub(nx_mul(ar, br), nx_mul(ai, bi));
                 out[1] = nx_add(nx_mul(ar, bi), nx_mul(ai, br));
             }
             "cdiv" => {
-                let ((ar, ai), (br, bi)) = (cx(a.first()?), cx(a.get(1)?));
+                let ((ar, ai), (br, bi)) = (centre_x(a.first()?), centre_x(a.get(1)?));
                 let d = nx_add(nx_mul(br, br), nx_mul(bi, bi));
                 out[0] = nx_div(nx_add(nx_mul(ar, br), nx_mul(ai, bi)), d);
                 out[1] = nx_div(nx_sub(nx_mul(ai, br), nx_mul(ar, bi)), d);
             }
             "cexp" => {
-                let (re, im) = cx(a.first()?);
+                let (re, im) = centre_x(a.first()?);
                 let e = crate::detmath::exp(re);
                 let (s, c) = crate::detmath::sin_cos(im);
                 out[0] = nx_mul(e, c);
                 out[1] = nx_mul(e, s);
             }
             _ => {
-                let (re, im) = cx(a.first()?);
+                let (re, im) = centre_x(a.first()?);
                 out[0] = crate::detmath::ln(nx_sqrt(nx_add(nx_mul(re, re), nx_mul(im, im))));
                 out[1] = crate::detmath::atan2(im, re);
             }
@@ -869,8 +868,8 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
                 }
             }
             "slow_in_out" => {
-                let (t, si, so, fl) = (a.first()?, a.get(1)?, a.get(2)?, a.get(3)?);
-                out[0] = slow_in_out(t.lanes[0], si.lanes[0], so.lanes[0], fl.lanes[0].to_bits() != 0);
+                let (t, slow_in_arg, so, fl) = (a.first()?, a.get(1)?, a.get(2)?, a.get(3)?);
+                out[0] = slow_in_out(t.lanes[0], slow_in_arg.lanes[0], so.lanes[0], fl.lanes[0].to_bits() != 0);
             }
             // shake_shift at constant arguments: the ported render body with the weight table, scale and hash table built by the crate; the twelve scalar arguments are in the order of the body's parameter slots
             "shake_shift" => {
@@ -949,7 +948,7 @@ pub fn coerce_lanes(class: &str, x: &ArgView2, out_n: usize) -> [f32; 4] {
         o[0] = if n % 2 == 1 { s(0) } else { s(n - 1) };
         return o;
     }
-    let a1 = class == "coerce_up_a1" || class == "coerce_to_v4";
+    let e_cell_class = class == "coerce_up_a1" || class == "coerce_to_v4";
     let m = out_n.clamp(1, 4);
     if n >= m {
         for i in 0..m {
@@ -957,7 +956,7 @@ pub fn coerce_lanes(class: &str, x: &ArgView2, out_n: usize) -> [f32; 4] {
         }
     } else if n == 1 {
         // a1 and v4: E_CELL_A (rows (1,2) and (1,4)); row (1,3) is D_CELL_A in every class
-        let e_cell_a = a1 && (m == 2 || m == 4);
+        let e_cell_a = e_cell_class && (m == 2 || m == 4);
         for i in 0..m {
             o[i] = if e_cell_a && i == m - 1 { 1.0 } else { s(0) };
         }

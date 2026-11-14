@@ -11,7 +11,7 @@ use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use crate::device_ops_neighbourhood::{blur_dev, cst, edge_of, frame_ok, img, is_const, lane, plane_channels, BlurJob};
 use crate::kernels2::cvt_i32;
 use crate::types::{Image, KParams};
-use fx_device::cl::Arg as ClArg;
+use fx_device::ocl::Arg as ClArg;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
 use std::sync::Arc;
@@ -30,7 +30,7 @@ fn edge_accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
         return Err("width 1: the body reads one float past the plane (host memory)");
     }
     match plane_channels(&a[0]) {
-        Some(ch) if ch >= 1 => {}
+        Some(chan) if chan >= 1 => {}
         Some(_) => return Err("fewer channels than the combination tag"),
         None => return Err("the source is not a plain image"),
     }
@@ -129,33 +129,33 @@ fn edge_corpus() -> Vec<SelfCase> {
         (0.9, -2.0, 1.0, 0, 0, 2.0),
     ];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS_EDGE.iter().enumerate() {
+    for (dim_idx, &(w, h)) in DIMS_EDGE.iter().enumerate() {
         let n = w * h;
-        for (si, p) in sets.iter().enumerate() {
+        for (set_idx, p) in sets.iter().enumerate() {
             // small frames take only the pass-through blur; the others every set
-            if (w <= 3 || h == 1) && si >= 3 {
+            if (w <= 3 || h == 1) && set_idx >= 3 {
                 continue;
             }
-            if n > 2000 && (si + di) % 2 == 1 {
+            if n > 2000 && (set_idx + dim_idx) % 2 == 1 {
                 continue;
             }
             for kind in 0..3usize {
-                if kind == 2 && si % 2 == 1 {
+                if kind == 2 && set_idx % 2 == 1 {
                     continue;
                 }
                 let plane = match kind {
-                    0 => plain_plane(n, di * 17 + si),
-                    1 => special_plane(n, di * 17 + si),
-                    _ => nasty_plane(n, di * 17 + si),
+                    0 => plain_plane(n, dim_idx * 17 + set_idx),
+                    1 => special_plane(n, dim_idx * 17 + set_idx),
+                    _ => nasty_plane(n, dim_idx * 17 + set_idx),
                 };
-                let mut kp = KParams::standin();
+                let mut kp = KParams::host_defaults();
                 kp.blur_edge = p.3;
                 kp.blur_render_scale = p.4;
                 if p.5 != 0.0 {
                     kp.host_aspect = p.5;
                 }
                 out.push(SelfCase {
-                    name: format!("{w}x{h} set {si} kind {kind}"),
+                    name: format!("{w}x{h} set {set_idx} kind {kind}"),
                     dims: (w, h),
                     tag: 1,
                     args: vec![Image { n, planes: vec![plane] }],

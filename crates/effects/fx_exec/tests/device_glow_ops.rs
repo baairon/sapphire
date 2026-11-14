@@ -65,8 +65,8 @@ const MUTANTS: &[(&str, &str, &str)] = &[
     ("overlay_ext_b_no_neg", "float nd = -dd;", "float nd = dd;"),
     ("overlay_ext_b_low_plain", "r = x + x;", "r = x;"),
     ("overlay_ext_a_max_swap", "r = (x > one) ? x : one;", "r = (one > x) ? one : x;"),
-    ("afrm_max_operand_order", "float m = (x0 > x1) ? x0 : x1;", "float m = (x1 > x0) ? x1 : x0;"),
-    ("afrm_max_ge", "m = (m > x2) ? m : x2;", "m = (m >= x2) ? m : x2;"),
+    ("afrm_max_operand_order", "float m = (first_sample > sum_1) ? first_sample : sum_1;", "float m = (sum_1 > first_sample) ? sum_1 : first_sample;"),
+    ("afrm_max_ge", "m = (m > third_sample) ? m : third_sample;", "m = (m >= third_sample) ? m : third_sample;"),
     ("afrm_select_arm", "(use_scale != 0u) ? nanx_mul(as_float(sbits), m) : m", "(use_scale != 0u) ? m : nanx_mul(as_float(sbits), m)"),
     ("afrm_mul_dropped", "out[i] = nanx_mul(as_float(sbits), c2[i]);", "out[i] = c2[i];"),
 ];

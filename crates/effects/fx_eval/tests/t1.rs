@@ -98,8 +98,8 @@ fn destructuring_count_mismatch_is_an_error() {
         "T",
     );
     assert!(e.unwrap_err().contains("Assignment has 3 variables, but rhs has 2 values."));
-    let e2 = gen(&["(def_effect T ( S ) ( ) ( ) ( let ( u = ( f S ) ) ( g u ( values S S ) ) ))"], "T");
-    assert!(e2.unwrap_err().contains("expected single value but got 2"));
+    let gen_err = gen(&["(def_effect T ( S ) ( ) ( ) ( let ( u = ( f S ) ) ( g u ( values S S ) ) ))"], "T");
+    assert!(gen_err.unwrap_err().contains("expected single value but got 2"));
 }
 
 #[test]
@@ -113,12 +113,12 @@ fn two_namespaces_head_versus_variable() {
     assert_eq!(g.nodes[1].label, "rotate");
     assert_eq!(r.children, vec![0, 1]);
     // and inside a defun the formal named rotate does not hide the head
-    let g2 = gen(
+    let parsed = gen(
         &["(defun d (rotate s) (rotate s rotate))", "(def_effect T ( S ) ( ) ( r = 3 ) ( d r S ))"],
         "T",
     )
     .unwrap();
-    let last = g2.nodes.last().unwrap();
+    let last = parsed.nodes.last().unwrap();
     assert_eq!(last.name, "rotate");
     assert_eq!(last.children, vec![0, 1]);
 }
@@ -231,9 +231,9 @@ fn hue_sat_bright_hand() {
         ("+", vec![21, 23]),
     ];
     assert_eq!(g.nodes.len(), want.len());
-    for (i, (n, (nm, ch))) in g.nodes.iter().zip(want.iter()).enumerate() {
+    for (i, (n, (nm, chan))) in g.nodes.iter().zip(want.iter()).enumerate() {
         assert_eq!(&n.name, nm, "node {}", i);
-        assert_eq!(&n.children, ch, "node {}", i);
+        assert_eq!(&n.children, chan, "node {}", i);
     }
     let lab = |i: usize| g.nodes[i].label.clone();
     assert_eq!(lab(1), "preserve_luma");

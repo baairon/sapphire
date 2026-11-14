@@ -4,7 +4,7 @@
 //! and single-edit mutants of the kernel source, each of which the compare must refuse. Prints NOT RUN without an OpenCL device
 //! (run with --test-threads=1: platform discovery is not thread safe).
 
-use fx_device::cl::Buffer;
+use fx_device::ocl::Buffer;
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{Backend as Handle, DevImage, DeviceKind, Session};
 use fx_exec::device_ops_flow_solve_a as dv;
@@ -100,9 +100,9 @@ struct Case {
     kind: usize,
     seed: u64,
     has_v: bool,
-    p0: u32,
-    p1: u32,
-    p2: u32,
+    p_first: u32,
+    p_middle: u32,
+    p_last: u32,
 }
 
 const SPECIAL_SCALARS: [u32; 12] = [
@@ -117,9 +117,9 @@ fn cases(k: K) -> Vec<Case> {
         K::Relax => vec![1199, 1200, 1201, 1202, 1217, 1260],
         _ => vec![],
     };
-    let f32_phases: Vec<u32> = vec![0, 4, 8, 12, 16, 20, 24, 28, 1, 2, 3, 6];
+    let fixed_phases: Vec<u32> = vec![0, 4, 8, 12, 16, 20, 24, 28, 1, 2, 3, 6];
     let nest_phases: Vec<u32> = (0..16).map(|i| i * 4).chain([1, 2, 6, 63]).collect();
-    let phases = if k == K::Relax { nest_phases } else { f32_phases };
+    let phases = if k == K::Relax { nest_phases } else { fixed_phases };
     widths.extend(&big);
     let pads = [0usize, 1, 3, 5];
     let mut out = Vec::new();
@@ -152,9 +152,9 @@ fn cases(k: K) -> Vec<Case> {
                         kind: (idx + rep) % 3,
                         seed: idx as u64 * 7919 + 13,
                         has_v,
-                        p0: SPECIAL_SCALARS[(idx / 2) % SPECIAL_SCALARS.len()],
-                        p1: SPECIAL_SCALARS[(idx / 3 + 1) % SPECIAL_SCALARS.len()],
-                        p2: EPS_SET[(idx / 7) % EPS_SET.len()],
+                        p_first: SPECIAL_SCALARS[(idx / 2) % SPECIAL_SCALARS.len()],
+                        p_middle: SPECIAL_SCALARS[(idx / 3 + 1) % SPECIAL_SCALARS.len()],
+                        p_last: EPS_SET[(idx / 7) % EPS_SET.len()],
                     });
                 }
             }
@@ -165,7 +165,7 @@ fn cases(k: K) -> Vec<Case> {
         for &w in &[907usize, 915, 1000] {
             for ph in [4u32, 8, 12, 16, 20] {
                 for rep in 0..4u64 {
-                    out.push(Case { k, w, h: 2, stride: w, row0: 0, rows: 1, phase: ph, kind: 4, seed: 90_000 + w as u64 * 31 + ph as u64 * 7 + rep, has_v: false, p0: 0, p1: 0, p2: 0 });
+                    out.push(Case { k, w, h: 2, stride: w, row0: 0, rows: 1, phase: ph, kind: 4, seed: 90_000 + w as u64 * 31 + ph as u64 * 7 + rep, has_v: false, p_first: 0, p_middle: 0, p_last: 0 });
                 }
             }
         }
@@ -187,7 +187,7 @@ fn down(img: &DevImage, which: &[usize]) -> Result<Vec<u32>, String> {
 fn run(s: &Arc<Session>, c: &Case, pool: &[f32], stub: bool) -> Pair {
     let n = c.h * c.stride;
     let sentinel = vec![f32::from_bits(SENTINEL); n];
-    let (w, h, st, r0, rows) = (c.w as i32, c.h as i32, c.stride as i32, c.row0 as i32, c.rows as i32);
+    let (w, h, st, row_start, rows) = (c.w as i32, c.h as i32, c.stride as i32, c.row0 as i32, c.rows as i32);
     let d = |i: u64| {
         if c.kind == 4 {
             // NaN dense in the first three columns of a row only (inside the aligned head, rows 1, phase 4 to 20), finite beyond: the head accumulation is the only NaN source
@@ -202,12 +202,12 @@ fn run(s: &Arc<Session>, c: &Case, pool: &[f32], stub: bool) -> Pair {
             let (a, b, cc, dd, e, f) = (d(0), d(1), d(2), d(3), d(4), d(5));
             let sh = Shape { width: w, stride: st, phase_bytes: c.phase };
             let mut out = sentinel.clone();
-            optical_flow_solve::fma_mix(&optical_flow_solve::MixIn { a: &a, b: &b, c: &cc, d: &dd, e: &e, f: &f }, &mut out, &sh, r0, rows);
+            optical_flow_solve::fma_mix(&optical_flow_solve::MixIn { a: &a, b: &b, c: &cc, d: &dd, e: &e, f: &f }, &mut out, &sh, row_start, rows);
             let dev = (|| {
                 let img = upload(s, &[&a, &b, &cc, &dd, &e, &f, &sentinel])?;
                 if !stub {
                     let p = |i: usize| img.plane(i);
-                    dv::fma_mix_dev(s, [p(0), p(1), p(2), p(3), p(4), p(5)], p(6), &sh, r0, rows).map_err(|e| e.to_string())?;
+                    dv::fma_mix_dev(s, [p(0), p(1), p(2), p(3), p(4), p(5)], p(6), &sh, row_start, rows).map_err(|e| e.to_string())?;
                 }
                 down(&img, &[6])
             })();
@@ -215,32 +215,32 @@ fn run(s: &Arc<Session>, c: &Case, pool: &[f32], stub: bool) -> Pair {
         }
         K::Flow => {
             let (u, v, a, b, cc) = (d(0), d(1), d(2), d(3), d(4));
-            let (rs, fg, eps) = (f32::from_bits(c.p0), f32::from_bits(c.p1), f32::from_bits(c.p2));
-            let (mut o0, mut o1) = (sentinel.clone(), sentinel.clone());
-            optical_flow_solve::flow_update(&optical_flow_solve::FlowIn { u: &u, v: &v, a: &a, b: &b, c: &cc }, &mut o0, &mut o1, w, st, r0, rows, rs, fg, eps);
+            let (rs, fg, eps) = (f32::from_bits(c.p_first), f32::from_bits(c.p_middle), f32::from_bits(c.p_last));
+            let (mut out_u, mut out_v) = (sentinel.clone(), sentinel.clone());
+            optical_flow_solve::flow_update(&optical_flow_solve::FlowIn { u: &u, v: &v, a: &a, b: &b, c: &cc }, &mut out_u, &mut out_v, w, st, row_start, rows, rs, fg, eps);
             let dev = (|| {
                 let img = upload(s, &[&u, &v, &a, &b, &cc, &sentinel, &sentinel])?;
                 if !stub {
                     let fb = dv::FlowBufs { u: img.plane(0), v: img.plane(1), a: img.plane(2), b: img.plane(3), c: img.plane(4) };
-                    dv::flow_update_dev(s, &fb, img.plane(5), img.plane(6), w, st, r0, rows, rs, fg, eps).map_err(|e| e.to_string())?;
+                    dv::flow_update_dev(s, &fb, img.plane(5), img.plane(6), w, st, row_start, rows, rs, fg, eps).map_err(|e| e.to_string())?;
                 }
                 down(&img, &[5, 6])
             })();
-            (words(&o0).into_iter().chain(words(&o1)).collect(), dev)
+            (words(&out_u).into_iter().chain(words(&out_v)).collect(), dev)
         }
         K::Diff => {
             let (p, q, mut x, mut y) = (d(0), d(1), d(2), d(3));
-            let (x0, y0) = (x.clone(), y.clone());
+            let (x_init, y_init) = (x.clone(), y.clone());
             let sh = Shape { width: w, stride: st, phase_bytes: c.phase };
-            let sum = optical_flow_solve::diff_sum(&optical_flow_solve::DiffPlanes { p: &p, q: &q }, &mut x, &mut y, &sh, r0, rows);
+            let sum = optical_flow_solve::diff_sum(&optical_flow_solve::DiffPlanes { p: &p, q: &q }, &mut x, &mut y, &sh, row_start, rows);
             let mut want = words(&x);
             want.extend(words(&y));
             want.push(sum.to_bits());
             let dev = (|| {
-                let img = upload(s, &[&p, &q, &x0, &y0])?;
+                let img = upload(s, &[&p, &q, &x_init, &y_init])?;
                 let mut sumw = 0u32;
                 if !stub {
-                    sumw = dv::diff_sum_dev(s, img.plane(0), img.plane(1), img.plane(2), img.plane(3), &sh, r0, rows).map_err(|e| e.to_string())?.to_bits();
+                    sumw = dv::diff_sum_dev(s, img.plane(0), img.plane(1), img.plane(2), img.plane(3), &sh, row_start, rows).map_err(|e| e.to_string())?.to_bits();
                 }
                 let mut v = down(&img, &[2, 3])?;
                 v.push(sumw);
@@ -250,12 +250,12 @@ fn run(s: &Arc<Session>, c: &Case, pool: &[f32], stub: bool) -> Pair {
         }
         K::Zero => {
             let mut p = d(0);
-            let p0 = p.clone();
-            optical_flow_solve::reduce::zero_border(&mut p, w, h, st, r0, rows as u32);
+            let p_first = p.clone();
+            optical_flow_solve::reduce::zero_border(&mut p, w, h, st, row_start, rows as u32);
             let dev = (|| {
-                let img = upload(s, &[&p0])?;
+                let img = upload(s, &[&p_first])?;
                 if !stub {
-                    dv::zero_border_dev(s, img.plane(0), w, h, st, r0, rows as u32).map_err(|e| e.to_string())?;
+                    dv::zero_border_dev(s, img.plane(0), w, h, st, row_start, rows as u32).map_err(|e| e.to_string())?;
                 }
                 down(&img, &[0])
             })();
@@ -263,21 +263,21 @@ fn run(s: &Arc<Session>, c: &Case, pool: &[f32], stub: bool) -> Pair {
         }
         K::Scale => {
             let mut p = d(0);
-            let p0 = p.clone();
-            let sc = f32::from_bits(c.p0);
-            optical_flow_solve::smooth::scale_plane(&mut p, w, st, sc, r0, rows as u32);
+            let p_first = p.clone();
+            let sc = f32::from_bits(c.p_first);
+            optical_flow_solve::smooth::scale_plane(&mut p, w, st, sc, row_start, rows as u32);
             let dev = (|| {
-                let img = upload(s, &[&p0])?;
+                let img = upload(s, &[&p_first])?;
                 if !stub {
-                    dv::scale_plane_dev(s, img.plane(0), w, st, sc, r0, rows as u32).map_err(|e| e.to_string())?;
+                    dv::scale_plane_dev(s, img.plane(0), w, st, sc, row_start, rows as u32).map_err(|e| e.to_string())?;
                 }
                 down(&img, &[0])
             })();
             (words(&p), dev)
         }
         K::Relax => {
-            let (t0, u0, a0, t1, u1, a1, v) = (d(0), d(1), d(2), d(3), d(4), d(5), d(6));
-            let sc = f32::from_bits(c.p0);
+            let (nest_zero_t, nest_zero_u, nest_zero_acc, nest_one_t, nest_one_u, nest_one_acc, v) = (d(0), d(1), d(2), d(3), d(4), d(5), d(6));
+            let sc = f32::from_bits(c.p_first);
             let ctx = optical_flow_solve::relax::Ctx {
                 width: w,
                 height: h,
@@ -285,25 +285,25 @@ fn run(s: &Arc<Session>, c: &Case, pool: &[f32], stub: bool) -> Pair {
                 scale: sc,
                 v: if c.has_v { Some(&v) } else { None },
                 nests: [
-                    optical_flow_solve::relax::NestIn { t: &t0, u: &u0, acc: &a0 },
-                    optical_flow_solve::relax::NestIn { t: &t1, u: &u1, acc: &a1 },
+                    optical_flow_solve::relax::NestIn { t: &nest_zero_t, u: &nest_zero_u, acc: &nest_zero_acc },
+                    optical_flow_solve::relax::NestIn { t: &nest_one_t, u: &nest_one_u, acc: &nest_one_acc },
                 ],
                 phase_bytes: c.phase,
             };
-            let (mut o0, mut o1) = (sentinel.clone(), sentinel.clone());
-            optical_flow_solve::relax::relax_callback(&ctx, [&mut o0, &mut o1], r0, rows);
+            let (mut out_u, mut out_v) = (sentinel.clone(), sentinel.clone());
+            optical_flow_solve::relax::relax_callback(&ctx, [&mut out_u, &mut out_v], row_start, rows);
             let dev = (|| {
-                let img = upload(s, &[&t0, &u0, &a0, &sentinel, &t1, &u1, &a1, &sentinel, &v])?;
+                let img = upload(s, &[&nest_zero_t, &nest_zero_u, &nest_zero_acc, &sentinel, &nest_one_t, &nest_one_u, &nest_one_acc, &sentinel, &v])?;
                 if !stub {
                     let p = |i: usize| img.plane(i);
-                    let n0 = dv::RelaxNest { t: p(0), u: p(1), acc: p(2), out: p(3) };
-                    let n1 = dv::RelaxNest { t: p(4), u: p(5), acc: p(6), out: p(7) };
+                    let nest_zero = dv::RelaxNest { t: p(0), u: p(1), acc: p(2), out: p(3) };
+                    let nest_one = dv::RelaxNest { t: p(4), u: p(5), acc: p(6), out: p(7) };
                     let vb: Option<&Buffer<f32>> = if c.has_v { Some(p(8)) } else { None };
-                    dv::relax_dev(s, w, h, st, sc, vb, [&n0, &n1], c.phase, r0, rows).map_err(|e| e.to_string())?;
+                    dv::relax_dev(s, w, h, st, sc, vb, [&nest_zero, &nest_one], c.phase, row_start, rows).map_err(|e| e.to_string())?;
                 }
                 down(&img, &[3, 7])
             })();
-            (words(&o0).into_iter().chain(words(&o1)).collect(), dev)
+            (words(&out_u).into_iter().chain(words(&out_v)).collect(), dev)
         }
         K::Stretch => unreachable!(),
     }
@@ -521,12 +521,12 @@ const MUTANTS: &[(K, &str, &str, &str)] = &[
     (K::Zero, "last column", "j == w - 1)", "j == w - 2)"),
     (K::Scale, "operand order of the product", "pl[ix] = flow_a_mul(pl[ix], as_float(scale_bits));", "pl[ix] = flow_a_mul(as_float(scale_bits), pl[ix]);"),
     (K::Relax, "dropped sign flip of the last row column 0", "d = flow_a_flip(uu[rb - st]);", "d = uu[rb - st];"),
-    (K::Relax, "fused arm of the scalar last row", "r = flow_a_fnma213(pvv, flow_a_sub(ua, dx), a);", "r = flow_a_fma213(pvv, flow_a_sub(ua, dx), a);"),
-    (K::Relax, "vector block mask", "sp = (long3)(0, n & ~15, 0);", "sp = (long3)(0, n & ~7, 0);"),
+    (K::Relax, "fused arm of the scalar last row", "r = flow_a_fnma213(pvv, flow_a_sub(ua, delta_x), a);", "r = flow_a_fma213(pvv, flow_a_sub(ua, delta_x), a);"),
+    (K::Relax, "vector block mask", "row_split = (long3)(0, n & ~15, 0);", "row_split = (long3)(0, n & ~7, 0);"),
     (K::Relax, "alignment line of the relax planes", "long lb = 64;", "long lb = 32;"),
-    (K::Relax, "unfused middle row of the scale absent form", "float tm = flow_a_fma213(dx, scale, a);", "float tm = flow_a_add(flow_a_mul(dx, scale), a);"),
-    (K::Relax, "nest select of the accumulator", "__global const float* aa = (nest == 0) ? a0 : a1;", "__global const float* aa = (nest == 0) ? a0 : a0;"),
-    (K::Mix, "vector body end compare", "int vec = (sp.z == 0 && i >= sp.x && i < sp.y) ? 1 : 0;", "int vec = (sp.z == 0 && i >= sp.x && i <= sp.y) ? 1 : 0;"),
+    (K::Relax, "unfused middle row of the scale absent form", "float tm = flow_a_fma213(delta_x, scale, a);", "float tm = flow_a_add(flow_a_mul(delta_x, scale), a);"),
+    (K::Relax, "nest select of the accumulator", "__global const float* aa = (nest == 0) ? nest_zero_acc : nest_one_acc;", "__global const float* aa = (nest == 0) ? nest_zero_acc : nest_zero_acc;"),
+    (K::Mix, "vector body end compare", "int vec = (row_split.z == 0 && i >= row_split.x && i < row_split.y) ? 1 : 0;", "int vec = (row_split.z == 0 && i >= row_split.x && i <= row_split.y) ? 1 : 0;"),
 ];
 
 #[test]

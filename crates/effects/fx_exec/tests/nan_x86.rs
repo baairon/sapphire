@@ -13,7 +13,7 @@ fn ripmap_of_an_infinite_source_holds_only_the_x86_default_nan() {
     let wrap = Arg::Const { n: 2, lanes: [1.0f32.to_bits(), 1.0f32.to_bits(), 0, 0] };
     let filter = Arg::Const { n: 1, lanes: [1.0f32.to_bits(), 0, 0, 0] };
     let args = [Arg::Img(&img), wrap, filter];
-    let out = run_any("make_mipmap", 1, &args, n, (w, h), &KParams::standin()).unwrap();
+    let out = run_any("make_mipmap", 1, &args, n, (w, h), &KParams::host_defaults()).unwrap();
     let Out::Mip(m) = out else { panic!("not a ripmap") };
     let words: Vec<u32> = m.ripmap.planes.iter().flatten().copied().collect();
     let nans: Vec<u32> = words.iter().copied().filter(|b| (b & 0x7fff_ffff) > 0x7f80_0000).collect();

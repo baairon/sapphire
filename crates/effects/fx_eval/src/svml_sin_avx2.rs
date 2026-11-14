@@ -68,10 +68,10 @@ fn window(e: i32) -> [u32; 3] {
     let s = e - 54;
     // floor(2^s / (2 pi)) mod 2^96 is the first 96 fraction bits of inv * 2^(s - 96)
     let t = if s >= 96 { inv.frac_shl((s - 96) as u32) } else { inv.shr((96 - s) as u32) };
-    let (w0, t) = take32(&t);
-    let (w1, t) = take32(&t);
-    let (w2, _) = take32(&t);
-    [w0, w1, w2]
+    let (win_first, t) = take32(&t);
+    let (diff_1, t) = take32(&t);
+    let (win_last, _) = take32(&t);
+    [win_first, diff_1, win_last]
 }
 
 fn lookup_entry(k: usize) -> [u32; 4] {
@@ -89,7 +89,7 @@ fn lookup_entry(k: usize) -> [u32; 4] {
     };
     // c3: the cosine as a power of two, rounded in the logarithm, a tie going up
     let cd = c.to_f64();
-    let c3: f32 = if cd == 0.0 {
+    let c_rounded: f32 = if cd == 0.0 {
         0.0
     } else {
         let b = cd.to_bits();
@@ -100,10 +100,10 @@ fn lookup_entry(k: usize) -> [u32; 4] {
         }
         f32::from_bits((((e - 1023 + 127) as u32) << 23) | if cd < 0.0 { 0x8000_0000 } else { 0 })
     };
-    let c0 = c.sub(&Fx::from_f64(c3 as f64)).to_f32_scaled(0);
+    let c_residual = c.sub(&Fx::from_f64(c_rounded as f64)).to_f32_scaled(0);
     let c1 = s.to_f32_scaled(0);
     let c2 = s.sub(&Fx::from_f64(c1 as f64)).to_f32_scaled(0);
-    [c0.to_bits(), c1.to_bits(), c2.to_bits(), c3.to_bits()]
+    [c_residual.to_bits(), c1.to_bits(), c2.to_bits(), c_rounded.to_bits()]
 }
 
 trait Pipe: Sized {
@@ -166,101 +166,101 @@ fn fast_lane(x: u32) -> u32 {
 fn slow_lane(x: u32, tab: &SineTables) -> u32 {
     let sg = x & 0x8000_0000;
     let e = ((x & EXP_MASK) >> 23) as usize;
-    let [w0, w1, w2] = tab.window[e];
+    let [win_first, diff_1, win_last] = tab.window[e];
     let m = (x & 0x007f_ffff).wrapping_add(0x0080_0000);
     let (mlo, mhi) = (m & 0xffff, m >> 16);
-    let (w0lo, w0hi) = (w0 & 0xffff, w0 >> 16);
-    let (w1lo, w1hi) = (w1 & 0xffff, w1 >> 16);
-    let (w2lo, w2hi) = (w2 & 0xffff, w2 >> 16);
+    let (w0lo, w0hi) = (win_first & 0xffff, win_first >> 16);
+    let (w1lo, w1hi) = (diff_1 & 0xffff, diff_1 >> 16);
+    let (w2lo, w2hi) = (win_last & 0xffff, win_last >> 16);
     const M: u32 = 0xffff;
     // 24 x 96 bit product in 16 bit limbs (0x136e2ef to 0x136e3f8), 32 bit wrapping multiplies
-    let s15 = mhi.wrapping_mul(w2lo) >> 16;
-    let mut b11 = mhi.wrapping_mul(w2hi);
-    let c0 = mlo.wrapping_mul(w2hi) >> 16;
-    let d1 = mlo.wrapping_mul(w1lo);
-    let mut e5 = d1 & M;
-    b11 = b11.wrapping_add(c0);
-    let d1h = d1 >> 16;
-    e5 = e5.wrapping_add(b11);
-    let f3 = mlo.wrapping_mul(w1hi);
-    let g2 = mhi.wrapping_mul(w1lo);
-    let h11 = s15.wrapping_add(e5);
-    let mut i5 = f3 & M;
-    let j1 = g2.wrapping_add(d1h);
-    let k15 = h11 >> 16;
-    let l11 = h11 & M;
-    i5 = i5.wrapping_add(j1);
-    i5 = k15.wrapping_add(i5);
-    let m15 = mhi.wrapping_mul(w1hi);
-    let n4 = f3 >> 16;
-    let o0 = i5 >> 16;
-    let p5 = i5 << 16;
-    let q3 = m15.wrapping_add(n4);
-    let r8 = mlo.wrapping_mul(w0lo);
-    let s2 = r8 & M;
-    let t15 = s2.wrapping_add(q3);
-    let u3 = r8 >> 16;
-    let v1 = o0.wrapping_add(t15);
-    let w6 = mlo.wrapping_mul(w0hi);
-    let x7 = mhi.wrapping_mul(w0lo);
-    let y10 = w6 & M;
-    let z9 = x7.wrapping_add(u3);
-    let aa15 = v1 >> 16;
-    let ab1 = v1 & M;
-    let ac3 = p5.wrapping_add(l11);
-    let ad8 = y10.wrapping_add(z9);
-    let ae15 = aa15.wrapping_add(ad8);
-    let af4 = sg ^ 0x3f80_0000;
-    let ag6 = ae15 << 16;
-    let ah8 = ag6.wrapping_add(ab1);
+    let cross_hi = mhi.wrapping_mul(w2lo) >> 16;
+    let mut prod_11 = mhi.wrapping_mul(w2hi);
+    let cross_lo = mlo.wrapping_mul(w2hi) >> 16;
+    let fp33_sub_1 = mlo.wrapping_mul(w1lo);
+    let mut low_acc = fp33_sub_1 & M;
+    prod_11 = prod_11.wrapping_add(cross_lo);
+    let d1h = fp33_sub_1 >> 16;
+    low_acc = low_acc.wrapping_add(prod_11);
+    let prod_3 = mlo.wrapping_mul(w1hi);
+    let prod_2 = mhi.wrapping_mul(w1lo);
+    let sum_11 = cross_hi.wrapping_add(low_acc);
+    let mut low_acc_b = prod_3 & M;
+    let mid_sum = prod_2.wrapping_add(d1h);
+    let carry_mid = sum_11 >> 16;
+    let bits_11 = sum_11 & M;
+    low_acc_b = low_acc_b.wrapping_add(mid_sum);
+    low_acc_b = carry_mid.wrapping_add(low_acc_b);
+    let prod_15 = mhi.wrapping_mul(w1hi);
+    let carry_lo = prod_3 >> 16;
+    let flag_0 = low_acc_b >> 16;
+    let fused_5 = low_acc_b << 16;
+    let carry_sum = prod_15.wrapping_add(carry_lo);
+    let route_int_7 = mlo.wrapping_mul(w0lo);
+    let masked_route = route_int_7 & M;
+    let carry_total = masked_route.wrapping_add(carry_sum);
+    let flag_3 = route_int_7 >> 16;
+    let top_sum = flag_0.wrapping_add(carry_total);
+    let prod_w0 = mlo.wrapping_mul(w0hi);
+    let prod_7 = mhi.wrapping_mul(w0lo);
+    let bits_10 = prod_w0 & M;
+    let sum_tail = prod_7.wrapping_add(flag_3);
+    let flag_15 = top_sum >> 16;
+    let bits_1 = top_sum & M;
+    let sum_3 = fused_5.wrapping_add(bits_11);
+    let sum_8 = bits_10.wrapping_add(sum_tail);
+    let sum_15 = flag_15.wrapping_add(sum_8);
+    let bits_4 = sg ^ 0x3f80_0000;
+    let ag6 = sum_15 << 16;
+    let ah8 = ag6.wrapping_add(bits_1);
     let ai1 = sg ^ 0x2880_0000;
-    let ak5 = (ah8 >> 9) | af4;
-    let ao6 = ((ac3 & 0x3_ffff) << 5) | ai1;
+    let ak5 = (ah8 >> 9) | bits_4;
+    let ao6 = ((sum_3 & 0x3_ffff) << 5) | ai1;
     // the reduced fraction as a float pair
-    let y9 = INDEX_MAGIC + f(ak5);
-    let y0 = f(ao6) - f(ai1);
-    let y11 = y9 - INDEX_MAGIC;
-    let idx = (y9.to_bits() & 0xff) as usize;
-    let y7 = f(ak5) - y11;
-    let y5 = sg ^ 0x3400_0000;
-    let y4 = (((ah8 & 0x1ff) << 14) | (ac3 >> 18)) | y5;
-    let y3 = f(y4) - f(y5);
-    let y2 = y7 + y3;
-    let y7b = y7 - y2;
-    let y10 = y3 + y7b;
-    let mut y1 = y10 + y0;
-    let hi = y2 * TWO_PI;
-    let err = y2.mul_add(TWO_PI, -hi); // 0x136e4a2
-    let mid = y2.mul_add(SPLIT, err); // 0x136e4ad
-    y1 = y1.mul_add(TWO_PI, mid); // 0x136e4b2
+    let sum_9 = INDEX_MAGIC + f(ak5);
+    let table_val_0 = f(ao6) - f(ai1);
+    let diff_11 = sum_9 - INDEX_MAGIC;
+    let idx = (sum_9.to_bits() & 0xff) as usize;
+    let table_val_7 = f(ak5) - diff_11;
+    let bits_5 = sg ^ 0x3400_0000;
+    let flag_4 = (((ah8 & 0x1ff) << 14) | (sum_3 >> 18)) | bits_5;
+    let table_diff = f(flag_4) - f(bits_5);
+    let table_sum = table_val_7 + table_diff;
+    let diff_7_b = table_val_7 - table_sum;
+    let bits_10 = table_diff + diff_7_b;
+    let mut sum_1 = bits_10 + table_val_0;
+    let hi = table_sum * TWO_PI;
+    let err = table_sum.mul_add(TWO_PI, -hi); // 0x136e4a2
+    let mid = table_sum.mul_add(SPLIT, err); // 0x136e4ad
+    sum_1 = sum_1.mul_add(TWO_PI, mid); // 0x136e4b2
     // small arguments keep x itself; the others the (hi, lo) pair
     let a = f(x & ABS_MASK);
     let gt = a > f(SMALL_BITS);
     let le = a <= f(SMALL_BITS);
-    let lo = if gt { y1 } else { 0.0 };
+    let lo = if gt { sum_1 } else { 0.0 };
     let r = f((if le { x } else { 0 }) | (if gt { hi.to_bits() } else { 0 }));
     let r2 = r * r;
     let t = tab.lookup[idx];
-    let (t0, t1, t2, t3) = (f(t[0]), f(t[1]), f(t[2]), f(t[3]));
-    let p1 = S1.mul_add(r2, S0); // 0x136e614
-    let p1r = p1 * r2;
-    let w4 = t3.mul_add(r, t1); // 0x136e646
-    let c03 = t0 + t3;
-    let w5 = t1 - w4;
-    let w7 = r.mul_add(t0, w4); // 0x136e658
-    let w5 = t3.mul_add(r, w5); // 0x136e65d
-    let w8 = w4 - w7;
-    let w8 = r.mul_add(t0, w8); // 0x136e676
-    let w8 = w8 + w5;
+    let (tab_a, tab_b, sum_2, table_val_3) = (f(t[0]), f(t[1]), f(t[2]), f(t[3]));
+    let poly_lo = S1.mul_add(r2, S0); // 0x136e614
+    let p1r = poly_lo * r2;
+    let fused_4 = table_val_3.mul_add(r, tab_b); // 0x136e646
+    let sum_03 = tab_a + table_val_3;
+    let diff_5 = tab_b - fused_4;
+    let fused_7 = r.mul_add(tab_a, fused_4); // 0x136e658
+    let diff_5 = table_val_3.mul_add(r, diff_5); // 0x136e65d
+    let diff_8 = fused_4 - fused_7;
+    let diff_8 = r.mul_add(tab_a, diff_8); // 0x136e676
+    let diff_8 = diff_8 + diff_5;
     let p2 = S3.mul_add(r2, S2); // 0x136e68e
-    let w5b = r * p1r;
-    let w3 = (-t1).mul_add(r, c03); // 0x136e69c
-    let w13 = r2 * p2;
-    let w5c = w3.mul_add(w5b, w8); // 0x136e6d8
-    let w10 = w3.mul_add(lo, t2); // 0x136e6e3
-    let w13 = t1.mul_add(w13, w10); // 0x136e6e8
-    let w3b = w13 + w5c;
-    (w7 + w3b).to_bits()
+    let prod_5_b = r * p1r;
+    let poly_c = (-tab_b).mul_add(r, sum_03); // 0x136e69c
+    let prod_13 = r2 * p2;
+    let fused_5_c = poly_c.mul_add(prod_5_b, diff_8); // 0x136e6d8
+    let fused_10 = poly_c.mul_add(lo, sum_2); // 0x136e6e3
+    let prod_13 = tab_b.mul_add(prod_13, fused_10); // 0x136e6e8
+    let sum_3_b = prod_13 + fused_5_c;
+    (fused_7 + sum_3_b).to_bits()
 }
 
 /// The scalar routine 0x135ce60 for a lane with biased exponent 255: infinity times zero (the default NaN), a NaN squared.

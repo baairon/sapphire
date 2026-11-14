@@ -16,10 +16,10 @@ fn hash_builder_and_hashes() {
     assert_eq!(h, HashTable::build());
     assert_eq!(h.to_bytes().len(), 1024);
     // hand evaluation of entry 0: y1 = 150889, y2 = (4096*150889+150889) % 714025, ...
-    let y1 = 150889u64;
-    let y2 = (4096 * y1 + 150889) % 714025;
-    let y3 = (4096 * y2 + 150889) % 714025;
-    assert_eq!(h.t[0], ((y1 >> 2) as u32).wrapping_add((y2 as u32) << 8).wrapping_add((y3 as u32) << 18));
+    let seed = 150889u64;
+    let prod_2 = (4096 * seed + 150889) % 714025;
+    let prod_3 = (4096 * prod_2 + 150889) % 714025;
+    assert_eq!(h.t[0], ((seed >> 2) as u32).wrapping_add((prod_2 as u32) << 8).wrapping_add((prod_3 as u32) << 18));
     // hash1 is four rounds; hash2 with y = 0 differs from hash1 only by four more rounds
     let mut v = 12345u32;
     for _ in 0..4 {

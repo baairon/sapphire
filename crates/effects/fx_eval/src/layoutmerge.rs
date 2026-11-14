@@ -20,13 +20,13 @@ pub enum Sx {
 fn tokenize(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
-    for ch in s.chars() {
-        match ch {
+    for chan in s.chars() {
+        match chan {
             '(' | ')' => {
                 if !cur.is_empty() {
                     out.push(std::mem::take(&mut cur));
                 }
-                out.push(ch.to_string());
+                out.push(chan.to_string());
             }
             c if c.is_whitespace() => {
                 if !cur.is_empty() {

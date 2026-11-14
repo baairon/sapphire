@@ -11,7 +11,7 @@
 
 /// Glint diagonal passes: the window sum, box pass and blend routines, the glint band-row kernel and its epilogue, the diagonal kernel.
 pub const GLINT_DIAG: &str = r#"
-/* glint_diag_box::window_sum_scalar and diagonal_box_sum::window_sum (scalar arm): S = +0 + (((+0 + x0) + x1) + ...). */
+/* glint_diag_box::window_sum_scalar and diagonal_box_sum::window_sum (scalar arm): S = +0 + (((+0 + sample_first) + sample_second) + ...). */
 float gdb_wsum_scalar(__global const float* x, int n) {
     float t = 0x0p+0f;
     for (int i = 0; i < 2147483647; i++) {
@@ -77,12 +77,12 @@ float gdb_wsum_vector(__global const float* x, int n, uint phase) {
         }
         t = nanx_add(t, x[main_end + done + j]);
     }
-    float h0 = nanx_add(v[0], v[4]);
-    float h1 = nanx_add(v[1], v[5]);
-    float h2 = nanx_add(v[2], v[6]);
-    float h3 = nanx_add(v[3], v[7]);
-    float ha_sum = nanx_add(h0, h2);
-    float hb_sum = nanx_add(h1, h3);
+    float hsum0 = nanx_add(v[0], v[4]);
+    float hsum1 = nanx_add(v[1], v[5]);
+    float hsum2 = nanx_add(v[2], v[6]);
+    float hsum3 = nanx_add(v[3], v[7]);
+    float ha_sum = nanx_add(hsum0, hsum2);
+    float hb_sum = nanx_add(hsum1, hsum3);
     return nanx_add(nanx_add(ha_sum, hb_sum), t);
 }
 
@@ -190,7 +190,7 @@ long gdb_map(long i, int w, int h, int mirrored) {
 /* glint_diag_box::run for one band row (counter = first + gid). phases holds six words per counter: the row phase each of the six passes sees. */
 __kernel void glint_diag_band_f32(__global const float* src, __global float* dst, __global float* scratch, __global const uint* phases,
                                   __global uint* err, int w, int h, long slen, long dlen, int mirrored, int band_start, long first,
-                                  long nitems, int r0, int r1, int r2, long dd, uint fbits, long cap) {
+                                  long nitems, int radius0, int radius1, int radius2, long dd, uint fbits, long cap) {
     long gid = (long)get_global_id(0);
     if (gid >= nitems) {
         return;
@@ -202,8 +202,8 @@ __kernel void glint_diag_band_f32(__global const float* src, __global float* dst
     long a_ = (t > 0) ? t : 0;
     long b_ = (-t > 0) ? -t : 0;
     long l1 = (long)w - 2 * a_;
-    long l2 = 2 * (long)h - 2 * b_;
-    long l = (l1 < l2) ? l1 : l2;
+    long len_limit = 2 * (long)h - 2 * b_;
+    long l = (l1 < len_limit) ? l1 : len_limit;
     long off = (long)(int)((uint)(ulong)((long)w * b_) + (uint)(ulong)(2 * a_));
     if (l <= 0) {
         return;
@@ -215,16 +215,16 @@ __kernel void glint_diag_band_f32(__global const float* src, __global float* dst
     int first_zeroed = 0;
     int last_zeroed = 0;
     int bb = (int)b_;
-    float x0;
-    float x1;
-    GDB_RD(off, x0);
-    ra[0] = x0;
+    float sample_first;
+    float sample_second;
+    GDB_RD(off, sample_first);
+    ra[0] = sample_first;
     if (b_ == 0) {
         rb[0] = 0x0p+0f;
         first_zeroed = 1;
     } else {
-        GDB_RD(off - w, x1);
-        rb[0] = nanx_mul(0x1p-1f, nanx_add(x0, x1));
+        GDB_RD(off - w, sample_second);
+        rb[0] = nanx_mul(0x1p-1f, nanx_add(sample_first, sample_second));
     }
     if (l >= 2) {
         long p = off + 1;
@@ -275,9 +275,9 @@ __kernel void glint_diag_band_f32(__global const float* src, __global float* dst
     }
     int clampv = (int)((l - 1) >> 1);
     int radii[3];
-    radii[0] = r0;
-    radii[1] = r1;
-    radii[2] = r2;
+    radii[0] = radius0;
+    radii[1] = radius1;
+    radii[2] = radius2;
     for (int k = 0; k < 3; k++) {
         int radius = radii[k];
         if (radius <= 0) {
@@ -357,7 +357,7 @@ __kernel void glint_diag_edge_f32(__global const float* src, __global float* dst
 /* diagonal_box_sum::box_sum_diagonals for one diagonal (index kk = first + gid), in place on the plane. phases holds three words per
    position in the group of four: the row buffer phase each of the three passes sees. kind 0 is Anti, 1 is Main. */
 __kernel void diag_box_sum_f32(__global float* img, __global float* scratch, __global const uint* phases, int w, int h, int m, int kind,
-                               int base_t, long a, int r0, int r1, int r2, int shift_nz, uint sbits, int rcl, long first, long nitems) {
+                               int base_t, long a, int radius0, int radius1, int radius2, int shift_nz, uint sbits, int rcl, long first, long nitems) {
     long gid = (long)get_global_id(0);
     if (gid >= nitems) {
         return;
@@ -374,15 +374,15 @@ __kernel void diag_box_sum_f32(__global float* img, __global float* scratch, __g
         row0 = (t > 0) ? t : 0;
         col0 = (long)w - 1 + ((t < 0) ? t : 0);
         len = (long)w + ((t < 0) ? t : 0);
-        long l2 = (long)h - row0;
-        len = (len < l2) ? len : l2;
+        long len_limit = (long)h - row0;
+        len = (len < len_limit) ? len : len_limit;
         step = (long)w - 1;
     } else {
         col0 = (t > 0) ? t : 0;
         row0 = (-t > 0) ? -t : 0;
         len = (long)w - col0;
-        long l2 = (long)h - row0;
-        len = (len < l2) ? len : l2;
+        long len_limit = (long)h - row0;
+        len = (len < len_limit) ? len : len_limit;
         step = (long)w + 1;
     }
     if (len < 0) {
@@ -407,9 +407,9 @@ __kernel void diag_box_sum_f32(__global float* img, __global float* scratch, __g
         inb[i] = img[start + i * step];
     }
     int radii[3];
-    radii[0] = r0;
-    radii[1] = r1;
-    radii[2] = r2;
+    radii[0] = radius0;
+    radii[1] = radius1;
+    radii[2] = radius2;
     for (int s = 0; s < 3; s++) {
         int radius = radii[s];
         if (radius <= 0) {

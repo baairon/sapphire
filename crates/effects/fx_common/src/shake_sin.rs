@@ -147,12 +147,12 @@ pub fn sinf_with(x: f32, t: &SinTables) -> f32 {
     let bits = x.to_bits();
     let abs = bits & 0x7fff_ffff;
     // r8d = 0x49ffffff - abs; r10d = abs - 0x39800000; jl when (r8d | r10d) is negative as i32
-    let r8 = MAIN_MAX_BITS.wrapping_sub(abs);
-    let r10 = abs.wrapping_sub(MAIN_MIN_BITS);
+    let route_int_7 = MAIN_MAX_BITS.wrapping_sub(abs);
+    let above_min = abs.wrapping_sub(MAIN_MIN_BITS);
     let xd = x as f64;
     let n: u32;
     let g: f64;
-    if ((r8 | r10) as i32) < 0 {
+    if ((route_int_7 | above_min) as i32) < 0 {
         // tiny, big, or non finite
         if abs <= TINY_LIMIT_BITS {
             // cvtss2sd; mulsd [tiny scale]; cvtsd2ss
@@ -163,7 +163,7 @@ pub fn sinf_with(x: f32, t: &SinTables) -> f32 {
             return x - x;
         }
         // big finite argument, exponent group table lookup
-        let grp = ((((r10 >> 23).wrapping_sub(0x1b)) & 0xfff8) >> 3) as usize; // byte offset is 16 * grp
+        let grp = ((((above_min >> 23).wrapping_sub(0x1b)) & 0xfff8) >> 3) as usize; // byte offset is 16 * grp
         let e = t.big[grp];
         let hi = f64::from_bits(e[0] & 0xffff_ffff_ff00_0000);
         let mid = f64::from_bits(e[0] << 40);
@@ -172,38 +172,38 @@ pub fn sinf_with(x: f32, t: &SinTables) -> f32 {
         let mx = mid * xd;
         let xlo = xd * lo;
         let s = hx + mx;
-        let e1 = hx - s;
-        let s2 = s + MAGIC;
-        let err = mx + e1;
-        n = (s2.to_bits() & 0xffff_ffff) as u32;
-        let nd = s2 - MAGIC;
+        let diff_1 = hx - s;
+        let biased = s + MAGIC;
+        let err = mx + diff_1;
+        n = (biased.to_bits() & 0xffff_ffff) as u32;
+        let nd = biased - MAGIC;
         let f = s - nd;
         g = (xlo + err) + f;
     } else {
         // main path, one multiply by 128/pi with a split constant
         let tt = K_128_OVER_PI * xd;
-        let s2 = tt + MAGIC;
-        n = (s2.to_bits() & 0xffff_ffff) as u32;
-        let nd = s2 - MAGIC;
+        let biased = tt + MAGIC;
+        n = (biased.to_bits() & 0xffff_ffff) as u32;
+        let nd = biased - MAGIC;
         let xc = xd * C_LOW;
         let f = tt - nd;
         g = xc + f;
     }
     // sector fold and polynomial
-    let n2 = n.wrapping_add(n);
-    let b = n2 as u8;
+    let sum_2 = n.wrapping_add(n);
+    let b = sum_2 as u8;
     let m = ((b as i8) >> 7) as u8;
     let babs = b.wrapping_add(m) ^ m; // abs of the signed byte (0x80 stays 0x80)
     let idx = (babs & 0xfe) as usize; // even, 0..=128; byte offset is idx * 8
-    let eax = n2 & 0x180;
-    let s_a = (((eax + 0x80) & 0x100) as u64) << 0x37; // sign of the A term (bit 63)
-    let s_b = ((eax & 0x100) as u64) << 0x37; // sign of the B term
+    let quadrant = sum_2 & 0x180;
+    let s_a = (((quadrant + 0x80) & 0x100) as u64) << 0x37; // sign of the A term (bit 63)
+    let s_b = ((quadrant & 0x100) as u64) << 0x37; // sign of the B term
     let ent = t.main[idx >> 1];
     let a = f64::from_bits(ent[0]);
     let bb = f64::from_bits(ent[1]);
-    let g2 = g * g;
-    let p_cos = (K1 - g2) * bb;
-    let p_sin_poly = f64::from_bits((K2 - g2).to_bits() ^ s_a);
+    let prod_2 = g * g;
+    let p_cos = (K1 - prod_2) * bb;
+    let p_sin_poly = f64::from_bits((K2 - prod_2).to_bits() ^ s_a);
     let p_sin = (a * g) * p_sin_poly;
     let r = f64::from_bits(p_cos.to_bits() ^ s_b) + p_sin;
     r as f32

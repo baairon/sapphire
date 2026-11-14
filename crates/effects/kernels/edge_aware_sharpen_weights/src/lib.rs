@@ -37,9 +37,9 @@ pub struct Ctx {
     pub w: i32,      //  elements per line
     pub s: i32,      //  number of lines (stride of the transposed plane), also the partition total
     pub flag_cell_b: i32, //  0: guide-plane mode (B); non zero: constant mode (A)
-    pub f0: f32,     //  scale of |p0|
-    pub f4: f32,     //
-    pub f8: f32,     //  scale of |p1|
+    pub d_scale: f32,     //  scale of |p0|
+    pub ca_param: f32,     //
+    pub e_scale: f32,     //  scale of |p1|
     pub fc: f32,     //
     pub esh2_job_ctx_a: f32,   // (mode A only)
     pub k: f32,      // [ctx]
@@ -65,15 +65,15 @@ pub fn minss(a: f32, b: f32) -> f32 {
 pub fn newton(m: f32) -> f32 {
     let r = 1.0f32 / m;
     let t = r * m;
-    let t2 = t * r;
-    (r + r) - t2
+    let sum_2 = t * r;
+    (r + r) - sum_2
 }
 
 /// The same Newton step from a given estimate r (used by the APPROX-BOUND sensitivity test only, never by the port).
 pub fn newton_from(r: f32, m: f32) -> f32 {
     let t = r * m;
-    let t2 = t * r;
-    (r + r) - t2
+    let sum_2 = t * r;
+    (r + r) - sum_2
 }
 
 #[inline]
@@ -87,7 +87,7 @@ fn recip(m: f32, lane: Lane) -> f32 {
 /// Scalar constants derived from the context: cA = (D1 * (double)(1 + a)) as f32, cB likewise with fc.
 #[inline]
 pub fn c_a(ctx: &Ctx) -> f32 {
-    (D1 * ((ONE + ctx.f4) as f64)) as f32
+    (D1 * ((ONE + ctx.ca_param) as f64)) as f32
 }
 #[inline]
 pub fn c_b(ctx: &Ctx) -> f32 {
@@ -120,9 +120,9 @@ pub fn g_t(m: f32, lane: Lane, k: f32, cb: f32, kcb: f32) -> f32 {
     }
 }
 
-/// Lane plan of one line of `n` elements whose `cur` line starts at byte address `line_addr` (ALIGN-DEPENDENT, and the
+/// Lane plan of one line of `n` elements whose `cur` line starts at byte position `line_phase` (ALIGN-DEPENDENT, and the
 /// row 0 twin). Returns, per element m (0-based; element j = m + 1), the lane kind.
-pub fn lane_plan(n: usize, line_addr: u64) -> Vec<Lane> {
+pub fn lane_plan(n: usize, line_phase: u64) -> Vec<Lane> {
     let mut v = vec![Lane::Scalar; n];
     if n < 16 {
         return v;
@@ -132,7 +132,7 @@ pub fn lane_plan(n: usize, line_addr: u64) -> Vec<Lane> {
         h = 0usize;
         main_end = n & !15;
     } else {
-        let p = (line_addr.wrapping_add(4) & 0x3f) as usize;
+        let p = (line_phase.wrapping_add(4) & 0x3f) as usize;
         if p == 0 {
             h = 0;
         } else if p & 3 != 0 {
@@ -162,7 +162,7 @@ pub fn lane_plan(n: usize, line_addr: u64) -> Vec<Lane> {
 
 pub struct Bufs<'a> {
     pub p0: &'a [f32],
-    pub p1: &'a [f32],
+    pub second_plane: &'a [f32],
     pub cur: &'a [f32],
     pub a: &'a mut [f32],
     pub t: &'a mut [f32],
@@ -180,9 +180,9 @@ struct LineParams {
     cb: f32,
     kcb: f32,
     ca: f32,
-    c10: f32,
-    c11: f32,
-    cur_addr: u64,
+    d_const: f32,
+    e_const: f32,
+    cur_phase: u64,
 }
 
 /// gT(m) with the plain product (`RULE` false) or the NaN rule of the product (`RULE` true).
@@ -213,35 +213,35 @@ fn fz<const RULE: bool>(x: f32, d: f32, c: f32, guide: bool) -> f32 {
 
 /// One line (`line` >= 1 and not the first line of row 0) of weights. Returns whether a written value is NaN (always false for `RULE`).
 fn line_pass<const RULE: bool>(lp: &LineParams, b: &mut Bufs) -> bool {
-    let LineParams { w, s, line, n, mode_b, d, e, k, cb, kcb, ca, c10, c11, cur_addr } = *lp;
+    let LineParams { w, s, line, n, mode_b, d, e, k, cb, kcb, ca, d_const, e_const, cur_phase } = *lp;
     let base = line * w;
     let mut bad = false;
     b.a[base] = ONE;
     if !mode_b {
-        let v = fz::<RULE>(b.p1[base].abs(), e, c11, false);
+        let v = fz::<RULE>(b.second_plane[base].abs(), e, e_const, false);
         bad |= v != v;
         b.t[line] = v;
         for j in 1..=n {
-            let va = fz::<RULE>(b.p0[base + j].abs(), d, c10, false);
-            let vt = fz::<RULE>(b.p1[base + j].abs(), e, c11, false);
+            let va = fz::<RULE>(b.p0[base + j].abs(), d, d_const, false);
+            let vt = fz::<RULE>(b.second_plane[base + j].abs(), e, e_const, false);
             bad |= (va != va) | (vt != vt);
             b.a[base + j] = va;
             b.t[j * s + line] = vt;
         }
     } else {
         let prev = base - w;
-        let m0 = minss(b.cur[prev], b.cur[base]);
-        let v = fz::<RULE>(b.p1[base].abs(), e, g_t_r::<RULE>(m0, Lane::Scalar, k, cb, kcb), true);
+        let min_0 = minss(b.cur[prev], b.cur[base]);
+        let v = fz::<RULE>(b.second_plane[base].abs(), e, g_t_r::<RULE>(min_0, Lane::Scalar, k, cb, kcb), true);
         bad |= v != v;
         b.t[line] = v;
         if w > 1 {
-            let plan = lane_plan(n, cur_addr.wrapping_add((4 * base) as u64));
+            let plan = lane_plan(n, cur_phase.wrapping_add((4 * base) as u64));
             for j in 1..=n {
                 let lane = plan[j - 1];
                 let ma = minss(b.cur[base + j - 1], b.cur[base + j]);
                 let va = fz::<RULE>(b.p0[base + j].abs(), d, h_a(ma, lane, ca), true);
                 let mt = minss(b.cur[prev + j], b.cur[base + j]);
-                let vt = fz::<RULE>(b.p1[base + j].abs(), e, g_t_r::<RULE>(mt, lane, k, cb, kcb), true);
+                let vt = fz::<RULE>(b.second_plane[base + j].abs(), e, g_t_r::<RULE>(mt, lane, k, cb, kcb), true);
                 bad |= (va != va) | (vt != vt);
                 b.a[base + j] = va;
                 b.t[j * s + line] = vt;
@@ -251,38 +251,38 @@ fn line_pass<const RULE: bool>(lp: &LineParams, b: &mut Bufs) -> bool {
     bad && !RULE
 }
 
-/// Runs the job for the partition tile (`start`, `count`). `cur_addr` is the byte address of `cur[0]` (only its value modulo 64 matters).
+/// Runs the job for the partition tile (`start`, `count`). `cur_phase` is the byte position of `cur[0]` (only its value modulo 64 matters).
 /// CONTRACT-LIMIT: w >= 1, s >= 1, 0 <= start < s, 0 <= count <= s - start, slices of at least w*s floats (the original does not check).
-pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_addr: u64, b: &mut Bufs) -> Result<(), Err> {
+pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_phase: u64, b: &mut Bufs) -> Result<(), Err> {
     if ctx.w < 1 || ctx.s < 1 || start < 0 || start >= ctx.s || count < 0 || count > ctx.s - start {
         return Err(Err::Contract(format!("w {} s {} start {} count {}", ctx.w, ctx.s, start, count)));
     }
     let (w, s, st) = (ctx.w as usize, ctx.s as usize, start as usize);
     let total = w * s;
-    if b.p0.len() < total || b.p1.len() < total || b.a.len() < total || b.t.len() < total || (ctx.flag_cell_b == 0 && b.cur.len() < total) {
+    if b.p0.len() < total || b.second_plane.len() < total || b.a.len() < total || b.t.len() < total || (ctx.flag_cell_b == 0 && b.cur.len() < total) {
         return Err(Err::Contract("plane too small".into()));
     }
     let mode_b = ctx.flag_cell_b == 0; // r14d == 1
-    let (d, e, k) = (ctx.f0, ctx.f8, ctx.k);
+    let (d, e, k) = (ctx.d_scale, ctx.e_scale, ctx.k);
     let ca = c_a(ctx);
     let cb = c_b(ctx);
     let kcb = k.fmul(cb);
     // constants of mode A : c10 added to |p0| * d, c11 added to |p1| * e
-    let (mut c10, mut c11) = (0.0f32, 0.0f32);
+    let (mut d_const, mut e_const) = (0.0f32, 0.0f32);
     if !mode_b {
-        let ca_a = (D1 * ((ctx.f4 + ONE) as f64)) as f32;
-        c10 = ca_a;
+        let ca_a = (D1 * ((ctx.ca_param + ONE) as f64)) as f32;
+        d_const = ca_a;
         let bd = ctx.esh2_job_ctx_a as f64;
         if LOW > bd {
-            c11 = k.fmul((D1 * ((ctx.fc + ONE) as f64)) as f32);
+            e_const = k.fmul((D1 * ((ctx.fc + ONE) as f64)) as f32);
         } else if bd > HIGH {
-            c10 = ONE;
-            c11 = k;
+            d_const = ONE;
+            e_const = k;
         } else {
-            let x3 = ONE / ctx.esh2_job_ctx_a;
+            let inv_sigma = ONE / ctx.esh2_job_ctx_a;
             let cb_a = (D1 * ((ONE + ctx.fc) as f64)) as f32;
-            c10 = minss(x3, c10);
-            c11 = k.fmul(minss(x3, cb_a));
+            d_const = minss(inv_sigma, d_const);
+            e_const = k.fmul(minss(inv_sigma, cb_a));
         }
     }
     // pre-stores : a[start*w] = 1, t[start] = 1
@@ -297,10 +297,10 @@ pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_addr: u64, b: &mut Bufs) -> 
             }
             if !mode_b {
                 for j in 1..=n {
-                    b.a[j] = fma213(b.p0[j].abs(), d, c10);
+                    b.a[j] = fma213(b.p0[j].abs(), d, d_const);
                 }
             } else {
-                let plan = lane_plan(n, cur_addr);
+                let plan = lane_plan(n, cur_phase);
                 for j in 1..=n {
                     let m = minss(b.cur[j - 1], b.cur[j]);
                     b.a[j] = fma231(h_a(m, plan[j - 1], ca), b.p0[j].abs(), d);
@@ -314,7 +314,7 @@ pub fn job_1(ctx: &Ctx, start: i32, count: i32, cur_addr: u64, b: &mut Bufs) -> 
     for line in line0..lines_end.max(line0) {
         // plain arithmetic first; a NaN anywhere in the line's results (a NaN operand always reaches the result of a fused step)
         // sends the line through the NaN-rule pass, which rewrites every element of the line
-        let lp = LineParams { w, s, line, n, mode_b, d, e, k, cb, kcb, ca, c10, c11, cur_addr };
+        let lp = LineParams { w, s, line, n, mode_b, d, e, k, cb, kcb, ca, d_const, e_const, cur_phase };
         if line_pass::<false>(&lp, b) {
             line_pass::<true>(&lp, b);
         }

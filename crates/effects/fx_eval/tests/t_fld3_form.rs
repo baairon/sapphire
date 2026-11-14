@@ -15,11 +15,11 @@ fn s(x: f32) -> ArgView2 {
 
 #[test]
 fn fld3_records_a_b_c() {
-    for (a0, a1) in [(0x3f80_0000u32, 0x3f80_0000u32), (0x3f9a_e180, 0x3f80_0000), (0x3f9a_e180, 0x3f30_0000)] {
-        let a = [s(f32::from_bits(a0)), s(f32::from_bits(a1))];
+    for (a_bits, b_bits) in [(0x3f80_0000u32, 0x3f80_0000u32), (0x3f9a_e180, 0x3f80_0000), (0x3f9a_e180, 0x3f30_0000)] {
+        let a = [s(f32::from_bits(a_bits)), s(f32::from_bits(b_bits))];
         assert_eq!(v3_form(&a, 3), "M3B");
         let r = fold_lanes("v3_to_v4_if4", &a, 3, None).expect("folded");
-        assert_eq!(r, [a0, a0, a0, a1], "a0 {:08x} a1 {:08x}", a0, a1);
+        assert_eq!(r, [a_bits, a_bits, a_bits, b_bits], "a0 {:08x} a1 {:08x}", a_bits, b_bits);
     }
     assert_eq!(f32::from_bits(0x3f30_0000), 0.6875);
 }
@@ -50,11 +50,11 @@ fn fld3_earlier_measured_zero_argument_1_unchanged() {
 // as well. The candidate forms one lane (own, concat truncated), broadcast of argument 0, product and swapped lanes are mutants; the bindings gB and gD kill them.
 #[test]
 fn fld3m_records_ga_gb_gc_gd() {
-    for (a0, a1) in [(0x3f80_0000u32, 0x3f80_0000u32), (0x3f80_0000, 0x3f30_0000), (0x3f9a_e180, 0x3f30_0000)] {
-        let a = [s(f32::from_bits(a0)), s(f32::from_bits(a1))];
+    for (a_bits, b_bits) in [(0x3f80_0000u32, 0x3f80_0000u32), (0x3f80_0000, 0x3f30_0000), (0x3f9a_e180, 0x3f30_0000)] {
+        let a = [s(f32::from_bits(a_bits)), s(f32::from_bits(b_bits))];
         assert_eq!(v3_form(&a, 1), "M1P");
         let r = fold_lanes("v3_to_v4_if4", &a, 1, None).expect("folded");
-        assert_eq!(r, [a0, a1, 0, 0], "a0 {:08x} a1 {:08x}", a0, a1);
+        assert_eq!(r, [a_bits, b_bits, 0, 0], "a0 {:08x} a1 {:08x}", a_bits, b_bits);
     }
 }
 

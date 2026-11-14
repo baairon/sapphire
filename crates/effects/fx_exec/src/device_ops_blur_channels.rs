@@ -40,7 +40,7 @@ fn accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
         return Err("combination tag outside 1..4");
     }
     match plane_channels(&a[0]) {
-        Some(ch) if ch >= 1 => {}
+        Some(chan) if chan >= 1 => {}
         Some(_) => return Err("a source without planes"),
         None => return Err("the source is not a plain image"),
     }
@@ -110,15 +110,15 @@ fn run(s: &Arc<Session>, c: &NodeCall, a: &[DevArg]) -> Result<DevImage, DevErro
         if m == 10 {
             std::mem::swap(&mut sx, &mut sy);
         }
-        let mut sp = cp.subpixel != 0;
+        let mut subpixel_on = cp.subpixel != 0;
         if m == 7 {
-            sp = !sp;
+            subpixel_on = !subpixel_on;
         }
         let mut sidx = if p < n_in { p } else { last };
         if m == 3 && p >= n_in && last > 0 {
             sidx = last - 1;
         }
-        let job = BlurJob { w, h, sx, sy, gain: g, edge, passes, subpixel: sp, aspect: cp.aspect };
+        let job = BlurJob { w, h, sx, sy, gain: g, edge, passes, subpixel: subpixel_on, aspect: cp.aspect };
         blur_dev(s, &scr, src.plane(sidx), out.plane(p), &job)?;
     }
     Ok(out)
@@ -167,25 +167,25 @@ fn corpus() -> Vec<SelfCase> {
         (1.2, 0.7, [1.0, 2.0, 0.5, 1.0], 4, 1.0, [1.0, 1.0, 1.0, 1.0], 4, 0.0, 0, 0, Some(2.0)),
     ];
     let mut out = Vec::new();
-    for (di, &(w, h)) in DIMS.iter().enumerate() {
+    for (dim_idx, &(w, h)) in DIMS.iter().enumerate() {
         let n = w * h;
-        for si in [1usize, 3, 9, 6, 2, 4, 7, 10, 0, 5, 8] {
-            let p = &sets[si];
+        for set_idx in [1usize, 3, 9, 6, 2, 4, 7, 10, 0, 5, 8] {
+            let p = &sets[set_idx];
             for tag in 1usize..=4 {
                 for src_planes in 1usize..=4 {
                     // sources of 1 to 4 planes: all against tag 4 and 3, the rest sampled
-                    if (di + si + tag + src_planes) % 3 != 0 && !(tag >= 3 && src_planes <= 2) {
+                    if (dim_idx + set_idx + tag + src_planes) % 3 != 0 && !(tag >= 3 && src_planes <= 2) {
                         continue;
                     }
-                    if n > 1000 && (si + tag + src_planes) % 2 == 1 {
+                    if n > 1000 && (set_idx + tag + src_planes) % 2 == 1 {
                         continue;
                     }
-                    let kind = (si + src_planes) % 3;
+                    let kind = (set_idx + src_planes) % 3;
                     let mut kp = kp_blur(p.8, p.9);
                     kp.blur_aspect = p.10;
-                    let img = Image { n, planes: (0..src_planes).map(|k| values(n, di * 31 + si * 5 + k, kind)).collect() };
+                    let img = Image { n, planes: (0..src_planes).map(|k| values(n, dim_idx * 31 + set_idx * 5 + k, kind)).collect() };
                     out.push(SelfCase {
-                        name: format!("{w}x{h} set {si} tag {tag} src {src_planes} kind {kind}"),
+                        name: format!("{w}x{h} set {set_idx} tag {tag} src {src_planes} kind {kind}"),
                         dims: (w, h),
                         tag: tag as i32,
                         args: vec![img],

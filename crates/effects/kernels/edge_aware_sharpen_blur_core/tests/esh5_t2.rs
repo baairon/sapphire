@@ -40,18 +40,18 @@ impl Host for Rec {
         self.ev.push(format!("powf x0={} x1={}", x.to_bits(), y.to_bits()));
         f32::from_bits(self.powf_ret)
     }
-    fn scratch_init(&mut self, this: u64, bytes: i64, ecx: u32, r8d: u32, g0: u64, g1: u64, hx: &[f32], hy: &[f32]) -> u64 {
-        self.ev.push(format!("scratch rsi={} rdx={} ecx={} r8d={} g0={} g1={} hx={} hy={}", nm(this), bytes, ecx, r8d, g0, g1, join(hx), join(hy)));
+    fn scratch_init(&mut self, this: u64, bytes: i64, init_flags: u32, fill_flags: u32, tag_lo: u64, tag_hi: u64, hx: &[f32], hy: &[f32]) -> u64 {
+        self.ev.push(format!("scratch rsi={} rdx={} ecx={} r8d={} g0={} g1={} hx={} hy={}", nm(this), bytes, init_flags, fill_flags, tag_lo, tag_hi, join(hx), join(hy)));
         HANDLE.with(|h| h.get())
     }
     fn pool_run(&mut self, this: u64, job: u32, radius: u32, src: u64, dst: u64, aux: u64) {
         self.ev.push(format!("pool rdi={} job=0x{:x} radius={} src={} dst={} aux={}", nm(this), job, radius, nm(src), nm(dst), nm(aux)));
     }
-    fn copy(&mut self, dst: u64, src: u64, edx: u32, w0: u64, w1: u64, w2: u64) {
-        self.ev.push(format!("copy rdi={} rsi={} edx={} w0={} w1={} w2={}", nm(dst), nm(src), edx, w0, w1, nm(w2)));
+    fn copy(&mut self, dst: u64, src: u64, copy_mode: u32, roi_xy: u64, roi_wh: u64, aux_handle: u64) {
+        self.ev.push(format!("copy rdi={} rsi={} edx={} w0={} w1={} w2={}", nm(dst), nm(src), copy_mode, roi_xy, roi_wh, nm(aux_handle)));
     }
-    fn scratch_free(&mut self, handle: u64, g0: u64, g1: u64) {
-        self.ev.push(format!("free rdi={} g0={} g1={}", handle, g0, g1));
+    fn scratch_free(&mut self, handle: u64, tag_lo: u64, tag_hi: u64) {
+        self.ev.push(format!("free rdi={} g0={} g1={}", handle, tag_lo, tag_hi));
     }
 }
 thread_local! { static HANDLE: std::cell::Cell<u64> = std::cell::Cell::new(0); }

@@ -45,7 +45,7 @@ fn run(path: &str, names: &[String]) -> i32 {
             let o = fx_eval::CompileOptions { overrides: s.overrides.clone(), paramset: s.paramset.clone(), hc_zero_legacy: std::env::args().any(|x| x == "--hc-zero-legacy"), ..Default::default() };
             match compile(&g, &ct, &o) {
                 Ok(cp) => {
-                    let run: Vec<String> = cp.nodes.iter().filter(|n| (n.kind == "func" || n.kind == "auto") && !n.b160 && !n.folded).map(|n| n.prim.clone()).collect();
+                    let run: Vec<String> = cp.nodes.iter().filter(|n| (n.kind == "func" || n.kind == "auto") && !n.is_const_node && !n.folded).map(|n| n.prim.clone()).collect();
                     let un = fx_exec::unsupported_classes(&cp);
                     println!("{}\t{}\t{}\t{}", name, s.paramset, run.join(" "), if un.is_empty() { "-".to_string() } else { un.join(" ") });
                 }

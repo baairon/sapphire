@@ -108,13 +108,13 @@ impl FrameBuf {
     /// Bytes of plane `plane`.
     pub fn plane(&self, plane: usize) -> Option<&[u8]> {
         let p = self.plane_layout(plane)?;
-        Some(&self.data[p.offset..p.offset + p.size])
+        Some(&self.data[p.byte_pos..p.byte_pos + p.size])
     }
 
     /// Mutable bytes of plane `plane`.
     pub fn plane_mut(&mut self, plane: usize) -> Option<&mut [u8]> {
         let p = *self.plane_layout(plane)?;
-        Some(&mut self.data[p.offset..p.offset + p.size])
+        Some(&mut self.data[p.byte_pos..p.byte_pos + p.size])
     }
 
     /// Row `y` of plane `plane`.
@@ -123,7 +123,7 @@ impl FrameBuf {
         if y >= p.rows {
             return None;
         }
-        let start = p.offset + y * p.stride;
+        let start = p.byte_pos + y * p.stride;
         Some(&self.data[start..start + p.stride])
     }
 
@@ -133,7 +133,7 @@ impl FrameBuf {
         if y >= p.rows {
             return None;
         }
-        let start = p.offset + y * p.stride;
+        let start = p.byte_pos + y * p.stride;
         Some(&mut self.data[start..start + p.stride])
     }
 
@@ -159,11 +159,11 @@ impl FrameBuf {
         let mut out = Vec::with_capacity(self.aligned_len(align));
         for p in self.planes() {
             match p.kind {
-                PlaneKind::Palette => out.extend_from_slice(&self.data[p.offset..p.offset + p.size]),
+                PlaneKind::Palette => out.extend_from_slice(&self.data[p.byte_pos..p.byte_pos + p.size]),
                 PlaneKind::Samples => {
                     let padded = align_up(p.stride, align);
                     for y in 0..p.rows {
-                        let start = p.offset + y * p.stride;
+                        let start = p.byte_pos + y * p.stride;
                         out.extend_from_slice(&self.data[start..start + p.stride]);
                         out.resize(out.len() + (padded - p.stride), 0);
                     }
@@ -185,13 +185,13 @@ impl FrameBuf {
         for p in planes {
             match p.kind {
                 PlaneKind::Palette => {
-                    frame.data[p.offset..p.offset + p.size].copy_from_slice(&bytes[at..at + p.size]);
+                    frame.data[p.byte_pos..p.byte_pos + p.size].copy_from_slice(&bytes[at..at + p.size]);
                     at += p.size;
                 }
                 PlaneKind::Samples => {
                     let padded = align_up(p.stride, align);
                     for y in 0..p.rows {
-                        let dst = p.offset + y * p.stride;
+                        let dst = p.byte_pos + y * p.stride;
                         frame.data[dst..dst + p.stride].copy_from_slice(&bytes[at..at + p.stride]);
                         at += padded;
                     }
@@ -211,7 +211,7 @@ impl FrameBuf {
             return Err(Error::BufferSize { expected: needed, actual: dst.len() });
         }
         for y in 0..p.rows {
-            let src = p.offset + y * p.stride;
+            let src = p.byte_pos + y * p.stride;
             dst[y * dst_stride..y * dst_stride + p.stride].copy_from_slice(&self.data[src..src + p.stride]);
         }
         Ok(())
@@ -227,7 +227,7 @@ impl FrameBuf {
             return Err(Error::BufferSize { expected: needed, actual: src.len() });
         }
         for y in 0..p.rows {
-            let dst = p.offset + y * p.stride;
+            let dst = p.byte_pos + y * p.stride;
             self.data[dst..dst + p.stride].copy_from_slice(&src[y * src_stride..y * src_stride + p.stride]);
         }
         Ok(())

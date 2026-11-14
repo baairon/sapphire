@@ -64,11 +64,11 @@ pub fn calls(nout: i32, m: Mutant) -> Vec<PadCall> {
     }
     let mut chans: Vec<i32> = Vec::new();
     // do { call; ch++ } while (ch < count)
-    let mut ch: i32 = if m == Mutant::StartAtOne { 1 } else { 0 };
+    let mut next_chan: i32 = if m == Mutant::StartAtOne { 1 } else { 0 };
     loop {
-        chans.push(ch);
-        ch += 1;
-        let go = if m == Mutant::OneExtra { ch <= n } else { ch < n };
+        chans.push(next_chan);
+        next_chan += 1;
+        let go = if m == Mutant::OneExtra { next_chan <= n } else { next_chan < n };
         if !go {
             break;
         }
@@ -79,21 +79,21 @@ pub fn calls(nout: i32, m: Mutant) -> Vec<PadCall> {
     if m == Mutant::Reversed {
         chans.reverse();
     }
-    for ch in chans {
+    for next_chan in chans {
         let mode = match m {
             Mutant::ModeOne => 1,
-            Mutant::ModeChanSwapped => ch,
+            Mutant::ModeChanSwapped => next_chan,
             _ => 0,
         };
         let chan = match m {
             Mutant::ModeChanSwapped => 0,
-            Mutant::ChanPlusOne => ch + 1,
-            _ => ch,
+            Mutant::ChanPlusOne => next_chan + 1,
+            _ => next_chan,
         };
         let out = match m {
             Mutant::DestAlwaysFirst => 0,
-            Mutant::DestShifted => ch + 1,
-            _ => ch,
+            Mutant::DestShifted => next_chan + 1,
+            _ => next_chan,
         };
         v.push(PadCall { mode, chan, out });
     }

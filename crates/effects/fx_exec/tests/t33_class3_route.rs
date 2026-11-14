@@ -19,8 +19,8 @@ fn route_pieces_equal_floored_pair() {
     // floored pair
     let mut pl = Vec::new();
     convert_pair::convert_from_source_line_3_b(&mem, &mut pl, n);
-    let mut d1 = vec![0xaaaa_aaaau32; 4 * n];
-    convert_pair::convert_to_dest_line_3_m2(&pl, &mem, &mut d1, n).unwrap();
+    let mut fp33_sub_1 = vec![0xaaaa_aaaau32; 4 * n];
+    convert_pair::convert_to_dest_line_3_m2(&pl, &mem, &mut fp33_sub_1, n).unwrap();
     // route pieces
     let (mut a, mut b, mut c) = (vec![0u32; n], vec![0u32; n], vec![0u32; n]);
     {
@@ -34,7 +34,7 @@ fn route_pieces_equal_floored_pair() {
         assert_eq!(d2[4 * i], 0xaaaa_aaaa, "the mode-2 body leaves slot 0");
     }
     format14_write::copy_word0(&mem, &mut d2, n as i32).unwrap();
-    assert_eq!(d1, d2, "route destination equals the floored pair");
+    assert_eq!(fp33_sub_1, d2, "route destination equals the floored pair");
 }
 
 #[test]

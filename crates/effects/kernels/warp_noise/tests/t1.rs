@@ -20,8 +20,8 @@ fn weight_table_ends() {
 fn origin_one_octave_by_hand() {
     let t = tables();
     let seed = 503;
-    let cell = |cx: i32, cy: i32| {
-        let h = hash_2(&t.hash, ((cy as u32) << 4) ^ (seed as u32), cx as u32);
+    let cell = |centre_x: i32, cy: i32| {
+        let h = hash_2(&t.hash, ((cy as u32) << 4) ^ (seed as u32), centre_x as u32);
         (((h & 0x1fff) as i32 - 4096) as f32) * f32::from_bits(0x3980_0000)
     };
     let w = |d2: f32| t.weights[(((d2 * 4096.0) as i32) >> 1) as usize];

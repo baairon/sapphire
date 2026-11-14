@@ -11,7 +11,7 @@ fn state_a(prog: &str, flag: bool) -> (Result<(), String>, Vec<(usize, usize)>) 
     let g = fx_eval::build_effect(&c, c.find_effect(prog, None).unwrap()).unwrap();
     let mut o = fx_eval::CompileOptions::default();
     o.const_inputs.insert("Mask".into(), vec![1.0]);
-    o.v3_bound_count = flag;
+    o.claim_bound_count = flag;
     let _ = fx_eval::fold::v3_take();
     let r = fx_eval::compile(&g, &combo_table(), &o).map(|_| ()).map_err(|e| e.msg);
     let v = fx_eval::fold::v3_take().iter().map(|x| (x.0, x.1)).collect();

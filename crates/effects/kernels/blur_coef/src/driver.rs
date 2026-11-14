@@ -55,8 +55,8 @@ pub fn plan(p: &DriverParams) -> Plan {
     // X section: vcomiss sx, 0; jbe skips for sx <= 0 and NaN.
     let x = if p.sigma_x > 0.0 {
         let r = radii(p.sigma_x, p.width, n, p.subpixel);
-        let (c, a2) = coeffs(&r.a, &r.b, r.frac, n as usize, acc);
-        acc = a2;
+        let (c, next_acc) = coeffs(&r.a, &r.b, r.frac, n as usize, acc);
+        acc = next_acc;
         Some(PassPlan { a: r.a, b: r.b, c, frac: r.frac, npasses: n })
     } else {
         None
@@ -72,8 +72,8 @@ pub fn plan(p: &DriverParams) -> Plan {
         }
         let extent = if p.half { p.height >> 1 } else { p.height };
         let r = radii(sy, extent, n, p.subpixel);
-        let (c, a2) = coeffs(&r.a, &r.b, r.frac, n as usize, acc);
-        acc = a2;
+        let (c, next_acc) = coeffs(&r.a, &r.b, r.frac, n as usize, acc);
+        acc = next_acc;
         Some(PassPlan { a: r.a, b: r.b, c, frac: r.frac, npasses: n })
     } else {
         None

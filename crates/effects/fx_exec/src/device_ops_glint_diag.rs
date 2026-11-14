@@ -6,7 +6,7 @@
 //! outside the plane) is flagged by the kernel and returned as [`DiagDevError::Range`]; the CPU path then reports the named error.
 
 use diagonal_box_sum::{scale_factor, BoxSumError, Diagonal, Params as BoxParams};
-use fx_device::cl::{Access, Arg as ClArg, Buffer};
+use fx_device::ocl::{Access, Arg as ClArg, Buffer};
 use fx_device::Session;
 use glint_diag_box::{normaliser, Band, Error, Params, RowPhases};
 use std::sync::Arc;

@@ -246,7 +246,7 @@ pub struct Assumption {
 
 pub fn assumptions() -> Vec<Assumption> {
     vec![
-        Assumption { id: "TA-A1", value: "feature word 0x9d97ff selects the AVX2 and FMA body (dispatcher not ported)", basis: "harness feature word" },
+        Assumption { id: "TA-A1", value: "feature word selects the AVX2 and FMA body (dispatcher not ported)", basis: "harness feature word" }, // origin: 0x9d97ff
         Assumption { id: "TA-A2", value: "flag != 0 (offload serializer 0x363d40) is refused by name, not rendered", basis: "host offload plumbing, not ported" },
         // TA-A3 ROI helper: 0x5b9bd0; host dispatch: 0x673100.
         Assumption { id: "TA-A3", value: "host branch (ROI helper and host dispatch) is refused by name when |cos(angle) / amount| < 1e-4", basis: "host services, not ported" },

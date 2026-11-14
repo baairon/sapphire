@@ -78,25 +78,25 @@ pub struct Output {
     pub plane3_accesses: u32,
 }
 
-pub fn run(cx: &CompileCtx, ops: &Operands, inp: &Inputs, scratch: Scratch) -> Result<Output, ExecErr> {
-    if cx.flag != 0 {
-        return Err(ExecErr::FlagNonzero(cx.flag));
+pub fn run(centre_x: &CompileCtx, ops: &Operands, inp: &Inputs, scratch: Scratch) -> Result<Output, ExecErr> {
+    if centre_x.flag != 0 {
+        return Err(ExecErr::FlagNonzero(centre_x.flag));
     }
-    if cx.tag < 0 {
-        return Err(ExecErr::TagNegative(cx.tag));
+    if centre_x.tag < 0 {
+        return Err(ExecErr::TagNegative(centre_x.tag));
     }
-    if !(1..=3).contains(&cx.nch) {
-        return Err(ExecErr::NchRange(cx.nch));
+    if !(1..=3).contains(&centre_x.nch) {
+        return Err(ExecErr::NchRange(centre_x.nch));
     }
     let iters = edge_aware_sharpen_jobs::cvtt32(ops.levels);
     if iters > 7 {
         return Err(ExecErr::ItersAbove7(iters));
     }
-    let nu = cx.nch as usize;
-    if cx.w < 1 || cx.h < 1 || cx.cw < 0 {
-        return Err(ExecErr::Shape(format!("w {} h {} cw {}", cx.w, cx.h, cx.cw)));
+    let nu = centre_x.nch as usize;
+    if centre_x.w < 1 || centre_x.h < 1 || centre_x.cw < 0 {
+        return Err(ExecErr::Shape(format!("w {} h {} cw {}", centre_x.w, centre_x.h, centre_x.cw)));
     }
-    let wh = (cx.w as usize) * (cx.h as usize);
+    let wh = (centre_x.w as usize) * (centre_x.h as usize);
     if inp.source.len() != nu || inp.source.iter().any(|p| p.len() != wh) {
         return Err(ExecErr::Shape(format!("source planes {} (nch {}), each w*h = {}", inp.source.len(), nu, wh)));
     }
@@ -140,9 +140,9 @@ pub fn run(cx: &CompileCtx, ops: &Operands, inp: &Inputs, scratch: Scratch) -> R
     let mut arr = [0f32; 11];
     arr[..7].copy_from_slice(&ops.sigmoid_scale);
     arr[7..10].copy_from_slice(&ops.rel_chan);
-    let th = d::This { n: cx.nch, sig_byte, sigma0, mode: ops.blur_type, variant: ops.deriv_io[0], bcflag: ops.deriv_io[1], iters: ops.levels, scale: ops.tiny_detail_size, output_a: ops.edge_threshold, arr };
-    let c = d::Cx { cw: cx.cw, w: cx.w, h: cx.h, kcell: cx.kcell };
-    match d::slot52(&th, &c, &ids, &mut mem, cx.flag) {
+    let th = d::This { n: centre_x.nch, sig_byte, sigma0, mode: ops.blur_type, variant: ops.deriv_io[0], bcflag: ops.deriv_io[1], iters: ops.levels, scale: ops.tiny_detail_size, output_a: ops.edge_threshold, arr };
+    let c = d::Cx { cw: centre_x.cw, w: centre_x.w, h: centre_x.h, kcell: centre_x.kcell };
+    match d::slot52(&th, &c, &ids, &mut mem, centre_x.flag) {
         Ok(calls) => {
             let planes = (0..nu).map(|k| mem[ids.out[k]..ids.out[k] + wh].to_vec()).collect();
             Ok(Output { planes, calls, plane3_accesses: 0 })

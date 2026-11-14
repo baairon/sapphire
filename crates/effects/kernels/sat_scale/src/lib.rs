@@ -131,7 +131,7 @@ pub fn pixels(p: &Params, n: i32, inp: &Inputs, outs: &mut [&mut [f32]; 3]) -> R
     }
     if p.scalar_scale {
         let s = p.scale;
-        let w1 = nx_sub(ONE, s); // 
+        let diff_1 = nx_sub(ONE, s); // 
         for i in 0..n {
             let (r, g, b) = (src[0][i], src[1][i], src[2][i]);
             let l = luma_px(r, g, b);
@@ -140,7 +140,7 @@ pub fn pixels(p: &Params, n: i32, inp: &Inputs, outs: &mut [&mut [f32]; 3]) -> R
                 outs[1][i] = l;
                 outs[2][i] = l;
             } else {
-                let w = nx_mul(w1, l); // 
+                let w = nx_mul(diff_1, l); // 
                 outs[0][i] = nx_fma(s, r, w);
                 outs[1][i] = nx_fma(s, g, w);
                 outs[2][i] = nx_fma(b, s, w);

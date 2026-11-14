@@ -3,7 +3,7 @@
 //! CPU over the corpus, the census frame sizes and the counted parameter sets. Prints NOT RUN without an OpenCL device
 //! (run with --test-threads=1: platform discovery is not thread safe).
 
-use fx_device::cl::Buffer;
+use fx_device::ocl::Buffer;
 use fx_device::selfcheck::{adversarial_f32, compare_f32, NanPayloads};
 use fx_device::{Backend as Handle, DevError, DevImage, DeviceKind, Session};
 use fx_exec::backend::NodeCall;
@@ -391,19 +391,19 @@ fn guard_run(s: &Arc<Session>, levels: &[Level], idx: i32, c: &GuardCase, seed: 
     let params = guard_params(c);
     let mut store = RecStore { planes: init.clone(), seq: Vec::new() };
     let mut poll = || false;
-    let o1 = run_body(levels, idx, &params, &mut store, &mut poll);
+    let cpu_out = run_body(levels, idx, &params, &mut store, &mut poll);
     let mut pl = dv::DevPlanes::new(s);
     for (id, d) in &init {
         pl.register(*id, d, phase_of(*id));
     }
     let mut rec = Vec::new();
     let mut poll2 = || false;
-    let o2 = dv::dev_solve_body(levels, idx, &params, &mut pl, &mut poll2, &mut rec);
+    let dev_out = dv::dev_solve_body(levels, idx, &params, &mut pl, &mut poll2, &mut rec);
     if let Some(e) = pl.take_dev_err() {
         return Err(format!("device error {e:?}"));
     }
-    if o1 != o2 {
-        return Err(format!("outcomes differ {o1:?} {o2:?}"));
+    if cpu_out != dev_out {
+        return Err(format!("outcomes differ {cpu_out:?} {dev_out:?}"));
     }
     if store.seq != rec {
         let at = store.seq.iter().zip(&rec).position(|(a, b)| a != b).unwrap_or(store.seq.len().min(rec.len()));
@@ -475,7 +475,7 @@ fn cpu_node(w: usize, h: usize, c: &dv::FlowCase, prev: &Image, next: &Image) ->
     for (n, lanes) in const_args(c) {
         args.push(Arg::Const { n, lanes });
     }
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     match fx_exec::kernels::run_any("optical_flow", 3, &args, w * h, (w, h), &kp) {
         Ok(fx_exec::kernels2::Out::Img(i)) => Ok(i),
         Ok(_) => Err("not an image".into()),
@@ -489,7 +489,7 @@ fn std_case(w: usize, h: usize) -> dv::FlowCase {
 
 #[test]
 fn every_refusal_shape_gives_the_cpu_nodes_error_through_accepts() {
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let mut refused = 0usize;
     let mut run = 0usize;
     let mut shapes: Vec<(usize, usize)> = Vec::new();
@@ -530,7 +530,7 @@ fn every_refusal_shape_gives_the_cpu_nodes_error_through_accepts() {
 #[test]
 fn accepts_refuses_wrong_operand_shapes() {
     use fx_exec::device_ops::ArgShape as S;
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let call = |tag| NodeCall { idx: 0, class: "optical_flow", tag, n: 64, dims: (8, 8), kp: &kp };
     let good: Vec<S> = (0..9).map(|i| if i < 2 { S::Img { channels: 3 } } else { S::Const { n: 1 } }).collect();
     assert_eq!(dv::optical_flow_accepts(&call(3), &good), Ok(()));
@@ -627,8 +627,8 @@ fn device_vs_cpu(s: &Arc<Session>, c: &dv::FlowCase, t: &mut Tally, log: &mut Ve
     let name = format!("{}x{} kind {} iters {:?} lambda {} unit {} tex {} smooth {}", c.w, c.h, c.kind, c.iters, c.lambda, c.unit, c.texture, c.smooth);
     match (want, got) {
         (Ok(w), Ok((d, st))) => {
-            let dl = d.download().unwrap();
-            planes_equal(t, &name, &[w.flow_u, w.flow_v, w.confidence], &dl);
+            let downloaded = d.download().unwrap();
+            planes_equal(t, &name, &[w.flow_u, w.flow_v, w.confidence], &downloaded);
             log.push(format!("{name}: plane reads {} uploads {} solve launches {}", st.plane_reads, st.plane_uploads, st.solve_launches.len()));
         }
         (Err(e), Err(DevError::Unsupported(_))) => log.push(format!("{name}: CPU error {e:?} and device refusal (equal outcome class)")),
@@ -670,7 +670,7 @@ fn forced_device_equals_the_cpu_node_over_the_corpus_and_the_census_runs() {
 #[test]
 fn accepts_refuses_a_frame_size_that_overflows_usize() {
     use fx_exec::device_ops::ArgShape as S;
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let good: Vec<S> = (0..9).map(|i| if i < 2 { S::Img { channels: 1 } } else { S::Const { n: 1 } }).collect();
     for dims in [(usize::MAX, 2usize), (1usize << 40, 1usize << 40), (2usize, usize::MAX)] {
         let call = NodeCall { idx: 0, class: "optical_flow", tag: 3, n: 0, dims, kp: &kp };
@@ -735,7 +735,7 @@ fn device_placement_equals_the_cpu_placement_plane_by_plane() {
 #[test]
 fn accepts_refuses_an_invalid_host_phase() {
     use fx_exec::device_ops::ArgShape as S;
-    let mut kp = KParams::standin();
+    let mut kp = KParams::host_defaults();
     kp.flow_host_phase = 6;
     let good: Vec<S> = (0..9).map(|i| if i < 2 { S::Img { channels: 1 } } else { S::Const { n: 1 } }).collect();
     let call = NodeCall { idx: 0, class: "optical_flow", tag: 3, n: 64 * 32, dims: (64, 32), kp: &kp };

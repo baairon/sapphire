@@ -35,13 +35,13 @@ pub struct WriterOut { pub f: f32, pub dur_frames: f32, pub ts_over_step: f32, p
 
 /// . `kind` is the host id; `f4` is in_data; `eax_in` is eax on entry to 
 /// (1 on the fall-through path, used only when the step is not positive; INFERRED for the jump source).
-pub fn render_entry_f(current_time: i32, duration: i32, step: i32, time_scale: u32, f4: i32, kind: i32, eax_in: i32) -> WriterOut {
-    let dbl = kind == 4 && f4 != 0 && !mu(6);
-    let ecx = if dbl { step.wrapping_add(step) } else { step };
-    let r8 = if ecx <= 0 { if mu(15) { 0 } else { eax_in } } else if dbl { step.wrapping_add(step) } else { step };
-    let d = r8 as f32;
+pub fn render_entry_f(current_time: i32, duration: i32, step: i32, time_scale: u32, ctx_cell: i32, kind: i32, step_in: i32) -> WriterOut {
+    let dbl = kind == 4 && ctx_cell != 0 && !mu(6);
+    let eff_step = if dbl { step.wrapping_add(step) } else { step };
+    let route_step = if eff_step <= 0 { if mu(15) { 0 } else { step_in } } else if dbl { step.wrapping_add(step) } else { step };
+    let d = route_step as f32;
     let ts = if mu(16) { (time_scale as i32 as i64) as f32 } else { (time_scale as u64 as i64) as f32 };
-    WriterOut { f: (current_time as f32) / d, dur_frames: (duration as f32) / d, ts_over_step: ts / d, step: r8 }
+    WriterOut { f: (current_time as f32) / d, dur_frames: (duration as f32) / d, ts_over_step: ts / d, step: route_step }
 }
 
 // ---------------------------------------------------------------- checkout 
@@ -54,7 +54,7 @@ pub struct CheckoutIn {
     pub lim_global: i32,   //  (a host-side time cell written from [[owner]]; INFERRED meaning)
     pub step: Option<i32>, // [[ctx]], None when ctx is null
     pub kind: i32,         // 
-    pub f4: i32,           // [[ctx]]
+    pub ctx_cell: i32,           // [[ctx]]
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Request {
@@ -78,21 +78,21 @@ pub fn checkout_request(i: CheckoutIn) -> Result<Request, FrameError> {
     let x = if mu(8) { ((i.f as f32) - i.big_f.trunc()) + i.big_f } else { ((i.f as f32) - i.big_f.floor()) + i.big_f };
     let step = match i.step {
         None => 1,
-        Some(s) => if i.kind == 4 && i.f4 != 0 && !mu(6) { s.wrapping_add(s) } else { s },
+        Some(s) => if i.kind == 4 && i.ctx_cell != 0 && !mu(6) { s.wrapping_add(s) } else { s },
     };
     let lim = if mu(22) {
         if step == 0 { return Err(FrameError::DivideError); } i.lim_global.wrapping_div_euclid(step)
     } else { i.lim_global.checked_div(step).ok_or(FrameError::DivideError)? };
-    let eax = if mu(9) { cvtt_ss(x.floor()) } else { cvtt_ss(x) };
+    let frame_word = if mu(9) { cvtt_ss(x.floor()) } else { cvtt_ss(x) };
     let sub = if mu(7) { 0.0 } else { LIMIT_SUB };
     let c = cvtt_sd((i.dur_frames as f64) - sub);
-    let cl = if c >= eax { eax } else { c };
-    let frame = if mu(2) { cl } else if mu(12) { if lim >= eax { lim } else { cl } } else if mu(13) { if lim > cl { lim } else { cl } } else if lim > eax { lim } else { cl };
+    let clamped = if c >= frame_word { frame_word } else { c };
+    let frame = if mu(2) { clamped } else if mu(12) { if lim >= frame_word { lim } else { clamped } } else if mu(13) { if lim > clamped { lim } else { clamped } } else if lim > frame_word { lim } else { clamped };
     let fx = if mu(23) { x.trunc() } else { x.floor() };
-    let stored = if mu(3) { x } else if mu(14) { (x - fx) + (eax as f32) } else { (x - fx) + (frame as f32) };
+    let stored = if mu(3) { x } else if mu(14) { (x - fx) + (frame_word as f32) } else { (x - fx) + (frame as f32) };
     let cache_key = if mu(18) { cvtt_ss(stored * 2.0 + 100.0) } else { cvtt_ss(stored.mul_add(2.0, 100.0)) };
     let host_time = if mu(17) { cvt_ss((step as f32) * stored) } else { cvtt_ss((step as f32) * stored) };
-    Ok(Request { f: i.f, x, trunc_x: eax, lim, frame, stored, step, cache_key, host_time })
+    Ok(Request { f: i.f, x, trunc_x: frame_word, lim, frame, stored, step, cache_key, host_time })
 }
 
 /// Host model: frames keyed by (f, x bits) as the plugin computes them; an unanswered request is an error.
@@ -212,14 +212,14 @@ pub fn render_entry_limit(h: &mut OwnerHist, i: &EntryIn) -> Option<i32> {
     Some(r.anchor)
 }
 /// The two other record writers (same record, they do NOT write the cell): ebx = trunc of a float local.
-pub fn render_entry_seq(h: &mut OwnerHist, ebx: i32, settings: (i32, i32), flag_cell_a_4: bool) {
+pub fn render_entry_seq(h: &mut OwnerHist, class_flag: i32, settings: (i32, i32), flag_cell_a_4: bool) {
     if !flag_cell_a_4 { return; }
     h.cur = 0;
     let r = &mut h.rec[0];
-    let eax = ebx.wrapping_sub(r.last);
-    let keep = ebx != 0 && eax == 1 && !settings_differ(r, settings);
-    if !keep { r.keep_flag = 0; r.anchor = ebx; }
-    r.last = ebx;
+    let frame_word = class_flag.wrapping_sub(r.last);
+    let keep = class_flag != 0 && frame_word == 1 && !settings_differ(r, settings);
+    if !keep { r.keep_flag = 0; r.anchor = class_flag; }
+    r.last = class_flag;
 }
 
 // ---------------------------------------------------------------- the frame cache (entries + k * the entry size)
@@ -258,7 +258,7 @@ impl FrameCache {
 /// the record (LIMIT-CELL-BY-RECORD), `step` local_time_step, `kind` the host id, `f4` the step struct flag, `r8` and `r9` the two
 /// frame-range selectors (r9 != 0 is the scalar path).
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TwRoute { pub big_f: f32, pub dur_frames: f32, pub limit_cell: i32, pub step: i32, pub kind: i32, pub f4: i32, pub r8: i32, pub r9: i32 }
+pub struct TwRoute { pub big_f: f32, pub dur_frames: f32, pub limit_cell: i32, pub step: i32, pub kind: i32, pub ctx_cell: i32, pub route_step: i32, pub tap_a: i32 }
 
 /// One host request as the plugin makes it: the frame after the limit, the stored time and the host call argument trunc(step x stored).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -267,14 +267,14 @@ pub struct TwRequest { pub frame: i32, pub stored: f32, pub arg: i32 }
 /// The request for one get_frame offset t (float32(F + shift) as folded): the scalar frame range, then the checkout request.
 /// Refusals are named: the lane path is not on the recorded route (r9 = 0), a range of more than one frame, a zero step.
 pub fn route_request(q: &TwRoute, t: f32) -> Result<TwRequest, String> {
-    if q.r9 == 0 {
+    if q.tap_a == 0 {
         return Err("FRAME-RANGE-LANE-PATH-NOT-ON-ROUTE (r9d = 0: the lane path of the frame range is ported but the recorded route is the scalar path)".into());
     }
-    let (lo, hi) = frame_range_scalar(t, q.r8 != 0);
+    let (lo, hi) = frame_range_scalar(t, q.route_step != 0);
     if lo != hi {
         return Err(format!("FRAME-RANGE-MULTI-UNRECORDED (frames {} to {} for one request; the recorded route asks one frame per offset)", lo, hi));
     }
-    let r = checkout_request(CheckoutIn { f: lo, big_f: q.big_f, dur_frames: q.dur_frames, lim_global: q.limit_cell, step: Some(q.step), kind: q.kind, f4: q.f4 })
+    let r = checkout_request(CheckoutIn { f: lo, big_f: q.big_f, dur_frames: q.dur_frames, lim_global: q.limit_cell, step: Some(q.step), kind: q.kind, ctx_cell: q.ctx_cell })
         .map_err(|e| format!("FRAME-REQUEST-REFUSED ({:?}; step {})", e, q.step))?;
     Ok(TwRequest { frame: r.frame, stored: r.stored, arg: r.host_time })
 }
@@ -282,7 +282,7 @@ pub fn route_request(q: &TwRoute, t: f32) -> Result<TwRequest, String> {
 #[cfg(test)]
 mod int29_tests {
     use super::*;
-    fn q(f: f32, step: i32) -> TwRoute { TwRoute { big_f: f, dur_frames: 240.0, limit_cell: 0, step, kind: 0, f4: 0, r8: 0, r9: 1 } }
+    fn q(f: f32, step: i32) -> TwRoute { TwRoute { big_f: f, dur_frames: 240.0, limit_cell: 0, step, kind: 0, ctx_cell: 0, route_step: 0, tap_a: 1 } }
     /// REQUEST-LIST (MEASURED keylog): F 2.5 then 3.5 at step 2 with shifts +1, 0, -1 ask frames 3,2,1 and 4,3,2
     /// with arguments 7,5,3 and 9,7,5.
     #[test]
@@ -308,10 +308,10 @@ mod int29_tests {
     #[test]
     fn refusals_named() {
         let mut a = q(1.0, 1);
-        a.r9 = 0;
+        a.tap_a = 0;
         assert!(route_request(&a, 1.0).unwrap_err().starts_with("FRAME-RANGE-LANE-PATH-NOT-ON-ROUTE"));
         let mut b = q(1.0, 1);
-        b.r8 = 1;
+        b.route_step = 1;
         assert!(route_request(&b, 1.5).unwrap_err().starts_with("FRAME-RANGE-MULTI-UNRECORDED"));
         assert!(route_request(&q(1.0, 0), 1.0).unwrap_err().starts_with("FRAME-REQUEST-REFUSED"));
     }

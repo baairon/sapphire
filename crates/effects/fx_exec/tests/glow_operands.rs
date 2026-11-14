@@ -18,7 +18,7 @@ fn run(w: usize, h: usize, edge: f32, show: f32, count: usize) -> Result<Out, Ex
     let im = img(w, h);
     let mut a: Vec<Arg> = vec![Arg::Img(&im), c(&[0.5, 0.5, 0.5]), c(&[1.0, 1.0]), c(&[12.0, 14.4, 16.7999]), c(&[2.0, 2.0, 2.0]), c(&[1.0]), c(&[edge]), c(&[show])];
     a.truncate(count);
-    run_wired("glow", 1, &a, w * h, (w, h), &KParams::standin())
+    run_wired("glow", 1, &a, w * h, (w, h), &KParams::host_defaults())
 }
 
 fn plane(o: Out) -> Vec<f32> {

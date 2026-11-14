@@ -73,7 +73,7 @@ fn tpr_shift_point_fields() {
     }
     let mut h = HostCurveValues::parse(&format!("{}value shift 24 0 1 24 0 0\nvalue shift 25 0 1 24 0 0\n", HOST)).unwrap();
     h.time_frames = Some(0.0);
-    h.ae32 = true;
+    h.claim_route = true;
     for s in STYLES {
         let mut d = Vec::new();
         assert!(fold(s, "shift", 0.5, &[0.0, 0.0], 2, &h, &mut d).is_none(), "{}", s);
@@ -87,7 +87,7 @@ fn tpr_shift_point_fields() {
     }
     let mut h = HostCurveValues::parse(&t).unwrap();
     h.time_frames = Some(0.0);
-    h.ae32 = true;
+    h.claim_route = true;
     for s in STYLES {
         let mut d = Vec::new();
         let r = fold(s, "shift", 0.5, &[0.0, 0.0], 2, &h, &mut d);

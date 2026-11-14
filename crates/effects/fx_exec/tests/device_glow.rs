@@ -62,7 +62,7 @@ fn an_edge_mode_the_cpu_refuses_is_declined_on_the_device() {
         (v.len(), core::array::from_fn(|i| v.get(i).copied().unwrap_or(last).to_bits()))
     };
     let consts = [c(&[0.5]), c(&[1.0, 1.0]), c(&[0.3]), c(&[1.0]), c(&[1.0]), c(&[2.0]), c(&[0.0])];
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let mut cpu: Vec<Arg> = vec![Arg::Img(&src)];
     cpu.extend(consts.iter().map(|&(n, lanes)| Arg::Const { n, lanes }));
     assert!(fx_exec::kernels::run_any("glow", 3, &cpu, n, (w, h), &kp).is_err(), "the CPU refuses edge mode 2");
@@ -78,16 +78,16 @@ fn an_edge_mode_the_cpu_refuses_is_declined_on_the_device() {
 
 /// Single-edit mutants of the bright pass source: (name, text in the program, replacement). Each must occur once in the program.
 const MUTANTS: &[(&str, &str, &str)] = &[
-    ("compare direction r > t0", "float e = (r > t0) ? nanx_sub(r, t0) : 0x0p+0f;", "float e = (r >= t0) ? nanx_sub(r, t0) : 0x0p+0f;"),
+    ("compare direction r > thresh_r", "float e = (r > thresh_r) ? nanx_sub(r, thresh_r) : 0x0p+0f;", "float e = (r >= thresh_r) ? nanx_sub(r, thresh_r) : 0x0p+0f;"),
     ("NaN form of the e test", "if (!(e > 0x0p+0f)) {", "if (e < 0x0p+0f) {"),
     ("select arm of maxss(r, 0)", "float mr = (r > 0x0p+0f) ? r : 0x0p+0f;", "float mr = (r < 0x0p+0f) ? 0x0p+0f : r;"),
     ("reciprocal multiply for the division", "float f = nanx_div(tt, s);", "float f = nanx_mul(tt, nanx_div(0x1p+0f, s));"),
     ("compare direction s > tt", "if (s > tt) {", "if (s >= tt) {"),
-    ("dropped g guard", "    if (g > t1) {\n        e = nanx_add(e, nanx_sub(g, t1));\n    }", "    e = nanx_add(e, nanx_sub(g, t1));"),
-    ("operand swap in the excess", "float e = (r > t0) ? nanx_sub(r, t0) : 0x0p+0f;", "float e = (r > t0) ? nanx_sub(t0, r) : 0x0p+0f;"),
-    ("operand swap in the green excess", "e = nanx_add(e, nanx_sub(g, t1));", "e = nanx_add(e, nanx_sub(t1, g));"),
+    ("dropped g guard", "    if (g > thresh_g) {\n        e = nanx_add(e, nanx_sub(g, thresh_g));\n    }", "    e = nanx_add(e, nanx_sub(g, thresh_g));"),
+    ("operand swap in the excess", "float e = (r > thresh_r) ? nanx_sub(r, thresh_r) : 0x0p+0f;", "float e = (r > thresh_r) ? nanx_sub(thresh_r, r) : 0x0p+0f;"),
+    ("operand swap in the green excess", "e = nanx_add(e, nanx_sub(g, thresh_g));", "e = nanx_add(e, nanx_sub(thresh_g, g));"),
     ("contracted multiply-add in the one plane scale", "float d = nanx_mul(k, nanx_sub(x, t));", "float d = fma(k, x, -(k * t));"),
-    ("sum order of the colour sum", "float s = (b > 0x0p+0f) ? nanx_add(b, s1) : s1;", "float s = (b > 0x0p+0f) ? nanx_add(nanx_add(b, g), mr) : s1;"),
+    ("sum order of the colour sum", "float s = (b > 0x0p+0f) ? nanx_add(b, pick_1) : pick_1;", "float s = (b > 0x0p+0f) ? nanx_add(nanx_add(b, g), mr) : pick_1;"),
     ("constant in the one plane zero test", "if (t >= x || 0x0p+0f >= x) {", "if (t >= x || 0x1p-7f >= x) {"),
     ("select arm of the one plane result", "p[i] = (x > d) ? d : x;", "p[i] = (x > d) ? x : d;"),
 ];

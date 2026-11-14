@@ -67,22 +67,22 @@ pub enum MonoError {
 /// Elements [lo, hi) go through the vector loop (vector weights), all others through the scalar loops.
 /// Listing . n must be > 0.
 pub fn split(n: i32, dst_phase: u32, m: u32) -> (usize, usize) {
-    let t8 = if m == 3 { 9 } else { 8 };
-    let t797 = if m == 4 { 800 } else { 0x31d };
-    if n < t8 {
+    let pick_8 = if m == 3 { 9 } else { 8 };
+    let scalar_limit = if m == 4 { 800 } else { 0x31d };
+    if n < pick_8 {
         return (0, 0);
     }
-    if n < t797 {
+    if n < scalar_limit {
         let hi = (n & !7) as usize;
         return (0, hi);
     }
-    let r8 = dst_phase & 0x1f;
+    let route_int_7 = dst_phase & 0x1f;
     let mut peel: u32 = 0;
-    if m != 12 && r8 != 0 {
-        if r8 & 3 != 0 {
+    if m != 12 && route_int_7 != 0 {
+        if route_int_7 & 3 != 0 {
             return (0, 0);
         }
-        peel = (32 - r8) >> 2;
+        peel = (32 - route_int_7) >> 2;
         if m == 5 {
             peel += 1;
         }
@@ -177,7 +177,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str)> {
         ("MN1-A1", "ASSUMED-SEMANTIC (tier SEMANTIC): vector weight cell plane 1, 32 B, NOT CAPTURED (lookup_mono.tsv U32): every lane = 0.5 (f64), basis: scalar loops compute the same plane with captured 0.5; sensitivity: T2 alt run changes the cell and the output changes"),
         ("MN1-A2", "ASSUMED-SEMANTIC: vector weight cell plane 0, 32 B, NOT CAPTURED: every lane = 0.3125 (f64), same basis (scalar cell CAPTURED)"),
         ("MN1-A3", "ASSUMED-SEMANTIC: vector weight cell plane 2, 32 B, NOT CAPTURED: every lane = 0.1875 (f64), same basis (scalar cell CAPTURED)"),
-        ("MN1-A4", "ROUTE AVX2-ONLY: feature word cell (pointer to, word zero in the capture) is served as 0x9d97ff in the R-PARITY run; AVX tier, SSE tier and the init retry are not ported"),
+        ("MN1-A4", "ROUTE AVX2-ONLY: feature word cell (pointer to, word zero in the capture) is served as in the R-PARITY run; AVX tier, SSE tier and the init retry are not ported"), // origin: 0x9d97ff
         ("MN1-A5", "HOST-HOOKED: tail callee (pad plane host service, channels < 3) is a record-only hook on the emulator side and a Call::Fill token on the Rust side native is not used (no READY at build time): class is PAD-UNVERIFIED"),
         ("MN1-A6", "ALIGN-DEPENDENT: Params.dst_phase is the explicit stand-in for (dest pointer & 0x1f); it only chooses which elements use the vector cells, so it changes outputs only if A1..A3 are wrong"),
         ("MN1-A7", "HOST-FP-ASSUMED: MXCSR round to nearest, no FTZ, no DAZ; null [this] with n > 0 is outside the contract (reported, not compared); dest pointer with (phase & 3) != 0 is not reachable with f32 planes (not compared)"),

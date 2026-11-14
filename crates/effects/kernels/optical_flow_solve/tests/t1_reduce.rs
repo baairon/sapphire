@@ -11,14 +11,14 @@ fn ramp(n: usize) -> Vec<f32> {
 #[test]
 fn sum_width_one_height_one() {
     let acc = sum_plane(&[3.0f32], 0, 0, 1, 1, 1);
-    assert_eq!(acc.vx_0, 3.0);
+    assert_eq!(acc.scalar_sum, 3.0);
     assert_eq!(finish(&acc, 1), (3.0, 1.0, 3.0));
 }
 
 #[test]
 fn sum_scalar_row_small_width() {
     let acc = sum_plane(&ramp(31), 0, 0, 31, 31, 1);
-    assert_eq!(acc.vx_0, 465.0);
+    assert_eq!(acc.scalar_sum, 465.0);
     assert_eq!(acc.v, [[0.0; 4]; 8]);
 }
 
@@ -28,7 +28,7 @@ fn sum_vector_row_aligned() {
     let acc = sum_plane(&ramp(40), 0, 0, 40, 40, 1);
     assert_eq!(acc.v[0], [68.0, 71.0, 74.0, 77.0]);
     assert_eq!(acc.v[7], [28.0, 29.0, 30.0, 31.0]);
-    assert_eq!(acc.vx_0, 0.0);
+    assert_eq!(acc.scalar_sum, 0.0);
 }
 
 #[test]
@@ -37,13 +37,13 @@ fn sum_vector_row_phase_four() {
     let acc = sum_plane(&ramp(40), 4, 0, 40, 40, 1);
     assert_eq!(acc.v[0], [38.0, 40.0, 42.0, 44.0]);
     assert_eq!(acc.v[7], [31.0, 32.0, 33.0, 34.0]);
-    assert_eq!(acc.vx_0, 42.0);
+    assert_eq!(acc.scalar_sum, 42.0);
 }
 
 #[test]
 fn sum_odd_phase_is_scalar() {
     let acc = sum_plane(&ramp(40), 2, 0, 40, 40, 1);
-    assert_eq!(acc.vx_0, 780.0);
+    assert_eq!(acc.scalar_sum, 780.0);
     assert_eq!(acc.v, [[0.0; 4]; 8]);
 }
 
@@ -53,7 +53,7 @@ fn finish_fold_and_mean() {
     for r in 0..8 {
         acc.v[r] = [r as f32, 1.0, 2.0, 4.0];
     }
-    acc.vx_0 = 0.5;
+    acc.scalar_sum = 0.5;
     // lanes: lane0 = 0+..+7 = 28, lane1 = 8, lane2 = 16, lane3 = 32; total = (28 + 16) + (8 + 32) + 0.5
     let (t, c, m) = finish(&acc, 4);
     assert_eq!((t, c, m), (84.5, 4.0, 21.125));

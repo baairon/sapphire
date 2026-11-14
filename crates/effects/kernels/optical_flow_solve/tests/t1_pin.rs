@@ -17,7 +17,7 @@ fn pin_total_operand_order() {
     // total = fold.fadd(x0): the fold's NaN wins over x0's
     let mut acc = Acc::new();
     acc.v[0][0] = nan(B);
-    acc.vx_0 = nan(A);
+    acc.scalar_sum = nan(A);
     let (t, _, _) = finish(&acc, 4);
     assert_eq!(t.to_bits(), B);
 }

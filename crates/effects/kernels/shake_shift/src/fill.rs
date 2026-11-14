@@ -49,15 +49,15 @@ struct Cur<'a> {
     mem: &'a mut [u8],
     /// Index of the routine's rdi inside `mem`.
     pos: usize,
-    /// Absolute address of rdi (only its low four bits are used).
-    addr: u64,
+    /// Absolute destination position (rdi) (only its low four bits are used).
+    dst_pos: u64,
     byte: u8,
 }
 
 impl<'a> Cur<'a> {
     fn advance(&mut self, n: usize) {
         self.pos += n;
-        self.addr = self.addr.wrapping_add(n as u64);
+        self.dst_pos = self.dst_pos.wrapping_add(n as u64);
     }
     fn jump(&mut self, t: Table, idx: u32, visit: &mut dyn FnMut(Table, u32)) {
         visit(t, idx);
@@ -84,24 +84,24 @@ impl<'a> Cur<'a> {
     }
 }
 
-/// Runs the routine on `mem` whose first byte is at absolute address `addr`. `value` is rsi (its low byte is stored);
-/// `count` is rdx as a signed value. Returns rax (the destination address). A count of zero or below returns with no store.
+/// Runs the routine on `mem` whose first byte is at absolute position `dst_pos`. `value` is rsi (its low byte is stored);
+/// `count` is rdx as a signed value. Returns rax (the destination position). A count of zero or below returns with no store.
 /// `visit` receives every jump-table dispatch (table, index) in order.
-pub fn fill_traced(mem: &mut [u8], addr: u64, value: u64, count: i64, env: &FillEnv, visit: &mut dyn FnMut(Table, u32)) -> u64 {
-    let rax = addr;
+pub fn fill_traced(mem: &mut [u8], dst_pos: u64, value: u64, count: i64, env: &FillEnv, visit: &mut dyn FnMut(Table, u32)) -> u64 {
+    let align_word = dst_pos;
     if count == 1 {
         mem[0] = value as u8;
-        return rax;
+        return align_word;
     }
     if count < 1 {
-        return rax;
+        return align_word;
     }
     assert!((count as u64) <= mem.len() as u64, "fill: count {} exceeds the destination ({} bytes)", count, mem.len());
-    let mut c = Cur { mem, pos: 0, addr, byte: value as u8 };
+    let mut c = Cur { mem, pos: 0, dst_pos, byte: value as u8 };
     let mut n = count;
     // 0x1378426..0x1378454: unaligned start (8-byte phase) takes a head block unless the count is at most 8.
-    if c.addr & 7 != 0 && n > 8 {
-        let h = 8 - (c.addr & 7) as i64;
+    if c.dst_pos & 7 != 0 && n > 8 {
+        let h = 8 - (c.dst_pos & 7) as i64;
         c.advance(h as usize);
         n -= h;
         c.jump(Table::Head8, h as u32, visit);
@@ -110,18 +110,18 @@ pub fn fill_traced(mem: &mut [u8], addr: u64, value: u64, count: i64, env: &Fill
     if n < 0x80 {
         c.advance(n as usize);
         c.jump(Table::Small, n as u32, visit);
-        return rax;
+        return align_word;
     }
     if env.sse2 {
         // 0x13786eb: align to 16, then the 16-byte path.
-        let h = ((16 - (c.addr & 15)) & 15) as i64;
+        let h = ((16 - (c.dst_pos & 15)) & 15) as i64;
         c.advance(h as usize);
         n -= h;
         c.jump(Table::Head16, h as u32, visit);
         if n < 0xb0 {
             c.advance(n as usize);
             c.jump(Table::Tail, n as u32, visit);
-            return rax;
+            return align_word;
         }
         // 0x1378c83: the temporal and non-temporal loops store the same bytes; both exit with n < 0x80.
         if n > env.nt_threshold {
@@ -165,10 +165,10 @@ pub fn fill_traced(mem: &mut [u8], addr: u64, value: u64, count: i64, env: &Fill
         c.advance(n as usize);
         c.jump(Table::Small, n as u32, visit);
     }
-    rax
+    align_word
 }
 
 /// [`fill_traced`] without the trace.
-pub fn fill(mem: &mut [u8], addr: u64, value: u64, count: i64, env: &FillEnv) -> u64 {
-    fill_traced(mem, addr, value, count, env, &mut |_, _| {})
+pub fn fill(mem: &mut [u8], dst_pos: u64, value: u64, count: i64, env: &FillEnv) -> u64 {
+    fill_traced(mem, dst_pos, value, count, env, &mut |_, _| {})
 }

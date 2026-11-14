@@ -22,8 +22,8 @@ pub enum ClassErr {
 /// The cells of one derivation. `None` = not in the style's record.
 #[derive(Clone, Debug)]
 pub struct ClassCells {
-    pub ae32_ready_c: u32,
-    pub ae32_ready_d: u32,
+    pub claim_setup_first: u32,
+    pub claim_setup_second: u32,
     pub prog_mode_word: u32,
     pub prog_class_byte: Option<u8>,
     pub prog_flag_byte: Option<u8>,
@@ -50,22 +50,22 @@ fn need(v: Option<u8>, cell: &'static str) -> Result<u8, ClassErr> {
 /// 's return value (0 or 1) for input `i` named `name`.
 pub fn derive_ret(i: usize, name: &str, c: &ClassCells, r: &RowCells) -> Result<u8, ClassErr> {
     // step 1 
-    let edi: u8 = if (r.fmt_cell_a & 0xffff_fffd) == 0 || (r.b_cell_o & 1) != 0 { 1 } else { 0 };
+    let quot_int: u8 = if (r.fmt_cell_a & 0xffff_fffd) == 0 || (r.b_cell_o & 1) != 0 { 1 } else { 0 };
     // step 2 
-    let ecx = if c.ae32_ready_d != 0 { c.ae32_ready_d } else { c.prog_mode_word };
+    let flag = if c.claim_setup_second != 0 { c.claim_setup_second } else { c.prog_mode_word };
     // step 3 : bit i of the sign-extended byte [prog]; read only when ecx != 1
-    let ebx: u8 = if ecx == 1 {
-        edi
+    let class_flag: u8 = if flag == 1 {
+        quot_int
     } else {
         let b = need(c.prog_class_byte, "[prog]")? as i8 as i32;
         if i < 32 && (b >> i) & 1 == 1 {
-            edi
+            quot_int
         } else {
             0
         }
     };
     // step 4: [owner] == 0 takes the name arms
-    if c.ae32_ready_c == 0 {
+    if c.claim_setup_first == 0 {
         if ZERO_PREFIX.iter().any(|p| name.starts_with(p)) || ZERO_EXACT.contains(&name) {
             return Ok(0);
         }
@@ -83,13 +83,13 @@ pub fn derive_ret(i: usize, name: &str, c: &ClassCells, r: &RowCells) -> Result<
         }
     }
     // step 5, tail 
-    if ebx == 0 {
+    if class_flag == 0 {
         return Ok(0);
     }
     if TAIL_ZERO_IF_F_CELL_A.contains(&name) && need(c.prog_flag_byte, "[prog]")? & 0x40 != 0 {
         return Ok(0);
     }
-    Ok(ebx)
+    Ok(class_flag)
 }
 
 /// The class byte the caller stores (then): 4 if the return is nonzero, else 3; 1 by the name test.

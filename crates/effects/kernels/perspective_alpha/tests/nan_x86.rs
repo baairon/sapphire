@@ -9,7 +9,7 @@ const EXPECT: &[u32] = &[
 
 #[test]
 fn fresh_nan_words_are_the_x86_words() {
-    let info = Info { n: 4, roi_form: 0, port_blk_a: 4, port_blk_b: 1, port_blk_c: 4, s8: 8, port_info_b: 4, port_info_a: 1.0 };
+    let info = Info { n: 4, roi_form: 0, port_blk_a: 4, port_blk_b: 1, port_blk_c: 4, alpha_cells: 8, port_info_b: 4, port_info_a: 1.0 };
     let mut got: Vec<u32> = Vec::new();
     for (par, v) in [
         (Params { params_b: 0.0, params_a: 1.0, params_c: 0.0 }, f32::INFINITY),

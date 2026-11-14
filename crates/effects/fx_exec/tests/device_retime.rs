@@ -23,9 +23,9 @@ fn device() -> Option<std::sync::Arc<fx_device::DeviceCtx>> {
     }
 }
 
-fn synth(ch: usize, n: usize, seed: u64, lo: f32, span: f32) -> Image {
+fn synth(chan_count: usize, n: usize, seed: u64, lo: f32, span: f32) -> Image {
     let mut s = seed;
-    let planes = (0..ch)
+    let planes = (0..chan_count)
         .map(|_| {
             (0..n)
                 .map(|_| {
@@ -48,7 +48,7 @@ fn bits(i: &Image) -> Vec<Vec<u32>> {
 
 /// Runs `class` on the CPU and through the forced device backend and requires equal bits and no fallback.
 fn same(b: &mut DeviceBackend, class: &'static str, tag: i32, dims: (usize, usize), imgs: &[Image], consts: &[(usize, [u32; 4])]) {
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let n = dims.0 * dims.1;
     let mut cpu_args: Vec<Arg> = imgs.iter().map(Arg::Img).collect();
     cpu_args.extend(consts.iter().map(|&(n, lanes)| Arg::Const { n, lanes }));
@@ -102,7 +102,7 @@ fn the_four_retime_ops_equal_the_cpu_through_the_forced_backend() {
 fn a_refused_shape_is_declined_by_the_device_and_refused_by_the_cpu() {
     let Some(ctx) = device() else { return };
     let mut b = DeviceBackend::new(ctx);
-    let kp = KParams::standin();
+    let kp = KParams::host_defaults();
     let imgs = [synth(3, 8, 1, 0.0, 1.0), synth(3, 8, 2, 0.0, 1.0), synth(2, 8, 3, -1.0, 2.0)];
     let mut cpu_args: Vec<Arg> = imgs.iter().map(Arg::Img).collect();
     cpu_args.push(Arg::Const { n: 1, lanes: konst(0.5) });

@@ -12,7 +12,7 @@ use crate::device_ops::{ArgShape, DevArg, DeviceOp, SelfCase};
 use crate::kernels;
 use crate::kernels2::{cvt_i32, footprint_taken, geom_of, Out};
 use crate::types::{Arg, Geom, Image, KParams, MipImage};
-use fx_device::cl::{Access, Arg as ClArg, Buffer};
+use fx_device::ocl::{Access, Arg as ClArg, Buffer};
 use fx_device::selfcheck::{adversarial_f32, compare_f32, Mismatch, NanPayloads, Tally};
 use fx_device::sim::Rng;
 use fx_device::{DevError, DevImage, Session};
@@ -153,14 +153,14 @@ fn warp_launch(rel: bool, s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Re
     if mipref.width() != w || mipref.height() != h || w * h != c.n || w == 0 || h == 0 {
         return Err(unsup("ripmap built for another frame size"));
     }
-    let ch = mipref.channels();
-    if !(1..=4).contains(&ch) || ch as i32 != c.tag {
+    let chan = mipref.channels();
+    if !(1..=4).contains(&chan) || chan as i32 != c.tag {
         return Err(unsup("tag differs from the ripmap channels"));
     }
     let mx = cvt_i32(lane(&args[2], 0).ok_or_else(|| unsup("wrap is not a constant"))?);
     let my = cvt_i32(lane(&args[2], 1).ok_or_else(|| unsup("wrap is not a constant"))?);
     let flag = lane(&args[3], 0).ok_or_else(|| unsup("flag is not a constant"))?;
-    let (const_coords, ca1, ca2, coords) = match &args[1] {
+    let (const_coords, coord_a_first, coord_a_second, coords) = match &args[1] {
         DevArg::Const { lanes, .. } => (true, f32::from_bits(lanes[0]), f32::from_bits(lanes[1]), None),
         DevArg::Img(d) if d.channels() == 2 && d.n == c.n => (false, 0.0, 0.0, Some(d)),
         _ => return Err(unsup("coordinate operand must be a constant or a 2 channel image of the frame size")),
@@ -186,8 +186,8 @@ fn warp_launch(rel: bool, s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Re
     let g: Geom = geom_of(c.kp, w, h);
     if let (Some(pre), Some(d)) = (&prefill, coords) {
         let lat = crate::device_ops_footprint::fp_lattice(s, &mipref)?;
-        let out = DevImage::alloc(s, ch, c.n)?;
-        crate::device_ops_footprint::fp_warp_launch(s, rel, w, h, ch, &lat, d, pre, mx, my, &g, &out)?;
+        let out = DevImage::alloc(s, chan, c.n)?;
+        crate::device_ops_footprint::fp_warp_launch(s, rel, w, h, chan, &lat, d, pre, mx, my, &g, &out)?;
         return Ok(out);
     }
     let uploaded = match &mipref {
@@ -197,34 +197,34 @@ fn warp_launch(rel: bool, s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Re
         }
         MipRef::Dev(_) => None,
     };
-    let out = DevImage::alloc(s, ch, c.n)?;
+    let out = DevImage::alloc(s, chan, c.n)?;
     let err = ErrCell::new(s)?;
     let pb = match (&uploaded, &mipref) {
         (Some(u), _) => u.plane(0),
         (None, MipRef::Dev(m)) => m.dev.plane(0),
         _ => unreachable!("a host ripmap is uploaded"),
     };
-    let (a1, a2) = match coords {
+    let (coord_x_buf, coord_y_buf) = match coords {
         Some(d) => (d.plane(0), d.plane(1)),
         None => (pb, pb),
     };
-    let o = |k: usize| out.plane(k.min(ch - 1));
+    let o = |k: usize| out.plane(k.min(chan - 1));
     s.launch(
         "warp_warp_f32",
         c.n,
         &[
             pb.arg(),
             ClArg::U32(plane_len as u32),
-            a1.arg(),
-            a2.arg(),
+            coord_x_buf.arg(),
+            coord_y_buf.arg(),
             ClArg::I32(const_coords as i32),
-            ClArg::F32(ca1),
-            ClArg::F32(ca2),
+            ClArg::F32(coord_a_first),
+            ClArg::F32(coord_a_second),
             o(0).arg(),
             o(1).arg(),
             o(2).arg(),
             o(3).arg(),
-            ClArg::I32(ch as i32),
+            ClArg::I32(chan as i32),
             ClArg::I32(w as i32),
             ClArg::I32(h as i32),
             ClArg::I32(wt0 as i32),
@@ -258,7 +258,7 @@ pub fn warp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevIm
 
 pub fn rotate_accepts(_c: &NodeCall, shapes: &[ArgShape]) -> Result<(), &'static str> {
     expect_args(shapes, 3)?;
-    let ok = |s: &ArgShape, ch: usize| matches!(s, ArgShape::Const { .. }) || *s == ArgShape::Img { channels: ch };
+    let ok = |s: &ArgShape, chan: usize| matches!(s, ArgShape::Const { .. }) || *s == ArgShape::Img { channels: chan };
     if !ok(&shapes[0], 2) || !ok(&shapes[1], 1) || !ok(&shapes[2], 2) {
         return Err("operands must be constants or images of 2, 1 and 2 channels");
     }
@@ -282,9 +282,9 @@ pub fn rotate_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<Dev
     let v_const = matches!(args[0], DevArg::Const { .. });
     let a_const = matches!(args[1], DevArg::Const { .. });
     let c_const = matches!(args[2], DevArg::Const { .. });
-    let img = |a: &DevArg, ch: usize| -> Result<(), DevError> {
+    let img = |a: &DevArg, chan: usize| -> Result<(), DevError> {
         match a {
-            DevArg::Img(d) if d.channels() == ch && d.n == n => Ok(()),
+            DevArg::Img(d) if d.channels() == chan && d.n == n => Ok(()),
             DevArg::Const { .. } => Ok(()),
             _ => Err(unsup("operand shape")),
         }
@@ -303,7 +303,7 @@ pub fn rotate_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<Dev
         sconst = sn;
         cconst = cs;
     }
-    let (mut va, mut vb, mut ca, mut cb, mut k1, mut k2) = (0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32);
+    let (mut va, mut vb, mut ca, mut cb, mut rot_x_start, mut rot_y_start) = (0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32);
     let path: i32;
     if v_const {
         va = l(&args[0], 0);
@@ -332,10 +332,10 @@ pub fn rotate_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<Dev
             (false, true) => {
                 let (cc, d) = (ca, cb);
                 let (sn, cs) = (sconst, cconst);
-                let k1a = sn.mul_add(d, cc);
-                k1 = (-cc).mul_add(cs, k1a);
-                let k2a = (-sn).mul_add(cc, d);
-                k2 = (-d).mul_add(cs, k2a);
+                let fused_1_a = sn.mul_add(d, cc);
+                rot_x_start = (-cc).mul_add(cs, fused_1_a);
+                let fused_2_a = (-sn).mul_add(cc, d);
+                rot_y_start = (-d).mul_add(cs, fused_2_a);
                 7
             }
             (true, true) => return Err(unsup("all operands constant (outside the contract)")),
@@ -366,8 +366,8 @@ pub fn rotate_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<Dev
             ClArg::F32(cb),
             ClArg::F32(sconst),
             ClArg::F32(cconst),
-            ClArg::F32(k1),
-            ClArg::F32(k2),
+            ClArg::F32(rot_x_start),
+            ClArg::F32(rot_y_start),
             st.arg(),
             out.plane(0).arg(),
             out.plane(1).arg(),
@@ -428,8 +428,8 @@ pub fn persp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevI
     let base = if c.kp.persp_base >= 0 { c.kp.persp_base as usize } else { env_base("WPG1_PBASE") };
     // constants of perspective::constants after the sincos callee at (-0.25 * gpu_call_a) * 2pi
     let arg = (-0.25f32 * gpu_call_a) * f32::from_bits(TWO_PI_BITS);
-    let (r0, r1) = libm_sincos::sincosf_x(arg);
-    let (m1, p, m4, m5, m6, m7) = (a * r0, a * r1, r0 * b, r1 * b, r0, r1);
+    let (sin_t, cos_t) = libm_sincos::sincosf_x(arg);
+    let (a_sin, p, b_sin, b_cos, sin_k, cos_k) = (a * sin_t, a * cos_t, sin_t * b, cos_t * b, sin_t, cos_t);
     let out = DevImage::alloc(s, 2, c.n)?;
     s.launch(
         "warp_persp_f32",
@@ -439,12 +439,12 @@ pub fn persp_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Result<DevI
             uv.plane(1).arg(),
             out.plane(0).arg(),
             out.plane(1).arg(),
-            ClArg::F32(m1),
+            ClArg::F32(a_sin),
             ClArg::F32(p),
-            ClArg::F32(m4),
-            ClArg::F32(m5),
-            ClArg::F32(m6),
-            ClArg::F32(m7),
+            ClArg::F32(b_sin),
+            ClArg::F32(b_cos),
+            ClArg::F32(sin_k),
+            ClArg::F32(cos_k),
             ClArg::F32(b),
             ClArg::I32(w as i32),
             ClArg::I32(h as i32),
@@ -477,7 +477,7 @@ pub fn persp_alpha_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
     if uv.channels() != 2 || uv.n != c.n || w * h != c.n || w == 0 || h == 0 {
         return Err(unsup("argument 0 must be a 2 channel image of the frame size"));
     }
-    let (s8, port_info_b, port_info_a) = match c.kp.palpha_cells {
+    let (alpha_cells, port_info_b, port_info_a) = match c.kp.palpha_cells {
         Some((x, y, z)) => (x, y, z),
         None => match (env_f("WPG1_S8"), env_f("WPG1_S48"), env_f("WPG1_S30")) {
             (Some(x), Some(y), Some(z)) => (x as i32, y as i32, z),
@@ -489,24 +489,24 @@ pub fn persp_alpha_run(s: &Arc<Session>, c: &NodeCall, args: &[DevArg]) -> Resul
     }
     // perspective_alpha_with: theta, sincos, x8, then p, edi and ecx
     let theta = (-0.25f32 * gpu_call_a) * f32::from_bits(TWO_PI_BITS);
-    let (r0, r1) = libm_sincos::sincosf_x(theta);
-    let x8 = r1 * a;
-    if x8 == 0.0 {
+    let (sin_t, cos_t) = libm_sincos::sincosf_x(theta);
+    let prod_8 = cos_t * a;
+    if prod_8 == 0.0 {
         return Err(unsup("zero fill route stays on the CPU"));
     }
-    let pp = b * r0;
+    let pp = b * sin_t;
     let den = (b * (port_info_b as f32)) as f64;
     let k_cell_b = f64::from_bits(0x3fd7_0a3d_8000_0000);
-    let num = ((s8 as f64) * k_cell_b) * port_info_a;
-    let edi = cvttsd2si32(num / den);
-    let m = edi.max(4);
-    let ecx = if x8 > 0.0 { m.wrapping_neg() } else { m };
-    let cf = ecx as f32;
+    let num = ((alpha_cells as f64) * k_cell_b) * port_info_a;
+    let quot_int = cvttsd2si32(num / den);
+    let m = quot_int.max(4);
+    let signed_m = if prod_8 > 0.0 { m.wrapping_neg() } else { m };
+    let cf = signed_m as f32;
     let out = DevImage::alloc(s, 1, c.n)?;
     s.launch(
         "warp_persp_alpha_f32",
         c.n,
-        &[uv.plane(1).arg(), out.plane(0).arg(), ClArg::U32(c.n as u32), ClArg::F32(cf), ClArg::F32(pp), ClArg::F32(r1)],
+        &[uv.plane(1).arg(), out.plane(0).arg(), ClArg::U32(c.n as u32), ClArg::F32(cf), ClArg::F32(pp), ClArg::F32(cos_t)],
     )?;
     Ok(out)
 }
@@ -564,14 +564,14 @@ fn call_cpu(class: &str, tag: i32, args: &[K2Arg], dims: (usize, usize), kp: &KP
     kernels::run_any(class, tag, &cpu, dims.0 * dims.1, dims, kp)
 }
 
-fn src_image(r: &mut Rng, ch: usize, n: usize, dirty: bool) -> Image {
-    let sp = adversarial_f32(40, r.next_u64());
-    let planes = (0..ch)
+fn src_image(r: &mut Rng, chan: usize, n: usize, dirty: bool) -> Image {
+    let samples = adversarial_f32(40, r.next_u64());
+    let planes = (0..chan)
         .map(|_| {
             (0..n)
                 .map(|i| {
                     if dirty && r.below(7) == 0 {
-                        sp[(r.next_u32() as usize + i) % sp.len()]
+                        samples[(r.next_u32() as usize + i) % samples.len()]
                     } else {
                         span(r, -0.5, 1.5)
                     }
@@ -590,13 +590,13 @@ fn geom_variant(k: usize, w: usize) -> Option<Geom> {
     }
 }
 
-fn mip_of(src: &Image, ch: usize, wrap: (i32, i32), dims: (usize, usize), kp: &KParams) -> Option<MipImage> {
-    mip_filter(src, ch, wrap, dims, kp, 0.0)
+fn mip_of(src: &Image, chan: usize, wrap: (i32, i32), dims: (usize, usize), kp: &KParams) -> Option<MipImage> {
+    mip_filter(src, chan, wrap, dims, kp, 0.0)
 }
 
-fn mip_filter(src: &Image, ch: usize, wrap: (i32, i32), dims: (usize, usize), kp: &KParams, filter: f32) -> Option<MipImage> {
+fn mip_filter(src: &Image, chan: usize, wrap: (i32, i32), dims: (usize, usize), kp: &KParams, filter: f32) -> Option<MipImage> {
     let args = [K2Arg::Img(src.clone()), cst(&[wrap.0 as f32, wrap.1 as f32]), cst(&[filter])];
-    match call_cpu("make_mipmap", ch as i32, &args, dims, kp) {
+    match call_cpu("make_mipmap", chan as i32, &args, dims, kp) {
         Ok(Out::Mip(m)) => Some(m),
         _ => None,
     }
@@ -610,10 +610,10 @@ fn warp_cases(rel: bool) -> Vec<K2Case> {
     let mut k = 0usize;
     for &(w, h) in FRAMES {
         let n = w * h;
-        for ch in 1..=4usize {
+        for chan in 1..=4usize {
             for &(mx, my) in modes {
                 k += 1;
-                let mut kp = KParams::standin();
+                let mut kp = KParams::host_defaults();
                 kp.geom = geom_variant(k, w);
                 kp.pad_pixel = [0.25, -0.5, 2.0, 1.0];
                 // make_mipmap wrap: the sampler's own modes mostly, another pair sometimes
@@ -621,19 +621,19 @@ fn warp_cases(rel: bool) -> Vec<K2Case> {
                 for kind in 0..4 {
                     // kind 0: image coordinates inside the frame, 1: const coordinates, 2: wide range, 3: adversarial
                     let dirty = kind == 3;
-                    let src = src_image(&mut r, ch, n, dirty && k % 2 == 0);
-                    let Some(mip) = mip_of(&src, ch, wrap, (w, h), &kp) else { continue };
+                    let src = src_image(&mut r, chan, n, dirty && k % 2 == 0);
+                    let Some(mip) = mip_of(&src, chan, wrap, (w, h), &kp) else { continue };
                     let coords: K2Arg = match kind {
                         0 => K2Arg::Img(Image { n, planes: vec![plane_of(&mut r, n, &mut |r| span(r, -1.2, 1.2)), plane_of(&mut r, n, &mut |r| span(r, -1.2, 1.2))] }),
                         1 => cst(&[span(&mut r, -1.0, 1.0), span(&mut r, -1.0, 1.0)]),
                         2 => K2Arg::Img(Image { n, planes: vec![plane_of(&mut r, n, &mut |r| span(r, -9.0, 9.0)), plane_of(&mut r, n, &mut |r| span(r, -9.0, 9.0))] }),
                         _ => {
-                            let sp = adversarial_f32(30, r.next_u64());
+                            let samples = adversarial_f32(30, r.next_u64());
                             K2Arg::Img(Image {
                                 n,
                                 planes: vec![
-                                    plane_of(&mut r, n, &mut |r| if r.below(3) == 0 { sp[r.next_u32() as usize % sp.len()] } else { span(r, -2.0, 2.0) }),
-                                    plane_of(&mut r, n, &mut |r| if r.below(3) == 0 { sp[r.next_u32() as usize % sp.len()] } else { span(r, -2.0, 2.0) }),
+                                    plane_of(&mut r, n, &mut |r| if r.below(3) == 0 { samples[r.next_u32() as usize % samples.len()] } else { span(r, -2.0, 2.0) }),
+                                    plane_of(&mut r, n, &mut |r| if r.below(3) == 0 { samples[r.next_u32() as usize % samples.len()] } else { span(r, -2.0, 2.0) }),
                                 ],
                             })
                         }
@@ -641,7 +641,7 @@ fn warp_cases(rel: bool) -> Vec<K2Case> {
                     // argument 3: the filter / footprint flag; nonzero is taken only with image coordinates (the footprint cases below)
                     let flag = if kind == 1 && k % 2 == 0 { 2.0 } else { 0.0 };
                     let args = vec![K2Arg::Mip(Box::new(mip)), coords, cst(&[mx as f32, my as f32]), cst(&[flag])];
-                    out.push(K2Case { name: format!("{class} {w}x{h} ch{ch} mode({mx},{my}) wrap{wrap:?} kind{kind}"), dims: (w, h), tag: ch as i32, args, kp, strict: kind < 2 && mx <= 2 && my <= 2 });
+                    out.push(K2Case { name: format!("{class} {w}x{h} ch{chan} mode({mx},{my}) wrap{wrap:?} kind{kind}"), dims: (w, h), tag: chan as i32, args, kp, strict: kind < 2 && mx <= 2 && my <= 2 });
                 }
             }
         }
@@ -666,7 +666,7 @@ fn fp_plane(r: &mut Rng, kind: usize, axis: usize, w: usize, h: usize) -> Vec<f3
     let n = w * h;
     let sl = span(r, -3.0, 3.0);
     let off = span(r, -1.0, 1.0);
-    let sp = adversarial_f32(30, r.next_u64());
+    let samples = adversarial_f32(30, r.next_u64());
     let mut v = Vec::with_capacity(n);
     for i in 0..n {
         let (x, y) = ((i % w) as f32, (i / w) as f32);
@@ -679,7 +679,7 @@ fn fp_plane(r: &mut Rng, kind: usize, axis: usize, w: usize, h: usize) -> Vec<f3
             3 => off,
             4 => {
                 if r.below(5) == 0 {
-                    sp[r.next_u32() as usize % sp.len()]
+                    samples[r.next_u32() as usize % samples.len()]
                 } else {
                     off + sl * t / 8.0
                 }
@@ -708,11 +708,11 @@ fn footprint_cases(rel: bool) -> Vec<K2Case> {
     let mut k = 0usize;
     for &(w, h) in FRAMES_FP {
         let n = w * h;
-        for ch in 1..=4usize {
+        for chan in 1..=4usize {
             for &(mx, my) in modes {
                 for kind in 0..6usize {
                     k += 1;
-                    let mut kp = KParams::standin();
+                    let mut kp = KParams::host_defaults();
                     kp.geom = geom_variant(k, w);
                     kp.pad_pixel = [0.25, -0.5, 2.0, 1.0];
                     let aspect_off = k % 23 == 0;
@@ -721,14 +721,14 @@ fn footprint_cases(rel: bool) -> Vec<K2Case> {
                     }
                     let mip_filter_lane = if k % 19 == 0 { 0.0 } else { 1.0 };
                     let wrap = if k % 5 == 0 { ((k % 3) as i32, ((k / 3) % 3) as i32) } else { (mx.clamp(0, 2), my.clamp(0, 2)) };
-                    let src = src_image(&mut r, ch, n, kind == 4 && k % 2 == 0);
-                    let Some(mip) = mip_filter(&src, ch, wrap, (w, h), &kp, mip_filter_lane) else { continue };
+                    let src = src_image(&mut r, chan, n, kind == 4 && k % 2 == 0);
+                    let Some(mip) = mip_filter(&src, chan, wrap, (w, h), &kp, mip_filter_lane) else { continue };
                     let ka = if kind == 5 { (k / 7) % 5 } else { kind };
                     let coords = K2Arg::Img(Image { n, planes: vec![fp_plane(&mut r, kind, 0, w, h), fp_plane(&mut r, ka, 1, w, h)] });
                     let filter = FILTERS_FP[k % FILTERS_FP.len()];
                     let args = vec![K2Arg::Mip(Box::new(mip)), coords, cst(&[mx as f32, my as f32]), cst(&[filter])];
                     let strict = w >= 2 && !aspect_off && mip_filter_lane != 0.0;
-                    out.push(K2Case { name: format!("{class} footprint {w}x{h} ch{ch} mode({mx},{my}) wrap{wrap:?} kind{kind} filter{filter} aspect{}", kp.host_aspect), dims: (w, h), tag: ch as i32, args, kp, strict });
+                    out.push(K2Case { name: format!("{class} footprint {w}x{h} ch{chan} mode({mx},{my}) wrap{wrap:?} kind{kind} filter{filter} aspect{}", kp.host_aspect), dims: (w, h), tag: chan as i32, args, kp, strict });
                 }
             }
         }
@@ -748,13 +748,13 @@ fn rotate_cases() -> Vec<K2Case> {
                 if vc && ac && cc {
                     continue;
                 }
-                let sp = adversarial_f32(24, r.next_u64());
+                let samples = adversarial_f32(24, r.next_u64());
                 let val = |r: &mut Rng, lo: f32, hi: f32| -> f32 {
                     match kind {
-                        4 => sp[r.next_u32() as usize % sp.len()],
+                        4 => samples[r.next_u32() as usize % samples.len()],
                         5 => {
                             if r.below(4) == 0 {
-                                sp[r.next_u32() as usize % sp.len()]
+                                samples[r.next_u32() as usize % samples.len()]
                             } else {
                                 span(r, lo, hi)
                             }
@@ -776,7 +776,7 @@ fn rotate_cases() -> Vec<K2Case> {
                     dims: (w, h),
                     tag: 2,
                     args: vec![v, a, c],
-                    kp: KParams::standin(),
+                    kp: KParams::host_defaults(),
                     strict: kind <= 2,
                 });
             }
@@ -796,20 +796,20 @@ fn persp_cases() -> Vec<K2Case> {
     let mut k = 0usize;
     for &(w, h) in FRAMES_PERSP {
         let n = w * h;
-        for (si, &(a, g, b)) in persp_scalar_sets().iter().enumerate() {
+        for (set_idx, &(a, g, b)) in persp_scalar_sets().iter().enumerate() {
             k += 1;
-            let mut kp = KParams::standin();
+            let mut kp = KParams::host_defaults();
             kp.persp_base = bases[k % bases.len()];
             kp.persp_rowbuf = k % 3 == 0;
             for kind in 0..3 {
-                let sp = adversarial_f32(24, r.next_u64());
+                let samples = adversarial_f32(24, r.next_u64());
                 let mut f = |r: &mut Rng| -> f32 {
                     match kind {
                         0 => span(r, -3.0, 3.0),
                         1 => span(r, -40.0, 40.0),
                         _ => {
                             if r.below(3) == 0 {
-                                sp[r.next_u32() as usize % sp.len()]
+                                samples[r.next_u32() as usize % samples.len()]
                             } else {
                                 span(r, -2.0, 2.0)
                             }
@@ -819,7 +819,7 @@ fn persp_cases() -> Vec<K2Case> {
                 let u = plane_of(&mut r, n, &mut f);
                 let v = plane_of(&mut r, n, &mut f);
                 out.push(K2Case {
-                    name: format!("perspective {w}x{h} scalars{si} base{} rowbuf{} kind{kind}", kp.persp_base, kp.persp_rowbuf),
+                    name: format!("perspective {w}x{h} scalars{set_idx} base{} rowbuf{} kind{kind}", kp.persp_base, kp.persp_rowbuf),
                     dims: (w, h),
                     tag: 2,
                     args: vec![K2Arg::Img(Image { n, planes: vec![u, v] }), cst(&[a]), cst(&[g]), cst(&[b])],
@@ -839,19 +839,19 @@ fn persp_alpha_cases() -> Vec<K2Case> {
     let mut k = 0usize;
     for &(w, h) in FRAMES_PERSP {
         let n = w * h;
-        for (si, &(a, g, b)) in persp_scalar_sets().iter().enumerate() {
+        for (set_idx, &(a, g, b)) in persp_scalar_sets().iter().enumerate() {
             k += 1;
-            let mut kp = KParams::standin();
+            let mut kp = KParams::host_defaults();
             kp.palpha_cells = Some(cells[k % cells.len()]);
             for kind in 0..3 {
-                let sp = adversarial_f32(24, r.next_u64());
+                let samples = adversarial_f32(24, r.next_u64());
                 let mut f = |r: &mut Rng| -> f32 {
                     match kind {
                         0 => span(r, -3.0, 3.0),
                         1 => span(r, -40.0, 40.0),
                         _ => {
                             if r.below(3) == 0 {
-                                sp[r.next_u32() as usize % sp.len()]
+                                samples[r.next_u32() as usize % samples.len()]
                             } else {
                                 span(r, -2.0, 2.0)
                             }
@@ -861,7 +861,7 @@ fn persp_alpha_cases() -> Vec<K2Case> {
                 let u = plane_of(&mut r, n, &mut f);
                 let v = plane_of(&mut r, n, &mut f);
                 out.push(K2Case {
-                    name: format!("perspective_alpha {w}x{h} scalars{si} cells{:?} kind{kind}", kp.palpha_cells),
+                    name: format!("perspective_alpha {w}x{h} scalars{set_idx} cells{:?} kind{kind}", kp.palpha_cells),
                     dims: (w, h),
                     tag: 1,
                     args: vec![K2Arg::Img(Image { n, planes: vec![u, v] }), cst(&[a]), cst(&[g]), cst(&[b])],

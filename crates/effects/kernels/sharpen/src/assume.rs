@@ -17,6 +17,6 @@ pub fn assumptions() -> Vec<Assumption> {
         Assumption { id: "B-A1", what: "cancel polls /10 return 0 (inherited from blur)", label: "ASSUMED" },
         Assumption { id: "B-A4", what: "blur scratch base phase; sharpen uses blur::DEFAULT_BASE_PHASE (see README)", label: "ASSUMED" },
         Assumption { id: "B-A6", what: "single worker: partition gives start 0, count = total", label: "ASSUMED" },
-        Assumption { id: "U05", what: "feature word 0x9d97ff (AVX2 + FMA bodies)", label: "ASSUMED" },
+        Assumption { id: "U05", what: "feature word (AVX2 + FMA bodies)", label: "ASSUMED" }, // origin: 0x9d97ff
     ]
 }

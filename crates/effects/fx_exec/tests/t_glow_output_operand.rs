@@ -10,9 +10,9 @@ fn big<F: FnOnce() + Send + 'static>(f: F) {
     std::thread::Builder::new().stack_size(256 << 20).spawn(f).unwrap().join().unwrap();
 }
 
-fn synth(ch: usize, n: usize) -> Image {
+fn synth(chan: usize, n: usize) -> Image {
     let mut s = 12345u64;
-    let planes = (0..ch)
+    let planes = (0..chan)
         .map(|_| {
             (0..n)
                 .map(|_| {
@@ -33,7 +33,7 @@ fn glow_go(src: i32, out: i32, show: Option<f32>, exec: bool) -> Result<(Vec<Str
     let c = Corpus::native();
     let g = build_effect(&c, c.find_effect("Glow", None).unwrap()).unwrap();
     let mut b = Binding::defaults();
-    b.v3_bound_count = true;
+    b.claim_bound_count = true;
     b.input_elnum.insert("Source".into(), src);
     b.input_elnum.insert("Output".into(), out);
     b.const_inputs.insert("Background".into(), vec![0.0]);

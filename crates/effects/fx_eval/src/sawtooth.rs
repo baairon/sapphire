@@ -26,13 +26,13 @@ fn hash_rounds() -> &'static [u32; 256] {
         let mut t = [0u32; 256];
         let mut st = 0u64;
         for e in t.iter_mut() {
-            let y1 = step(st);
-            let y2 = step(y1);
-            let y3 = step(y2);
-            *e = ((y1 >> 2) as u32)
-                .wrapping_add((y2 << 8) as u32)
-                .wrapping_add((y3 << 18) as u32);
-            st = y3;
+            let step_1 = step(st);
+            let step_2 = step(step_1);
+            let step_3 = step(step_2);
+            *e = ((step_1 >> 2) as u32)
+                .wrapping_add((step_2 << 8) as u32)
+                .wrapping_add((step_3 << 18) as u32);
+            st = step_3;
         }
         t
     })
@@ -141,17 +141,17 @@ fn search(t: &Table, u: f32) -> usize {
 
 /// The per-lane body. `seed` is the integer hash seed, `x` the phase lane, `p1`..`p5` the five scalar
 /// parameters (low, high, noise low, noise high, dwell).
-pub fn random_sawtooth_body(seed: i32, x: f32, p1: f32, p2: f32, p3: f32, p4: f32, p5: f32) -> f32 {
-    random_sawtooth_traced(seed, x, p1, p2, p3, p4, p5).0
+pub fn random_sawtooth_body(seed: i32, x: f32, range_lo: f32, p2: f32, p3: f32, p4: f32, pair_limit: f32) -> f32 {
+    random_sawtooth_traced(seed, x, range_lo, p2, p3, p4, pair_limit).0
 }
 
 /// The body plus a flag that is set when the sign division of the dwell step divides a NaN by its own
 /// absolute value (both operands NaN, where the silicon rule keeps the first operand).
-pub fn random_sawtooth_traced(seed: i32, x: f32, p1: f32, p2: f32, p3: f32, p4: f32, p5: f32) -> (f32, bool) {
+pub fn random_sawtooth_traced(seed: i32, x: f32, range_lo: f32, p2: f32, p3: f32, p4: f32, pair_limit: f32) -> (f32, bool) {
     let t = table();
     let s = seed as u32;
-    let h0 = (hash1(s.wrapping_add(0x3fd)) & 0x3fff_ffff) as i32;
-    let off = ((h0 as f64) * f64::from_bits(0x3e79_0000_0000_0000)) as f32;
+    let phase_bits = (hash1(s.wrapping_add(0x3fd)) & 0x3fff_ffff) as i32;
+    let off = ((phase_bits as f64) * f64::from_bits(0x3e79_0000_0000_0000)) as f32;
     let v = off + x;
     let flo = (v * f32::from_bits(0x3a80_0000)).floor();
     let n = cvt_i32(flo);
@@ -159,31 +159,31 @@ pub fn random_sawtooth_traced(seed: i32, x: f32, p1: f32, p2: f32, p3: f32, p4: 
     let u = v - base;
     let idx = search(t, u);
     let y = (n as u32).wrapping_add(t.h[idx]);
-    let r12 = hash2(s, y);
-    let e1 = (hash1(r12) & 0x3fff_ffff) as i32;
+    let row_hash = hash2(s, y);
+    let bits_1 = (hash1(row_hash) & 0x3fff_ffff) as i32;
     let d = (p4 - p3) as f64;
-    let r1 = fma64_to32([p4, p3, p3], e1 as f64, f64::from_bits(0x3e10_0000_0000_0000) * d, p3 as f64);
-    let ab = r1.abs();
+    let ramp = fma64_to32([p4, p3, p3], bits_1 as f64, f64::from_bits(0x3e10_0000_0000_0000) * d, p3 as f64);
+    let ab = ramp.abs();
     let mut adj = 0f32;
-    let pair = !(p5 >= ab) && r1.is_nan();
-    if !(p5 >= ab) {
-        let mut sg = r1 / ab;
+    let pair = !(pair_limit >= ab) && ramp.is_nan();
+    if !(pair_limit >= ab) {
+        let mut sg = ramp / ab;
         // 0/0 and inf/inf with neither operand NaN make a fresh NaN: pin it to the x86 default NaN word.
-        if sg.is_nan() && !r1.is_nan() && !ab.is_nan() {
+        if sg.is_nan() && !ramp.is_nan() && !ab.is_nan() {
             sg = f32::from_bits(0xffc0_0000);
         }
-        adj = fma32([sg, r1, p5], sg, p5, r1, true);
+        adj = fma32([sg, ramp, pair_limit], sg, pair_limit, ramp, true);
     }
-    let e2 = (r12 & 0x3fff_ffff) as i32;
-    let d2 = (p2 - p1) as f64;
-    let r2 = fma64_to32([p2, p1, p1], e2 as f64, f64::from_bits(0x3e10_0000_0000_0000) * d2, p1 as f64);
+    let bits_2 = (row_hash & 0x3fff_ffff) as i32;
+    let d2 = (p2 - range_lo) as f64;
+    let r2 = fma64_to32([p2, range_lo, range_lo], bits_2 as f64, f64::from_bits(0x3e10_0000_0000_0000) * d2, range_lo as f64);
     let w = u - t.c[idx];
     (fma32([w, r2, adj], w, adj, r2, false), pair)
 }
 
 /// The seed cell of the evaluator wrapper: argument 0 times 4096, truncated.
-pub fn seed_of(a0: f32) -> i32 {
-    cvt_i32(f32::from_bits(0x4580_0000) * a0)
+pub fn seed_of(seed_param: f32) -> i32 {
+    cvt_i32(f32::from_bits(0x4580_0000) * seed_param)
 }
 
 /// Labels of the stand-ins.

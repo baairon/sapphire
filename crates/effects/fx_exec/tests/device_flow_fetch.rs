@@ -185,21 +185,21 @@ fn warp_fetch(s: &Arc<Session>, stop: bool) -> Tally {
     for &(w, h) in &SIZES {
         for extra in [0i32, 2] {
             for kind in 0..3usize {
-                for (si, &(lo, mg)) in sets.iter().enumerate() {
+                for (set_idx, &(lo, mg)) in sets.iter().enumerate() {
                     idx += 1;
                     let mut r = Lcg(idx * 6151 + 5);
                     let stride = w + extra;
                     let n = (stride * h) as usize + 3;
                     let edge = [lo, (w as f32) - mg, (h as f32) - mg, 0.0, -0.0, w as f32];
-                    let dx = flow(n, kind, &mut r, &pool, w as f32, &edge);
+                    let delta_x = flow(n, kind, &mut r, &pool, w as f32, &edge);
                     let dy = flow(n, kind, &mut r, &pool, h as f32, &edge);
-                    let src = plane(n, (kind + si) % 3, &mut r, &pool, 5.0);
+                    let src = plane(n, (kind + set_idx) % 3, &mut r, &pool, 5.0);
                     let (row0, rows) = if idx % 3 == 0 && h > 2 { (1, h - 1) } else { (0, h) };
                     let mut out = sent(n);
-                    optical_flow_solve::warp_fetch(&dx, &dy, &src, &mut out, w, h, stride, row0, rows, &optical_flow_solve::FetchConsts { lo, margin: mg });
-                    let (a, b, c, o) = (up(s, &dx), up(s, &dy), up(s, &src), up(s, &sent(n)));
+                    optical_flow_solve::warp_fetch(&delta_x, &dy, &src, &mut out, w, h, stride, row0, rows, &optical_flow_solve::FetchConsts { lo, margin: mg });
+                    let (a, b, c, o) = (up(s, &delta_x), up(s, &dy), up(s, &src), up(s, &sent(n)));
                     let got = ff::warp_fetch_launch(s, a.plane(0), b.plane(0), c.plane(0), o.plane(0), w, h, stride, row0, rows, lo.to_bits(), mg.to_bits()).map(|_| down(&o)).map_err(|e| e.to_string());
-                    if !t.check(format!("warp_fetch {w}x{h} stride {stride} kind {kind} set {si}"), words(&out), got) && stop {
+                    if !t.check(format!("warp_fetch {w}x{h} stride {stride} kind {kind} set {set_idx}"), words(&out), got) && stop {
                         return t;
                     }
                 }
@@ -299,7 +299,7 @@ fn stencil(s: &Arc<Session>, stop: bool) -> Tally {
             if w >= 1200 && hh != 3 {
                 continue;
             }
-            for &al in &aligns {
+            for &align in &aligns {
                 for kind in 0..3usize {
                     idx += 1;
                     if w >= 1200 && idx % 2 == 1 {
@@ -314,10 +314,10 @@ fn stencil(s: &Arc<Session>, stop: bool) -> Tally {
                     let sc = cst(&mut r, &pool, idx as usize);
                     let (row0, cnt) = if hh >= 3 && idx % 3 == 0 { (1, hh - 1) } else { (0, hh) };
                     let mut out = sent(n);
-                    optical_flow::flow_stencil_rows(&mut out, &b, &c, &d, w, hh, pitch, sc, row0, cnt, al as usize);
+                    optical_flow::flow_stencil_rows(&mut out, &b, &c, &d, w, hh, pitch, sc, row0, cnt, align as usize);
                     let (db, dc, dd, o) = (up(s, &b), up(s, &c), up(s, &d), up(s, &sent(n)));
-                    let got = ff::flow_stencil_rows_launch(s, o.plane(0), db.plane(0), dc.plane(0), dd.plane(0), w, hh, pitch, sc.to_bits(), row0, cnt, al).map(|_| down(&o)).map_err(|e| e.to_string());
-                    if !t.check(format!("stencil w {w} rows {hh} align {al} kind {kind}"), words(&out), got) && stop {
+                    let got = ff::flow_stencil_rows_launch(s, o.plane(0), db.plane(0), dc.plane(0), dd.plane(0), w, hh, pitch, sc.to_bits(), row0, cnt, align).map(|_| down(&o)).map_err(|e| e.to_string());
+                    if !t.check(format!("stencil w {w} rows {hh} align {align} kind {kind}"), words(&out), got) && stop {
                         return t;
                     }
                 }
@@ -332,7 +332,7 @@ fn sum_rows(s: &Arc<Session>, stop: bool) -> Tally {
     let mut t = Tally::default();
     let mut idx = 0u64;
     for w in [1i32, 2, 63, 64, 65, 100, 127, 128, 129, 191, 192, 200, 300] {
-        for &al in &PHASES {
+        for &align in &PHASES {
             for kind in 0..3usize {
                 for extra in [0i32, 5] {
                     idx += 1;
@@ -341,10 +341,10 @@ fn sum_rows(s: &Arc<Session>, stop: bool) -> Tally {
                     let n = (stride * 3) as usize + 3;
                     let data = plane(n, kind, &mut r, &pool, 4.0);
                     let (row0, rows) = if idx % 3 == 0 { (1, 2) } else { (0, 3) };
-                    let want = optical_flow::sum_rows(&data, w, stride, row0, rows, al as usize);
+                    let want = optical_flow::sum_rows(&data, w, stride, row0, rows, align as usize);
                     let d = up(s, &data);
-                    let got = ff::sum_rows_value(s, d.plane(0), w, stride, row0, rows, al).map(|v| vec![v.to_bits()]).map_err(|e| e.to_string());
-                    if !t.check(format!("sum_rows w {w} align {al} kind {kind}"), vec![want.to_bits()], got) && stop {
+                    let got = ff::sum_rows_value(s, d.plane(0), w, stride, row0, rows, align).map(|v| vec![v.to_bits()]).map_err(|e| e.to_string());
+                    if !t.check(format!("sum_rows w {w} align {align} kind {kind}"), vec![want.to_bits()], got) && stop {
                         return t;
                     }
                 }
@@ -387,7 +387,7 @@ fn final_warp(s: &Arc<Session>, stop: bool) -> Tally {
     for &(w, h) in &SIZES {
         for extra in [0i32, 2] {
             for kind in 0..3usize {
-                for si in 0..3usize {
+                for set_idx in 0..3usize {
                     idx += 1;
                     let mut r = Lcg(idx * 1427 + 23);
                     let stride = w + extra;
@@ -398,7 +398,7 @@ fn final_warp(s: &Arc<Session>, stop: bool) -> Tally {
                     let target = plane(n, kind, &mut r, &pool, 2.0);
                     let img = plane(n, (kind + 1) % 3, &mut r, &pool, 2.0);
                     let g: Vec<Vec<f32>> = (0..4).map(|k| plane(n, (kind + k) % 3, &mut r, &pool, 2.0)).collect();
-                    let scale = [1.0f32, 0.5, f32::from_bits(0x7fc0_0007)][si];
+                    let scale = [1.0f32, 0.5, f32::from_bits(0x7fc0_0007)][set_idx];
                     let (rs, rc) = if idx % 3 == 0 && h > 2 { (1, h - 1) } else { (0, h) };
                     let planes = optical_flow_entry::WarpPlanes {
                         width: w, height: h, stride, target_plane: &target, img: &img, u: &u, v: &v, grad_a_x: &g[0], grad_a_y: &g[1], grad_b_x: &g[2], grad_b_y: &g[3], scale,
@@ -409,7 +409,7 @@ fn final_warp(s: &Arc<Session>, stop: bool) -> Tally {
                     let o = up(s, &sent(n));
                     let fp = ff::FinalWarpPlanes { target: ups[0].plane(0), img: ups[1].plane(0), u: ups[2].plane(0), v: ups[3].plane(0), grad_a_x: ups[4].plane(0), grad_a_y: ups[5].plane(0), grad_b_x: ups[6].plane(0), grad_b_y: ups[7].plane(0) };
                     let got = ff::final_warp_launch(s, &fp, o.plane(0), w, h, stride, rs, rc, scale.to_bits()).map(|_| down(&o)).map_err(|e| e.to_string());
-                    if !t.check(format!("final_warp {w}x{h} stride {stride} kind {kind} set {si}"), words(&out), got) && stop {
+                    if !t.check(format!("final_warp {w}x{h} stride {stride} kind {kind} set {set_idx}"), words(&out), got) && stop {
                         return t;
                     }
                 }
@@ -523,7 +523,7 @@ fn every_flow_fetch_kernel_equals_its_crate_function_bit_for_bit() {
 /// (kernel, name, text in the program, replacement); each text occurs once.
 const MUTANTS: &[(&str, &str, &str, &str)] = &[
     ("deriv_x", "stub: always the scalar arm", "int vec = (all == 0) && ((long)i >= head) && ((long)i < vend);\n    float r;", "int vec = 0;\n    float r;"),
-    ("deriv_x", "vector operand roles swapped", "float t = flow_b_m231(inp[(long)roff + p2], inp[(long)roff + p1], cv);", "float t = flow_b_m231(inp[(long)roff + p1], inp[(long)roff + p2], cv);"),
+    ("deriv_x", "vector operand roles swapped", "float t = flow_b_m231(inp[(long)roff + p2], inp[(long)roff + prev_idx], cv);", "float t = flow_b_m231(inp[(long)roff + prev_idx], inp[(long)roff + p2], cv);"),
     ("deriv_y", "vector row bound off by one", "(y < (h & ~7))", "(y <= (h & ~7))"),
     ("warp_fetch", "lower bound compare direction", "int a = lo >= px;", "int a = lo > px;"),
     ("warp_fetch", "fraction operand order", "float fx = nanx_sub(px, (float)ix0);", "float fx = nanx_sub((float)ix0, px);"),
@@ -533,7 +533,7 @@ const MUTANTS: &[(&str, &str, &str, &str)] = &[
     ("flow_stencil_rows", "last row index", "((row == (int)((uint)rows - 1u)) ? 2 : 1)", "((row == (int)((uint)rows - 2u)) ? 2 : 1)"),
     ("flow_stencil_rows", "vector start compare", "int vec = (i >= head) && (i < vend);", "int vec = (i > head) && (i < vend);"),
     ("sum_rows", "block end mask", "long end = w - ((w - head) & 0x3f);", "long end = w - ((w - head) & 0x1f);"),
-    ("sum_rows", "half sum operands", "float pair_even = nanx_add(x0, x2);", "float pair_even = nanx_add(x0, x1);"),
+    ("sum_rows", "half sum operands", "float pair_even = nanx_add(pair_a, pair_c);", "float pair_even = nanx_add(pair_a, pair_b);"),
     ("scan_range", "tail compare", "if ((uint)w > 2u * (uint)pw2) {", "if ((uint)w >= 2u * (uint)pw2) {"),
     ("final_warp", "outside compare direction", "int outside = (eps >= sx)", "int outside = (eps > sx)"),
     ("final_warp", "magnitude sum operands", "float sum = nanx_add(mag_a, mag_b);", "float sum = nanx_add(mag_a, mag_a);"),

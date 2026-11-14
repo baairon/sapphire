@@ -7,9 +7,9 @@ use fx_exec::types::{Arg, Image, KParams, Val};
 use std::rc::Rc;
 use std::time::Instant;
 
-fn synth(ch: usize, n: usize, seed: u64) -> Image {
+fn synth(chan: usize, n: usize, seed: u64) -> Image {
     let mut s = seed;
-    let planes = (0..ch)
+    let planes = (0..chan)
         .map(|_| {
             (0..n)
                 .map(|_| {
@@ -37,7 +37,7 @@ fn time_blur_sharpen_grad_static2_and_edge_aware_sharpen_at_1080p() {
     let mut b = DeviceBackend::new(ctx);
     let (w, h) = (1920usize, 1080usize);
     let n = w * h;
-    let mut kp = KParams::standin();
+    let mut kp = KParams::host_defaults();
     kp.sharpen_count = Some(n);
     let src3 = Val::Img(Rc::new(synth(3, n, 1)));
     let src1 = Val::Img(Rc::new(synth(1, n, 2)));

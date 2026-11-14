@@ -232,10 +232,10 @@ pub fn column_detail(text: &str) -> (Column, usize, Vec<String>) {
             let i = pos + p;
             let mut depth = 0i32;
             let mut j = i;
-            for (k, ch) in c[i..].char_indices() {
-                if ch == '(' {
+            for (k, chan) in c[i..].char_indices() {
+                if chan == '(' {
                     depth += 1;
-                } else if ch == ')' {
+                } else if chan == ')' {
                     depth -= 1;
                     if depth == 0 {
                         j = i + k + 1;
@@ -263,11 +263,11 @@ pub fn column_detail(text: &str) -> (Column, usize, Vec<String>) {
                 if prim_of(nn).trim_start_matches('_') != printed.trim_start_matches('_') {
                     return false;
                 }
-                let al = args_of(nn);
-                if al.len() != gs.len() {
+                let at_limit = args_of(nn);
+                if at_limit.len() != gs.len() {
                     return false;
                 }
-                al.iter().zip(&gs).all(|(x, g)| match g {
+                at_limit.iter().zip(&gs).all(|(x, g)| match g {
                     G::Ref(r) => aliases(&nodes, *x, *r),
                     _ => true,
                 })

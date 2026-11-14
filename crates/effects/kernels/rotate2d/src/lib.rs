@@ -122,32 +122,32 @@ pub fn render_cfg(g: Cfg, v: Vec2, angle: Angle, center: Vec2, n: i32, ox: &mut 
     }
     let rev = g.logic == Logic::DeltaReversed;
     // delta helper: v - center (original) or center - v (mutant)
-    let dl = |a: f32, b: f32| if rev { nx_sub(b, a) } else { nx_sub(a, b) };
+    let signed_diff = |a: f32, b: f32| if rev { nx_sub(b, a) } else { nx_sub(a, b) };
     match angle {
         Angle::Plane(ang) => match (v, center) {
             // P1:, v and center constant
             (Vec2::Const(a, b), Vec2::Const(cc, d)) => {
-                let dx = nx_sub(a, cc);
+                let delta_x = nx_sub(a, cc);
                 let dy = nx_sub(b, d);
                 for i in 0..nn {
                     let (s, c) = g.sc(ld(ang, i));
-                    let t1 = g.f(0, -dy, s, cc);
-                    let t2 = g.f(1, s, dx, d);
-                    ox[i] = g.f(2, dx, c, t1);
-                    oy[i] = g.f(3, c, dy, t2);
+                    let rot_part = g.f(0, -dy, s, cc);
+                    let sum_2 = g.f(1, s, delta_x, d);
+                    ox[i] = g.f(2, delta_x, c, rot_part);
+                    oy[i] = g.f(3, c, dy, sum_2);
                 }
             }
             // P2:, v constant, centre planes
-            (Vec2::Const(a, b), Vec2::Planes(cx, cy)) => {
+            (Vec2::Const(a, b), Vec2::Planes(centre_x, cy)) => {
                 for i in 0..nn {
                     let (s, c) = g.sc(ld(ang, i));
-                    let (cxi, cyi) = (ld(cx, i), ld(cy, i));
-                    let dx = dl(a, cxi);
-                    let dy = dl(b, cyi);
-                    let t1 = g.f(4, dx, c, cxi);
-                    ox[i] = g.f(5, -dy, s, t1);
-                    let t2 = g.f(6, dy, c, cyi);
-                    oy[i] = g.f(7, s, dx, t2);
+                    let (cxi, cyi) = (ld(centre_x, i), ld(cy, i));
+                    let delta_x = signed_diff(a, cxi);
+                    let dy = signed_diff(b, cyi);
+                    let rot_part = g.f(4, delta_x, c, cxi);
+                    ox[i] = g.f(5, -dy, s, rot_part);
+                    let sum_2 = g.f(6, dy, c, cyi);
+                    oy[i] = g.f(7, s, delta_x, sum_2);
                 }
             }
             // P3: split: v planes, centre constant
@@ -155,85 +155,85 @@ pub fn render_cfg(g: Cfg, v: Vec2, angle: Angle, center: Vec2, n: i32, ox: &mut 
                 for i in 0..nn {
                     let (s, c) = g.sc(ld(ang, i));
                     let (vxi, vyi) = (ld(vx, i), ld(vy, i));
-                    let dx = dl(vxi, cc);
-                    let dy = dl(vyi, d);
+                    let delta_x = signed_diff(vxi, cc);
+                    let dy = signed_diff(vyi, d);
                     if g.logic == Logic::P3AsP2 {
-                        let t1 = g.f(8, dx, c, cc);
-                        ox[i] = g.f(10, -dy, s, t1);
-                        let t2 = g.f(9, dy, c, d);
-                        oy[i] = g.f(11, s, dx, t2);
+                        let rot_part = g.f(8, delta_x, c, cc);
+                        ox[i] = g.f(10, -dy, s, rot_part);
+                        let sum_2 = g.f(9, dy, c, d);
+                        oy[i] = g.f(11, s, delta_x, sum_2);
                     } else {
-                        let t1 = g.f(8, dx, c, cc);
-                        let t2 = g.f(9, dx, s, d);
-                        ox[i] = g.f(10, -dy, s, t1);
-                        oy[i] = g.f(11, c, dy, t2);
+                        let rot_part = g.f(8, delta_x, c, cc);
+                        let sum_2 = g.f(9, delta_x, s, d);
+                        ox[i] = g.f(10, -dy, s, rot_part);
+                        oy[i] = g.f(11, c, dy, sum_2);
                     }
                 }
             }
             // P4:, all planes
-            (Vec2::Planes(vx, vy), Vec2::Planes(cx, cy)) => {
+            (Vec2::Planes(vx, vy), Vec2::Planes(centre_x, cy)) => {
                 for i in 0..nn {
                     let (s, c) = g.sc(ld(ang, i));
-                    let (cxi, cyi) = (ld(cx, i), ld(cy, i));
-                    let dx = dl(ld(vx, i), cxi);
-                    let dy = dl(ld(vy, i), cyi);
-                    let t1 = g.f(12, dx, c, cxi);
-                    ox[i] = g.f(13, -dy, s, t1);
-                    let t2 = g.f(14, dy, c, cyi);
-                    oy[i] = g.f(15, s, dx, t2);
+                    let (cxi, cyi) = (ld(centre_x, i), ld(cy, i));
+                    let delta_x = signed_diff(ld(vx, i), cxi);
+                    let dy = signed_diff(ld(vy, i), cyi);
+                    let rot_part = g.f(12, delta_x, c, cxi);
+                    ox[i] = g.f(13, -dy, s, rot_part);
+                    let sum_2 = g.f(14, dy, c, cyi);
+                    oy[i] = g.f(15, s, delta_x, sum_2);
                 }
             }
         },
-        Angle::Const(a0) => {
+        Angle::Const(const_angle) => {
             // sincos once, before the n test of the original 
-            let (s, c) = g.sc(a0);
+            let (s, c) = g.sc(const_angle);
             match (v, center) {
                 // P5:, v constant, centre planes
-                (Vec2::Const(a, b), Vec2::Planes(cx, cy)) => {
+                (Vec2::Const(a, b), Vec2::Planes(centre_x, cy)) => {
                     for i in 0..nn {
-                        let (cxi, cyi) = (ld(cx, i), ld(cy, i));
-                        let dx = dl(a, cxi);
-                        let dy = dl(b, cyi);
-                        let t1 = g.f(16, dx, c, cxi);
-                        ox[i] = g.f(17, -dy, s, t1);
-                        let t2 = g.f(18, c, dy, cyi);
-                        oy[i] = g.f(19, dx, s, t2);
+                        let (cxi, cyi) = (ld(centre_x, i), ld(cy, i));
+                        let delta_x = signed_diff(a, cxi);
+                        let dy = signed_diff(b, cyi);
+                        let rot_part = g.f(16, delta_x, c, cxi);
+                        ox[i] = g.f(17, -dy, s, rot_part);
+                        let sum_2 = g.f(18, c, dy, cyi);
+                        oy[i] = g.f(19, delta_x, s, sum_2);
                     }
                 }
                 // P6:, v planes, centre planes
-                (Vec2::Planes(vx, vy), Vec2::Planes(cx, cy)) => {
+                (Vec2::Planes(vx, vy), Vec2::Planes(centre_x, cy)) => {
                     for i in 0..nn {
-                        let (cxi, cyi) = (ld(cx, i), ld(cy, i));
-                        let dx = dl(ld(vx, i), cxi);
-                        let dy = dl(ld(vy, i), cyi);
-                        let t1 = g.f(20, dx, c, cxi);
-                        ox[i] = g.f(21, -dy, s, t1);
-                        let t2 = g.f(22, c, dy, cyi);
-                        oy[i] = g.f(23, dx, s, t2);
+                        let (cxi, cyi) = (ld(centre_x, i), ld(cy, i));
+                        let delta_x = signed_diff(ld(vx, i), cxi);
+                        let dy = signed_diff(ld(vy, i), cyi);
+                        let rot_part = g.f(20, delta_x, c, cxi);
+                        ox[i] = g.f(21, -dy, s, rot_part);
+                        let sum_2 = g.f(22, c, dy, cyi);
+                        oy[i] = g.f(23, delta_x, s, sum_2);
                     }
                 }
                 // P7:, centre constant (v planes; v constant is outside the contract)
                 (Vec2::Planes(vx, vy), Vec2::Const(cc, d)) => {
                     if g.logic == Logic::P7Unfolded {
                         for i in 0..nn {
-                            let dx = dl(ld(vx, i), cc);
-                            let dy = dl(ld(vy, i), d);
-                            let t1 = g.f(28, dx, c, cc);
-                            ox[i] = g.f(30, -dy, s, t1);
-                            let t2 = g.f(29, c, dy, d);
-                            oy[i] = g.f(31, dx, s, t2);
+                            let delta_x = signed_diff(ld(vx, i), cc);
+                            let dy = signed_diff(ld(vy, i), d);
+                            let rot_part = g.f(28, delta_x, c, cc);
+                            ox[i] = g.f(30, -dy, s, rot_part);
+                            let sum_2 = g.f(29, c, dy, d);
+                            oy[i] = g.f(31, delta_x, s, sum_2);
                         }
                     } else {
-                        let k1a = g.f(24, s, d, cc);
-                        let k1 = g.f(25, -cc, c, k1a);
-                        let k2a = g.f(26, -s, cc, d);
-                        let k2 = g.f(27, -d, c, k2a);
+                        let term_1_a = g.f(24, s, d, cc);
+                        let x_part = g.f(25, -cc, c, term_1_a);
+                        let term_2_a = g.f(26, -s, cc, d);
+                        let y_part = g.f(27, -d, c, term_2_a);
                         for i in 0..nn {
                             let (vxi, vyi) = (ld(vx, i), ld(vy, i));
-                            let t1 = g.f(28, c, vxi, k1);
-                            let t2 = g.f(29, vxi, s, k2);
-                            ox[i] = g.f(30, -vyi, s, t1);
-                            oy[i] = g.f(31, vyi, c, t2);
+                            let rot_part = g.f(28, c, vxi, x_part);
+                            let sum_2 = g.f(29, vxi, s, y_part);
+                            ox[i] = g.f(30, -vyi, s, rot_part);
+                            oy[i] = g.f(31, vyi, c, sum_2);
                         }
                     }
                 }
@@ -255,7 +255,7 @@ pub fn assumptions() -> Vec<Assumption> {
     vec![
         Assumption { id: "RT1-A1", tier: "CAPTURED", text: "TWO_PI = f32 0x40c90fdb, five sites in the AVX2 body" },
         Assumption { id: "RT1-A2", tier: "ASSUMED-SEMANTIC 2 (inherited SC1-A1)", text: "sincos callee is the finished crate libm_sincos; its uncaptured table cells are stand-ins on both sides of T2" },
-        Assumption { id: "RT1-A3", tier: "ROUTE AVX2-ONLY", text: "feature word served as 0x9d97ff; the SSE tier is not ported (it is the third tier; no AVX tier exists in this class)" },
+        Assumption { id: "RT1-A3", tier: "ROUTE AVX2-ONLY", text: "feature word served as; the SSE tier is not ported (it is the third tier; no AVX tier exists in this class)" }, // origin: 0x9d97ff
         Assumption { id: "RT1-A4", tier: "HOST-FP-ASSUMED", text: "MXCSR round to nearest even, no FTZ, no DAZ; the emulator follows the SDM, not silicon (vfmadd NaN rules)" },
         Assumption { id: "RT1-A5", tier: "INFERRED", text: "operand layout: argument i at this*(i+1): const byte, lanes, record (planes at record); arg0 = v, arg1 = angle (turns), arg2 = centre; outputs outs[0], outs[1]" },
         Assumption { id: "RT1-A6", tier: "INFERRED", text: "single combo (2, 1, 2) tag 2 (audit_evt COMBOS.tsv); constness is not part of the combo, so all operand-kind combinations run this one body" },
@@ -314,16 +314,16 @@ mod tests {
         let ang: Vec<f32> = (0..n).map(|i| 0.07 * i as f32 - 0.1).collect();
         let vx: Vec<f32> = (0..n).map(|i| 0.5 + i as f32).collect();
         let vy: Vec<f32> = (0..n).map(|i| 2.0 - 0.3 * i as f32).collect();
-        let cx: Vec<f32> = vec![0.25; n];
+        let centre_x: Vec<f32> = vec![0.25; n];
         let cy: Vec<f32> = vec![-0.5; n];
         let reference = |v: (f32, f32), a: f32, c: (f32, f32)| {
             let (s, co) = ((6.2831853f64 * a as f64).sin(), (6.2831853f64 * a as f64).cos());
-            let (dx, dy) = ((v.0 - c.0) as f64, (v.1 - c.1) as f64);
-            ((c.0 as f64 + dx * co - dy * s) as f32, (c.1 as f64 + dx * s + dy * co) as f32)
+            let (delta_x, dy) = ((v.0 - c.0) as f64, (v.1 - c.1) as f64);
+            ((c.0 as f64 + delta_x * co - dy * s) as f32, (c.1 as f64 + delta_x * s + dy * co) as f32)
         };
         let vcs = [Vec2::Planes(&vx, &vy)];
         for (vi, v) in vcs.iter().enumerate() {
-            for cen in [Vec2::Const(0.25, -0.5), Vec2::Planes(&cx, &cy)] {
+            for cen in [Vec2::Const(0.25, -0.5), Vec2::Planes(&centre_x, &cy)] {
                 for a in [Angle::Plane(&ang), Angle::Const(0.13)] {
                     let (ox, oy) = run(*v, a, cen, n);
                     for i in 0..n {
@@ -335,7 +335,7 @@ mod tests {
             }
         }
         // constant v paths
-        for cen in [Vec2::Const(0.25, -0.5), Vec2::Planes(&cx, &cy)] {
+        for cen in [Vec2::Const(0.25, -0.5), Vec2::Planes(&centre_x, &cy)] {
             for a in [Angle::Plane(&ang), Angle::Const(0.13)] {
                 if let (Vec2::Const(..), Angle::Const(_)) = (cen, a) { continue; }
                 let (ox, oy) = run(Vec2::Const(1.5, -2.0), a, cen, n);
@@ -385,7 +385,7 @@ mod tests {
         let mut hit = 0u64;
         for t in 0..40usize {
         let tf = 0.173 * t as f32 + 0.0291;
-        let cx: Vec<f32> = (0..n).map(|i| 0.1137 * ((i * 7 + t) % 13) as f32 + tf).collect();
+        let centre_x: Vec<f32> = (0..n).map(|i| 0.1137 * ((i * 7 + t) % 13) as f32 + tf).collect();
         let cy: Vec<f32> = (0..n).map(|i| -0.0313 * ((i * 5 + t) % 11) as f32 - tf * 0.7).collect();
         let base = |v: Vec2, a: Angle, c: Vec2, g: Cfg| {
             let mut ox = vec![0.0f32; n];
@@ -395,11 +395,11 @@ mod tests {
         };
         let kinds: Vec<(Vec2, Angle, Vec2)> = vec![
             (Vec2::Const(0.37 + tf, -0.91), Angle::Plane(&ang), Vec2::Const(0.2 + tf, 0.3 - tf)),
-            (Vec2::Const(0.37 + tf, -0.91), Angle::Plane(&ang), Vec2::Planes(&cx, &cy)),
+            (Vec2::Const(0.37 + tf, -0.91), Angle::Plane(&ang), Vec2::Planes(&centre_x, &cy)),
             (Vec2::Planes(&vx, &vy), Angle::Plane(&ang), Vec2::Const(0.2 + tf, 0.3 - tf)),
-            (Vec2::Planes(&vx, &vy), Angle::Plane(&ang), Vec2::Planes(&cx, &cy)),
-            (Vec2::Const(0.37 + tf, -0.91), Angle::Const(0.123 + tf * 0.5), Vec2::Planes(&cx, &cy)),
-            (Vec2::Planes(&vx, &vy), Angle::Const(0.123 + tf * 0.5), Vec2::Planes(&cx, &cy)),
+            (Vec2::Planes(&vx, &vy), Angle::Plane(&ang), Vec2::Planes(&centre_x, &cy)),
+            (Vec2::Const(0.37 + tf, -0.91), Angle::Const(0.123 + tf * 0.5), Vec2::Planes(&centre_x, &cy)),
+            (Vec2::Planes(&vx, &vy), Angle::Const(0.123 + tf * 0.5), Vec2::Planes(&centre_x, &cy)),
             (Vec2::Planes(&vx, &vy), Angle::Const(0.123 + tf * 0.5), Vec2::Const(0.2 + tf, 0.3 - tf)),
         ];
         for (v, a, c) in &kinds {

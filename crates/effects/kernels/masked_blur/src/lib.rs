@@ -75,10 +75,10 @@ pub fn combine_px(m: f32, b: f32, w: f32, s: f32, thr: f32) -> f32 {
     if w > 0.0 {
         b /= min_x86(w, 1.0);
     }
-    let m1 = min_x86(m, 1.0);
+    let bits_1 = min_x86(m, 1.0);
     // vsubss d = b - s; vfmadd231ss s = d * m1 + s: NaN priority s, then d (m1 is never a NaN here)
     let d = b.fsub(s);
-    fma231(s, d, m1)
+    fma231(s, d, bits_1)
 }
 
 /// Job over a whole dense plane.

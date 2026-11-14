@@ -11,7 +11,7 @@ fn at_now(style: &str, p: &str, idx: i32, host: f64) -> u32 {
     let raw = (host * 65536.0).round() as i64;
     let mut h = HostCurveValues::parse(&format!("{}value {} {} 0 1 24 0 {}\n", HOST, p, idx, raw)).unwrap();
     h.time_frames = Some(0.0);
-    h.ae32 = true;
+    h.claim_route = true;
     let mut d = Vec::new();
     fold(style, p, 0.0, &[0.0], 1, &h, &mut d).unwrap_or_else(|| panic!("{} {}: {:?}", style, p, d))[0].to_bits()
 }

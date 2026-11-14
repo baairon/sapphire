@@ -78,22 +78,22 @@ pub fn cvtt64(x: f32) -> i64 {
 
 /// One element of job, operation by operation.
 pub fn exp_tanh_elem(s0: f32, x: f32) -> f32 {
-    let t1 = nx_mul(s0, x);
-    let t1 = C_LOG2E * t1;
-    let p = f32::from_bits(t1.to_bits() ^ 0x8000_0000);
+    let log2_arg = nx_mul(s0, x);
+    let log2_arg = C_LOG2E * log2_arg;
+    let p = f32::from_bits(log2_arg.to_bits() ^ 0x8000_0000);
     let off = if 0.0f32 > p { ONE } else { 0.0f32 }; // vcomiss xmm12, xmm0 / ja: 0 > p, unordered is not above
     let clipp = maxss(C_FLOOR, p);
     let w = cvtt32(clipp);
     let wf = w as f32; // vcvtsi2ss
     let u = clipp - wf;
-    let a1 = C_A + clipp;
-    let z0 = u + off;
+    let ca_clip = C_A + clipp;
+    let sum_0 = u + off;
     let r = C_C - clipp;
-    let x3 = r + wf;
-    let x4 = x3 - off;
-    let q = C_B / x4;
-    let v = a1 + q;
-    let v = nx_fma(-z0, C_D, v); // vfnmadd231ss: -(z0 * C_D) + v, fused
+    let sum_rw = r + wf;
+    let diff_4 = sum_rw - off;
+    let q = C_B / diff_4;
+    let v = ca_clip + q;
+    let v = nx_fma(-sum_0, C_D, v); // vfnmadd231ss: -(z0 * C_D) + v, fused
     let m = TWO23 * v;
     let lo = cvtt64(m) as u64 as u32; // esi
     let d = ONE + f32::from_bits(lo);
@@ -119,19 +119,19 @@ pub fn job_3(s0: f32, start: i32, count: i32, x: &mut [f32]) -> Result<(), Err> 
 /// Job . Phase 1: partition of `s` lines (`t1` = start, count): `p0[line*w] = running sum of a[line*w]`. Phase 2: partition of `w`
 /// (`t2`): for `lines` of length `s` starting at `start2*s`: `p1 = running sum of t` (t is the transposed plane with row stride s).
 /// Planes are w*s floats. CONTRACT-LIMIT: w >= 1, s >= 1, tiles inside the totals.
-pub fn job_cell_a(w: i32, s: i32, t1: (i32, i32), t2: (i32, i32), a: &[f32], t: &[f32], p0: &mut [f32], p1: &mut [f32]) -> Result<(), Err> {
+pub fn job_cell_a(w: i32, s: i32, rows_span: (i32, i32), cols_span: (i32, i32), a: &[f32], t: &[f32], p0: &mut [f32], second_plane: &mut [f32]) -> Result<(), Err> {
     // a phase whose count is <= 0 does nothing in the original (jle): no condition on its start
     let bad = |t: (i32, i32), total: i32| t.1 > 0 && (t.0 < 0 || t.0 + t.1 > total);
-    if w < 1 || s < 1 || bad(t1, s) || bad(t2, w) {
-        return Err(Err::Contract(format!("w {} s {} t1 {:?} t2 {:?}", w, s, t1, t2)));
+    if w < 1 || s < 1 || bad(rows_span, s) || bad(cols_span, w) {
+        return Err(Err::Contract(format!("w {} s {} t1 {:?} t2 {:?}", w, s, rows_span, cols_span)));
     }
     let (wu, su) = (w as usize, s as usize);
     let n = wu * su;
-    if a.len() < n || t.len() < n || p0.len() < n || p1.len() < n {
+    if a.len() < n || t.len() < n || p0.len() < n || second_plane.len() < n {
         return Err(Err::Contract("plane too small".into()));
     }
-    for line in (t1.0.max(0) as usize)..((t1.0 + t1.1).max(0) as usize) {
-        if t1.1 <= 0 {
+    for line in (rows_span.0.max(0) as usize)..((rows_span.0 + rows_span.1).max(0) as usize) {
+        if rows_span.1 <= 0 {
             break;
         }
         let base = line * wu;
@@ -149,21 +149,21 @@ pub fn job_cell_a(w: i32, s: i32, t1: (i32, i32), t2: (i32, i32), a: &[f32], t: 
             }
         }
     }
-    for col in (t2.0.max(0) as usize)..((t2.0 + t2.1).max(0) as usize) {
-        if t2.1 <= 0 {
+    for col in (cols_span.0.max(0) as usize)..((cols_span.0 + cols_span.1).max(0) as usize) {
+        if cols_span.1 <= 0 {
             break;
         }
         let base = col * su;
         let mut acc = 0.0f32;
         for j in 0..su {
             acc += t[base + j];
-            p1[base + j] = acc;
+            second_plane[base + j] = acc;
         }
         if acc != acc {
             let mut acc = 0.0f32;
             for j in 0..su {
                 acc = acc.fadd(t[base + j]);
-                p1[base + j] = acc;
+                second_plane[base + j] = acc;
             }
         }
     }
@@ -177,9 +177,9 @@ pub struct Ctx {
     pub s: i32,      //  number of lines (stride of the transposed plane), also the partition total
     pub nch: i32,    //  number of colour planes (the plane pointer array holds four)
     pub flag_cell_b: i32, //  0: guide-plane mode (B); non zero: constant mode (A)
-    pub f0: f32,     //  scale of the horizontal distance (d)
-    pub f4: f32,     //
-    pub f8: f32,     //  scale of the vertical distance (e)
+    pub d_scale: f32,     //  scale of the horizontal distance (d)
+    pub ca_param: f32,     //
+    pub e_scale: f32,     //  scale of the vertical distance (e)
     pub fc: f32,     //
     pub esh2_job_ctx_a: f32,   // (mode A only)
     pub k: f32,      // [ctx]
@@ -187,8 +187,8 @@ pub struct Ctx {
 
 /// cA = (D1 * (double)(1 + f4)) as f32, cB likewise with fc (vcvtss2sd, vmulsd, vcvtsd2ss).
 #[inline]
-pub fn c_a(f4: f32) -> f32 {
-    (D1 * ((ONE + f4) as f64)) as f32
+pub fn c_a(ca_param: f32) -> f32 {
+    (D1 * ((ONE + ca_param) as f64)) as f32
 }
 
 /// hA(m): m < 1e-10 -> cA; m > 0.9999999999 -> 1; else min(1/m, cA). Compares in double, ordered (NaN falls through to the divide).
@@ -218,7 +218,7 @@ pub fn g_t(m: f32, k: f32, cb: f32, kcb: f32) -> f32 {
 }
 
 pub struct Bufs<'a> {
-    pub ch: [&'a [f32]; 4],
+    pub chan: [&'a [f32]; 4],
     pub cur: &'a [f32],
     pub a: &'a mut [f32],
     pub t: &'a mut [f32],
@@ -227,9 +227,9 @@ pub struct Bufs<'a> {
 /// Sum over the channels of |x - y| (sequential, starting from +0.0, each `acc + |d|`): the scalar chains . Plain arithmetic: the result is
 /// exact unless an operand is NaN, which the callers detect on the final fused value.
 #[inline]
-fn l1(ch: &[&[f32]; 4], nch: usize, i: usize, j: usize) -> f32 {
+fn l1(chan: &[&[f32]; 4], nch: usize, i: usize, j: usize) -> f32 {
     let mut acc = 0.0f32;
-    for c in ch.iter().take(nch) {
+    for c in chan.iter().take(nch) {
         acc += (c[i] - c[j]).abs();
     }
     acc
@@ -248,8 +248,8 @@ struct LineParams {
     cb: f32,
     kcb: f32,
     ca: f32,
-    c10: f32,
-    c11: f32,
+    d_const: f32,
+    e_const: f32,
 }
 
 /// gT(m) with the plain product (`RULE` false) or the NaN rule of the product (`RULE` true).
@@ -271,37 +271,37 @@ fn g_t_r<const RULE: bool>(m: f32, k: f32, cb: f32, kcb: f32) -> f32 {
 /// Sum over the channels of |x - y| times `d`, plus `h` (fused): plain when `RULE` is false, else each step with the NaN rule of its instruction
 /// (guide mode `vfmadd231ss`, constant mode `vfmadd213ss`).
 #[inline(always)]
-fn l1_fz<const RULE: bool>(ch: &[&[f32]; 4], nch: usize, i: usize, j: usize, d: f32, h: f32, guide: bool) -> f32 {
+fn l1_fz<const RULE: bool>(chan: &[&[f32]; 4], nch: usize, i: usize, j: usize, d: f32, h: f32, guide: bool) -> f32 {
     if RULE {
         let mut sa = 0.0f32;
-        for c in ch.iter().take(nch) {
+        for c in chan.iter().take(nch) {
             sa = sa.fadd(c[i].fsub(c[j]).abs());
         }
         if guide { fma231(h, sa, d) } else { fma213(sa, d, h) }
     } else {
-        l1(ch, nch, i, j).mul_add(d, h)
+        l1(chan, nch, i, j).mul_add(d, h)
     }
 }
 
 /// One line (not the first line of row 0) of job_2. Returns whether a written value is NaN (always false for `RULE`).
 fn line_pass<const RULE: bool>(lp: &LineParams, b: &mut Bufs) -> bool {
-    let LineParams { w, s, nch, line, n, mode_b, d, e, k, cb, kcb, ca, c10, c11 } = *lp;
+    let LineParams { w, s, nch, line, n, mode_b, d, e, k, cb, kcb, ca, d_const, e_const } = *lp;
     let base = line * w;
     let prev = base - w;
     let mut bad = false;
     b.a[base] = ONE;
-    let g0 = if mode_b { g_t_r::<RULE>(minss(b.cur[prev], b.cur[base]), k, cb, kcb) } else { c11 };
-    let v = l1_fz::<RULE>(&b.ch, nch, base, prev, e, g0, mode_b);
+    let e_weight = if mode_b { g_t_r::<RULE>(minss(b.cur[prev], b.cur[base]), k, cb, kcb) } else { e_const };
+    let v = l1_fz::<RULE>(&b.chan, nch, base, prev, e, e_weight, mode_b);
     bad |= v != v;
     b.t[line] = v;
     for j in 1..=n {
         let (h, g) = if mode_b {
             (h_a(minss(b.cur[base + j - 1], b.cur[base + j]), ca), g_t_r::<RULE>(minss(b.cur[prev + j], b.cur[base + j]), k, cb, kcb))
         } else {
-            (c10, c11)
+            (d_const, e_const)
         };
-        let va = l1_fz::<RULE>(&b.ch, nch, base + j, base + j - 1, d, h, mode_b);
-        let vt = l1_fz::<RULE>(&b.ch, nch, base + j, prev + j, e, g, mode_b);
+        let va = l1_fz::<RULE>(&b.chan, nch, base + j, base + j - 1, d, h, mode_b);
+        let vt = l1_fz::<RULE>(&b.chan, nch, base + j, prev + j, e, g, mode_b);
         bad |= (va != va) | (vt != vt);
         b.a[base + j] = va;
         b.t[j * s + line] = vt;
@@ -317,28 +317,28 @@ pub fn job_2(ctx: &Ctx, start: i32, count: i32, b: &mut Bufs) -> Result<(), Err>
     }
     let (w, s, st, nch) = (ctx.w as usize, ctx.s as usize, start as usize, ctx.nch as usize);
     let total = w * s;
-    if b.ch.iter().take(nch).any(|c| c.len() < total) || b.a.len() < total || b.t.len() < total || (ctx.flag_cell_b == 0 && b.cur.len() < total) {
+    if b.chan.iter().take(nch).any(|c| c.len() < total) || b.a.len() < total || b.t.len() < total || (ctx.flag_cell_b == 0 && b.cur.len() < total) {
         return Err(Err::Contract("plane too small".into()));
     }
     let mode_b = ctx.flag_cell_b == 0;
-    let (d, e, k) = (ctx.f0, ctx.f8, ctx.k);
-    let ca = c_a(ctx.f4);
+    let (d, e, k) = (ctx.d_scale, ctx.e_scale, ctx.k);
+    let ca = c_a(ctx.ca_param);
     let cb = c_a(ctx.fc);
     let kcb = k.fmul(cb);
-    let (mut c10, mut c11) = (0.0f32, 0.0f32);
+    let (mut d_const, mut e_const) = (0.0f32, 0.0f32);
     if !mode_b {
         // 
-        c10 = ca;
+        d_const = ca;
         let bd = ctx.esh2_job_ctx_a as f64;
         if LOW > bd {
-            c11 = k.fmul(cb);
+            e_const = k.fmul(cb);
         } else if bd > HIGH {
-            c10 = ONE;
-            c11 = k;
+            d_const = ONE;
+            e_const = k;
         } else {
             let x = ONE / ctx.esh2_job_ctx_a;
-            c10 = minss(x, c10);
-            c11 = k.fmul(minss(x, cb));
+            d_const = minss(x, d_const);
+            e_const = k.fmul(minss(x, cb));
         }
     }
     b.a[st * w] = ONE; // pre-stores 
@@ -351,9 +351,9 @@ pub fn job_2(ctx: &Ctx, start: i32, count: i32, b: &mut Bufs) -> Result<(), Err>
                 b.t[row * s] = ONE;
             }
             for j in 1..=n {
-                let h = if mode_b { h_a(minss(b.cur[j - 1], b.cur[j]), ca) } else { c10 };
-                let v = l1_fz::<false>(&b.ch, nch, j, j - 1, d, h, mode_b);
-                b.a[j] = if v != v { l1_fz::<true>(&b.ch, nch, j, j - 1, d, h, mode_b) } else { v };
+                let h = if mode_b { h_a(minss(b.cur[j - 1], b.cur[j]), ca) } else { d_const };
+                let v = l1_fz::<false>(&b.chan, nch, j, j - 1, d, h, mode_b);
+                b.a[j] = if v != v { l1_fz::<true>(&b.chan, nch, j, j - 1, d, h, mode_b) } else { v };
             }
         }
         first_line = 1;
@@ -363,7 +363,7 @@ pub fn job_2(ctx: &Ctx, start: i32, count: i32, b: &mut Bufs) -> Result<(), Err>
     for line in line0..lines_end.max(line0) {
         // plain arithmetic first; a NaN anywhere in the line's results (a NaN operand always reaches the result of a fused step)
         // sends the line through the NaN-rule pass, which rewrites every element of the line
-        let lp = LineParams { w, s, nch, line, n, mode_b, d, e, k, cb, kcb, ca, c10, c11 };
+        let lp = LineParams { w, s, nch, line, n, mode_b, d, e, k, cb, kcb, ca, d_const, e_const };
         if line_pass::<false>(&lp, b) {
             line_pass::<true>(&lp, b);
         }

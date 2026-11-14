@@ -11,7 +11,7 @@
 //! range, and so do these functions. Host scalars (`relax_scale * flow_gain`) are computed with the crate's own `fmul`.
 
 use fx_common::nanop::NanOps;
-use fx_device::cl::{Arg as ClArg, Buffer};
+use fx_device::ocl::{Arg as ClArg, Buffer};
 use fx_device::{DevError, DevImage, Session};
 use optical_flow_pyramid::LevelRecord as Level;
 use optical_flow_solve::stretch::PairPlane;

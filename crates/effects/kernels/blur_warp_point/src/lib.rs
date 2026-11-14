@@ -27,7 +27,7 @@ pub struct Assumption {
 
 pub fn assumptions() -> Vec<Assumption> {
     vec![
-        Assumption { id: "A1", va: "", basis: "feature word read at the dispatch; AVX2 route needs (word & 0x9d97ff) == 0x9d97ff; the port assumes the word 0x9d97ff", label: "ASSUMPTION" },
+        Assumption { id: "A1", va: "", basis: "feature word read at the dispatch; AVX2 route needs (word &) ==; the port assumes the word", label: "ASSUMPTION" }, // origin: 0x9d97ff, 0x9d97ff, 0x9d97ff
         Assumption { id: "A2", va: "stack", basis: "tmp buffer at rbp is 32 byte aligned (prologue: and rsp,-32; push rbp; push rbp), so the alignment peel count r9 is 0", label: "INFERRED" },
         Assumption { id: "A3", va: "stack", basis: "tmp buffer has 4*n bytes from rbp; n > 12 overwrites the frame in the original, so supported and tested range is 0 <= n <= 12", label: "ASSUMPTION" },
         Assumption { id: "A4", va: "", basis: "constants +1.0 (0000803f) and -1.0 (000080bf), captured (lookup.py cov_asOFF N4)", label: "MEASURED" },
@@ -49,8 +49,8 @@ impl Geometry {
     /// params == 0 branch of 
     pub fn mode0(p: &Params) -> Geometry {
         let rowf = p.width.wrapping_add(3);
-        let r9 = p.n.wrapping_mul(rowf);
-        Geometry { base: p.n as i64 + r9 as i64, stride: r9 }
+        let tap_a = p.n.wrapping_mul(rowf);
+        Geometry { base: p.n as i64 + tap_a as i64, stride: tap_a }
     }
 }
 
@@ -74,20 +74,20 @@ pub fn sample(p: &Params, g: &Geometry, src: &[f32], x: f32, y: f32) -> Vec<f32>
     let xc = clamp_axis(p.flag_x, x, p.width);
     let yc = clamp_axis(p.flag_y, y, p.height);
     let one = 1.0f32;
-    let x1 = one + xc;
-    let y1 = one + yc;
-    let ix = cvtt(x1);
-    let iy = cvtt(y1);
-    let fx = x1 - ix as f32;
-    let fy = y1 - iy as f32;
+    let x_shifted = one + xc;
+    let sum_1 = one + yc;
+    let ix = cvtt(x_shifted);
+    let iy = cvtt(sum_1);
+    let fx = x_shifted - ix as f32;
+    let fy = sum_1 - iy as f32;
     let offx = ix.wrapping_sub(1).wrapping_mul(n) as i64;
     let offy = iy.wrapping_sub(1).wrapping_mul(g.stride) as i64;
     let pos = g.base + offx + offy;
     let fxy = fx * fy;
-    let w00 = ((one - fx) - fy) + fxy;
-    let w10 = fx - fxy;
-    let w01 = fy - fxy;
-    let w11 = fxy;
+    let sum_00 = ((one - fx) - fy) + fxy;
+    let diff_10 = fx - fxy;
+    let diff_01 = fy - fxy;
+    let frac_xy = fxy;
     let nn = n.max(0) as usize;
     let mut tmp = vec![0.0f32; nn];
     let at = |i: i64| src[i as usize];
@@ -95,24 +95,24 @@ pub fn sample(p: &Params, g: &Geometry, src: &[f32], x: f32, y: f32) -> Vec<f32>
     let nl = n as i64;
     // vector order: ((w10*B fused w00*A) fused w11*D) fused w01*C
     let vec_el = |q: i64| -> f32 {
-        let v = w10 * at(q + nl);
-        let v = w00.mul_add(at(q), v);
-        let v = w11.mul_add(at(q + nl + st), v);
-        w01.mul_add(at(q + st), v)
+        let v = diff_10 * at(q + nl);
+        let v = sum_00.mul_add(at(q), v);
+        let v = frac_xy.mul_add(at(q + nl + st), v);
+        diff_01.mul_add(at(q + st), v)
     };
     // scalar order: fma(w10,B,w11*D) + fma(w00,A,w01*C)
     let sc_el = |q: i64| -> f32 {
-        let a = w10.mul_add(at(q + nl), w11 * at(q + nl + st));
-        let b = w00.mul_add(at(q), w01 * at(q + st));
+        let a = diff_10.mul_add(at(q + nl), frac_xy * at(q + nl + st));
+        let b = sum_00.mul_add(at(q), diff_01 * at(q + st));
         a + b
     };
     if nn >= 16 {
-        let r11 = nn & !15;
-        for j in 0..r11 { tmp[j] = vec_el(pos + j as i64); }
-        let rem = nn - r11;
-        let q4 = rem & !3;
-        for j in r11..r11 + q4 { tmp[j] = vec_el(pos + j as i64); }
-        for j in r11 + q4..nn { tmp[j] = sc_el(pos + j as i64); }
+        let tap_c = nn & !15;
+        for j in 0..tap_c { tmp[j] = vec_el(pos + j as i64); }
+        let rem = nn - tap_c;
+        let bits_4 = rem & !3;
+        for j in tap_c..tap_c + bits_4 { tmp[j] = vec_el(pos + j as i64); }
+        for j in tap_c + bits_4..nn { tmp[j] = sc_el(pos + j as i64); }
     } else {
         for j in 0..nn { tmp[j] = sc_el(pos + j as i64); }
     }

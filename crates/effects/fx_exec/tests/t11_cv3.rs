@@ -37,16 +37,16 @@ fn from_source_removes_non_finite_and_premultiplies_per_row() {
 fn to_dest_modes_hand_example() {
     let img = Image::from_planes(vec![vec![0.1, 0.2], vec![0.3, 0.4], vec![0.5, 0.6], vec![1.5, -0.25]]).unwrap();
     let pre = vec![7.0f32; 8];
-    let (m1, w1) = image_to_host(&img, 2, 1, AlphaMode::ClampKeep, &pre).unwrap();
-    assert!(w1);
-    assert_eq!(m1, vec![0.5, 0.3, 0.1, 1.0, 0.6, 0.4, 0.2, 0.0]);
-    let (m2, _) = image_to_host(&img, 2, 1, AlphaMode::ZeroAlpha, &pre).unwrap();
-    assert_eq!(m2, vec![0.5, 0.3, 0.1, 0.0, 0.6, 0.4, 0.2, 0.0]);
-    let (m3, _) = image_to_host(&img, 2, 1, AlphaMode::One, &pre).unwrap();
-    assert_eq!(m3, vec![0.5, 0.3, 0.1, 1.0, 0.6, 0.4, 0.2, 1.0]);
-    let (m0, w0) = image_to_host(&img, 2, 1, AlphaMode::NoWrite, &pre).unwrap();
-    assert!(!w0);
-    assert_eq!(m0, pre);
+    let (bits_1, diff_1) = image_to_host(&img, 2, 1, AlphaMode::ClampKeep, &pre).unwrap();
+    assert!(diff_1);
+    assert_eq!(bits_1, vec![0.5, 0.3, 0.1, 1.0, 0.6, 0.4, 0.2, 0.0]);
+    let (zero_alpha_out, _) = image_to_host(&img, 2, 1, AlphaMode::ZeroAlpha, &pre).unwrap();
+    assert_eq!(zero_alpha_out, vec![0.5, 0.3, 0.1, 0.0, 0.6, 0.4, 0.2, 0.0]);
+    let (one_alpha_out, _) = image_to_host(&img, 2, 1, AlphaMode::One, &pre).unwrap();
+    assert_eq!(one_alpha_out, vec![0.5, 0.3, 0.1, 1.0, 0.6, 0.4, 0.2, 1.0]);
+    let (nowrite_out, was_written) = image_to_host(&img, 2, 1, AlphaMode::NoWrite, &pre).unwrap();
+    assert!(!was_written);
+    assert_eq!(nowrite_out, pre);
 }
 
 #[test]
@@ -73,8 +73,8 @@ fn command_path_identity_plan_matches_image_path() {
     let plan = "(exec-linewise 1 1 ((allocate-images :ref32.2 4 2 cpu)) ((convert-from-source 0 :ref32.2) (convert-to-dest :ref32.2)) ((free-images :ref32.2)))";
     let mem: Vec<f32> = (0..4 * 12).map(|i| ((i * 37 % 17) as f32) * 0.11 - 0.4).collect();
     for mode in [AlphaMode::ClampKeep, AlphaMode::ZeroAlpha, AlphaMode::One, AlphaMode::NoWrite] {
-        let hc = HostConvert { src: vec![mem.clone()], mode, dest_prefill: vec![9.0; 48], cell: 1, margin: 0, ae32: None };
-        let co = execute_commands_hc(&[plan.to_string()], &hc, 4, 3, &HostFrames::default(), &KParams::standin()).unwrap();
+        let hc = HostConvert { src: vec![mem.clone()], mode, dest_prefill: vec![9.0; 48], cell: 1, margin: 0, claim_route: None };
+        let co = execute_commands_hc(&[plan.to_string()], &hc, 4, 3, &HostFrames::default(), &KParams::host_defaults()).unwrap();
         let im = host_to_image(&mem, 4, 3).unwrap();
         let (want, wrote) = image_to_host(&im, 4, 3, mode, &vec![9.0; 48]).unwrap();
         assert_eq!(co.host_dest.unwrap(), want);
@@ -95,7 +95,7 @@ fn derive_mode_for_hue_sat_bright() {
 #[test]
 fn cell_gt1_and_margin_are_refused() {
     use fx_exec::{ExecError, HostConvert};
-    let base = |cell, margin| HostConvert { src: vec![vec![0.0; 16]], mode: convert_pair::AlphaMode::One, dest_prefill: vec![0.0; 16], cell, margin, ae32: None };
+    let base = |cell, margin| HostConvert { src: vec![vec![0.0; 16]], mode: convert_pair::AlphaMode::One, dest_prefill: vec![0.0; 16], cell, margin, claim_route: None };
     assert!(base(1, 0).check_claim().is_ok());
     assert!(matches!(base(2, 0).check_claim(), Err(ExecError::CellGt1NotClaimed(2))));
     assert!(matches!(base(1, 1).check_claim(), Err(ExecError::Shape(_))));

@@ -156,7 +156,7 @@ pub struct PlanNode {
     /// all arguments are constants (a folding candidate, FOLDING-UNMEASURED; nothing is folded)
     pub all_const_args: bool,
     /// const flag (constant node, folded node or alias-to-constant)
-    pub b160: bool,
+    pub is_const_node: bool,
     pub folded: bool,
     /// class of a folded constant (see CNode.cls)
     pub cls: String,
@@ -266,7 +266,7 @@ pub struct CompileOptions {
     pub ctx_has_data: u32,
     /// a v3_to_v4_if4 node takes its bound image argument's count (the count the route records) only when true;
     /// fx_run sets it on the 'ae32' route only; every other route keeps the node's own count and the earlier compile
-    pub v3_bound_count: bool,
+    pub claim_bound_count: bool,
 }
 
 /// the per-program bit-order rows of the INPUT-PRESENCE-MASK: (declared position j, input name, declared default, bind-pass node
@@ -607,7 +607,7 @@ pub fn flagged_default_to_1(g: &Genotype, n: &GNode) -> bool {
 #[derive(Debug, Clone)]
 pub struct NodeState {
     pub gid: usize,
-    pub b160: bool,
+    pub is_const_node: bool,
     pub folded: bool,
     pub lanes: [u32; 4],
     pub elnum: i32,
@@ -618,27 +618,27 @@ pub struct NodeState {
 }
 
 /// Compile a genotype under a parameter binding (with the original's collapses and folding).
-pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Result<CompiledProgram, CompileError> {
+pub fn compile(genotype: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Result<CompiledProgram, CompileError> {
     if opt.mocha_data_present {
         return Err(CompileError { msg: "MOCHA-DATA-PRESENT: host mocha data (tracking data in mocha_render's data object) is outside the claimed context".into() });
     }
     if opt.presence_mask.is_some() {
         // INPUT-PRESENCE-MASK: one input, both readers derived (derive_presence), then the ordinary compile
-        let (o2, label) = derive_presence(g0, opt)?;
-        let mut cp = compile(g0, combos, &o2)?;
+        let (presence_opts, label) = derive_presence(genotype, opt)?;
+        let mut cp = compile(genotype, combos, &presence_opts)?;
         cp.diagnostics.insert(0, label);
         return Ok(cp);
     }
     // MEASURED by value on 5 pairs: an unbound input whose declared default names another input is that input
-    let mut g_owned = g0.clone();
+    let mut g_owned = genotype.clone();
     if opt.minimal_context {
         let mut amap: HashMap<usize, usize> = HashMap::new();
-        for i in &g0.inputs {
+        for i in &genotype.inputs {
             if opt.presence_derived && opt.bound_elnum.contains_key(&i.name) {
                 continue; // a set presence bit keeps the input an image (the bind pass leaves it alone)
             }
             if let Some(t) = &i.default {
-                if let Some(b) = g0.inputs.iter().find(|x| x.name == t.trim() && x.name != i.name) {
+                if let Some(b) = genotype.inputs.iter().find(|x| x.name == t.trim() && x.name != i.name) {
                     amap.insert(i.node, b.node);
                 }
             }
@@ -843,20 +843,20 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
     // which holds for every argument of every class seen except get_frame / time_warp arg 0) holds, a kind-4 child (Special or Input) is replaced by a fresh clone, one
     // clone per slot (store into [node+8i] and [node+8i]). The sharing step below (filter) then merges clones.
     {
-        let n0 = nodes.len();
-        for ci in 0..n0 {
+        let node_count = nodes.len();
+        for ci in 0..node_count {
             if nodes[ci].kind != CKind::Func {
                 continue;
             }
             for ai in 0..nodes[ci].args.len() {
                 let t = nodes[ci].args[ai];
-                if t >= n0 {
+                if t >= node_count {
                     continue;
                 }
                 let k = nodes[t].kind;
                 let last_excl = (crate::layout::flags_of(&nodes[ci].name) & 0x40) != 0 && ai + 1 == nodes[ci].args.len();
-                let b0a = (nodes[ci].name == "get_frame" || nodes[ci].name == "time_warp") && ai == 0;
-                if last_excl || b0a || !(k == CKind::Special || k == CKind::Input) {
+                let first_arg_excluded = (nodes[ci].name == "get_frame" || nodes[ci].name == "time_warp") && ai == 0;
+                if last_excl || first_arg_excluded || !(k == CKind::Special || k == CKind::Input) {
                     continue;
                 }
                 let mut cp = nodes[t].clone();
@@ -938,9 +938,9 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
             if name == "if_neq_const" && nodes[id].args.len() >= 2 {
                 // the compare uses the clamped counts; outside 1..4 the original's dword is unmeasured, so refuse.
                 let raw = |c: usize| nodes[c].elnum.unwrap_or(nodes[c].nlanes as i32);
-                let (n0, n1) = (raw(nodes[id].args[0]), raw(nodes[id].args[1]));
-                if !(1..=4).contains(&n0) || !(1..=4).contains(&n1) {
-                    ifneq_refusal.borrow_mut().get_or_insert(format!("IFNEQ-CONST-COUNT-OUT-OF-RANGE ({}: node {}: {}, {})", g.name, id, n0, n1));
+                let (node_count, raw_arg_1) = (raw(nodes[id].args[0]), raw(nodes[id].args[1]));
+                if !(1..=4).contains(&node_count) || !(1..=4).contains(&raw_arg_1) {
+                    ifneq_refusal.borrow_mut().get_or_insert(format!("IFNEQ-CONST-COUNT-OUT-OF-RANGE ({}: node {}: {}, {})", g.name, id, node_count, raw_arg_1));
                     continue;
                 }
                 // a non-constant second argument is noted for fx_run's claim-route refusal; no result changes here
@@ -983,8 +983,8 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
             // R5 / R5b (slot 38): the class decides the collapse
             // a v3_to_v4_if4 node takes the element count of its bound image argument for the collapse and the fold
             // A RULE THAT TAKES A RECORDED COUNT APPLIES ONLY ON THE ROUTE THAT RECORDS IT
-            let v3_route = opt.v3_bound_count || cfg!(feature = "dx2v2_allroutes_mut");
-            let v3cnt: Option<i32> = if name == "v3_to_v4_if4" && v3_route && !cfg!(feature = "dx2_owncount_mut") {
+            let claim_bound_route = opt.claim_bound_count || cfg!(feature = "dx2v2_allroutes_mut");
+            let v3cnt: Option<i32> = if name == "v3_to_v4_if4" && claim_bound_route && !cfg!(feature = "dx2_owncount_mut") {
                 match crate::fold::v3_count(&views) {
                     Some(c) => Some(c),
                     None if cfg!(feature = "dx2v2_norefuse_mut") => el,
@@ -1013,8 +1013,8 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                     if nodes[t].is_const {
                         let k = (nodes[t].elnum.unwrap_or(1) - 1).max(0) as usize;
                         let tl = nodes[t].lanes;
-                        let l0 = tl[k.min(3)];
-                        nodes[id].lanes = [l0, tl[k.min(1)], tl[k.min(2)], tl[k.min(3)]];
+                        let first_lane = tl[k.min(3)];
+                        nodes[id].lanes = [first_lane, tl[k.min(1)], tl[k.min(2)], tl[k.min(3)]];
                         nodes[id].is_const = true;
                         nodes[id].folded = true;
                         nodes[id].cls = name.clone();
@@ -1328,7 +1328,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
         };
         // call 2: Special policy, per group
         let mut table: HashMap<String, usize> = HashMap::new();
-        let mut red2: HashMap<usize, usize> = HashMap::new();
+        let mut reduced_ids: HashMap<usize, usize> = HashMap::new();
         let mut last: i32 = -2;
         for r in &lres {
             if r.g != last {
@@ -1338,7 +1338,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
             if nodes[r.id].kind == CKind::Special {
                 match table.get(&nodes[r.id].name) {
                     Some(&f) => {
-                        red2.insert(r.id, f);
+                        reduced_ids.insert(r.id, f);
                     }
                     None => {
                         table.insert(nodes[r.id].name.clone(), r.id);
@@ -1347,7 +1347,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
             }
         }
         if !opt.xy_unshared {
-            apply(&mut nodes, &arr, &red2);
+            apply(&mut nodes, &arr, &reduced_ids);
         }
     }
     // execution order: postorder over the surviving DAG
@@ -1399,7 +1399,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
             param: c.param.clone(),
             identity: false,
             all_const_args: all_const,
-            b160: c.is_const,
+            is_const_node: c.is_const,
             folded: c.folded,
             cls: c.cls.clone(),
             input_pos: c.input_pos,
@@ -1414,7 +1414,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
     }
     let node_state: Vec<NodeState> = nodes
         .iter()
-        .map(|c| NodeState { gid: c.id, b160: c.is_const, folded: c.folded, lanes: c.lanes, elnum: c.elnum.unwrap_or(-1), alias: c.alias, name: c.name.clone(), auto: c.auto, nargs: c.args.len() })
+        .map(|c| NodeState { gid: c.id, is_const_node: c.is_const, folded: c.folded, lanes: c.lanes, elnum: c.elnum.unwrap_or(-1), alias: c.alias, name: c.name.clone(), auto: c.auto, nargs: c.args.len() })
         .collect();
     let clones = clone_pass(&nodes, &exec, final_root);
     if let Some(d) = diags.iter().find(|d| d.starts_with("HC-KEYED-MISSING") || d.starts_with("HC-NO-INTERFACE") || d.starts_with("TICKMAP-") || d.starts_with("ROUTE-SELECTOR-NOT-CLAIMED") || d.starts_with("HOST-CURVE-VALUE")) {
@@ -1448,7 +1448,7 @@ fn clone_pass(nodes: &[CNode], exec: &[usize], final_root: usize) -> Vec<NodeSta
     };
     let mk = |t: usize, gid: usize| {
         let tg = &nodes[t];
-        NodeState { gid, b160: true, folded: tg.folded, lanes: tg.lanes, elnum: tg.elnum.unwrap_or(-1), alias: None, name: tg.name.clone(), auto: tg.auto, nargs: 0 }
+        NodeState { gid, is_const_node: true, folded: tg.folded, lanes: tg.lanes, elnum: tg.elnum.unwrap_or(-1), alias: None, name: tg.name.clone(), auto: tg.auto, nargs: 0 }
     };
     let mut v: Vec<NodeState> = Vec::new();
     let mut next_gid = nodes.len();

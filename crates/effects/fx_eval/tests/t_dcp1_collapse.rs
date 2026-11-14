@@ -56,12 +56,12 @@ fn v3_to_v4_if4_constant_arguments_stay_with_the_fold() {
 #[test]
 fn v3_to_v4_if4_constant_fold_follows_the_count() {
     use fx_eval::fold::fold_lanes;
-    let z3 = ArgView2 { is_const: true, lanes: [0.0, 0.0, 0.0, 0.0], n: 3, elnum: Some(3) };
+    let arg_view2_3 = ArgView2 { is_const: true, lanes: [0.0, 0.0, 0.0, 0.0], n: 3, elnum: Some(3) };
     let hsb = ArgView2 { is_const: true, lanes: [0.8125, 1.0625, 0.9375, 0.0], n: 3, elnum: Some(3) };
     let one = cst(1.0);
     // Drop_Shadow at count 4: argument 0 lanes (0,0,0) and argument 1 as the alpha lane: [0 0 0 1]
-    let r4 = fold_lanes("v3_to_v4_if4", &[z3.clone(), one.clone(), img(4)], 4, None).unwrap();
-    assert_eq!(r4.map(f32::from_bits), [0.0, 0.0, 0.0, 1.0]);
+    let folded_4 = fold_lanes("v3_to_v4_if4", &[arg_view2_3.clone(), one.clone(), img(4)], 4, None).unwrap();
+    assert_eq!(folded_4.map(f32::from_bits), [0.0, 0.0, 0.0, 1.0]);
     // Hue_Sat_Bright at count 3: the 3 lanes of argument 0, nothing in lane 3
     let r3 = fold_lanes("v3_to_v4_if4", &[hsb.clone(), one.clone(), img(3)], 3, None).unwrap();
     assert_eq!(&r3.map(f32::from_bits)[..3], &[0.8125, 1.0625, 0.9375]);

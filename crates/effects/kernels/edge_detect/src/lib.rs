@@ -173,7 +173,7 @@ pub fn assumptions() -> Vec<Assumption> {
         Assumption { id: "ED-A2", what: "width 1: the body reads one float past the row; the value is host memory, parameter past_end (zero pad in the emulator harness)", label: "PARAM-UNCAPTURED" },
         Assumption { id: "ED-A3", what: "row partition returns the rows given by the caller; parallel_for runs the body once", label: "HOST-HOOKED" },
         Assumption { id: "ED-A4", what: "device route (render flag != 0, 0x344c90) is not rebuilt; the CPU route only", label: "NOT REBUILT" },
-        Assumption { id: "ED-A5", what: "feature word 0x9d97ff superset: the AVX2 body 0x342180 is the judged route; the SSE twin is not ported", label: "ROUTE AVX2-ONLY" },
+        Assumption { id: "ED-A5", what: "feature word superset: the AVX2 body 0x342180 is the judged route; the SSE twin is not ported", label: "ROUTE AVX2-ONLY" }, // origin: 0x9d97ff
         Assumption { id: "ED-A6", what: "blur ROI record with the image field 0 only; blur_core scratch phase 0 (inherited from crate blur)", label: "ASSUMED" },
         Assumption { id: "ED-A7", what: "ceilf of slot 57 is roundss ceil on the AVX2 word; modelled by f32::ceil", label: "INFERRED, tested in T2" },
     ]

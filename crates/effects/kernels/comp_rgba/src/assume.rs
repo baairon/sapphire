@@ -11,7 +11,7 @@ pub fn assumptions() -> Vec<Assumption> {
     vec![
         Assumption { id: "CR1-A1", tier: "CAPTURED", what: "ONE f32 1.0 (bytes 0000803f): T >= 1 test and 1 - T in the float routes" },
         Assumption { id: "CR1-A2", tier: "CAPTURED", what: "ONE f64 1.0 (bytes 000000000000f03f): the const-B double routes (local (1,1), (3,2);)" },
-        Assumption { id: "CR1-A3", tier: "ROUTE", what: "AVX2 route only: feature word cell is captured, the word behind it is served as 0x9d97ff; the SSE twins are not ported" },
+        Assumption { id: "CR1-A3", tier: "ROUTE", what: "AVX2 route only: feature word cell is captured, the word behind it is served as; the SSE twins are not ported" }, // origin: 0x9d97ff
         Assumption { id: "CR1-A4", tier: "HOST-FP-ASSUMED", what: "MXCSR round to nearest, no FTZ, no DAZ; the emulator follows the SDM, not silicon" },
         Assumption { id: "CR1-A5", tier: "CALLEE-MODELLED / PAD-UNVERIFIED", what: "combo (4,3): the body calls the host plane service (mode 1, chans 0..2) and the fill (value 1.0); the T2 compares the call record only. apply_pad runs them through the finished plane_service crate with an explicit block (the class virtual's block is uncaptured) and re-expresses the 1.0 fill as a constant flat fill" },
         Assumption { id: "CR1-A6", tier: "HOST-HOOKED", what: "unimplemented (ca,cb): class virtual [vtable] (returns handled or not) and the log are host services, record only" },

@@ -59,8 +59,8 @@ fn v_classes_table() {
 #[test]
 fn level_roundtrip_shapes() {
     let big: Vec<f32> = (0..50 * 7).map(|i| (i % 13) as f32 * 0.1).collect();
-    let (s, w2, h2) = downsample_plane(&big, 50, 7, 2, 0);
-    assert_eq!((w2, h2), (13, 2));
+    let (s, small_w, small_h) = downsample_plane(&big, 50, 7, 2, 0);
+    assert_eq!((small_w, small_h), (13, 2));
     assert_eq!(s.len(), 26);
     let u = upsample_plane(&s, 50, 7, 2);
     assert_eq!(u.len(), 350);

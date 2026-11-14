@@ -13,8 +13,8 @@ pub fn radius(amount: f32, width: i32) -> f32 {
 
 /// Gain index: `idx = ch >= in_count ? in_count : ch` (cmovge); may equal in_count.
 #[inline]
-pub fn gain_index(ch: usize, in_count: usize) -> usize {
-    if ch >= in_count { in_count } else { ch }
+pub fn gain_index(chan: usize, in_count: usize) -> usize {
+    if chan >= in_count { in_count } else { chan }
 }
 
 /// What the wrapper does for one plane.

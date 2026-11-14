@@ -15,8 +15,8 @@ fn params(n: i32) -> Params {
 
 #[test]
 fn two_planes_then_constant() {
-    let (p0, p1) = ([1.0f32, 2.0, 3.0], [4.0f32, 5.0, 6.0]);
-    let planes: [&[f32]; 2] = [&p0, &p1];
+    let (p0, plane_b) = ([1.0f32, 2.0, 3.0], [4.0f32, 5.0, 6.0]);
+    let planes: [&[f32]; 2] = [&p0, &plane_b];
     let z = [0u32; 4];
     let c = [0.1f32.to_bits(), 0, 0, 0];
     let blocks = [img(&z, &planes, 1), cst(&c)];
@@ -26,7 +26,7 @@ fn two_planes_then_constant() {
         append::render(&params(3), &blocks, 2, 1, &mut refs).unwrap();
     }
     assert_eq!(o[0], p0);
-    assert_eq!(o[1], p1);
+    assert_eq!(o[1], plane_b);
     assert_eq!(o[2], vec![0.1f32; 3]);
     assert_eq!(o[3], vec![-1.0f32; 3], "the fourth plane is untouched");
 }

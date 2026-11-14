@@ -14,6 +14,6 @@ fn ungiven_rate_is_refused_by_name() {
     let e = compile_for(&g, &b).err().expect("refused without a rate");
     assert!(format!("{}", e).contains("FPS-UNGIVEN"), "{}", e);
     b.host.insert("get_frames_per_second".into(), vec![24.0]);
-    let e2 = compile_for(&g, &b).err().map(|e| format!("{}", e)).unwrap_or_default();
-    assert!(!e2.contains("FPS-UNGIVEN"), "{}", e2);
+    let compile_for_2 = compile_for(&g, &b).err().map(|e| format!("{}", e)).unwrap_or_default();
+    assert!(!compile_for_2.contains("FPS-UNGIVEN"), "{}", compile_for_2);
 }

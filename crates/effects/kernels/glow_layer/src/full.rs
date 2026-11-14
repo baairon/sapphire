@@ -121,9 +121,9 @@ pub fn glow_pass(src: &[Plane], dst: &mut [PlaneMut], a: &PassArgs) -> Result<()
     }
     // bright pass (0x673fa0): one plane reads thresholds[0] only
     {
-        let bp = BrightParams { thresholds: if n == 1 { [a.thresholds[0], 0.0, 0.0] } else { a.thresholds } };
+        let bright_params = BrightParams { thresholds: if n == 1 { [a.thresholds[0], 0.0, 0.0] } else { a.thresholds } };
         let mut views: Vec<&mut [f32]> = bufs.iter_mut().map(|b| b.as_mut_slice()).collect();
-        bright_pass_flat(&bp, &mut views, total)?;
+        bright_pass_flat(&bright_params, &mut views, total)?;
     }
     if a.show_threshold == 0 {
         // invalid edge modes are rejected here, before any blur work (the original asserts inside the kernel)
@@ -148,11 +148,11 @@ pub fn glow_pass(src: &[Plane], dst: &mut [PlaneMut], a: &PassArgs) -> Result<()
 pub fn full_assumptions() -> Vec<crate::bright::Assumption> {
     use crate::bright::Assumption;
     vec![
-        Assumption { id: "plane-count", va: "0x52b260", value: "a plane count other than 1 or 3 returns PlaneCount; the original sends every n != 1 to 0x33bfb0", basis: "cmp eax,1 at 52b260", label: "conservative choice" },
+        Assumption { id: "plane-count", va: "", value: "a plane count other than 1 or 3 returns PlaneCount; the original sends every n != 1 to 0x33bfb0", basis: "cmp eax,1 at 52b260", label: "conservative choice" }, // origin: 0x52b260
         Assumption { id: "in-place-blur", va: "0x1537a0", value: "the in-place blur (rsi == rdx) is modelled as blur_core(copy, out)", basis: "listing 33bdc2..33bdc9 and 33c124..33c128; equality checked against the original's in-place call", label: "checked" },
-        Assumption { id: "roi-form", va: "0x5b9b10", value: "ROI form 1 (info+8 == 0), dense planes, d = 0 and element bytes = 4", basis: "ROI constants at 0x160f274 and 0x160f280", label: "assumed" },
+        Assumption { id: "roi-form", va: "", value: "ROI form 1 (info+8 == 0), dense planes, d = 0 and element bytes = 4", basis: "ROI constants and", label: "assumed" }, // origin: 0x5b9b10, 0x160f274, 0x160f280
         Assumption { id: "aspect", va: "0x1537a0", value: "aspect (info+0x30, +0x38) is a caller field, None by default", basis: "blur core argument record", label: "assumed" },
         Assumption { id: "edge-mode", va: "0x1537a0", value: "an edge mode other than 0 or 1 gives FxError::Geometry before blur work, only when show_threshold == 0", basis: "the original asserts inside the blur kernel", label: "assumed" },
-        Assumption { id: "pool-route", va: "0x674000", value: "the bright pass runs its inline path; the pool route is equal to it", basis: "pool and inline layouts compared byte for byte on the bright pass", label: "assumed" },
+        Assumption { id: "pool-route", va: "", value: "the bright pass runs its inline path; the pool route is equal to it", basis: "pool and inline layouts compared byte for byte on the bright pass", label: "assumed" }, // origin: 0x674000
     ]
 }

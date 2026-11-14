@@ -28,30 +28,30 @@ fn big_chunk(g: u32) -> [u64; 2] {
         }
         f.shr(p - 7)
     };
-    let x2 = chunk.trunc_sig(29);
-    let x23 = chunk.trunc_sig(42);
-    let x3 = x23.sub(&x2);
-    let t5 = chunk.sub(&x23);
-    let b2 = x2.to_f64().to_bits();
-    let b3 = x3.to_f64().to_bits();
-    assert!(b2 & 0xff_ffff == 0 && b3 & 0xff_ffff_ffff == 0);
-    [(b2 & 0xffff_ffff_ff00_0000) | (b3 >> 40), t5.to_f64().to_bits()]
+    let chunk_hi = chunk.trunc_sig(29);
+    let chunk_mid = chunk.trunc_sig(42);
+    let chunk_mid_part = chunk_mid.sub(&chunk_hi);
+    let bits_5 = chunk.sub(&chunk_mid);
+    let hi_bits = chunk_hi.to_f64().to_bits();
+    let mid_bits = chunk_mid_part.to_f64().to_bits();
+    assert!(hi_bits & 0xff_ffff == 0 && mid_bits & 0xff_ffff_ffff == 0);
+    [(hi_bits & 0xffff_ffff_ff00_0000) | (mid_bits >> 40), bits_5.to_f64().to_bits()]
 }
 
 fn compute() -> SinTables {
     let h = pi().div_u64(128);
-    let h2 = h.mul(&h);
-    let h3 = h2.mul(&h);
+    let h_sq = h.mul(&h);
+    let bits_3 = h_sq.mul(&h);
     let mut main = [[0u64; 2]; 65];
     for (j, slot) in main.iter_mut().enumerate() {
         let (a, b): (Fx, Fx) = if j == 0 {
-            (h3.div_u64(6), Fx::zero())
+            (bits_3.div_u64(6), Fx::zero())
         } else if j == 64 {
-            (Fx::zero(), h2.div_u64(2))
+            (Fx::zero(), h_sq.div_u64(2))
         } else {
             let th = pi().mul_u64(j as u64).div_u64(128);
             let (s, c) = sincos(&th);
-            (c.mul(&h3).div_u64(6), s.mul(&h2).div_u64(2))
+            (c.mul(&bits_3).div_u64(6), s.mul(&h_sq).div_u64(2))
         };
         *slot = [a.to_f64().to_bits(), b.to_f64().to_bits()];
     }

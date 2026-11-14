@@ -83,14 +83,14 @@ fn errors_and_planes() {
     assert_eq!(render(&big, &[Plane::new(&x, 4, 4, 4).unwrap()], &mut [PlaneMut::new(&mut o, 4, 4, 4).unwrap()]), Err(FxError::Geometry));
     // two planes use per-plane gains
     let (w, h) = (16, 8);
-    let x0 = gen_noise(w, h, 1);
-    let x1 = gen_noise(w, h, 2);
-    let (mut o0, mut o1) = (vec![0.0f32; w * h], vec![0.0f32; w * h]);
+    let noise = gen_noise(w, h, 1);
+    let sum_1 = gen_noise(w, h, 2);
+    let (mut out_a, mut out_b) = (vec![0.0f32; w * h], vec![0.0f32; w * h]);
     let pp = Params { amount: 0.5, gains: vec![0.5, 2.0], in_count: 2, ctx_width: w as i32, aspect: None, count: None };
-    render(&pp, &[Plane::new(&x0, w, h, w).unwrap(), Plane::new(&x1, w, h, w).unwrap()], &mut [PlaneMut::new(&mut o0, w, h, w).unwrap(), PlaneMut::new(&mut o1, w, h, w).unwrap()]).unwrap();
+    render(&pp, &[Plane::new(&noise, w, h, w).unwrap(), Plane::new(&sum_1, w, h, w).unwrap()], &mut [PlaneMut::new(&mut out_a, w, h, w).unwrap(), PlaneMut::new(&mut out_b, w, h, w).unwrap()]).unwrap();
     let r = radius(0.5, w as i32);
-    assert_eq!(o0, sharpen_plane(&x0, w, h, r, 0.5, None, w * h, 0).unwrap());
-    assert_eq!(o1, sharpen_plane(&x1, w, h, r, 2.0, None, w * h, 0).unwrap());
+    assert_eq!(out_a, sharpen_plane(&noise, w, h, r, 0.5, None, w * h, 0).unwrap());
+    assert_eq!(out_b, sharpen_plane(&sum_1, w, h, r, 2.0, None, w * h, 0).unwrap());
 }
 
 #[test]

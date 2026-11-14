@@ -222,11 +222,11 @@ fn relax_launch_equals_the_op_on_its_snapshot_with_the_polar_output_as_scale_pla
             nests: [NestIn { t: &sn[&l.nest1_t], u: &sn[&l.nest1_u], acc: &sn[&l.flow_u_next] }, NestIn { t: &sn[&l.nest2_t], u: &sn[&l.nest2_u], acc: &sn[&l.flow_v_next] }],
             phase_bytes: (l.nest1_t & 63) as u32,
         };
-        let (mut o1, mut o2) = (sn[&l.relax_first].clone(), sn[&l.relax_second].clone());
-        relax_callback(&ctx, [&mut o1, &mut o2], 0, l.height);
-        assert_eq!(bits(&s.planes[&l.relax_first]), bits(&o1), "alt {alt}");
-        assert_eq!(bits(&s.planes[&l.relax_second]), bits(&o2), "alt {alt}");
-        results.push(bits(&o1));
+        let (mut relax_a, mut relax_b) = (sn[&l.relax_first].clone(), sn[&l.relax_second].clone());
+        relax_callback(&ctx, [&mut relax_a, &mut relax_b], 0, l.height);
+        assert_eq!(bits(&s.planes[&l.relax_first]), bits(&relax_a), "alt {alt}");
+        assert_eq!(bits(&s.planes[&l.relax_second]), bits(&relax_b), "alt {alt}");
+        results.push(bits(&relax_a));
     }
     assert_ne!(results[0], results[1]);
 }

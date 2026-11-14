@@ -8,9 +8,9 @@ const EXPECT: &[u32] = &[
 
 fn go(c: f32, a: f32, d: f32, r: (f32, f32), u: f32, v: f32) -> [u32; 2] {
     let o = Obj { port_obj_c: c, gpu_call_a: a, port_obj_d: d };
-    let (mut o1, mut o2) = ([0.0f32], [0.0f32]);
-    run(&o, true, false, 1, r, 0, &[u], &[v], &mut o1, &mut o2).unwrap();
-    [o1[0].to_bits(), o2[0].to_bits()]
+    let (mut lanes_1, mut lanes_2) = ([0.0f32], [0.0f32]);
+    run(&o, true, false, 1, r, 0, &[u], &[v], &mut lanes_1, &mut lanes_2).unwrap();
+    [lanes_1[0].to_bits(), lanes_2[0].to_bits()]
 }
 
 #[test]

@@ -42,11 +42,11 @@ pub const LCG_ADD: u64 = 150_889;
 #[inline]
 pub fn lcg_step_x(x: u32) -> u32 {
     const MAGIC: i64 = 0x5dfc_9956_8187_2319_u64 as i64;
-    let rcx = (x << 12) as u64; // `shl ecx,0xc`: 32-bit shift, zero extended
-    let n = rcx.wrapping_add(LCG_ADD); // `lea r10,[rcx]`
+    let shifted = (x << 12) as u64; // `shl ecx,0xc`: 32-bit shift, zero extended
+    let n = shifted.wrapping_add(LCG_ADD); // `lea r10,[rcx]`
     let prod = (n as i64 as i128) * (MAGIC as i128); // `imul r10` (rdx:rax)
     let q = ((prod >> 64) as u64) >> 18; // `shr rdx,0x12`
-    let r = rcx
+    let r = shifted
         .wrapping_add(q.wrapping_mul(0xffff_ffff_fff5_1ad7)) // `imul r11,rdx,-714025`
         .wrapping_add(LCG_ADD); // `lea rdi,[rcx+r11*1]`
     r as u32 // the next `mov ecx,edi` keeps the low 32 bits
@@ -71,11 +71,11 @@ impl HashTable {
         let mut t = [0u32; HASH_TABLE_LEN];
         let mut state: u32 = 0; // `xor ecx,ecx`
         for slot in t.iter_mut() {
-            let y1 = lcg_step_x(state);
-            let y2 = lcg_step_x(y1);
-            let y3 = lcg_step_x(y2);
-            *slot = (y1 >> 2).wrapping_add(y2 << 8).wrapping_add(y3 << 18);
-            state = y3;
+            let lcg_1 = lcg_step_x(state);
+            let lcg_2 = lcg_step_x(lcg_1);
+            let lcg_3 = lcg_step_x(lcg_2);
+            *slot = (lcg_1 >> 2).wrapping_add(lcg_2 << 8).wrapping_add(lcg_3 << 18);
+            state = lcg_3;
         }
         HashTable { t, tail: state }
     }

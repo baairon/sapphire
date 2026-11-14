@@ -586,7 +586,7 @@ mod device_nan_exact_tests {
         let im = nan_image();
         let a = Rc::new(Image { n: 5, planes: vec![im.planes[0].clone()] });
         let c = Rc::new(Image { n: 5, planes: vec![im.planes[1].clone()] });
-        let kp = KParams::standin();
+        let kp = KParams::host_defaults();
         let call = NodeCall { idx: 0, class: "-", tag: 1, n: 5, dims: (5, 1), kp: &kp };
         let want = match crate::kernels::run_any("-", 1, &[Arg::Img(&a), Arg::Img(&c)], 5, (5, 1), &kp).unwrap() {
             crate::kernels2::Out::Img(i) => i.planes[0].clone(),
@@ -663,7 +663,7 @@ mod device_nan_exact_tests {
         ("ripmap sum signalling compare direction", "    int sa = (a & 0x00400000u) == 0u;", "    int sa = (a & 0x00400000u) != 0u;", &["make_mipmap"]),
         ("ripmap sum default NaN sign", "    if (isnan(s)) {\n        return 0xffc00000u;", "    if (isnan(s)) {\n        return 0x7fc00000u;", &["make_mipmap"]),
         ("ripmap NaN test mantissa mask", "    return (v & 0x7f800000u) == 0x7f800000u && (v & 0x007fffffu) != 0u;", "    return (v & 0x7f800000u) == 0x7f800000u && (v & 0x003fffffu) != 0u;", &["make_mipmap"]),
-        ("ripmap horizontal sum order", "(1u + x) * (uint)c + ch] = mm_avg(b, a);", "(1u + x) * (uint)c + ch] = mm_avg(a, b);", &["make_mipmap"]),
+        ("ripmap horizontal sum order", "(1u + x) * (uint)c + chan] = mm_avg(b, a);", "(1u + x) * (uint)c + chan] = mm_avg(a, b);", &["make_mipmap"]),
         ("ripmap vertical sum order", "    rip[doff + (1u + y) * stride + k] = mm_avg(b, a);", "    rip[doff + (1u + y) * stride + k] = mm_avg(a, b);", &["make_mipmap"]),
         ("ripmap average constant", "    return as_uint(0x1p-1f * as_float(s));", "    return as_uint(0x1p-2f * as_float(s));", &["make_mipmap"]),
     ];

@@ -12,16 +12,16 @@ fn cst(v: &[f32]) -> Arg<'static> {
     }
     Arg::Const { n: v.len(), lanes: l }
 }
-fn img(ch: usize, n: usize) -> Image {
+fn img(chan: usize, n: usize) -> Image {
     // plane k, sample i = 10 * (k + 1) + i, all exact in f32
-    Image::from_planes((0..ch).map(|k| (0..n).map(|i| (10 * (k + 1) + i) as f32).collect()).collect()).unwrap()
+    Image::from_planes((0..chan).map(|k| (0..n).map(|i| (10 * (k + 1) + i) as f32).collect()).collect()).unwrap()
 }
 fn run(class: &str, args: &[Arg], w: usize, h: usize) -> Image {
     let c: Vec<i32> = args.iter().map(|a| a.count()).collect();
     let t = Tables::from_tsv(effects_rtdata::text("fx_exec/data/COMBOS_EXEC.tsv")).select_counts(class, &c);
     assert!(t > 0, "no combo for {} {:?}", class, c);
     // the sharpen arm has no default count; the caller supplies W x H (HOST-COUNT, ROUTE)
-    let mut kp = KParams::standin();
+    let mut kp = KParams::host_defaults();
     kp.sharpen_count = Some(w * h);
     match run_any(class, t, args, w * h, (w, h), &kp).unwrap() {
         Out::Img(i) => i,
@@ -42,28 +42,28 @@ fn coerce_to_v3_rows() {
     }
     let (w, h) = (5, 3);
     let n = w * h;
-    let i1 = img(1, n);
-    let r = run("coerce_to_v3", &[Arg::Img(&i1)], w, h);
+    let img_1ch = img(1, n);
+    let r = run("coerce_to_v3", &[Arg::Img(&img_1ch)], w, h);
     assert_eq!(r.channels(), 3);
     for k in 0..3 {
-        same(&r.planes[k], &i1.planes[0]);
+        same(&r.planes[k], &img_1ch.planes[0]);
     }
-    let i2 = img(2, n);
-    let r = run("coerce_to_v3", &[Arg::Img(&i2)], w, h);
+    let img_2ch = img(2, n);
+    let r = run("coerce_to_v3", &[Arg::Img(&img_2ch)], w, h);
     assert_eq!(r.channels(), 3);
-    same(&r.planes[0], &i2.planes[0]);
-    same(&r.planes[1], &i2.planes[1]);
+    same(&r.planes[0], &img_2ch.planes[0]);
+    same(&r.planes[1], &img_2ch.planes[1]);
     same(&r.planes[2], &vec![0.0; n]);
-    let i4 = img(4, n);
-    let r = run("coerce_to_v3", &[Arg::Img(&i4)], w, h);
+    let img_4ch = img(4, n);
+    let r = run("coerce_to_v3", &[Arg::Img(&img_4ch)], w, h);
     assert_eq!(r.channels(), 3);
     for k in 0..3 {
-        same(&r.planes[k], &i4.planes[k]);
+        same(&r.planes[k], &img_4ch.planes[k]);
     }
-    let i3 = img(3, n);
-    let r = run("coerce_to_v3", &[Arg::Img(&i3)], w, h);
+    let img_3ch = img(3, n);
+    let r = run("coerce_to_v3", &[Arg::Img(&img_3ch)], w, h);
     for k in 0..3 {
-        same(&r.planes[k], &i3.planes[k]);
+        same(&r.planes[k], &img_3ch.planes[k]);
     }
 }
 
@@ -74,37 +74,37 @@ fn coerce_to_v4_and_up_to_v3_rows() {
     }
     let (w, h) = (5, 3);
     let n = w * h;
-    let i1 = img(1, n);
-    let r = run("coerce_to_v4", &[Arg::Img(&i1)], w, h);
+    let img_1ch = img(1, n);
+    let r = run("coerce_to_v4", &[Arg::Img(&img_1ch)], w, h);
     assert_eq!(r.channels(), 4);
     for k in 0..3 {
-        same(&r.planes[k], &i1.planes[0]);
+        same(&r.planes[k], &img_1ch.planes[0]);
     }
     same(&r.planes[3], &vec![1.0; n]);
-    let i3 = img(3, n);
-    let r = run("coerce_to_v4", &[Arg::Img(&i3)], w, h);
+    let img_3ch = img(3, n);
+    let r = run("coerce_to_v4", &[Arg::Img(&img_3ch)], w, h);
     for k in 0..3 {
-        same(&r.planes[k], &i3.planes[k]);
+        same(&r.planes[k], &img_3ch.planes[k]);
     }
     same(&r.planes[3], &vec![1.0; n]);
-    let i4 = img(4, n);
-    let r = run("coerce_to_v4", &[Arg::Img(&i4)], w, h);
+    let img_4ch = img(4, n);
+    let r = run("coerce_to_v4", &[Arg::Img(&img_4ch)], w, h);
     for k in 0..4 {
-        same(&r.planes[k], &i4.planes[k]);
+        same(&r.planes[k], &img_4ch.planes[k]);
     }
     // coerce_up_to_v3: 4 channels stay 4, 2 channels get a zero third plane
-    let r = run("coerce_up_to_v3", &[Arg::Img(&i4)], w, h);
+    let r = run("coerce_up_to_v3", &[Arg::Img(&img_4ch)], w, h);
     assert_eq!(r.channels(), 4);
     for k in 0..4 {
-        same(&r.planes[k], &i4.planes[k]);
+        same(&r.planes[k], &img_4ch.planes[k]);
     }
-    let i2 = img(2, n);
-    let r = run("coerce_up_to_v3", &[Arg::Img(&i2)], w, h);
+    let img_2ch = img(2, n);
+    let r = run("coerce_up_to_v3", &[Arg::Img(&img_2ch)], w, h);
     assert_eq!(r.channels(), 3);
     same(&r.planes[2], &vec![0.0; n]);
-    let r = run("coerce_up_to_v3", &[Arg::Img(&i1)], w, h);
+    let r = run("coerce_up_to_v3", &[Arg::Img(&img_1ch)], w, h);
     assert_eq!(r.channels(), 3);
-    same(&r.planes[1], &i1.planes[0]);
+    same(&r.planes[1], &img_1ch.planes[0]);
 }
 
 #[test]
@@ -114,21 +114,21 @@ fn v3_to_v4_rows() {
     }
     let (w, h) = (5, 3);
     let n = w * h;
-    let i3 = img(3, n);
-    let r = run("v3_to_v4", &[Arg::Img(&i3), cst(&[0.5])], w, h);
+    let img_3ch = img(3, n);
+    let r = run("v3_to_v4", &[Arg::Img(&img_3ch), cst(&[0.5])], w, h);
     assert_eq!(r.channels(), 4);
     for k in 0..3 {
-        same(&r.planes[k], &i3.planes[k]);
+        same(&r.planes[k], &img_3ch.planes[k]);
     }
     same(&r.planes[3], &vec![0.5; n]);
     // (4,1): the alpha operand is an image
-    let i4 = img(4, n);
-    let a1 = img(1, n);
-    let r = run("v3_to_v4", &[Arg::Img(&i4), Arg::Img(&a1)], w, h);
+    let img_4ch = img(4, n);
+    let other_img = img(1, n);
+    let r = run("v3_to_v4", &[Arg::Img(&img_4ch), Arg::Img(&other_img)], w, h);
     for k in 0..3 {
-        same(&r.planes[k], &i4.planes[k]);
+        same(&r.planes[k], &img_4ch.planes[k]);
     }
-    same(&r.planes[3], &a1.planes[0]);
+    same(&r.planes[3], &other_img.planes[0]);
     // (1,1): gray broadcast to the three colour planes (channel clamped to count - 1)
     let g = img(1, n);
     let r = run("v3_to_v4", &[Arg::Img(&g), cst(&[1.0])], w, h);
@@ -137,9 +137,9 @@ fn v3_to_v4_rows() {
     }
     same(&r.planes[3], &vec![1.0; n]);
     // (3,3): alpha operand 3 channels, only its channel 0 is used
-    let a3 = img(3, n);
-    let r = run("v3_to_v4", &[Arg::Img(&i3), Arg::Img(&a3)], w, h);
-    same(&r.planes[3], &a3.planes[0]);
+    let other_img_b = img(3, n);
+    let r = run("v3_to_v4", &[Arg::Img(&img_3ch), Arg::Img(&other_img_b)], w, h);
+    same(&r.planes[3], &other_img_b.planes[0]);
 }
 
 #[test]
@@ -157,16 +157,16 @@ fn sharpen_basic_properties() {
         assert!((v - 0.25).abs() < 1e-6, "{}", v);
     }
     // amount 0: radius 0 copies bit for bit
-    let i3 = img(3, n);
-    let r = run("sharpen", &[Arg::Img(&i3), cst(&[2.0, 2.0, 2.0]), cst(&[0.0])], w, h);
+    let img_3ch = img(3, n);
+    let r = run("sharpen", &[Arg::Img(&img_3ch), cst(&[2.0, 2.0, 2.0]), cst(&[0.0])], w, h);
     assert_eq!(r.channels(), 3);
     for k in 0..3 {
-        same(&r.planes[k], &i3.planes[k]);
+        same(&r.planes[k], &img_3ch.planes[k]);
     }
     // gain 0: copy
-    let r = run("sharpen", &[Arg::Img(&i3), cst(&[0.0]), cst(&[0.5])], w, h);
+    let r = run("sharpen", &[Arg::Img(&img_3ch), cst(&[0.0]), cst(&[0.5])], w, h);
     for k in 0..3 {
-        same(&r.planes[k], &i3.planes[k]);
+        same(&r.planes[k], &img_3ch.planes[k]);
     }
     // an actual sharpen of a ramp is finite, deterministic and changes interior samples
     let ramp = Image::from_planes(vec![(0..n).map(|i| ((i % w) as f32) / (w as f32)).collect()]).unwrap();
@@ -256,30 +256,30 @@ fn monochrome_a_rows() {
     let (w, h) = (9, 4);
     let n = w * h;
     // 4 channels: luma plane (0.3125 p0 + 0.5 p1 + 0.1875 p2, f64 fma chain) and the alpha plane = channel 3
-    let i4 = img(4, n);
-    let r = run("monochrome_a", &[Arg::Img(&i4)], w, h);
+    let img_4ch = img(4, n);
+    let r = run("monochrome_a", &[Arg::Img(&img_4ch)], w, h);
     assert_eq!(r.channels(), 2);
-    same(&r.planes[1], &i4.planes[3]);
+    same(&r.planes[1], &img_4ch.planes[3]);
     for i in 0..n {
-        let (a, b, c) = (i4.planes[0][i] as f64, i4.planes[1][i] as f64, i4.planes[2][i] as f64);
+        let (a, b, c) = (img_4ch.planes[0][i] as f64, img_4ch.planes[1][i] as f64, img_4ch.planes[2][i] as f64);
         let t = 0.5f64 * b;
         let t = a.mul_add(0.3125, t);
         let t = c.mul_add(0.1875, t);
         assert_eq!(r.planes[0][i].to_bits(), (t as f32).to_bits());
     }
     // 3 channels: one plane
-    let i3 = img(3, n);
-    let r = run("monochrome_a", &[Arg::Img(&i3)], w, h);
+    let img_3ch = img(3, n);
+    let r = run("monochrome_a", &[Arg::Img(&img_3ch)], w, h);
     assert_eq!(r.channels(), 1);
     // 2 channels: out0 = channel 0, out1 = channel 1
-    let i2 = img(2, n);
-    let r = run("monochrome_a", &[Arg::Img(&i2)], w, h);
+    let img_2ch = img(2, n);
+    let r = run("monochrome_a", &[Arg::Img(&img_2ch)], w, h);
     assert_eq!(r.channels(), 2);
-    same(&r.planes[0], &i2.planes[0]);
-    same(&r.planes[1], &i2.planes[1]);
+    same(&r.planes[0], &img_2ch.planes[0]);
+    same(&r.planes[1], &img_2ch.planes[1]);
     // 1 channel: copy
-    let i1 = img(1, n);
-    let r = run("monochrome_a", &[Arg::Img(&i1)], w, h);
+    let img_1ch = img(1, n);
+    let r = run("monochrome_a", &[Arg::Img(&img_1ch)], w, h);
     assert_eq!(r.channels(), 1);
-    same(&r.planes[0], &i1.planes[0]);
+    same(&r.planes[0], &img_1ch.planes[0]);
 }

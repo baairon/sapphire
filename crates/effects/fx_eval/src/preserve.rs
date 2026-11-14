@@ -160,7 +160,7 @@ pub fn analyze(cp: &CompiledProgram, hd: u32) -> Pres {
         // reverse pre order visits every node after all nodes below it on its DFS path; a DAG child reached by another parent was visited earlier or later,
         // but flags only depend on the flags of children, all 1 when is uniform, so the order cannot change the result
         for (_, a) in qual(cp, n) {
-            let literal = cp.nodes[a].b160 && !(cp.nodes[a].kind == "const");
+            let literal = cp.nodes[a].is_const_node && !(cp.nodes[a].kind == "const");
             let _ = literal;
             #[cfg(not(feature = "mut_childclear"))]
             {
@@ -193,7 +193,7 @@ pub fn analyze(cp: &CompiledProgram, hd: u32) -> Pres {
             continue;
         }
         let nd = &cp.nodes[n];
-        if kind_of(nd.kind) != 2 || fx_eval_pres_a[n] || nd.b160 {
+        if kind_of(nd.kind) != 2 || fx_eval_pres_a[n] || nd.is_const_node {
             continue;
         }
         // nested walk: post order, visited bytes, children = qualifying arguments, parent = Some(head) for every visited node but the head

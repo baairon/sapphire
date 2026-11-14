@@ -148,10 +148,10 @@ fn run_tail(layout: &str) -> (Tot, usize, usize) {
                  (0..4).map(|k| plane(&d, c, "inputs", &format!("o{}", k))).collect())
             };
             let r = sharpen::plan::radius(q.amount, q.cw);
-            let mut run_ch: Vec<usize> = (0..nn)
-                .filter(|&ch| matches!(plane_plan(r, q.gains[sharpen::plan::gain_index(ch, q.in_count)]), PlanePlan::Run { .. }))
+            let mut run_chans: Vec<usize> = (0..nn)
+                .filter(|&chan_idx| matches!(plane_plan(r, q.gains[sharpen::plan::gain_index(chan_idx, q.in_count)]), PlanePlan::Run { .. }))
                 .collect();
-            run_ch.reverse();
+            run_chans.reverse();
             let params = Params { amount: q.amount, gains: q.gains.clone(), in_count: q.in_count, ctx_width: q.cw, aspect: if q.aflag != 0 { Some(q.aspect) } else { None }, count: Some(q.count) };
             let srcp: Vec<Plane> = (0..nn).map(|k| Plane::new(&ins[k], w, h, w).unwrap()).collect();
             let mut obuf: Vec<Vec<f32>> = (0..nn).map(|_| vec![f32::from_bits(0x7fc0ffee); npix]).collect();
@@ -159,7 +159,7 @@ fn run_tail(layout: &str) -> (Tot, usize, usize) {
                 let mut dstp: Vec<PlaneMut> = obuf.iter_mut().map(|v| PlaneMut::new(v, w, h, w).unwrap()).collect();
                 let bsr = &bs;
                 render_with_alias(&params, &srcp, &mut dstp, q.alias, |_, _, _, _| {
-                    let chan = run_ch.pop().expect("blur call without a Run plan");
+                    let chan = run_chans.pop().expect("blur call without a Run plan");
                     Ok(bsr[chan].clone())
                 })
                 .unwrap();

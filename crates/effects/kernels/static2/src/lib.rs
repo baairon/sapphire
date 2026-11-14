@@ -108,14 +108,14 @@ fn element(t: &HashTable, p: &Params, i: u32, m: Mut) -> (f32, f32) {
     } else {
         t.hash1(seed) // call 
     };
-    let (mx, sy, cx, cy) = match m {
+    let (mx, sy, centre_x, cy) = match m {
         Mut::MaskX7ff => (0x7ffu32, 16u32, 2048i32, 2048i32),
         Mut::ShiftY15 => (0xfff, 15, 2048, 2048),
         Mut::CenterX2047 => (0xfff, 16, 2047, 2048),
         Mut::CenterY2049 => (0xfff, 16, 2048, 2049),
         _ => (0xfff, 16, 2048, 2048),
     };
-    let xi = (h & mx) as i32 - cx; // `and eax,0xfff ; add eax,0xfffff800`
+    let xi = (h & mx) as i32 - centre_x; // `and eax,0xfff ; add eax,0xfffff800`
     let yi = ((h >> sy) & 0xfff) as i32 - cy; // `shr edi,0x10 ; and edi,0xfff ; add edi,0xfffff800`
     let conv = |v: i32| -> f32 {
         if m == Mut::UnsignedConvert { v as u32 as f32 } else { v as f32 } // cvtsi2ss xmm,r32 (signed)

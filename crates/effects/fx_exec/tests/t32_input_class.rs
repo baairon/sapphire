@@ -3,7 +3,7 @@
 use fx_exec::input_class::*;
 
 fn base() -> ClassCells {
-    ClassCells { ae32_ready_c: 2, ae32_ready_d: 0, prog_mode_word: 1, prog_class_byte: Some(0), prog_flag_byte: Some(0), flag_2: Some(0) }
+    ClassCells { claim_setup_first: 2, claim_setup_second: 0, prog_mode_word: 1, prog_class_byte: Some(0), prog_flag_byte: Some(0), flag_2: Some(0) }
 }
 const R0: RowCells = RowCells { fmt_cell_a: 0, b_cell_o: 0, word_cell_a: 0 };
 
@@ -16,10 +16,10 @@ fn s_diffuse_default_passes() {
 
 #[test]
 fn opacity_answer_1_refuses_class_3() {
-    let c = ClassCells { ae32_ready_d: 3, ..base() };
+    let c = ClassCells { claim_setup_second: 3, ..base() };
     let e = input_class_guard("S", &[(0, "Source")], &c, &R0).unwrap_err();
     assert!(e.starts_with("INPUT-CLASS-NOT-PORTED (S input Source: derived class 3"), "{}", e);
-    let c1 = ClassCells { ae32_ready_d: 3, prog_class_byte: Some(1), ..base() };
+    let c1 = ClassCells { claim_setup_second: 3, prog_class_byte: Some(1), ..base() };
     assert!(input_class_guard("S", &[(0, "Source")], &c1, &R0).is_ok());
 }
 
@@ -35,10 +35,10 @@ fn format_word_1_refuses_class_3() {
 
 #[test]
 fn matte_with_59f_flag_refuses_class_3() {
-    let z = ClassCells { ae32_ready_c: 0, prog_class_byte: Some(0xff), ..base() };
+    let z = ClassCells { claim_setup_first: 0, prog_class_byte: Some(0xff), ..base() };
     assert!(input_class_guard("DS", &[(1, "Matte")], &z, &R0).is_ok());
-    let z2 = ClassCells { prog_flag_byte: Some(0x40), ..z };
-    assert!(input_class_guard("DS", &[(1, "Matte")], &z2, &R0).unwrap_err().contains("derived class 3"));
+    let z_squared = ClassCells { prog_flag_byte: Some(0x40), ..z };
+    assert!(input_class_guard("DS", &[(1, "Matte")], &z_squared, &R0).unwrap_err().contains("derived class 3"));
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn class_1_test_refuses_class_1() {
 
 #[test]
 fn bumps_with_1354_zero_refuses_by_name() {
-    let z = ClassCells { ae32_ready_c: 0, ..base() };
+    let z = ClassCells { claim_setup_first: 0, ..base() };
     let e = input_class_guard("u", &[(1, "Bumps")], &z, &R0).unwrap_err();
     assert!(e.starts_with("INPUT-CLASS-NOT-PORTED (u input Bumps: class derivation arm not ported"), "{}", e);
 }

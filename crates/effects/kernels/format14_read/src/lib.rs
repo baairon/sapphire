@@ -87,18 +87,18 @@ fn range(start: i32, end: i32, block: bool) -> Result<usize, ReadErr> {
     // block loop: r13 = start; repeat { ecx = min(r13 + 16, end); do pixels r13..ecx; r13 += 16 } while r13 < end. Plain loop: do { pixel } while ++r13 < end.
     let mut n = 0usize;
     if block {
-        let mut r13 = start;
+        let mut pos = start;
         let step: i32 = if mu(6) { 0x20 } else { 0x10 };
         loop {
             // the original computes esi = r13 + 16 in 32 bits; a wrapped (negative) esi makes the block empty and the outer loop restart from i32::MIN
-            let esi = match r13.checked_add(step) {
+            let tap_b = match pos.checked_add(step) {
                 Some(v) => v,
                 None => return Err(ReadErr::BlockCounterOverflow),
             };
-            let ecx = if esi < end { esi } else { end };
-            n += (ecx - r13) as usize;
-            r13 = esi;
-            if r13 >= end {
+            let run_end = if tap_b < end { tap_b } else { end };
+            n += (run_end - pos) as usize;
+            pos = tap_b;
+            if pos >= end {
                 break;
             }
         }

@@ -157,8 +157,8 @@ pub enum PlaneKind {
 pub struct PlaneLayout {
     /// Pixels or palette.
     pub kind: PlaneKind,
-    /// Byte offset of the first row inside the frame.
-    pub offset: usize,
+    /// Byte position of the first row inside the frame.
+    pub byte_pos: usize,
     /// Bytes per row (ffmpeg `av_image_get_linesize`, alignment 1).
     pub stride: usize,
     /// Number of rows.
@@ -181,7 +181,7 @@ pub struct PlaneLayout {
 
 const NO_PLANE: PlaneLayout = PlaneLayout {
     kind: PlaneKind::Samples,
-    offset: 0,
+    byte_pos: 0,
     stride: 0,
     rows: 0,
     size: 0,
@@ -388,7 +388,7 @@ impl PixFmt {
         let bit_packed = info.has(F_BITSTREAM);
         let mut planes = [NO_PLANE; 5];
         let mut count = 0usize;
-        let mut offset: u64 = 0;
+        let mut byte_pos: u64 = 0;
         for spec in info.plane_specs() {
             let cols = ceil_shift(width as u64, spec.shift_w);
             let rows = ceil_shift(height as u64, spec.shift_h);
@@ -399,7 +399,7 @@ impl PixFmt {
             let size = stride * rows;
             planes[count] = PlaneLayout {
                 kind: PlaneKind::Samples,
-                offset: offset as usize,
+                byte_pos: byte_pos as usize,
                 stride: stride as usize,
                 rows: rows as usize,
                 size: size as usize,
@@ -411,12 +411,12 @@ impl PixFmt {
                 bit_packed,
             };
             count += 1;
-            offset += size;
+            byte_pos += size;
         }
         if info.palette_bytes > 0 {
             planes[count] = PlaneLayout {
                 kind: PlaneKind::Palette,
-                offset: offset as usize,
+                byte_pos: byte_pos as usize,
                 stride: 4,
                 rows: info.palette_bytes as usize / 4,
                 size: info.palette_bytes as usize,
@@ -428,12 +428,12 @@ impl PixFmt {
                 bit_packed: false,
             };
             count += 1;
-            offset += info.palette_bytes as u64;
+            byte_pos += info.palette_bytes as u64;
         }
-        if offset > i32::MAX as u64 {
+        if byte_pos > i32::MAX as u64 {
             return Err(Error::InvalidSize { width, height, reason: "frame is larger than 2 GiB" });
         }
-        Ok(FrameLayout { fmt: self, width, height, planes, count, size: offset as usize })
+        Ok(FrameLayout { fmt: self, width, height, planes, count, size: byte_pos as usize })
     }
 
     /// Bytes per row of plane `plane` for a frame `width` pixels wide, tightly packed.
@@ -530,7 +530,7 @@ mod tests {
         assert_eq!(p.len(), 3);
         assert_eq!((p[0].cols, p[0].rows, p[0].stride), (33, 17, 33));
         assert_eq!((p[1].cols, p[1].rows, p[1].stride), (17, 9, 17));
-        assert_eq!((p[2].cols, p[2].rows, p[2].offset), (17, 9, 33 * 17 + 17 * 9));
+        assert_eq!((p[2].cols, p[2].rows, p[2].byte_pos), (17, 9, 33 * 17 + 17 * 9));
         assert_eq!(l.size(), 33 * 17 + 2 * 17 * 9);
     }
 
@@ -539,7 +539,7 @@ mod tests {
         let l = PixFmt::PAL8.plane_layout(33, 17).unwrap();
         assert_eq!(l.planes().len(), 2);
         assert_eq!(l.planes()[1].kind, PlaneKind::Palette);
-        assert_eq!(l.planes()[1].offset, 33 * 17);
+        assert_eq!(l.planes()[1].byte_pos, 33 * 17);
         assert_eq!(l.planes()[1].size, 1024);
         assert_eq!(l.pixel_planes(), 1);
     }
@@ -574,7 +574,7 @@ mod tests {
                 let l = fmt.plane_layout(w, h).unwrap();
                 let mut expect = 0usize;
                 for p in l.planes() {
-                    assert_eq!(p.offset, expect, "{} {}x{}", fmt, w, h);
+                    assert_eq!(p.byte_pos, expect, "{} {}x{}", fmt, w, h);
                     assert_eq!(p.size, p.stride * p.rows, "{} {}x{}", fmt, w, h);
                     expect += p.size;
                 }

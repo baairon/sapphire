@@ -109,7 +109,7 @@ fn determinism_and_errors() {
     let mut m: Vec<&mut [f32]> = o.iter_mut().map(|v| v.as_mut_slice()).collect();
     assert_eq!(run(&par(4, 0, 1.0, 4, 5), &Source::Planes(&refs), &mut m), Err(Error::NoChannels));
     assert_eq!(run(&par(4, 3, 1.0, 4, 9), &Source::Planes(&refs), &mut m), Err(Error::ShortPlane));
-    let mut m3: Vec<&mut [f32]> = o.iter_mut().take(3).map(|v| v.as_mut_slice()).collect();
-    assert_eq!(run(&par(4, 3, 1.0, 4, 5), &Source::Planes(&refs), &mut m3), Err(Error::OutputPlanes));
+    let mut bits_3: Vec<&mut [f32]> = o.iter_mut().take(3).map(|v| v.as_mut_slice()).collect();
+    assert_eq!(run(&par(4, 3, 1.0, 4, 5), &Source::Planes(&refs), &mut bits_3), Err(Error::OutputPlanes));
     assert!(!assumptions().is_empty());
 }

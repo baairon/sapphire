@@ -15,12 +15,12 @@ const MUTANTS: &[(&str, &str, &str)] = &[
     ("row factors C and 2C swapped", "? c2 : c;", "? c : c2;"),
     ("first row only gets the doubled factor", "float v = (y == 0 || y + 1 == (size_t)h) ? c2 : c;", "float v = (y == 0) ? c2 : c;"),
     ("last row only gets the doubled factor", "float v = (y == 0 || y + 1 == (size_t)h) ? c2 : c;", "float v = (y + 1 == (size_t)h) ? c2 : c;"),
-    ("contracted multiply-add replaced by two roundings", "float ed_fma213(float d, float s2, float s3) {\n    float r = fma(d, s2, s3);", "float ed_fma213(float d, float s2, float s3) {\n    float r = d * s2 + s3;"),
+    ("contracted multiply-add replaced by two roundings", "float ed_fma213(float d, float factor, float addend) {\n    float r = fma(d, factor, addend);", "float ed_fma213(float d, float factor, float addend) {\n    float r = d * factor + addend;"),
     ("interior column edge index", "nanx_sub(b[cur + x + 1], b[cur + x - 1])", "nanx_sub(b[cur + x + 1], b[cur + x])"),
     ("first row neighbour index", "size_t up = (y == 0) ? cur : cur - wd;", "size_t up = (y == 0) ? cur + wd : cur - wd;"),
     ("square root replaced", "float ed_sqrt(float x) {\n    float r = sqrt(x);", "float ed_sqrt(float x) {\n    float r = x * 0x1p-1f;"),
     ("last column vertical factor C instead of the row factor", "float gyl = nanx_mul(nanx_sub(b[up + wd - 1], b[down + wd - 1]), v);", "float gyl = nanx_mul(nanx_sub(b[up + wd - 1], b[down + wd - 1]), c);"),
-    ("fma NaN priority addend first", "    if (d != d) {\n        return as_float(as_uint(d) | 0x400000u);\n    }\n    if (s2 != s2) {", "    if (s3 != s3) {\n        return as_float(as_uint(s3) | 0x400000u);\n    }\n    if (s2 != s2) {"),
+    ("fma NaN priority addend first", "    if (d != d) {\n        return as_float(as_uint(d) | 0x400000u);\n    }\n    if (factor != factor) {", "    if (addend != addend) {\n        return as_float(as_uint(addend) | 0x400000u);\n    }\n    if (factor != factor) {"),
     ("last column difference index", "nanx_sub(b[cur + wd - 1], b[cur + wd - 2])", "nanx_sub(b[cur + wd - 2], b[cur + wd - 2])"),
 ];
 

@@ -109,51 +109,51 @@ pub fn render_mutant(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]
 
 pub fn run(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Mutant) -> Result<(), OpError> {
     // r14 = (countA == 3 && countB == 4), r12 = (countA == 4 && countB == 3)
-    let (mut r14, mut r12) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
+    let (mut a_rgb_b_rgba, mut a_rgba_b_rgb) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
     if m == Mutant::R14Swap {
-        r14 = a.count == 4 && b.count == 3;
+        a_rgb_b_rgba = a.count == 4 && b.count == 3;
     }
     if m == Mutant::ExtA3Only {
-        r14 = a.count == 3;
+        a_rgb_b_rgba = a.count == 3;
     }
     if m == Mutant::R12Off {
-        r12 = false;
+        a_rgba_b_rgb = false;
     }
     // (r14|r12) != 0 or nout == 3 take the fixed 3 channel loop (no nout <= 0 test); else nout channels (: jle skips)
-    let fixed3 = if m == Mutant::Fixed3Off { r14 || r12 } else { r14 || r12 || p.nout == 3 };
+    let fixed3 = if m == Mutant::Fixed3Off { a_rgb_b_rgba || a_rgba_b_rgb } else { a_rgb_b_rgba || a_rgba_b_rgb || p.nout == 3 };
     let mut nch: i32 = if fixed3 { 3 } else if p.nout > 0 { p.nout } else { 0 };
     if m == Mutant::Nch2 && nch > 2 {
         nch = 2;
     }
     let n = p.n;
     if n > 0 {
-        for ch in 0..nch {
-            if out.get(ch as usize).map_or(true, |d| d.len() < n as usize) {
+        for chan in 0..nch {
+            if out.get(chan as usize).map_or(true, |d| d.len() < n as usize) {
                 return Err(OpError::MissingOut);
             }
         }
-        if (r14 || r12) && out.get(3).map_or(true, |d| d.len() < n as usize) {
+        if (a_rgb_b_rgba || a_rgba_b_rgb) && out.get(3).map_or(true, |d| d.len() < n as usize) {
             return Err(OpError::MissingOut);
         }
     }
     let (a_const, b_const) = (a.is_const && m != Mutant::NoConstA, b.is_const && m != Mutant::NoConstB);
-    for ch in 0..nch {
+    for chan in 0..nch {
         // cmp esi,eax ; cmovl edx,esi : idx = min(ch, count - 1), signed
-        let mut ia = ch.min(a.count - 1);
-        let mut ib = ch.min(b.count - 1);
+        let mut ia = chan.min(a.count - 1);
+        let mut ib = chan.min(b.count - 1);
         if m == Mutant::ClampA {
-            ia = ch.min(a.count);
+            ia = chan.min(a.count);
         }
         if m == Mutant::ClampB {
-            ib = ch.min(b.count);
+            ib = chan.min(b.count);
         }
         if n <= 0 {
             continue; // cmp [n],0; jle next channel
         }
         let n = n as usize;
-        let dst_i = ch as usize;
+        let dst_i = chan as usize;
         if a_const {
-            let ca = a.consts[cidx(if m == Mutant::ConstIdx { ch.min(2) } else { ia })?];
+            let ca = a.consts[cidx(if m == Mutant::ConstIdx { chan.min(2) } else { ia })?];
             let pb = plane(b, ib)?; // the A-constant branch still holds B's plane in r14
             let d = out.get_mut(dst_i).ok_or(OpError::MissingOut)?;
             for i in 0..n {
@@ -180,10 +180,10 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Muta
         }
     }
     if n > 0 {
-        if r14 {
+        if a_rgb_b_rgba {
             ext(true, p, a, b, out, m)?;
         }
-        if r12 {
+        if a_rgba_b_rgb {
             ext(false, p, a, b, out, m)?;
         }
     }
@@ -272,7 +272,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
         ("IN2D-A1", "CAPTURED", "ONE 1.0f and the scalar abs mask 0x7fffffff (low lane of): bytes read by lookup.py (gate/lookup_ops.tsv)"),
         ("IN2D-A2", "MEASURED-DYLIB", "vector constant (32 B, uncovered in the image) = 1.0f x8, used by vsubps; explicit parameter vec_one; T2 runs 1.0 and 0.75"),
         ("IN2D-A3", "MEASURED-DYLIB", "vector mask (32 B, uncovered) = 0x7fffffff x8, used by vandps; explicit parameter vec_mask; T2 runs 0x7fffffff and 0x3fffffff"),
-        ("IN2D-A4", "ROUTE", "AVX2 route only: feature word 0x9d97ff selects; AVX tier and SSE tier are not ported"),
+        ("IN2D-A4", "ROUTE", "AVX2 route only: feature word selects; AVX tier and SSE tier are not ported"), // origin: 0x9d97ff
         ("IN2D-A5", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ; the emulator follows the SDM, not silicon"),
         ("IN2D-A6", "ALIGN-DEPENDENT", "dst3_phase_bytes = (address of output plane 3) & 0x1f is an explicit input; only the extension kernels split on it, and it only matters when vec_one != 1.0 or vec_mask != 0x7fffffff"),
         ("IN2D-A7", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 is an explicit parameter (hooked ret_const in R-PARITY); combo choice and type tables of the shared builder are uncovered and not rebuilt (INFERRED: nout is the output channel count of the chosen combo)"),

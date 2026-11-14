@@ -156,14 +156,14 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mut [
     if nout <= 0 {
         return Ok(()); // test eax,eax; jle 
     }
-    let (ca1, cb1, ct1) = (a.count.wrapping_sub(1), b.count.wrapping_sub(1), t.count.wrapping_sub(1));
+    let (coord_a_first, b_last_idx, ct1) = (a.count.wrapping_sub(1), b.count.wrapping_sub(1), t.count.wrapping_sub(1));
     // flag bytes live on the stack ([rbp], [rbp]) and the alpha rule rewrites them for every later channel
     let (mut fa, mut fb, ft) = (a.is_const, b.is_const, t.is_const);
     let nn = if p.n > 0 { p.n as usize } else { 0 };
-    let mut ch: i32 = 0;
+    let mut chan: i32 = 0;
     loop {
-        let r12 = ch + 1;
-        let cix = if m == Mutant::ConstIdx0 { 0 } else { ch };
+        let chan_after = chan + 1;
+        let cix = if m == Mutant::ConstIdx0 { 0 } else { chan };
         let konst = |o: &Operand, v: i32| -> Result<f32, InterpError> {
             if (0..4).contains(&v) {
                 Ok(o.consts[v as usize])
@@ -175,15 +175,15 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mut [
         let mut xa = konst(a, cix).unwrap_or(0.0);
         let mut xb = konst(b, cix).unwrap_or(0.0);
         let xt = konst(t, cix).unwrap_or(0.0);
-        if r12 == 4 {
+        if chan_after == 4 {
             // operands with fewer than 4 channels read as the constant ONE at channel 3
-            let k1 = if m == Mutant::AlphaZero { 0.0 } else { ONE };
-            if ca1 < 3 && m != Mutant::AlphaAOff {
-                xa = k1;
+            let alpha_one = if m == Mutant::AlphaZero { 0.0 } else { ONE };
+            if coord_a_first < 3 && m != Mutant::AlphaAOff {
+                xa = alpha_one;
                 fa = true;
             }
-            if cb1 < 3 && m != Mutant::AlphaBOff {
-                xb = k1;
+            if b_last_idx < 3 && m != Mutant::AlphaBOff {
+                xb = alpha_one;
                 fb = true;
             }
         }
@@ -191,16 +191,16 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mut [
             if cix > 3 {
                 return Err(InterpError::ConstIndex);
             }
-            let out_idx = ch as usize;
+            let out_idx = chan as usize;
             if out_idx >= outs.len() {
                 return Err(InterpError::MissingOut);
             }
             if outs[out_idx].len() < nn {
                 return Err(InterpError::ShortOut);
             }
-            let ia = if m == Mutant::ClampA { ch } else { ch.min(ca1) };
-            let ib = if m == Mutant::ClampB { ch } else { ch.min(cb1) };
-            let it = if m == Mutant::ClampT { ch } else { ch.min(ct1) };
+            let ia = if m == Mutant::ClampA { chan } else { chan.min(coord_a_first) };
+            let ib = if m == Mutant::ClampB { chan } else { chan.min(b_last_idx) };
+            let it = if m == Mutant::ClampT { chan } else { chan.min(ct1) };
             let pa = if fa { None } else { Some(plane_at(a, ia, nn)?) };
             let pb = if fb { None } else { Some(plane_at(b, ib, nn)?) };
             let pt = if ft { None } else { Some(plane_at(t, it, nn)?) };
@@ -221,8 +221,8 @@ pub fn run(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mut [
             }
         }
         // call [vtable] again; loop while r12d < result (the hook returns the same nout)
-        if r12 < nout {
-            ch += 1;
+        if chan_after < nout {
+            chan += 1;
         } else {
             break;
         }
@@ -238,7 +238,7 @@ pub fn render(p: &Params, a: &Operand, b: &Operand, t: &Operand, outs: &mut [&mu
 pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
     vec![
         ("IN1-A1", "CAPTURED", "ONE 1.0f; the four f64 window bounds (captured_values.tsv rows 'mix C06 bound'); the dylib holds the same bytes (MEASURED-DYLIB, gate/dylib_out.txt)"),
-        ("IN1-A2", "ROUTE", "AVX2 route only: feature word 0x9d97ff (cell -> pointer -> word) selects; AVX tier and SSE tier not ported or compared; GPU twin slot 54 NOT REBUILT"),
+        ("IN1-A2", "ROUTE", "AVX2 route only: feature word (cell -> pointer -> word) selects; AVX tier and SSE tier not ported or compared; GPU twin slot 54 NOT REBUILT"), // origin: 0x9d97ff
         ("IN1-A3", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ; the emulator follows the SDM, not silicon; f32::mul_add is fused (software where the CPU lacks FMA)"),
         ("IN1-A4", "CALLEE-HOSTED (count getter)", "nout = result of virtual slot 31 is an explicit parameter; it is the word of the chosen combo entry (1..4 for the 20 measured combos in audit_evt/COMBOS.tsv); the combo choice itself is COMBO-PARITY (evaluator lane)"),
         ("IN1-A5", "LIBC-MODEL", "memcpy thunk (copy shortcut, n > 0x18) is a functional model in the emulator (kind memcpy) and a slice copy in Rust; arguments (dst, src, 4n) are exactly the plane pointers and 4n"),

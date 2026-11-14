@@ -117,11 +117,11 @@ pub struct Trace {
     /// quadrant returned by the reducer
     pub quad: Option<u32>,
     /// limb table base index of the Payne-Hanek step
-    pub ph_rdi: Option<usize>,
+    pub reduce_step: Option<usize>,
 }
 
 fn tr(route: Route) -> Trace {
-    Trace { route, s_idx: None, d_idx: None, quad: None, ph_rdi: None }
+    Trace { route, s_idx: None, d_idx: None, quad: None, reduce_step: None }
 }
 
 /// cvtss2si (round to nearest even, 0x80000000 when out of range or NaN)
@@ -154,11 +154,11 @@ fn nan_x0(x: f32) -> f32 {
 /// (sin x, cos x) as the original computes them, plus the route taken.
 pub fn sincosf_traced(x: f32) -> (f32, f32, Trace) {
     let bits = x.to_bits();
-    let ax = (((bits >> 16) & 0x7fff) as u16).wrapping_sub(0x80);
-    if ax <= 0x457f {
+    let biased_top = (((bits >> 16) & 0x7fff) as u16).wrapping_sub(0x80);
+    if biased_top <= 0x457f {
         return fast(x, bits);
     }
-    if (ax as i16) <= 0x457f {
+    if (biased_top as i16) <= 0x457f {
         // zero and denormal
         let xd = x as f64;
         let s = (xd * TINY_K) as f32;
@@ -181,7 +181,7 @@ pub fn sincosf_x(x: f32) -> (f32, f32) {
 fn fast(x: f32, bits: u32) -> (f32, f32, Trace) {
     let tb = tables();
     let t = K1 * x;
-    let edx = cvtss2si(t);
+    let copy_mode = cvtss2si(t);
     let rt = (t + SHIFTER32) - SHIFTER32;
     let xd = x as f64;
     let m = (bits as u64) & SIGN32_MASK;
@@ -189,21 +189,21 @@ fn fast(x: f32, bits: u32) -> (f32, f32, Trace) {
     let a = f(A_HI ^ sg);
     let b = f(B_LO ^ sg);
     let rd = f((rt.to_bits() as u64) << 29);
-    let i0 = (((edx as u32).wrapping_add(0x1c7600) << 4) as u64 & 0x3f0) as usize >> 4;
-    let i1 = (((edx as u32).wrapping_add(0x1c7610) << 4) as u64 & 0x3f0) as usize >> 4;
+    let flag_0 = (((copy_mode as u32).wrapping_add(0x1c7600) << 4) as u64 & 0x3f0) as usize >> 4;
+    let flag_1 = (((copy_mode as u32).wrapping_add(0x1c7610) << 4) as u64 & 0x3f0) as usize >> 4;
     let r = xd - a * rd;
     let w = b * rd + r;
     let r2 = r * r;
     let p = (C_COS2 * r2 + ONE) + C_COS4 * (r2 * r2);
     let q = (C_SIN2 * r2 + ONE) + C_SIN4 * (r2 * r2);
-    let e0 = tb.s[i0];
-    let e1 = tb.s[i1];
+    let sin_row = tb.s[flag_0];
+    let cos_row = tb.s[flag_1];
     // lane 0: table sin at k, table cos at k; lane 1: table sin at k + 16, table cos at k + 16
-    let o0 = f(e0[0]) * p + (w * f(e0[1])) * q;
-    let o1 = f(e1[0]) * p + (w * f(e1[1])) * q;
+    let table_val_0 = f(sin_row[0]) * p + (w * f(sin_row[1])) * q;
+    let table_val_1 = f(cos_row[0]) * p + (w * f(cos_row[1])) * q;
     let mut trc = tr(Route::Fast);
-    trc.s_idx = Some((i0, i1));
-    (o0 as f32, o1 as f32, trc)
+    trc.s_idx = Some((flag_0, flag_1));
+    (table_val_0 as f32, table_val_1 as f32, trc)
 }
 
 fn mul2(a: [f64; 2], b: [f64; 2]) -> [f64; 2] {
@@ -218,7 +218,7 @@ fn sub2(a: [f64; 2], b: [f64; 2]) -> [f64; 2] {
 fn c2(c: [u64; 2]) -> [f64; 2] {
     [f(c[0]), f(c[1])]
 }
-fn sp(v: f64) -> [f64; 2] {
+fn split_pair(v: f64) -> [f64; 2] {
     [v, v]
 }
 
@@ -226,8 +226,8 @@ fn sp(v: f64) -> [f64; 2] {
 /// Returns (sin, cos) as doubles.
 pub fn sincos_d(x: f64) -> (f64, f64, Trace) {
     let hi16 = ((x.to_bits() >> 48) & 0x7fff) as u16;
-    let ax = hi16.wrapping_sub(0x3030);
-    if ax <= 0x10c5 {
+    let biased_top = hi16.wrapping_sub(0x3030);
+    if biased_top <= 0x10c5 {
         let (s, c, idx) = core_d(x, None);
         let mut t = tr(Route::DoubleMid);
         t.d_idx = Some(idx);
@@ -239,12 +239,12 @@ pub fn sincos_d(x: f64) -> (f64, f64, Trace) {
         let v = x * 0.0;
         return (v, v, tr(Route::NonFinite));
     }
-    let (yh, yl, q, small, rdi) = reduce_x(x);
+    let (yh, yl, q, small, step_out) = reduce_x(x);
     let (s, c, idx) = core_d(yh, Some((yl, q)));
     let mut t = tr(if small { Route::DoubleCw } else { Route::DoublePh });
     t.d_idx = Some(idx);
     t.quad = Some(q);
-    t.ph_rdi = rdi;
+    t.reduce_step = step_out;
     (s, c, t)
 }
 
@@ -252,64 +252,64 @@ pub fn sincos_d(x: f64) -> (f64, f64, Trace) {
 fn core_d(x: f64, red: Option<(f64, u32)>) -> (f64, f64, usize) {
     let tb = tables();
     let t = KD * x;
-    let edx = cvtsd2si(t);
+    let copy_mode = cvtsd2si(t);
     let n = (t + SHD) - SHD;
     let p1n = DP1 * n;
-    let q16 = match red {
+    let quadrant_bias = match red {
         Some((_, q)) => (q as u64) << 4,
         None => 0,
     };
-    let idx = ((edx as u32 as u64 + 0x1c7600 + q16) & 0x3f) as usize;
+    let idx = ((copy_mode as u32 as u64 + 0x1c7600 + quadrant_bias) & 0x3f) as usize;
     let e = &tb.d[idx];
     let p0 = [f(e[0]), f(e[1])];
-    let p1 = [f(e[2]), f(e[3])];
+    let e_pair = [f(e[2]), f(e[3])];
     let p2 = [f(e[4]), f(e[5])];
     let p3 = [f(e[6]), f(e[7])];
     let p2n = DP2 * n;
-    let x1 = x - p1n;
+    let sum_1 = x - p1n;
     let p3n = n * DP3;
-    let r1 = x1 - p2n;
-    let mut s5 = mul2(c2(C_CELL_E), sp(x1));
-    let mut a7 = mul2(p1, sp(r1));
-    let mut e3 = x1 - r1;
-    s5 = mul2(s5, sp(r1));
-    let r2 = r1 * r1;
-    e3 -= p2n;
-    let mut m1 = p3n - e3;
+    let reduced = sum_1 - p2n;
+    let mut poly_a = mul2(c2(C_CELL_E), split_pair(sum_1));
+    let mut prod_hi7 = mul2(e_pair, split_pair(reduced));
+    let mut diff_3 = sum_1 - reduced;
+    poly_a = mul2(poly_a, split_pair(reduced));
+    let r2 = reduced * reduced;
+    diff_3 -= p2n;
+    let mut bits_1 = p3n - diff_3;
     let aa = add2(p0, p3);
-    a7 = sub2(a7, aa);
+    prod_hi7 = sub2(prod_hi7, aa);
     if let Some((ylo, _)) = red {
-        m1 -= ylo;
+        bits_1 -= ylo;
     }
-    let m1v = mul2(sp(m1), a7);
-    let hi7 = p1;
-    let a2 = mul2(aa, sp(r1));
-    let mut s6 = mul2(c2(C_CELL_D), sp(r2));
-    let a3 = mul2(p3, sp(r1));
-    let a2 = mul2(a2, sp(r2));
-    let hi7 = mul2(hi7, sp(r2));
-    let r4 = r2 * r2;
-    s5 = add2(s5, c2(C_CELL_C));
-    let a4 = mul2(sp(r1), p0);
-    s6 = add2(s6, c2(C_CELL_B));
-    s5 = mul2(s5, sp(r4));
-    let a0 = a3;
-    let a3b = add2(a3, p1);
-    s6 = add2(s6, s5);
-    let t6 = mul2(sp(s6[1]), hi7);
-    let t2 = mul2(a2, sp(s6[0]));
-    let a7b = a4;
-    let a4b = add2(a4, a3b);
-    let a5 = sub2(p1, a3b);
-    let a3c = sub2(a3b, a4b);
+    let m1v = mul2(split_pair(bits_1), prod_hi7);
+    let hi7 = e_pair;
+    let sq_prod = mul2(aa, split_pair(reduced));
+    let mut poly_b = mul2(c2(C_CELL_D), split_pair(r2));
+    let cubic_prod = mul2(p3, split_pair(reduced));
+    let sq_prod = mul2(sq_prod, split_pair(r2));
+    let hi7 = mul2(hi7, split_pair(r2));
+    let prod_4 = r2 * r2;
+    poly_a = add2(poly_a, c2(C_CELL_C));
+    let const_prod = mul2(split_pair(reduced), p0);
+    poly_b = add2(poly_b, c2(C_CELL_B));
+    poly_a = mul2(poly_a, split_pair(prod_4));
+    let cubic_prod_saved = cubic_prod;
+    let sum_3_b = add2(cubic_prod, e_pair);
+    poly_b = add2(poly_b, poly_a);
+    let prod_6 = mul2(split_pair(poly_b[1]), hi7);
+    let sum_2 = mul2(sq_prod, split_pair(poly_b[0]));
+    let copy_7_b = const_prod;
+    let sum_4_b = add2(const_prod, sum_3_b);
+    let diff_5 = sub2(e_pair, sum_3_b);
+    let diff_3_c = sub2(sum_3_b, sum_4_b);
     let mut m = add2(m1v, p2);
-    let a5 = add2(a5, a0);
-    let a3d = add2(a3c, a7b);
-    m = add2(m, a5);
-    m = add2(m, a3d);
-    m = add2(m, t2);
-    m = add2(m, t6);
-    m = add2(m, a4b);
+    let diff_5 = add2(diff_5, cubic_prod_saved);
+    let sum_3_d = add2(diff_3_c, copy_7_b);
+    m = add2(m, diff_5);
+    m = add2(m, sum_3_d);
+    m = add2(m, sum_2);
+    m = add2(m, prod_6);
+    m = add2(m, sum_4_b);
     (m[0], m[1], idx)
 }
 
@@ -317,249 +317,249 @@ fn core_d(x: f64, red: Option<(f64, u32)>) -> (f64, f64, usize) {
 /// Returns (hi, lo, quadrant, cody_waite_route, ph_table_base).
 fn reduce_x(xin: f64) -> (f64, f64, u32, bool, Option<usize>) {
     let bits = xin.to_bits();
-    let r8 = (bits >> 63) as u32;
+    let quadrant = (bits >> 63) as u32;
     let a_bits = bits & !(1u64 << 63);
     let a = f(a_bits);
-    let edx = ((a_bits >> 52) & 0x7ff) as u32;
-    if edx >= 0x41d {
-        let (h, l, q, rdi) = reduce_ph(a_bits, edx, r8);
-        return (h, l, q, false, Some(rdi));
+    let copy_mode = ((a_bits >> 52) & 0x7ff) as u32;
+    if copy_mode >= 0x41d {
+        let (h, l, q, step_out) = reduce_ph(a_bits, copy_mode, quadrant);
+        return (h, l, q, false, Some(step_out));
     }
     let tt = FOUR_OVER_PI * a;
     let tb = tt.to_bits();
-    let ecx = ((tb >> 52) & 0x7ff) as u32;
-    let esi: u32 = if ecx >= 0x3ff {
+    let flag = ((tb >> 52) & 0x7ff) as u32;
+    let tap_b: u32 = if flag >= 0x3ff {
         let hi = (tb >> 32) as u32;
         let lo = tb as u32;
-        let cl = 0x1eu32.wrapping_sub(ecx) & 31;
+        let shift_count = 0x1eu32.wrapping_sub(flag) & 31;
         let s = ((hi | 0xfff0_0000) << 11) | (lo >> 21);
-        s >> cl
+        s >> shift_count
     } else {
         0
     };
-    let mi = esi.wrapping_add(esi & 1);
-    let half = esi.wrapping_add(1) >> 1;
-    let q = (1u32.wrapping_sub(2 * r8)).wrapping_mul(half) & 3;
+    let mi = tap_b.wrapping_add(tap_b & 1);
+    let half = tap_b.wrapping_add(1) >> 1;
+    let q = (1u32.wrapping_sub(2 * quadrant)).wrapping_mul(half) & 3;
     let m = (mi as i32) as f64;
     let (xh, xl);
-    if edx < 0x416 {
-        let x1 = f(CW_S[0]) * m;
-        let x2 = f(CW_S[1]) * m;
-        let mut x0 = a - x1;
-        let mut x4 = x0;
-        let x3 = f(CW_S[2]) * m;
-        x4 -= x2;
-        x0 -= x4;
-        let x7 = m * f(CW_S[3]);
-        x0 -= x2;
-        let mut y2 = x4;
-        y2 -= x3;
-        x4 -= y2;
-        x4 -= x3;
-        x0 += x4;
-        x0 -= x7;
-        xh = y2;
-        xl = x0;
+    if copy_mode < 0x416 {
+        let sum_1 = f(CW_S[0]) * m;
+        let cw_hi = f(CW_S[1]) * m;
+        let mut rem = a - sum_1;
+        let mut rem_b = rem;
+        let cw_lo = f(CW_S[2]) * m;
+        rem_b -= cw_hi;
+        rem -= rem_b;
+        let prod_7 = m * f(CW_S[3]);
+        rem -= cw_hi;
+        let mut rem_c = rem_b;
+        rem_c -= cw_lo;
+        rem_b -= rem_c;
+        rem_b -= cw_lo;
+        rem += rem_b;
+        rem -= prod_7;
+        xh = rem_c;
+        xl = rem;
     } else {
-        let x1 = f(CW_B[0]) * m;
-        let x2 = f(CW_B[1]) * m;
-        let mut x0 = a - x1;
-        let mut x4 = x0;
-        let x3 = f(CW_B[2]) * m;
-        x4 -= x2;
-        x0 -= x4;
-        let mut x8 = x4;
-        x0 -= x2;
-        x8 -= x3;
-        let mut x5 = x8;
-        x4 -= x8;
-        let x6 = f(CW_B[4]);
-        x4 -= x3;
-        x0 += x4;
-        x5 += x0;
-        let mut y2 = x5;
-        x8 -= x5;
-        x8 += x0;
-        let mut z0 = f(CW_B[3]);
-        z0 *= m;
-        let x7 = m * x6;
-        y2 -= z0;
-        x5 -= y2;
-        x5 -= z0;
-        x8 += x5;
-        x8 -= x7;
-        xh = y2;
-        xl = x8;
+        let sum_1 = f(CW_B[0]) * m;
+        let cw_hi = f(CW_B[1]) * m;
+        let mut rem = a - sum_1;
+        let mut rem_b = rem;
+        let cw_lo = f(CW_B[2]) * m;
+        rem_b -= cw_hi;
+        rem -= rem_b;
+        let mut prod_8 = rem_b;
+        rem -= cw_hi;
+        prod_8 -= cw_lo;
+        let mut acc_a = prod_8;
+        rem_b -= prod_8;
+        let table_val_6 = f(CW_B[4]);
+        rem_b -= cw_lo;
+        rem += rem_b;
+        acc_a += rem;
+        let mut rem_c = acc_a;
+        prod_8 -= acc_a;
+        prod_8 += rem;
+        let mut sum_0 = f(CW_B[3]);
+        sum_0 *= m;
+        let prod_7 = m * table_val_6;
+        rem_c -= sum_0;
+        acc_a -= rem_c;
+        acc_a -= sum_0;
+        prod_8 += acc_a;
+        prod_8 -= prod_7;
+        xh = rem_c;
+        xl = prod_8;
     }
-    let (h, l) = finish_sign(xh, xl, r8);
+    let (h, l) = finish_sign(xh, xl, quadrant);
     (h, l, q, true, None)
 }
 
-fn finish_sign(hi: f64, lo: f64, r8: u32) -> (f64, f64) {
-    let s = f(SIGN_TAB[r8 as usize]);
-    let h2 = hi * s;
-    let l2 = lo * s;
-    let o = h2 + l2;
-    let lo_out = (h2 - o) + l2;
+fn finish_sign(hi: f64, lo: f64, quadrant: u32) -> (f64, f64) {
+    let s = f(SIGN_TAB[quadrant as usize]);
+    let prod_hs = hi * s;
+    let prod_2 = lo * s;
+    let o = prod_hs + prod_2;
+    let lo_out = (prod_hs - o) + prod_2;
     (o, lo_out)
 }
 
 /// |x| >= 2^30, limb product against the 2/pi table .
-fn reduce_ph(a_bits: u64, edx: u32, r8: u32) -> (f64, f64, u32, usize) {
+fn reduce_ph(a_bits: u64, copy_mode: u32, quadrant: u32) -> (f64, f64, u32, usize) {
     let tab = |i: usize| f(PH_TAB[i]);
-    let w16 = (a_bits >> 48) as u32;
-    let mut eax = w16 & 0xffff_800f;
-    let r10 = (edx.wrapping_sub(0xc8) & 0x7ff) << 4;
-    eax |= r10;
-    let xp_bits = (a_bits & 0x0000_ffff_ffff_ffff) | (((eax & 0xffff) as u64) << 48);
+    let top_half_word = (a_bits >> 48) as u32;
+    let mut exp_bits = top_half_word & 0xffff_800f;
+    let flag_10 = (copy_mode.wrapping_sub(0xc8) & 0x7ff) << 4;
+    exp_bits |= flag_10;
+    let xp_bits = (a_bits & 0x0000_ffff_ffff_ffff) | (((exp_bits & 0xffff) as u64) << 48);
     let xp = f(xp_bits);
-    let eax2 = edx.wrapping_sub(0x41c) as i32;
-    let edi = eax2.wrapping_mul(0x147ae) >> 21;
-    let rdi = edi as i64 as usize;
-    let esi = edi.wrapping_mul(-25);
-    let ecx0 = (esi as u32).wrapping_add(edx).wrapping_sub(0x41c);
-    let ecx = ecx0.wrapping_neg().wrapping_add(0x26);
-    let mask = (!0u64) << (ecx & 63);
+    let eax2 = copy_mode.wrapping_sub(0x41c) as i32;
+    let quot_int = eax2.wrapping_mul(0x147ae) >> 21;
+    let step_out = quot_int as i64 as usize;
+    let tap_b = quot_int.wrapping_mul(-25);
+    let ecx0 = (tap_b as u32).wrapping_add(copy_mode).wrapping_sub(0x41c);
+    let flag = ecx0.wrapping_neg().wrapping_add(0x26);
+    let mask = (!0u64) << (flag & 63);
     let h_bits = (xp_bits & 0xffff_ffff_0000_0000) | ((xp_bits as u32 & 0xf800_0000) as u64);
-    let x1 = f(h_bits); // xmm1 = h
-    let mut x2 = xp;
-    let x0t = tab(rdi);
-    let mut x5 = tab(rdi + 1);
-    let mut x3 = x1 * x5; // h * t1
-    x2 -= x1; // l
-    let mut x0 = x0t * x2; // t0 * l
-    let mut x14 = x1;
-    x5 *= x2; // t1 * l
-    let mut x6 = x0;
-    x6 += x3;
-    let mut x4 = x6;
-    x0 -= x6;
-    let mut x12 = tab(rdi + 2);
-    x0 += x3;
-    let mut x7 = x1 * x12; // h * t2
-    x12 *= x2; // l * t2
-    x4 += x0;
-    let r10b = x4.to_bits() & mask;
-    x3 = tab(rdi + 3);
-    x14 *= x3; // h * t3
-    x3 *= x2; // l * t3
-    let mval = f(r10b);
-    x6 -= mval;
-    let mut x8 = x6;
-    x8 += x5;
-    let mut x10 = x8;
-    x6 -= x8;
-    x10 += x7;
-    x6 += x5;
-    x8 -= x10;
-    x0 += x6;
-    x8 += x7;
-    let mut x9 = x10;
-    x5 = x1;
-    x7 = tab(rdi + 4);
-    x0 += x8;
-    x5 *= x7; // h * t4
-    x7 *= x2; // l * t4
-    x9 += x0;
-    let mut x13 = x0;
-    x9 += x12;
-    x9 += x14;
+    let sum_1 = f(h_bits); // xmm1 = h
+    let mut cw_hi = xp;
+    let x0t = tab(step_out);
+    let mut acc_a = tab(step_out + 1);
+    let mut cw_lo = sum_1 * acc_a; // h * t1
+    cw_hi -= sum_1; // l
+    let mut rem = x0t * cw_hi; // t0 * l
+    let mut acc_h = sum_1;
+    acc_a *= cw_hi; // t1 * l
+    let mut table_val_6 = rem;
+    table_val_6 += cw_lo;
+    let mut rem_b = table_val_6;
+    rem -= table_val_6;
+    let mut table_val_12 = tab(step_out + 2);
+    rem += cw_lo;
+    let mut prod_7 = sum_1 * table_val_12; // h * t2
+    table_val_12 *= cw_hi; // l * t2
+    rem_b += rem;
+    let bits_val_10_b = rem_b.to_bits() & mask;
+    cw_lo = tab(step_out + 3);
+    acc_h *= cw_lo; // h * t3
+    cw_lo *= cw_hi; // l * t3
+    let mval = f(bits_val_10_b);
+    table_val_6 -= mval;
+    let mut prod_8 = table_val_6;
+    prod_8 += acc_a;
+    let mut acc_b = prod_8;
+    table_val_6 -= prod_8;
+    acc_b += prod_7;
+    table_val_6 += acc_a;
+    prod_8 -= acc_b;
+    rem += table_val_6;
+    prod_8 += prod_7;
+    let mut acc_c = acc_b;
+    acc_a = sum_1;
+    prod_7 = tab(step_out + 4);
+    rem += prod_8;
+    acc_a *= prod_7; // h * t4
+    prod_7 *= cw_hi; // l * t4
+    acc_c += rem;
+    let mut acc_d = rem;
+    acc_c += table_val_12;
+    acc_c += acc_h;
     // integer part of x9 from its raw bits
-    let raw = x9.to_bits() as i64;
-    let ecx9 = (((x9.to_bits() >> 52) & 0xfff) as u32).wrapping_neg().wrapping_add(0x33);
+    let raw = acc_c.to_bits() as i64;
+    let ecx9 = (((acc_c.to_bits() >> 52) & 0xfff) as u32).wrapping_neg().wrapping_add(0x33);
     let sh = ecx9 & 63;
     let sar = raw >> sh;
     let edx2 = sar as u32;
     let fbits = (sar << sh) as u64;
-    x9 = x1;
-    let r11 = edx2 & 1;
-    let eq = (1u32.wrapping_sub(2 * r8)).wrapping_mul(edx2.wrapping_add(1) >> 1) & 3;
+    acc_c = sum_1;
+    let tap_c = edx2 & 1;
+    let eq = (1u32.wrapping_sub(2 * quadrant)).wrapping_mul(edx2.wrapping_add(1) >> 1) & 3;
     let fval = f(fbits);
-    x10 -= fval;
-    let x11 = f(PH_C_CELL_A[r11 as usize]);
-    x13 += x10;
-    x10 -= x13;
-    x13 += x11;
-    x0 += x10;
-    let mut x15 = x13;
-    let mut x11b = x1;
-    x15 += x12;
-    x4 = x15;
-    x13 -= x15;
-    x4 += x14;
-    x13 += x12;
-    x15 -= x4;
-    x0 += x13;
-    x15 += x14;
-    x6 = x4;
-    let mut x14b = x1;
-    x12 = tab(rdi + 5);
-    x6 += x3;
-    x9 *= x12; // h * t5
-    x0 += x15;
-    x12 *= x2; // l * t5
-    x4 -= x6;
-    x8 = x6;
-    x4 += x3;
-    x8 += x5;
-    x0 += x4;
-    x6 -= x8;
-    x10 = x8;
-    x6 += x5;
-    x10 += x7;
-    x0 += x6;
-    x8 -= x10;
-    x3 = tab(rdi + 6);
-    x13 = x10;
-    x11b *= x3; // h * t6
-    x13 += x9;
-    x8 += x7;
-    x3 *= x2; // l * t6
-    x12 += x11b;
-    x10 -= x13;
-    x0 += x8;
-    x10 += x9;
-    let x15b = tab(rdi + 7);
-    x4 = x13;
-    x14b *= x15b; // h * t7
-    x4 += x12;
-    x0 += x10;
-    x2 *= x15b; // l * t7
-    x3 += x14b;
-    x13 -= x4;
-    x5 = x4;
-    x13 += x12;
-    x5 += x3;
-    x0 += x13;
-    x4 -= x5;
-    x4 += x3;
-    x3 = tab(rdi + 8);
-    let x1b = x1 * x3; // h * t8
-    x0 += x4;
-    x2 += x1b;
-    x3 = x2;
-    let c400 = f(PH_C_CELL_B);
-    x3 += x5;
-    let mut y1 = c400 * x3;
-    x3 += y1;
-    x3 -= y1;
-    x5 -= x3;
-    x5 += x2;
-    let x2c = f(PH_C_CELL_C);
-    y1 = x2c;
-    x0 += x5;
-    y1 *= x0;
-    x0 += x3;
-    x3 *= x2c;
-    x0 *= f(PH_C_CELL_D);
-    y1 += x0;
-    x0 = y1;
-    x0 += x3;
-    x3 -= x0;
-    x3 += y1;
-    let sgn = f(SIGN_TAB[r8 as usize]);
-    x0 *= sgn;
-    x3 *= sgn;
-    let _ = (&mut x13, &mut x15, &mut x11b, &mut x14b);
-    (x0, x3, eq, rdi)
+    acc_b -= fval;
+    let table_val_11 = f(PH_C_CELL_A[tap_c as usize]);
+    acc_d += acc_b;
+    acc_b -= acc_d;
+    acc_d += table_val_11;
+    rem += acc_b;
+    let mut acc_e = acc_d;
+    let mut copy_11_b = sum_1;
+    acc_e += table_val_12;
+    rem_b = acc_e;
+    acc_d -= acc_e;
+    rem_b += acc_h;
+    acc_d += table_val_12;
+    acc_e -= rem_b;
+    rem += acc_d;
+    acc_e += acc_h;
+    table_val_6 = rem_b;
+    let mut copy_14_b = sum_1;
+    table_val_12 = tab(step_out + 5);
+    table_val_6 += cw_lo;
+    acc_c *= table_val_12; // h * t5
+    rem += acc_e;
+    table_val_12 *= cw_hi; // l * t5
+    rem_b -= table_val_6;
+    prod_8 = table_val_6;
+    rem_b += cw_lo;
+    prod_8 += acc_a;
+    rem += rem_b;
+    table_val_6 -= prod_8;
+    acc_b = prod_8;
+    table_val_6 += acc_a;
+    acc_b += prod_7;
+    rem += table_val_6;
+    prod_8 -= acc_b;
+    cw_lo = tab(step_out + 6);
+    acc_d = acc_b;
+    copy_11_b *= cw_lo; // h * t6
+    acc_d += acc_c;
+    prod_8 += prod_7;
+    cw_lo *= cw_hi; // l * t6
+    table_val_12 += copy_11_b;
+    acc_b -= acc_d;
+    rem += prod_8;
+    acc_b += acc_c;
+    let table_val_15_b = tab(step_out + 7);
+    rem_b = acc_d;
+    copy_14_b *= table_val_15_b; // h * t7
+    rem_b += table_val_12;
+    rem += acc_b;
+    cw_hi *= table_val_15_b; // l * t7
+    cw_lo += copy_14_b;
+    acc_d -= rem_b;
+    acc_a = rem_b;
+    acc_d += table_val_12;
+    acc_a += cw_lo;
+    rem += acc_d;
+    rem_b -= acc_a;
+    rem_b += cw_lo;
+    cw_lo = tab(step_out + 8);
+    let prod_1_b = sum_1 * cw_lo; // h * t8
+    rem += rem_b;
+    cw_hi += prod_1_b;
+    cw_lo = cw_hi;
+    let ph_coef_b = f(PH_C_CELL_B);
+    cw_lo += acc_a;
+    let mut prod_1 = ph_coef_b * cw_lo;
+    cw_lo += prod_1;
+    cw_lo -= prod_1;
+    acc_a -= cw_lo;
+    acc_a += cw_hi;
+    let table_val_2_c = f(PH_C_CELL_C);
+    prod_1 = table_val_2_c;
+    rem += acc_a;
+    prod_1 *= rem;
+    rem += cw_lo;
+    cw_lo *= table_val_2_c;
+    rem *= f(PH_C_CELL_D);
+    prod_1 += rem;
+    rem = prod_1;
+    rem += cw_lo;
+    cw_lo -= rem;
+    cw_lo += prod_1;
+    let sgn = f(SIGN_TAB[quadrant as usize]);
+    rem *= sgn;
+    cw_lo *= sgn;
+    let _ = (&mut acc_d, &mut acc_e, &mut copy_11_b, &mut copy_14_b);
+    (rem, cw_lo, eq, step_out)
 }

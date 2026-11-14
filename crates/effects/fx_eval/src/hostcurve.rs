@@ -14,7 +14,7 @@ pub struct HostCurveValues {
     /// the file path as given (for refusal texts)
     pub source: String,
     /// set by fx_run: the claim ('ae32') route, where the global is HOST-APP's 1
-    pub ae32: bool,
+    pub claim_route: bool,
     pub values: BTreeMap<(String, i32, i32, i32, i32), (i32, i32)>,
     /// parameter -> field -> value text, from `point` lines
     pub points: BTreeMap<String, BTreeMap<String, String>>,
@@ -170,7 +170,7 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
     };
     let need = |k: &str| hcv.host.get(k).copied();
     // the global is HOST-APP's cell (1 in the claim state). On the verified render path fx_run supplies 1 and refuses a differing file line; on a state A route the file line (TICKMAP's E1 re-score: 0) is used.
-    let global: i64 = match (hcv.ae32, hcv.host.get("global").copied()) {
+    let global: i64 = match (hcv.claim_route, hcv.host.get("global").copied()) {
         (true, None) => 1,
         (true, Some(1)) => 1,
         (true, Some(v)) => return refuse(diags, format!("TICKMAP-GLOBAL-NOT-HOST-APP ({}: global {})", hcv.source, v)),
@@ -196,7 +196,7 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
             }
         }
         let hx = |k: &str| u64::from_str_radix(u[k].trim_start_matches("0x"), 16).map_err(|_| format!("TICKMAP-HOST-FIELD-UNSOURCED (unit field {} of {}: {} is unreadable)", k, prog, pname));
-        let (r6, x3, d4, d5) = match (hx(crate::judge_keys::REC_UNIT_KEY), hx("x3"), hx("d4"), hx("d5")) {
+        let (rec_unit_bits, unit_x_bits, unit_d_bits, unit_dd_bits) = match (hx(crate::judge_keys::REC_UNIT_KEY), hx("x3"), hx("d4"), hx("d5")) {
             (Ok(a), Ok(b), Ok(c), Ok(d)) => (a, b, c, d),
             (Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => return refuse(diags, e),
         };
@@ -205,10 +205,10 @@ pub fn fold_with_row(row: Option<effects_rtdata::TickmapRecord>, prog: &str, pna
                 return refuse(diags, format!("TICKMAP-HOST-FIELD-UNSOURCED ({})", k));
             }
         }
-        rec.rec_unit_value = f32::from_bits(r6 as u32);
-        pinfo.unit_x3 = f32::from_bits(x3 as u32);
-        pinfo.unit_d4 = f64::from_bits(d4);
-        pinfo.unit_d5 = f64::from_bits(d5);
+        rec.rec_unit_value = f32::from_bits(rec_unit_bits as u32);
+        pinfo.unit_x3 = f32::from_bits(unit_x_bits as u32);
+        pinfo.unit_d4 = f64::from_bits(unit_d_bits);
+        pinfo.unit_d5 = f64::from_bits(unit_dd_bits);
         hr.size_x = need("size_x").unwrap() as i32;
         hr.size_y = need("size_y").unwrap() as i32;
     }

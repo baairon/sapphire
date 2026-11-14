@@ -54,7 +54,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str)> {
         ("SR1-A3", "the plane structs [this], [this] are modelled as Option<Vec<plane>>; a missing struct or slot is a null pointer and faults only when a loop with n > 0 dereferences it, like the original"),
         ("SR1-A4", "NaN payloads are compared as a class (x86 mulss/divss/roundss operand-order payload rules are not modelled); non-NaN results are bit exact"),
         ("SR1-A5", "class identity: is slot 53 of scale_rgb by vtable pair (MEASURED, class_vtable_pairs.tsv); the name scale_rgb and the meaning 'brightness gain of S_HueSatBright' are PROBABLE/INFERRED; belongs to class `round` (MEASURED, same file), body-level port only"),
-        ("SR1-A6", "the dispatcher and the feature word are not emulated: the round body is entered (AVX2 branch, all of 0x9d97ff set); the SSE twin is not ported"),
+        ("SR1-A6", "the dispatcher and the feature word are not emulated: the round body is entered (AVX2 branch, all of set); the SSE twin is not ported"), // origin: 0x9d97ff
         ("SR1-A7", "slot 54 of scale_rgb (12 B) is a thunk `push rbp; mov rbp,rsp; pop rbp; jmp ` into a shared alternate-path pre-pass that repeats the same pad-call decision and tail-jumps to; not ported (outside the AVX2/CPU route)"),
         ("SR1-A8", "data reads: scale_rgb has none. round reads mask (captured : ff ff ff 7f then 12 zero bytes), 1.0f and 1.0 double, all CAPTURED (lookup_srgb.tsv); no stand-in needed, the T2 maps them from the captured image"),
     ]
@@ -190,9 +190,9 @@ pub fn snap_unit(x: f32) -> f32 {
 pub fn round_snap(o: &Obj, n: i32, nch: i32, out: &mut [Vec<f32>]) -> Result<Vec<usize>, Fault> {
     contract(o, out)?;
     let (ni, no) = (o.n_in, o.n_out);
-    let r12 = ni == 3 && (no == 4 || (mq(26) && no == 3));
-    let r14 = ni == 4 && (no == 3 || (mq(27) && no == 4));
-    let eff = if r12 || r14 || nch == 3 || (mq(28) && nch == 4) { 3 } else { nch };
+    let rgb_in_rgba_out = ni == 3 && (no == 4 || (mq(26) && no == 3));
+    let rgba_in_rgb_out = ni == 4 && (no == 3 || (mq(27) && no == 4));
+    let eff = if rgb_in_rgba_out || rgba_in_rgb_out || nch == 3 || (mq(28) && nch == 4) { 3 } else { nch };
     let mut wrote = vec![];
     for c in 0..eff.max(0) {
         let cu = c as usize;
@@ -215,7 +215,7 @@ pub fn round_snap(o: &Obj, n: i32, nch: i32, out: &mut [Vec<f32>]) -> Result<Vec
             wrote.push(cu);
         }
     }
-    if r12 {
+    if rgb_in_rgba_out {
         for i in 0..n.max(0) as usize {
             let y = if o.flag_b != mq(29) { o.out_p[3] } else { at(pl(&o.aux, 3, "aux")?, i, "aux")? };
             put(&mut out[3], i, snap_one_over(y), "out")?;
@@ -224,7 +224,7 @@ pub fn round_snap(o: &Obj, n: i32, nch: i32, out: &mut [Vec<f32>]) -> Result<Vec
             wrote.push(3);
         }
     }
-    if r14 {
+    if rgba_in_rgb_out {
         for i in 0..n.max(0) as usize {
             let x = if o.flag_a != mq(30) { o.in_p[3] } else { at(pl(&o.src, 3, "src")?, i, "src")? };
             put(&mut out[3], i, snap_unit(x), "out")?;

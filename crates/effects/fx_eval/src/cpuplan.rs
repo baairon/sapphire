@@ -361,7 +361,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
     // flag: feeds a non-linewise (not save_prev_dest) or warp family node
     let mut feeds_rand = vec![false; nn];
     for _ in 0..nn {
-        let mut ch = false;
+        let mut chan = false;
         for n in nodes.iter() {
             if !is_func(n.idx) {
                 continue;
@@ -371,11 +371,11 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             for &a in &n.args {
                 if (hits || feeds_rand[n.idx]) && !feeds_rand[a] {
                     feeds_rand[a] = true;
-                    ch = true;
+                    chan = true;
                 }
             }
         }
-        if !ch {
+        if !chan {
             break;
         }
     }
@@ -421,11 +421,11 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             k = e;
         }
         // convert-to-dest joins the block of the root node when that block is the last command, else it stands alone
-        if let Some(di) = (0..ni).find(|&i| items[i].k == IK::Dest) {
-            let ri = items[di].deps[0];
+        if let Some(dest_idx) = (0..ni).find(|&i| items[i].k == IK::Dest) {
+            let ri = items[dest_idx].deps[0];
             match cmds.last_mut() {
-                Some((true, its)) if its.contains(&ri) => its.push(di),
-                _ => cmds.push((true, vec![di])),
+                Some((true, its)) if its.contains(&ri) => its.push(dest_idx),
+                _ => cmds.push((true, vec![dest_idx])),
             }
         }
     }
@@ -582,7 +582,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
                         // the destination operand prints one -999 per channel, except for v3_to_v4_if4, which reads only its lane count
                         let lanes = if nd.prim.strip_suffix("_if_needed").unwrap_or(&nd.prim) == "v3_to_v4_if4" { 1 } else { an.elnum.clamp(1, 4) as usize };
                         a.push(format!("[ {} ]", vec!["-999"; lanes].join(" ")));
-                    } else if let Some(&ai) = (match it.alias { Some((ax, ad)) if x == ax => Some(ad), _ => item_of.get(&x).copied() }).as_ref() {
+                    } else if let Some(&ai) = (match it.alias { Some((arg_x, ad)) if x == arg_x => Some(ad), _ => item_of.get(&x).copied() }).as_ref() {
                         a.push(rf(storage[ai]));
                     } else if matches!(an.kind, "input" | "special") {
                         a.push(format!("(clip {} {})", slot_of.get(&an.idx).copied().unwrap_or(0), an.elnum));
@@ -663,7 +663,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             }
         }
         if *is_block {
-            let mut al: Vec<String> = Vec::new();
+            let mut at_limit: Vec<String> = Vec::new();
             let mut fr: Vec<String> = Vec::new();
             let mut bd: Vec<String> = Vec::new();
             let mut has_dest = false;
@@ -671,7 +671,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
                 if items[i].k == IK::Dest {
                     has_dest = true;
                 } else if local[i] && storage[i] == i {
-                    al.push(alloc_txt(i));
+                    at_limit.push(alloc_txt(i));
                     n_alloc += 1;
                 }
                 bd.push(body(i));
@@ -687,7 +687,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
             }
             let h = if has_dest { "1 1" } else { "0 0" };
             let wrap = |v: &Vec<String>| if v.is_empty() { "( )".to_string() } else { format!("( {}\\n  )", v.join("\\n    ")) };
-            out.push(format!("(exec-linewise {}\\n  {}\\n  {}\\n  {}\\n)", h, wrap(&al), wrap(&bd), wrap(&fr)));
+            out.push(format!("(exec-linewise {}\\n  {}\\n  {}\\n  {}\\n)", h, wrap(&at_limit), wrap(&bd), wrap(&fr)));
         } else {
             out.push(body(its[0]));
         }
@@ -730,12 +730,12 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
                 top.push(format!("(exec-linewise 1 1\\n  {}\\n  {}\\n  {}\\n)", wrap1(&none), wrap1(&vec![body(ds_dest.unwrap())]), wrap1(&none)));
             } else {
                 // the tail in its own exec-linewise on fresh images, then convert-to-dest; the command destination is freed afterwards
-                let al: Vec<String> = tail_items.iter().map(|&i| alloc_txt(i)).collect();
+                let at_limit: Vec<String> = tail_items.iter().map(|&i| alloc_txt(i)).collect();
                 let mut bd: Vec<String> = tail_items.iter().map(|&i| body(i)).collect();
                 bd.push(body(ds_dest.unwrap()));
                 let fr: Vec<String> = tail_items.iter().map(|&i| format!("(free-images {})", rf(i))).collect();
                 n_alloc += tail_items.len();
-                top.push(format!("(exec-linewise 1 1\\n  {}\\n  {}\\n  {}\\n)", wrap1(&al), wrap1(&bd), wrap1(&fr)));
+                top.push(format!("(exec-linewise 1 1\\n  {}\\n  {}\\n  {}\\n)", wrap1(&at_limit), wrap1(&bd), wrap1(&fr)));
             }
             top.push(format!("(free-images {})", rf(st)));
         }
@@ -755,7 +755,7 @@ pub fn plan_text_cpu(cp: &CompiledProgram) -> String {
     }
     for n in nodes.iter() {
         let lanes: Vec<String> = n.lanes.iter().map(|b| format!("{:08x}", b)).collect();
-        s.push_str(&format!("NODE\t{}\t{}\tkind={}\tprim={}\tout_ch={}\targs={}\tlanes={}\t{}={}\tfolded={}\n", n.idx, n.name, n.kind, if n.prim == "-" { "" } else { &n.prim }, n.elnum, n.args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(","), lanes.join(""), crate::judge_keys::PLAN_KEY_NODE_FLAG, n.b160 as u8, n.folded as u8));
+        s.push_str(&format!("NODE\t{}\t{}\tkind={}\tprim={}\tout_ch={}\targs={}\tlanes={}\t{}={}\tfolded={}\n", n.idx, n.name, n.kind, if n.prim == "-" { "" } else { &n.prim }, n.elnum, n.args.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(","), lanes.join(""), crate::judge_keys::PLAN_KEY_NODE_FLAG, n.is_const_node as u8, n.folded as u8));
     }
     // (f03, MEASURED on the f03 original: nodes 27 and 88 are both `m1` folded to [0]): a folded constant that an image-only argument needs as an image
     // AND that has a consumer at a scalar-capable argument exists twice in the original (the literal node and a clone appended at the end that carries the image).
@@ -811,17 +811,17 @@ fn inplace_rule(prim: &str) -> bool {
 fn mark_set(cp: &CompiledProgram) -> std::collections::HashSet<usize> {
     let mut mark = std::collections::HashSet::new();
     loop {
-        let mut ch = false;
+        let mut chan = false;
         for n in &cp.nodes {
             if (n.kind == "func" || n.kind == "auto") && (mark.contains(&n.idx) || crate::layout::flags_of(&n.prim) & 0x2000 != 0) {
                 for &a in &n.args {
                     if (cp.nodes[a].kind == "func" || cp.nodes[a].kind == "auto") && !crate::layout::mark_blocked(&n.prim) && mark.insert(a) {
-                        ch = true;
+                        chan = true;
                     }
                 }
             }
         }
-        if !ch {
+        if !chan {
             break;
         }
     }
@@ -843,7 +843,7 @@ pub fn ds_tail_split(cp: &CompiledProgram) -> (Vec<usize>, Option<usize>) {
     if ds_factor(cp) <= 1 {
         return (Vec::new(), None);
     }
-    let comp = |i: usize| (cp.nodes[i].kind == "func" || cp.nodes[i].kind == "auto") && !cp.nodes[i].b160 && !cp.nodes[i].folded;
+    let comp = |i: usize| (cp.nodes[i].kind == "func" || cp.nodes[i].kind == "auto") && !cp.nodes[i].is_const_node && !cp.nodes[i].folded;
     let mut v: Vec<usize> = Vec::new();
     let mut cur = cp.root;
     let mut guard = 0;
@@ -876,21 +876,21 @@ pub fn ds_tail(cp: &CompiledProgram) -> Vec<usize> {
 /// the xy variable directly; the pure computed arguments of a hoisted node are hoisted too.
 pub fn ds_hoist(cp: &CompiledProgram) -> Vec<usize> {
     let nodes = &cp.nodes;
-    let is_comp = |i: usize| (nodes[i].kind == "func" || nodes[i].kind == "auto") && !nodes[i].b160 && !nodes[i].folded;
+    let is_comp = |i: usize| (nodes[i].kind == "func" || nodes[i].kind == "auto") && !nodes[i].is_const_node && !nodes[i].folded;
     let is_xy = |i: usize| nodes[i].kind != "func" && nodes[i].kind != "auto" && nodes[i].kind != "const" && nodes[i].name == "xy";
-    let is_constlike = |i: usize| nodes[i].kind == "const" || ((nodes[i].kind == "func" || nodes[i].kind == "auto") && (nodes[i].b160 || nodes[i].folded));
+    let is_constlike = |i: usize| nodes[i].kind == "const" || ((nodes[i].kind == "func" || nodes[i].kind == "auto") && (nodes[i].is_const_node || nodes[i].folded));
     fn pure(cp: &CompiledProgram, i: usize, depth: usize) -> bool {
         let nodes = &cp.nodes;
         if depth > 64 {
             return false;
         }
         let n = &nodes[i];
-        if !((n.kind == "func" || n.kind == "auto") && !n.b160 && !n.folded) {
+        if !((n.kind == "func" || n.kind == "auto") && !n.is_const_node && !n.folded) {
             return false;
         }
         n.args.iter().all(|&a| {
             let m = &nodes[a];
-            m.kind == "const" || ((m.kind == "func" || m.kind == "auto") && (m.b160 || m.folded)) || (m.kind != "func" && m.kind != "auto" && m.name == "xy") || pure(cp, a, depth + 1)
+            m.kind == "const" || ((m.kind == "func" || m.kind == "auto") && (m.is_const_node || m.folded)) || (m.kind != "func" && m.kind != "auto" && m.name == "xy") || pure(cp, a, depth + 1)
         })
     }
     let mut h: Vec<usize> = Vec::new();

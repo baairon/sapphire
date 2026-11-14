@@ -52,10 +52,10 @@ fn minss_le_sweep() {
     for bits in 0..=u32::MAX {
         let a = f32::from_bits(bits);
         for &b in &[a, f32::from_bits(bits ^ 0x8000_0000)] {
-            let m1 = minss(a, b);
-            let m2 = if a <= b { a } else { b };
-            if m1.to_bits() != m2.to_bits() {
-                assert!(m1 == 0.0 && m2 == 0.0, "differ at {:08x}", bits);
+            let bits_1 = minss(a, b);
+            let pick_2 = if a <= b { a } else { b };
+            if bits_1.to_bits() != pick_2.to_bits() {
+                assert!(bits_1 == 0.0 && pick_2 == 0.0, "differ at {:08x}", bits);
                 zero_pairs += 1;
             }
         }

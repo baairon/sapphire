@@ -15,7 +15,7 @@ use crate::device_ops_glint_passes::{glint_cols_dev, glint_rows_dev};
 use crate::device_ops_neighbourhood::{blur_dev, const_n, cst, frame_ok, img, is_const, lane, plane_channels, render_scale, BlurJob};
 use crate::types::{Image, KParams};
 use diagonal_box_sum::{Diagonal, Params as BoxParams};
-use fx_device::cl::{Arg as ClArg, Buffer};
+use fx_device::ocl::{Arg as ClArg, Buffer};
 use fx_device::selfcheck::adversarial_f32;
 use fx_device::{DevError, DevImage, Session};
 use glint_dispatch::{refusal_of, wrapper, Error as DispatchError, GlintArgs, Host as DispatchHost, Layer, Roi as WrapRoi, Scratch as WrapScratch, ThreeArgs};
@@ -46,7 +46,7 @@ fn glint_accepts(c: &NodeCall, a: &[ArgShape]) -> Result<(), &'static str> {
         return Err("the combination tag is not 3");
     }
     match plane_channels(&a[0]) {
-        Some(ch) if ch >= 3 => {}
+        Some(chan) if chan >= 3 => {}
         Some(_) => return Err("fewer than three source planes"),
         None => return Err("the source is not a plain image"),
     }
@@ -131,8 +131,8 @@ impl DevHost<'_> {
                 let th = self.th;
                 let Some(k) = glow_layer::bright::scale(&th, 3) else { return Ok(()) };
                 let n = (roi.w as usize) * (roi.h as usize);
-                let (p0, p1, p2) = (self.buf(PlaneId(11))?, self.buf(PlaneId(12))?, self.buf(PlaneId(13))?);
-                self.s.launch("glow_bright3_f32", n, &[p0.arg(), p1.arg(), p2.arg(), ClArg::U32(n as u32), ClArg::F32(th[0]), ClArg::F32(th[1]), ClArg::F32(th[2]), ClArg::F32(k)])?;
+                let (p0, mid_plane, p2) = (self.buf(PlaneId(11))?, self.buf(PlaneId(12))?, self.buf(PlaneId(13))?);
+                self.s.launch("glow_bright3_f32", n, &[p0.arg(), mid_plane.arg(), p2.arg(), ClArg::U32(n as u32), ClArg::F32(th[0]), ClArg::F32(th[1]), ClArg::F32(th[2]), ClArg::F32(k)])?;
                 Ok(())
             }
             Call::CheckAbort(_) | Call::Free(_) | Call::Alloc { .. } => Ok(()),
@@ -367,8 +367,8 @@ pub struct GlintSet {
     pub strength: f32,
     pub a: &'static [f32],
     pub b: &'static [f32],
-    pub t0: &'static [f32],
-    pub t1: &'static [f32],
+    pub ops_c: &'static [f32],
+    pub ops_d: &'static [f32],
     pub rs: i32,
 }
 
@@ -376,35 +376,35 @@ const N: f32 = f32::NAN;
 
 pub const SETS: &[GlintSet] = &[
     // equal thresholds, all passes on
-    GlintSet { th: &[0.5], strength: 1.0, a: &[1.0], b: &[1.0], t0: &[1.0, 1.0, 1.0, 1.0], t1: &[0.25, 0.25, 0.25, 0.25], rs: 0 },
+    GlintSet { th: &[0.5], strength: 1.0, a: &[1.0], b: &[1.0], ops_c: &[1.0, 1.0, 1.0, 1.0], ops_d: &[0.25, 0.25, 0.25, 0.25], rs: 0 },
     // distinct thresholds, distinct widths and gates, mixed pass scales and gains
-    GlintSet { th: &[0.3, 0.6, 0.9], strength: 0.5, a: &[0.5, 1.0, 2.0], b: &[0.25, 1.0, 1.0], t0: &[1.0, 0.5, 1.0, 0.5], t1: &[0.25, 0.0, 0.5, 1.0], rs: 0 },
+    GlintSet { th: &[0.3, 0.6, 0.9], strength: 0.5, a: &[0.5, 1.0, 2.0], b: &[0.25, 1.0, 1.0], ops_c: &[1.0, 0.5, 1.0, 0.5], ops_d: &[0.25, 0.0, 0.5, 1.0], rs: 0 },
     // all thresholds 0 (bright pass skipped), strength 3
-    GlintSet { th: &[0.0], strength: 3.0, a: &[2.0], b: &[1.0], t0: &[1.0], t1: &[0.5], rs: 0 },
+    GlintSet { th: &[0.0], strength: 3.0, a: &[2.0], b: &[1.0], ops_c: &[1.0], ops_d: &[0.5], rs: 0 },
     // strength 0 (blur copy route), one threshold lane 0
-    GlintSet { th: &[0.0, 0.5, 0.7], strength: 0.0, a: &[1.0], b: &[1.0], t0: &[1.0], t1: &[0.25], rs: 0 },
+    GlintSet { th: &[0.0, 0.5, 0.7], strength: 0.0, a: &[1.0], b: &[1.0], ops_c: &[1.0], ops_d: &[0.25], rs: 0 },
     // thresholds at and above 1 (the 2^-7 floor), render scale override
-    GlintSet { th: &[1.0, 1.0, 1.0], strength: 0.5, a: &[1.0], b: &[1.0], t0: &[1.0, 1.0, 1.0, 1.0], t1: &[0.25], rs: 400 },
-    GlintSet { th: &[1.5, 2.0, 1.25], strength: 1.0, a: &[0.5, 1.0, 2.0], b: &[1.0], t0: &[1.0], t1: &[0.5, 0.25, 0.125, 1.0], rs: 0 },
+    GlintSet { th: &[1.0, 1.0, 1.0], strength: 0.5, a: &[1.0], b: &[1.0], ops_c: &[1.0, 1.0, 1.0, 1.0], ops_d: &[0.25], rs: 400 },
+    GlintSet { th: &[1.5, 2.0, 1.25], strength: 1.0, a: &[0.5, 1.0, 2.0], b: &[1.0], ops_c: &[1.0], ops_d: &[0.5, 0.25, 0.125, 1.0], rs: 0 },
     // negative threshold and negative gate, A 0 (copy route for the line passes)
-    GlintSet { th: &[-0.5, 0.2, 0.1], strength: 1.0, a: &[0.0], b: &[-1.0, 1.0, 1.0], t0: &[1.0], t1: &[0.25], rs: 0 },
+    GlintSet { th: &[-0.5, 0.2, 0.1], strength: 1.0, a: &[0.0], b: &[-1.0, 1.0, 1.0], ops_c: &[1.0], ops_d: &[0.25], rs: 0 },
     // NaN threshold, NaN A lane, NaN gate lane
-    GlintSet { th: &[N, 0.5, 0.4], strength: 1.0, a: &[N, 1.0, 1.0], b: &[1.0, N, 1.0], t0: &[1.0], t1: &[0.25], rs: 0 },
+    GlintSet { th: &[N, 0.5, 0.4], strength: 1.0, a: &[N, 1.0, 1.0], b: &[1.0, N, 1.0], ops_c: &[1.0], ops_d: &[0.25], rs: 0 },
     // each pass scale lane 0 in turn
-    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], t0: &[0.0, 1.0, 1.0, 1.0], t1: &[0.25], rs: 0 },
-    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], t0: &[1.0, 0.0, 1.0, 1.0], t1: &[0.25], rs: 0 },
-    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], t0: &[1.0, 1.0, 0.0, 1.0], t1: &[0.25], rs: 0 },
-    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], t0: &[1.0, 1.0, 1.0, 0.0], t1: &[0.25], rs: 0 },
+    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], ops_c: &[0.0, 1.0, 1.0, 1.0], ops_d: &[0.25], rs: 0 },
+    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], ops_c: &[1.0, 0.0, 1.0, 1.0], ops_d: &[0.25], rs: 0 },
+    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], ops_c: &[1.0, 1.0, 0.0, 1.0], ops_d: &[0.25], rs: 0 },
+    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], ops_c: &[1.0, 1.0, 1.0, 0.0], ops_d: &[0.25], rs: 0 },
     // a NaN pass scale lane
-    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], t0: &[N, 1.0, N, 1.0], t1: &[0.25], rs: 0 },
+    GlintSet { th: &[0.4], strength: 1.0, a: &[1.0], b: &[1.0], ops_c: &[N, 1.0, N, 1.0], ops_d: &[0.25], rs: 0 },
     // the blend scale of exactly 1.0 (4 * 1 * 0.25 * 1), and strengths above 1
-    GlintSet { th: &[0.3], strength: 1.0, a: &[1.0], b: &[1.0], t0: &[1.0, 1.0, 1.0, 1.0], t1: &[0.25, 0.25, 0.25, 0.25], rs: 400 },
-    GlintSet { th: &[0.3], strength: 1.0, a: &[1.0], b: &[1.0], t0: &[1.0, 1.0, 1.0, 1.0], t1: &[4.0, 4.0, 4.0, 4.0], rs: 0 },
+    GlintSet { th: &[0.3], strength: 1.0, a: &[1.0], b: &[1.0], ops_c: &[1.0, 1.0, 1.0, 1.0], ops_d: &[0.25, 0.25, 0.25, 0.25], rs: 400 },
+    GlintSet { th: &[0.3], strength: 1.0, a: &[1.0], b: &[1.0], ops_c: &[1.0, 1.0, 1.0, 1.0], ops_d: &[4.0, 4.0, 4.0, 4.0], rs: 0 },
     // large A (radius at the clamp) and A in (0, 0.5) (radii 0)
-    GlintSet { th: &[0.4], strength: 1.0, a: &[50.0, 200.0, 8.0], b: &[1.0], t0: &[1.0], t1: &[0.25], rs: 0 },
-    GlintSet { th: &[0.4], strength: 1.0, a: &[0.05, 0.02, 0.01], b: &[1.0], t0: &[1.0], t1: &[0.25], rs: 0 },
+    GlintSet { th: &[0.4], strength: 1.0, a: &[50.0, 200.0, 8.0], b: &[1.0], ops_c: &[1.0], ops_d: &[0.25], rs: 0 },
+    GlintSet { th: &[0.4], strength: 1.0, a: &[0.05, 0.02, 0.01], b: &[1.0], ops_c: &[1.0], ops_d: &[0.25], rs: 0 },
     // a gain of 0 with pass scale 0.5 (the copy route of lines with a blend)
-    GlintSet { th: &[0.2, 0.2, 0.2], strength: 2.0, a: &[1.0], b: &[0.5], t0: &[0.5, 0.5, 0.5, 0.5], t1: &[0.0, 0.0, 0.0, 0.0], rs: 0 },
+    GlintSet { th: &[0.2, 0.2, 0.2], strength: 2.0, a: &[1.0], b: &[0.5], ops_c: &[0.5, 0.5, 0.5, 0.5], ops_d: &[0.0, 0.0, 0.0, 0.0], rs: 0 },
     // a NaN strength lane is a decline (the blur plan); not in the corpus
 ];
 
@@ -442,7 +442,7 @@ fn plane_values(n: usize, seed: u64, t: &[f32], plain: bool) -> Vec<f32> {
 
 /// The host parameters of a case: render scale and the alignment phases.
 fn kp_of(set: &GlintSet, variant: usize) -> KParams {
-    let mut kp = KParams::standin();
+    let mut kp = KParams::host_defaults();
     kp.blur_render_scale = set.rs;
     kp.glint_align = match variant % 6 {
         0 => Align::default(),
@@ -456,7 +456,7 @@ fn kp_of(set: &GlintSet, variant: usize) -> KParams {
 }
 
 fn consts_of(set: &GlintSet) -> Vec<(usize, usize, [u32; 4])> {
-    vec![cst(1, set.th), cst(2, &[set.strength]), cst(3, set.a), cst(4, set.b), cst(5, set.t0), cst(6, set.t1)]
+    vec![cst(1, set.th), cst(2, &[set.strength]), cst(3, set.a), cst(4, set.b), cst(5, set.ops_c), cst(6, set.ops_d)]
 }
 
 /// The corpus: every parameter set at the two recorded sizes, a rotating window of sets at every other size.
@@ -465,28 +465,28 @@ pub fn glint_corpus() -> Vec<SelfCase> {
     let mut counter = 0usize;
     for (fi, &(w, h)) in FRAMES.iter().enumerate() {
         let n = w * h;
-        let recorded = (w, h) == (64, 32) || (w, h) == (50, 7);
+        let has_full_set = (w, h) == (64, 32) || (w, h) == (50, 7);
         let long = w.max(h) >= 63;
-        let picks: Vec<usize> = if recorded { (0..SETS.len()).collect() } else { (0..5).map(|j| (fi * 3 + j * 4) % SETS.len()).collect() };
+        let picks: Vec<usize> = if has_full_set { (0..SETS.len()).collect() } else { (0..5).map(|j| (fi * 3 + j * 4) % SETS.len()).collect() };
         // frames with a line of 63 or more samples reach the vector routes of the line passes: sets 0 and 1 (all passes active) run at
         // every alignment variant, so the scratch phases of each pass change the sums' grouping
-        let mut jobs: Vec<(usize, usize)> = picks.iter().map(|&si| (si, usize::MAX)).collect();
-        if long && !recorded {
-            for si in [0usize, 1] {
+        let mut jobs: Vec<(usize, usize)> = picks.iter().map(|&set_idx| (set_idx, usize::MAX)).collect();
+        if long && !has_full_set {
+            for set_idx in [0usize, 1] {
                 for v in 0..6 {
-                    jobs.push((si, v));
+                    jobs.push((set_idx, v));
                 }
             }
         }
-        for (si, forced) in jobs {
-            let set = &SETS[si];
+        for (set_idx, forced) in jobs {
+            let set = &SETS[set_idx];
             counter += 1;
-            let ch = if counter % 2 == 0 { 3 } else { 4 };
+            let chan = if counter % 2 == 0 { 3 } else { 4 };
             let plain = counter % 3 != 0;
-            let seed = (fi * 131 + si * 17 + counter) as u64;
-            let src = Image { n, planes: (0..ch).map(|p| plane_values(n, seed * 7 + p as u64, set.th, plain)).collect() };
+            let seed = (fi * 131 + set_idx * 17 + counter) as u64;
+            let src = Image { n, planes: (0..chan).map(|p| plane_values(n, seed * 7 + p as u64, set.th, plain)).collect() };
             out.push(SelfCase {
-                name: format!("{w}x{h} set {si} from {ch} planes{}", if plain { "" } else { " specials" }),
+                name: format!("{w}x{h} set {set_idx} from {chan} planes{}", if plain { "" } else { " specials" }),
                 dims: (w, h),
                 tag: 3,
                 args: vec![src],
@@ -497,11 +497,11 @@ pub fn glint_corpus() -> Vec<SelfCase> {
     }
     // a three lane constant source
     for &(w, h) in &[(7usize, 3usize), (64, 32), (50, 7)] {
-        for si in [0usize, 1, 13] {
-            let set = &SETS[si];
+        for set_idx in [0usize, 1, 13] {
+            let set = &SETS[set_idx];
             let mut consts = consts_of(set);
             consts.insert(0, cst(0, &[0.9, 0.2, 0.6]));
-            out.push(SelfCase { name: format!("{w}x{h} constant source set {si}"), dims: (w, h), tag: 3, args: vec![], consts, kp: Some(kp_of(set, si)) });
+            out.push(SelfCase { name: format!("{w}x{h} constant source set {set_idx}"), dims: (w, h), tag: 3, args: vec![], consts, kp: Some(kp_of(set, set_idx)) });
         }
     }
     out

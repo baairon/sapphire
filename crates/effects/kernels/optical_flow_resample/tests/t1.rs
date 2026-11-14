@@ -58,9 +58,9 @@ fn nan_propagates_and_is_canonical() {
     let d = h(&src, 9, 1, 5, 0);
     assert!(d.iter().any(|x| x.is_nan()));
     // infinity times a zero weight: a fresh NaN has the default pattern
-    let mut vs_2 = vec![1.0f32; 40];
-    vs_2[0] = f32::INFINITY;
-    let d = h(&vs_2, 40, 1, 3, 0);
+    let mut scale_second = vec![1.0f32; 40];
+    scale_second[0] = f32::INFINITY;
+    let d = h(&scale_second, 40, 1, 3, 0);
     assert!(d.iter().all(|x| !x.is_nan() || x.to_bits() & 0xffc0_0000 == 0xffc0_0000 || x.to_bits() & 0x7fc0_0000 == 0x7fc0_0000));
 }
 

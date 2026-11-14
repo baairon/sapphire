@@ -142,49 +142,49 @@ fn cidx(idx: i32) -> Result<usize, OpError> {
 /// The whole slot-53 AVX2 body of `maxmin` . `p.dst3_phase_bytes` = address of output plane 3 & 0x1f.
 pub fn run_bin(k: BKind, p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [f32]], m: Mutant) -> Result<(), OpError> {
     // r14 = (countA == 3 [edx is countA]), see : r14 = (A3 && B4), r12 = (A4 && B3)
-    let (mut r14, mut r12) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
+    let (mut a_rgb_b_rgba, mut a_rgba_b_rgb) = (a.count == 3 && b.count == 4, a.count == 4 && b.count == 3);
     if m == Mutant::R14Swap {
-        r14 = a.count == 4 && b.count == 3;
+        a_rgb_b_rgba = a.count == 4 && b.count == 3;
     }
     if m == Mutant::ExtA3Only {
-        r14 = a.count == 3;
+        a_rgb_b_rgba = a.count == 3;
     }
     if m == Mutant::R12Off {
-        r12 = false;
+        a_rgba_b_rgb = false;
     }
     // (r14|r12) != 0 or nout == 3 take the fixed 3 channel loop; else nout channels (jle skips)
-    let fixed3 = if m == Mutant::Fixed3Off { r14 || r12 } else { r14 || r12 || p.nout == 3 };
+    let fixed3 = if m == Mutant::Fixed3Off { a_rgb_b_rgba || a_rgba_b_rgb } else { a_rgb_b_rgba || a_rgba_b_rgb || p.nout == 3 };
     let mut nch: i32 = if fixed3 { 3 } else if p.nout > 0 { p.nout } else { 0 };
     if m == Mutant::Nch2 && nch > 2 {
         nch = 2;
     }
     let n = p.n;
     if n > 0 {
-        for ch in 0..nch {
-            if out.get(ch as usize).map_or(true, |d| d.len() < n as usize) {
+        for chan in 0..nch {
+            if out.get(chan as usize).map_or(true, |d| d.len() < n as usize) {
                 return Err(OpError::MissingOut);
             }
         }
-        if (r14 || r12) && out.get(3).map_or(true, |d| d.len() < n as usize) {
+        if (a_rgb_b_rgba || a_rgba_b_rgb) && out.get(3).map_or(true, |d| d.len() < n as usize) {
             return Err(OpError::MissingOut);
         }
     }
     let (a_const, b_const) = (a.is_const && m != Mutant::NoConstA, b.is_const && m != Mutant::NoConstB);
-    for ch in 0..nch {
+    for chan in 0..nch {
         // cmp esi,eax ; cmovl edx,esi : idx = min(ch, count - 1), signed
-        let mut ia = ch.min(a.count - 1);
-        let mut ib = ch.min(b.count - 1);
+        let mut ia = chan.min(a.count - 1);
+        let mut ib = chan.min(b.count - 1);
         if m == Mutant::ClampA {
-            ia = ch.min(a.count);
+            ia = chan.min(a.count);
         }
         if m == Mutant::ClampB {
-            ib = ch.min(b.count);
+            ib = chan.min(b.count);
         }
         if n <= 0 {
             continue; // cmp [n],0; jle next channel
         }
         let n = n as usize;
-        let dst_i = ch as usize;
+        let dst_i = chan as usize;
         if a_const {
             // xmm0 = Aconst[ia]; vmaxss xmm0,xmm0,[B plane] -> f(Aconst, B)
             let ca = a.consts[cidx(ia)?];
@@ -213,10 +213,10 @@ pub fn run_bin(k: BKind, p: &Params, a: &Operand, b: &Operand, out: &mut [&mut [
         }
     }
     if n > 0 {
-        if r14 {
+        if a_rgb_b_rgba {
             ext(k, true, p, a, b, out, m)?;
         }
-        if r12 {
+        if a_rgba_b_rgb {
             ext(k, false, p, a, b, out, m)?;
         }
     }
@@ -330,20 +330,20 @@ pub fn run_un(k: UKind, p: &UParams, count: i32, planes: &[&[f32]], out: &mut [&
     };
     let sm = if m == Mutant::ScalarMaskLsb { sm0 ^ 1 } else { sm0 };
     let vm = if m == Mutant::VecMaskIgnored { sm0 } else { p.vec_mask };
-    for ch in 0..nch.max(0) {
+    for chan in 0..nch.max(0) {
         if n <= 0 {
             continue; // test rdi; jle next channel
         }
         let nn = n as usize;
-        let src = planes.get(ch as usize).copied().ok_or(OpError::MissingPlane)?;
+        let src = planes.get(chan as usize).copied().ok_or(OpError::MissingPlane)?;
         if src.len() < nn {
             return Err(OpError::ShortPlane);
         }
-        let d = out.get_mut(ch as usize).ok_or(OpError::MissingOut)?;
+        let d = out.get_mut(chan as usize).ok_or(OpError::MissingOut)?;
         if d.len() < nn {
             return Err(OpError::MissingOut);
         }
-        let phase = p.dst_phase_bytes[(ch as usize).min(3)];
+        let phase = p.dst_phase_bytes[(chan as usize).min(3)];
         let ap = |x: f32, vector: bool| -> f32 {
             let mask = if vector { vm } else { sm };
             let bits = x.to_bits();
@@ -363,7 +363,7 @@ pub fn assumptions() -> Vec<(&'static str, &'static str, &'static str)> {
         ("OP2-A2", "SEMANTIC (explicit parameter vec_one)", "vector constant (uncovered) used by the max and min extension kernels as the first (B side) or second (A side) source; basis: the scalar head and tail of the same loop use captured ONE over the same array; T2 runs 1.0 and 0.75; sensitivity: paired runs"),
         ("OP2-A3", "SEMANTIC (new cell, explicit parameter vec_mask)", "abs vector mask ymm (uncovered): vandps with the data; basis: the scalar head and tail of the same loop AND the same array with the captured 0x7fffffff, so the core must be 0x7fffffff x8 for a loop that computes |x| element-wise; T2 runs 0x7fffffff and a second value"),
         ("OP2-A4", "SEMANTIC (explicit parameter vec_mask)", "negate vector mask ymm (uncovered, assumed 0x80000000 x8); negate vxorps is its consumer; basis as OP2-A3 with the captured scalar mask 0x80000000"),
-        ("OP2-A5", "ROUTE", "AVX2 route only: feature word 0x9d97ff selects max, min, abs, negate; AVX tiers and SSE tiers are not ported"),
+        ("OP2-A5", "ROUTE", "AVX2 route only: feature word selects max, min, abs, negate; AVX tiers and SSE tiers are not ported"), // origin: 0x9d97ff
         ("OP2-A6", "HOST-FP-ASSUMED", "MXCSR round to nearest, no FTZ, no DAZ (max/min compare, abs/negate are bit operations); the emulator follows the SDM, not silicon"),
         ("OP2-A7", "ALIGN-DEPENDENT", "dst3_phase_bytes (max/min extension) and dst_phase_bytes[c] (abs/negate) = (address of the output plane) & 0x1f are explicit inputs; they matter only when the vector constant differs from the scalar one (max/min: vec_one != 1.0; abs/negate: vec_mask != scalar mask). The harness puts every output plane at the same phase, so T2 covers equal phases for all channels"),
         ("OP2-A8", "CALLEE-HOSTED (count getter), max and min only", "nout = result of virtual slot 31 is an explicit parameter, hooked in R-PARITY; abs and negate do not call it: their channel count is the operand count [this] and no virtual call exists in the body (MEASURED listing)"),

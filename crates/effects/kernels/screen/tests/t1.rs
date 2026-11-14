@@ -21,9 +21,9 @@ fn p(nout: i32, n: i32) -> Params {
 #[test]
 fn hand_values() {
     // screen = a + (1-a) b: (0.5,0.5) -> 0.75, (0.25,0.5) -> 0.625, (0,x) -> x, (1,b) -> 1, no clamping
-    let a0 = [0.5f32, 0.25, 0.0, 1.0, 2.0];
-    let b0 = [0.5f32, 0.5, 0.75, 0.3, 4.0];
-    let (pa, pb) = ([&a0[..]], [&b0[..]]);
+    let a_lanes = [0.5f32, 0.25, 0.0, 1.0, 2.0];
+    let lanes_0 = [0.5f32, 0.5, 0.75, 0.3, 4.0];
+    let (pa, pb) = ([&a_lanes[..]], [&lanes_0[..]]);
     let mut o = outs(1, 8);
     go(&p(1, 5), &op(1, &pa), &op(1, &pb), &mut o).unwrap();
     assert_eq!(&o[0][..5], &[0.75, 0.625, 0.75, 1.0, -2.0]);
@@ -51,9 +51,9 @@ fn fused_not_unfused() {
 
 #[test]
 fn nan_and_inf() {
-    let a0 = [f32::NAN, 1.0, f32::INFINITY, -0.0];
-    let b0 = [0.5f32, f32::NAN, 0.5, 0.0];
-    let (pa, pb) = ([&a0[..]], [&b0[..]]);
+    let a_lanes = [f32::NAN, 1.0, f32::INFINITY, -0.0];
+    let lanes_0 = [0.5f32, f32::NAN, 0.5, 0.0];
+    let (pa, pb) = ([&a_lanes[..]], [&lanes_0[..]]);
     let mut o = outs(1, 4);
     go(&p(1, 4), &op(1, &pa), &op(1, &pb), &mut o).unwrap();
     assert!(o[0][0].is_nan() && o[0][1].is_nan() && o[0][2].is_nan());
@@ -75,8 +75,8 @@ fn extension_kernels() {
     // (4,3): (1 + a3) - a3
     let a: Vec<Vec<f32>> = (0..4).map(|c| vec![if c == 3 { 1.0e8 } else { 0.5 }; 3]).collect();
     let ar: Vec<&[f32]> = a.iter().map(|v| v.as_slice()).collect();
-    let b3: Vec<Vec<f32>> = (0..3).map(|_| vec![0.5; 3]).collect();
-    let b3r: Vec<&[f32]> = b3.iter().map(|v| v.as_slice()).collect();
+    let bits_3: Vec<Vec<f32>> = (0..3).map(|_| vec![0.5; 3]).collect();
+    let b3r: Vec<&[f32]> = bits_3.iter().map(|v| v.as_slice()).collect();
     let mut o = outs(4, 3);
     go(&p(4, 3), &op(4, &ar), &op(3, &b3r), &mut o).unwrap();
     assert_eq!(o[3][0], 0.0);
@@ -100,12 +100,12 @@ fn degenerate_and_errors() {
 
 #[test]
 fn deterministic() {
-    let a0: Vec<f32> = (0..33).map(|i| i as f32 * 0.07 - 0.3).collect();
-    let b0: Vec<f32> = (0..33).map(|i| i as f32 * 0.05).collect();
-    let (pa, pb) = ([&a0[..]], [&b0[..]]);
-    let mut o1 = outs(1, 33);
-    let mut o2 = outs(1, 33);
-    go(&p(1, 33), &op(1, &pa), &op(1, &pb), &mut o1).unwrap();
-    go(&p(1, 33), &op(1, &pa), &op(1, &pb), &mut o2).unwrap();
-    assert_eq!(o1, o2);
+    let a_lanes: Vec<f32> = (0..33).map(|i| i as f32 * 0.07 - 0.3).collect();
+    let lanes_0: Vec<f32> = (0..33).map(|i| i as f32 * 0.05).collect();
+    let (pa, pb) = ([&a_lanes[..]], [&lanes_0[..]]);
+    let mut first_outs = outs(1, 33);
+    let mut second_outs = outs(1, 33);
+    go(&p(1, 33), &op(1, &pa), &op(1, &pb), &mut first_outs).unwrap();
+    go(&p(1, 33), &op(1, &pa), &op(1, &pb), &mut second_outs).unwrap();
+    assert_eq!(first_outs, second_outs);
 }

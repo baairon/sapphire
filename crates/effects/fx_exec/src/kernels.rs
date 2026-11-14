@@ -105,14 +105,14 @@ pub(crate) fn need(args: &[Arg], k: usize, class: &str) -> Result<(), ExecError>
 fn hue_shift_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
     need(args, 2, "hue_shift")?;
     let (s, a) = (&args[0], &args[1]);
-    let sp = s.planes();
+    let src_planes = s.planes();
     let ap = a.planes();
     let p = hue_shift::Params { const_colour: s.is_const(), scalar_shift: a.is_const(), colour: colour_of(s), shift: a.f32s()[0], flag: false };
-    let inp = hue_shift::Inputs { src: src3(s, &sp), mask: if a.is_const() { None } else { ap.first().copied() } };
+    let inp = hue_shift::Inputs { src: src3(s, &src_planes), mask: if a.is_const() { None } else { ap.first().copied() } };
     let mut o = out4(n);
     let calls = {
-        let [o0, o1, o2, _] = &mut o;
-        let mut outs: [&mut [f32]; 3] = [o0.as_mut_slice(), o1.as_mut_slice(), o2.as_mut_slice()];
+        let [out_ch0, out_ch1, out_ch2, _] = &mut o;
+        let mut outs: [&mut [f32]; 3] = [out_ch0.as_mut_slice(), out_ch1.as_mut_slice(), out_ch2.as_mut_slice()];
         hue_shift::run(&p, tag, n as i32, &inp, &mut outs).map_err(|e| kerr("hue_shift", e))?
     };
     for c in calls {
@@ -127,14 +127,14 @@ fn hue_shift_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, 
 fn sat_scale_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
     need(args, 2, "sat_scale")?;
     let (s, a) = (&args[0], &args[1]);
-    let sp = s.planes();
+    let src_planes = s.planes();
     let ap = a.planes();
     let p = sat_scale::Params { const_colour: s.is_const(), scalar_scale: a.is_const(), colour: colour_of(s), scale: a.f32s()[0], flag: false };
-    let inp = sat_scale::Inputs { src: src3(s, &sp), mask: if a.is_const() { None } else { ap.first().copied() } };
+    let inp = sat_scale::Inputs { src: src3(s, &src_planes), mask: if a.is_const() { None } else { ap.first().copied() } };
     let mut o = out4(n);
     let calls = {
-        let [o0, o1, o2, _] = &mut o;
-        let mut outs: [&mut [f32]; 3] = [o0.as_mut_slice(), o1.as_mut_slice(), o2.as_mut_slice()];
+        let [out_ch0, out_ch1, out_ch2, _] = &mut o;
+        let mut outs: [&mut [f32]; 3] = [out_ch0.as_mut_slice(), out_ch1.as_mut_slice(), out_ch2.as_mut_slice()];
         sat_scale::run(&p, tag, n as i32, &inp, &mut outs).map_err(|e| kerr("sat_scale", e))?
     };
     for c in calls {
@@ -149,7 +149,7 @@ fn sat_scale_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, 
 fn hsp_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
     need(args, 2, "hue_shift_preserve_luma")?;
     let (s, a) = (&args[0], &args[1]);
-    let sp = s.planes();
+    let src_planes = s.planes();
     let ap = a.planes();
     let p = hue_shift_preserve_luma::Params {
         plane_count: tag,
@@ -162,9 +162,9 @@ fn hsp_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecEr
     };
     let mask = if a.is_const() { None } else { ap.first().copied() };
     let mut outs3: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
-    let calls = hue_shift_preserve_luma::render(&p, src3(s, &sp), mask, &mut outs3).map_err(|e| kerr("hue_shift_preserve_luma", e))?;
-    let [a0, a1, a2] = outs3;
-    let mut o = [a0, a1, a2, vec![0.0; n]];
+    let calls = hue_shift_preserve_luma::render(&p, src3(s, &src_planes), mask, &mut outs3).map_err(|e| kerr("hue_shift_preserve_luma", e))?;
+    let [res_ch0, res_ch1, res_ch2] = outs3;
+    let mut o = [res_ch0, res_ch1, res_ch2, vec![0.0; n]];
     for c in calls {
         match c {
             hue_shift_preserve_luma::Call::Fill(plane) => pad_fill(kp, s, plane, &mut o[(plane.max(0) as usize).min(3)], n)?,
@@ -178,9 +178,9 @@ fn v3_to_v4_if4_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Imag
     need(args, 3, "v3_to_v4_if4")?;
     let counts = [args[0].count(), args[1].count(), args[2].count()];
     let combo = v3_to_v4_if4::select_combo(counts).ok_or(ExecError::NoCombo { class: "v3_to_v4_if4".into(), operands: counts.to_vec() })?;
-    let (p0, p1) = (args[0].planes(), args[1].planes());
-    let (v0, v1) = (args[0].bits().to_vec(), args[1].bits().to_vec());
-    let blocks = [block_of(&args[0], &p0, &v0), block_of(&args[1], &p1, &v1)];
+    let (p0, planes_b) = (args[0].planes(), args[1].planes());
+    let (bits_a, bits_b) = (args[0].bits().to_vec(), args[1].bits().to_vec());
+    let blocks = [block_of(&args[0], &p0, &bits_a), block_of(&args[1], &planes_b, &bits_b)];
     let p = v3_to_v4_if4::Params { combo, host: ps::Host { in_pool: kp.in_pool }, roi: flat_roi(n) };
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; tag.max(0) as usize];
     {
@@ -235,11 +235,11 @@ fn screen_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, Exe
 
 fn overlay_k(args: &[Arg], tag: i32, n: usize, _kp: &KParams) -> Result<Image, ExecError> {
     need(args, 2, "overlay_super")?;
-    let n32 = count_i32("overlay_super", "the plane length", n)?;
+    let count_word = count_i32("overlay_super", "the plane length", n)?;
     let (pa, pb) = (args[0].planes(), args[1].planes());
     let oa = overlay_super::Operand { count: args[0].count(), is_const: args[0].is_const(), consts: args[0].f32s(), planes: &pa };
     let ob = overlay_super::Operand { count: args[1].count(), is_const: args[1].is_const(), consts: args[1].f32s(), planes: &pb };
-    let p = overlay_super::Params { nout: tag, n: n32 };
+    let p = overlay_super::Params { nout: tag, n: count_word };
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; tag.max(0) as usize];
     {
         let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|v| v.as_mut_slice()).collect();
@@ -250,11 +250,11 @@ fn overlay_k(args: &[Arg], tag: i32, n: usize, _kp: &KParams) -> Result<Image, E
 
 fn screen2_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
     need(args, 2, "screen")?;
-    let n32 = count_i32("screen", "the plane length", n)?;
+    let count_word = count_i32("screen", "the plane length", n)?;
     let (pa, pb) = (args[0].planes(), args[1].planes());
     let oa = screen::Operand { count: args[0].count(), is_const: args[0].is_const(), consts: args[0].f32s(), planes: &pa };
     let ob = screen::Operand { count: args[1].count(), is_const: args[1].is_const(), consts: args[1].f32s(), planes: &pb };
-    let p = screen::Params { nout: tag, n: n32, vec_one: kp.vec_one, dst3_phase_bytes: kp.dst3_phase_bytes };
+    let p = screen::Params { nout: tag, n: count_word, vec_one: kp.vec_one, dst3_phase_bytes: kp.dst3_phase_bytes };
     let mut outv: Vec<Vec<f32>> = vec![vec![0.0; n]; tag.max(0) as usize];
     {
         let mut outs: Vec<&mut [f32]> = outv.iter_mut().map(|v| v.as_mut_slice()).collect();

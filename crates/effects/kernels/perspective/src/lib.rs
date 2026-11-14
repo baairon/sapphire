@@ -67,24 +67,24 @@ pub fn sincos_native(x: f32) -> (f32, f32) {
 /// Per-call constants after the callee returns.
 #[derive(Clone, Copy, Debug)]
 pub struct K {
-    pub m1: f32,
+    pub a_sin: f32,
     pub p: f32,
-    pub m4: f32,
-    pub m5: f32,
-    pub m6: f32,
-    pub m7: f32,
+    pub b_sin: f32,
+    pub b_cos: f32,
+    pub sin_k: f32,
+    pub cos_k: f32,
     pub b: f32,
 }
 
-pub fn constants(o: &Obj, r0: f32, r1: f32) -> K {
-    K { m1: nx_mul(o.port_obj_c, r0), p: nx_mul(o.port_obj_c, r1), m4: nx_mul(r0, o.port_obj_d), m5: nx_mul(r1, o.port_obj_d), m6: r0, m7: r1, b: o.port_obj_d }
+pub fn constants(o: &Obj, sin_t: f32, cos_t: f32) -> K {
+    K { a_sin: nx_mul(o.port_obj_c, sin_t), p: nx_mul(o.port_obj_c, cos_t), b_sin: nx_mul(sin_t, o.port_obj_d), b_cos: nx_mul(cos_t, o.port_obj_d), sin_k: sin_t, cos_k: cos_t, b: o.port_obj_d }
 }
 
 fn d_of(k: &K, v: f32) -> f32 {
-    nx_fma(-k.m4, v, -k.m7) // vfnmsub213ss / vfmsub213ps with the negated m4
+    nx_fma(-k.b_sin, v, -k.cos_k) // vfnmsub213ss / vfmsub213ps with the negated m4
 }
 fn dneg_of(k: &K, v: f32) -> f32 {
-    nx_fma(k.m4, v, k.m7) // vfnmadd213ps (-(-m4 * v) + m7)
+    nx_fma(k.b_sin, v, k.cos_k) // vfnmadd213ps (-(-m4 * v) + m7)
 }
 
 /// Scalar parts (prologue peel, tails).
@@ -163,32 +163,32 @@ pub fn q_vector(k: &K, v: f32) -> f32 {
 
 fn elem(k: &K, u: f32, v: f32, part: Part, rcp: &dyn Fn(RcpSite, f32) -> f32) -> (f32, f32) {
     let q = if part == Part::Scalar { q_scalar(k, v) } else { q_vector_with(k, v, part, rcp) };
-    let t = nx_fma(v, k.m5, -k.m6); // vfmsub213ss / ps
-    (nx_mul(nx_mul(k.b, u), q), nx_fma(t, q, k.m1))
+    let t = nx_fma(v, k.b_cos, -k.sin_k); // vfmsub213ss / ps
+    (nx_mul(nx_mul(k.b, u), q), nx_fma(t, q, k.a_sin))
 }
 
 /// Section plan: (peel scalar count, 16 wide end, 8 wide end, scalar start of the tail).
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Plan {
     pub peel: usize,
-    pub v16_end: usize,
-    pub v8_end: usize,
+    pub wide_vec_end: usize,
+    pub narrow_vec_end: usize,
     pub n: usize,
 }
 
 pub fn plan(n: i32, out2_phase_bytes: u32) -> Plan {
     if n <= 0 {
-        return Plan { peel: 0, v16_end: 0, v8_end: 0, n: 0 };
+        return Plan { peel: 0, wide_vec_end: 0, narrow_vec_end: 0, n: 0 };
     }
     let nn = n as usize;
-    let all_scalar = Plan { peel: nn, v16_end: nn, v8_end: nn, n: nn }; // peel covers all
+    let all_scalar = Plan { peel: nn, wide_vec_end: nn, narrow_vec_end: nn, n: nn }; // peel covers all
     if n < 16 {
         return all_scalar;
     }
-    let (peel, esi);
+    let (peel, tap_b);
     if n < 29 {
         peel = 0usize;
-        esi = nn & !0xf;
+        tap_b = nn & !0xf;
     } else {
         let ph = out2_phase_bytes & 0x1f;
         let p = if ph == 0 {
@@ -202,18 +202,18 @@ pub fn plan(n: i32, out2_phase_bytes: u32) -> Plan {
             return all_scalar;
         }
         peel = p;
-        esi = nn - ((nn - p) & 0xf);
+        tap_b = nn - ((nn - p) & 0xf);
     }
-    let rem = nn - esi;
-    let v8_end = if rem >= 8 { esi + (rem & !7) } else { esi };
-    Plan { peel, v16_end: esi, v8_end, n: nn }
+    let rem = nn - tap_b;
+    let narrow_vec_end = if rem >= 8 { tap_b + (rem & !7) } else { tap_b };
+    Plan { peel, wide_vec_end: tap_b, narrow_vec_end, n: nn }
 }
 
 /// Which section an element i belongs to under a plan (the 16 block parity counts from the end of the peel).
 pub fn part_of(pl: &Plan, i: usize) -> Part {
-    if pl.peel < pl.n && i >= pl.peel && i < pl.v16_end {
+    if pl.peel < pl.n && i >= pl.peel && i < pl.wide_vec_end {
         if (i - pl.peel) % 16 < 8 { Part::Wide16A } else { Part::Wide16B }
-    } else if i >= pl.v16_end && i < pl.v8_end {
+    } else if i >= pl.wide_vec_end && i < pl.narrow_vec_end {
         Part::Wide8
     } else {
         Part::Scalar

@@ -39,7 +39,7 @@ pub struct Params {
     pub one: u32,
     /// all-ones vector mask (OP3-A2): only the sign bit of each lane matters; every lane is assumed equal
     pub k_mask: u32,
-    /// destination plane address & 0x1f in bytes (OP3-A9), same for every channel
+    /// destination plane position & 0x1f in bytes (OP3-A9), same for every channel
     pub dst_phase: usize,
     /// initial content of the destination planes (the harness sentinel)
     pub dst_init: u32,
@@ -59,7 +59,7 @@ pub fn assumptions() -> Vec<Assumption> {
         Assumption { id: "OP3-A4", tier: "HOST-HOOKED", text: "virtual slot 31 is the output channel count nout; hooked ret_const, meaning INFERRED from the loop bound" },
         Assumption { id: "OP3-A5", tier: "INFERRED", text: "object layout (operand count at, the flag field, constants, plane records, plane c at the record's per-channel pointer) MEASURED from the loads; that the host fills it so is INFERRED" },
         Assumption { id: "OP3-A6", tier: "LIBC-MODEL", text: "memcpy thunk (whole-plane arm copy when the condition is constant) hooked as memcpy" },
-        Assumption { id: "OP3-A7", tier: "ROUTE", text: "AVX2 route only (word 0x9d97ff); AVX and SSE tiers not compared; HOST-FP-ASSUMED (no arithmetic in the bodies, only ordered compares)" },
+        Assumption { id: "OP3-A7", tier: "ROUTE", text: "AVX2 route only (word); AVX and SSE tiers not compared; HOST-FP-ASSUMED (no arithmetic in the bodies, only ordered compares)" }, // origin: 0x9d97ff
         Assumption { id: "OP3-A8", tier: "CONTRACT", text: "channel counts 1..4, nout <= 4 (constants are read at index ch), n >= 0 when a whole-plane copy runs, destination planes disjoint from the sources, flag (rcx) = 0" },
         Assumption { id: "OP3-A9", tier: "ALIGN-DEPENDENT", text: "the vector region (peel from the destination phase) is visible only when k_mask is not all ones; dst_phase explicit" },
     ]
@@ -138,14 +138,14 @@ pub fn render_mut(kind: Kind, p: &Params, ops: &[Operand], out: &mut [Vec<u32>],
     }
     let nout = if has("nout_cap3") { p.nout.min(3) } else { p.nout };
     let sel_swap = has("swap_arms");
-    for ch in 0..nout as usize {
-        let chi = ch as i32;
-        let cidx = if has("const_idx0") { 0 } else { ch };
+    for chan in 0..nout as usize {
+        let chi = chan as i32;
+        let cidx = if has("const_idx0") { 0 } else { chan };
         let mut xconst = ops[ix].is_const;
         let mut yconst = ops[iy].is_const;
         let mut xc = ops[ix].consts[cidx];
         let mut yc = ops[iy].consts[cidx];
-        if ch == 3 && !has("ch3_plane") {
+        if chan == 3 && !has("ch3_plane") {
             if (ops[ix].count - 1) & 1 == 0 {
                 xc = p.one;
                 xconst = true;
@@ -174,7 +174,7 @@ pub fn render_mut(kind: Kind, p: &Params, ops: &[Operand], out: &mut [Vec<u32>],
             Some(b) => ops[ia].is_const && ops[b].is_const,
         };
         let thr = if has("plus_thresh_one") { p.one } else { 0 };
-        let dst = &mut out[ch];
+        let dst = &mut out[chan];
         if cond_const {
             let av = ops[ia].consts[cidx];
             let mut cv = match ib {

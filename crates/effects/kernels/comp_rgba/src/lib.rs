@@ -129,14 +129,14 @@ fn alpha_idx(cb: i32) -> usize {
 
 #[inline]
 fn mix(a: f32, b: f32, t: f32, omt: f32) -> f32 {
-    let ge1 = if m(1) {
+    let above_one = if m(1) {
         t > 1.0
     } else if m(12) {
         !(t < 1.0)
     } else {
         t >= 1.0
     };
-    if ge1 {
+    if above_one {
         b
     } else if if m(2) { 0.0 > t } else { 0.0 >= t } {
         if m(4) {
@@ -211,8 +211,8 @@ pub fn render(p: &Params, host: &Host, a: &[&[f32]], b: &[&[f32]], outs: &mut [&
     for i in 0..n_eff {
         let t = if b_const { p.b_vals[tc] } else { b[tc][i] };
         let omt = if dbl { (1.0f64 - t as f64) as f32 } else { 1.0f32 - t };
-        let ge1 = if dbl { if m(18) { (t as f64) > 1.0f64 } else { (t as f64) >= 1.0f64 } } else { false };
-        let le0 = if dbl { 0.0f64 >= (t as f64) } else { false };
+        let above_one = if dbl { if m(18) { (t as f64) > 1.0f64 } else { (t as f64) >= 1.0f64 } } else { false };
+        let at_most_zero = if dbl { 0.0f64 >= (t as f64) } else { false };
         let mut res = [0f32; 4];
         let colour = if alpha == Alpha::None { oc } else { 3 };
         for j in 0..colour {
@@ -221,9 +221,9 @@ pub fn render(p: &Params, host: &Host, a: &[&[f32]], b: &[&[f32]], outs: &mut [&
             let av = if a_const { p.a_vals[sel(p.ca, ja)] } else { a[sel(p.ca, ja)][i] };
             let bv = if b_const { p.b_vals[sel(p.cb, jb)] } else { b[sel(p.cb, jb)][i] };
             res[j] = if dbl {
-                if ge1 {
+                if above_one {
                     bv
-                } else if le0 {
+                } else if at_most_zero {
                     av + bv
                 } else {
                     av.mul_add(omt, bv)
@@ -236,22 +236,22 @@ pub fn render(p: &Params, host: &Host, a: &[&[f32]], b: &[&[f32]], outs: &mut [&
             Alpha::None => {}
             Alpha::One => res[3] = if m(7) { 0.0 } else { 1.0 },
             Alpha::Blend => {
-                let a3 = if a_const { p.a_vals[sel(p.ca, 3)] } else { a[sel(p.ca, 3)][i] };
-                let b3 = if b_const { p.b_vals[sel(p.cb, 3)] } else { b[sel(p.cb, 3)][i] };
+                let a_sample = if a_const { p.a_vals[sel(p.ca, 3)] } else { a[sel(p.ca, 3)][i] };
+                let pick_3 = if b_const { p.b_vals[sel(p.cb, 3)] } else { b[sel(p.cb, 3)][i] };
                 res[3] = if t >= 1.0 {
                     if m(5) {
-                        b3
+                        pick_3
                     } else {
                         1.0
                     }
                 } else if 0.0 >= t {
                     if m(6) {
-                        a3 + b3
+                        a_sample + pick_3
                     } else {
-                        a3
+                        a_sample
                     }
                 } else {
-                    a3.mul_add(omt, b3)
+                    a_sample.mul_add(omt, pick_3)
                 };
             }
         }

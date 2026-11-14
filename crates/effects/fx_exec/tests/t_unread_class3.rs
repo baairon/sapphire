@@ -8,11 +8,11 @@ use std::process::Command;
 
 /// Answer 1 cells: [owner+0x1354] 0, [owner+0x1358] 3, [prog+0x590] 1, [prog+0x594] 0, [prog+0x59f] 0, byte at the class-1 cell 1.
 fn answer1() -> ClassCells {
-    ClassCells { ae32_ready_c: 0, ae32_ready_d: 3, prog_mode_word: 1, prog_class_byte: Some(0), prog_flag_byte: Some(0), flag_2: Some(1) }
+    ClassCells { claim_setup_first: 0, claim_setup_second: 3, prog_mode_word: 1, prog_class_byte: Some(0), prog_flag_byte: Some(0), flag_2: Some(1) }
 }
 /// Answer 3 cells: [owner+0x1354] 2, [owner+0x1358] 0.
 fn answer3() -> ClassCells {
-    ClassCells { ae32_ready_c: 2, ae32_ready_d: 0, ..answer1() }
+    ClassCells { claim_setup_first: 2, claim_setup_second: 0, ..answer1() }
 }
 const R0: RowCells = RowCells { fmt_cell_a: 0, b_cell_o: 0, word_cell_a: 0 };
 
@@ -163,8 +163,8 @@ fn dissolve_dropped_to_unread_renders_one_image() {
     assert!(!o.plan.contains("\tTo\tkind=input"), "{}", o.plan);
     assert_eq!(o.plan.matches("convert-from-source").count(), 1);
     // determinism
-    let o2 = run("ok2", &SETS_ELIDED, false, &extra(&["--class3-record", "0,1,3,02"]));
-    assert_eq!(o.words, o2.words);
+    let elided_out = run("ok2", &SETS_ELIDED, false, &extra(&["--class3-record", "0,1,3,02"]));
+    assert_eq!(o.words, elided_out.words);
 }
 
 #[test]
@@ -220,9 +220,9 @@ fn a_plan_that_reads_to_with_a_source_takes_two_images() {
     assert!(o.plan.contains("\tTo\tkind=input"), "{}", o.plan);
     assert_eq!(o.plan.matches("convert-from-source").count(), 2);
     // one image given with the count 1 is a mismatch
-    let o1 = run("t1", &SETS_DISSOLVE, true, &extra(&["--class3-record", "0,1,3,02"]));
-    assert_eq!(o1.rc, Some(2));
-    assert!(o1.err.contains("INPUT-CLASS-ALLOC-MISMATCH"), "{}", o1.err);
+    let dissolve_out = run("t1", &SETS_DISSOLVE, true, &extra(&["--class3-record", "0,1,3,02"]));
+    assert_eq!(dissolve_out.rc, Some(2));
+    assert!(dissolve_out.err.contains("INPUT-CLASS-ALLOC-MISMATCH"), "{}", dissolve_out.err);
 }
 
 #[test]

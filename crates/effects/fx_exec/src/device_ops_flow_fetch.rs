@@ -9,7 +9,7 @@
 
 use fx_common::nanop::NanOps;
 use fx_common::x86::cvtss2si32_rne;
-use fx_device::cl::{Arg as ClArg, Buffer};
+use fx_device::ocl::{Arg as ClArg, Buffer};
 use fx_device::{DevError, Session};
 use std::sync::Arc;
 
@@ -66,7 +66,7 @@ pub fn deriv_y_launch(s: &Arc<Session>, inp: &Buffer<f32>, out: &Buffer<f32>, he
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn warp_fetch_launch(s: &Arc<Session>, dx: &Buffer<f32>, dy: &Buffer<f32>, src: &Buffer<f32>, out: &Buffer<f32>, width: i32, height: i32, stride: i32, row0: i32, rows: i32, lo_bits: u32, margin_bits: u32) -> Result<(), DevError> {
+pub fn warp_fetch_launch(s: &Arc<Session>, delta_x: &Buffer<f32>, dy: &Buffer<f32>, src: &Buffer<f32>, out: &Buffer<f32>, width: i32, height: i32, stride: i32, row0: i32, rows: i32, lo_bits: u32, margin_bits: u32) -> Result<(), DevError> {
     let n = count(width, rows)?;
     if stride <= 0 || height <= 0 {
         return Err(unsup("stride and height must be positive"));
@@ -74,17 +74,17 @@ pub fn warp_fetch_launch(s: &Arc<Session>, dx: &Buffer<f32>, dy: &Buffer<f32>, s
     launch(s, 
         "flow_b_warp_fetch",
         n as usize,
-        &[dx.arg(), dy.arg(), src.arg(), out.arg(), ClArg::I32(width), ClArg::I32(height), ClArg::I32(stride), ClArg::I32(row0), ClArg::I32(rows), ClArg::U32(lo_bits), ClArg::U32(margin_bits), ClArg::U32(n)],
+        &[delta_x.arg(), dy.arg(), src.arg(), out.arg(), ClArg::I32(width), ClArg::I32(height), ClArg::I32(stride), ClArg::I32(row0), ClArg::I32(rows), ClArg::U32(lo_bits), ClArg::U32(margin_bits), ClArg::U32(n)],
     )
 }
 
 /// `scale_copy_model` over `n` elements (the planes are read as words, so a copy keeps every payload).
 pub fn scale_copy_launch(s: &Arc<Session>, src: &Buffer<f32>, dst: &Buffer<f32>, k_bits: u32, n: usize) -> Result<(), DevError> {
-    let n32 = u32::try_from(n).map_err(|_| unsup("element count outside 32 bits"))?;
+    let count_u32 = u32::try_from(n).map_err(|_| unsup("element count outside 32 bits"))?;
     if n == 0 {
         return Ok(());
     }
-    launch(s, "flow_b_scale_copy", n, &[src.arg(), dst.arg(), ClArg::U32(k_bits), ClArg::U32(n32)])
+    launch(s, "flow_b_scale_copy", n, &[src.arg(), dst.arg(), ClArg::U32(k_bits), ClArg::U32(count_u32)])
 }
 
 #[allow(clippy::too_many_arguments)]

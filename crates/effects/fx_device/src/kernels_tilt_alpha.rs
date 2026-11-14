@@ -10,8 +10,8 @@
 pub const TILT_ALPHA: &str = r#"
 /* MIRRORS_MUL_ADD: tilt_alpha::tilt_alpha_with (fms231, fnms213 in the scalar element; fma231, fms213 in the vector element) */
 
-float ta_fz(float r, float d, float s2, float s3) {
-    return isnan(r) ? nanx_pick3(d, s2, s3) : r;
+float ta_fz(float r, float d, float second, float third) {
+    return isnan(r) ? nanx_pick3(d, second, third) : r;
 }
 
 /* clamp shared by every element: a strictly negative value gives +0, else min(1.0, t) with the minss rule */

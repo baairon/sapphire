@@ -136,9 +136,9 @@ pub fn render(p: &Params, args: &[Block], outs: &mut [&mut [f32]]) -> Result<Vec
         }
         Pass::D => {
             // svc(0, 0, outs[0]); svc(esi = 1, edx = 0, rcx = outs[1])
-            let (m0, m1) = if m(8) { (1, 0) } else { (0, 1) };
-            svc(m0, 0, outs[0])?;
-            svc(m1, if m(9) { 1 } else { 0 }, outs[1])?;
+            let (svc_kind, bits_1) = if m(8) { (1, 0) } else { (0, 1) };
+            svc(svc_kind, 0, outs[0])?;
+            svc(bits_1, if m(9) { 1 } else { 0 }, outs[1])?;
         }
     }
     Ok(acts)

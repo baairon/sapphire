@@ -12,8 +12,8 @@
 /// The four owner cells written by the arm plus bit 3 of the definition byte [[owner]].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OwnerCells {
-    pub ae32_ready_c: u32,
-    pub ae32_ready_d: u32,
+    pub claim_setup_first: u32,
+    pub claim_setup_second: u32,
     pub late_out_c: u32,
     pub late_out_d: u32,
     pub bit3: bool,
@@ -52,11 +52,11 @@ pub fn setup_arm(def_dynamic: bool, bit2: bool, params: &[ParamView]) -> Result<
     // prelude (in)
     let mut c = if !def_dynamic {
         //  arm : [owner cell]=2, [owner cell]=0, bit3 set, [owner cell]=0, [owner cell]=0
-        OwnerCells { ae32_ready_c: 2, ae32_ready_d: 0, late_out_c: 0, late_out_d: 0, bit3: true }
+        OwnerCells { claim_setup_first: 2, claim_setup_second: 0, late_out_c: 0, late_out_d: 0, bit3: true }
     } else if !bit2 {
-        OwnerCells { ae32_ready_c: 1, ae32_ready_d: 0, late_out_c: 1, late_out_d: 1, bit3: false }
+        OwnerCells { claim_setup_first: 1, claim_setup_second: 0, late_out_c: 1, late_out_d: 1, bit3: false }
     } else {
-        OwnerCells { ae32_ready_c: 1, ae32_ready_d: 0, late_out_c: 0, late_out_d: 0, bit3: true }
+        OwnerCells { claim_setup_first: 1, claim_setup_second: 0, late_out_c: 0, late_out_d: 0, bit3: true }
     };
     // loop over the program's parameters in order 
     for p in params {
@@ -64,9 +64,9 @@ pub fn setup_arm(def_dynamic: bool, bit2: bool, params: &[ParamView]) -> Result<
         if opac {
             // 
             let v = param_int(p.value).ok_or(ArmError::ValueOutOfRange)?;
-            c.ae32_ready_c = v as u32;
+            c.claim_setup_first = v as u32;
             if v == 0 {
-                c.ae32_ready_d = 3;
+                c.claim_setup_second = 3;
                 c.bit3 = true;
             } else if v == 1 && !bit2 {
                 c.late_out_c = 1;
@@ -77,9 +77,9 @@ pub fn setup_arm(def_dynamic: bool, bit2: bool, params: &[ParamView]) -> Result<
             //  (any kind, including a kind 4 parameter with another name)
             let v = param_int(p.value).ok_or(ArmError::ValueOutOfRange)?;
             if v == 0 {
-                c.ae32_ready_d = 3;
+                c.claim_setup_second = 3;
             } else {
-                c.ae32_ready_d = 0;
+                c.claim_setup_second = 0;
             }
             if !bit2 {
                 c.late_out_d = 0;
@@ -101,8 +101,8 @@ pub struct CtxCells {
 
 pub fn ctx_init(o: &OwnerCells, prog_mode_word: u32, ctx_mode_cell: u32, dest_desc_mode: u32) -> CtxCells {
     // r8d = [owner] if non-zero, else [prog]; the mode byte is r8b.
-    let r8 = if o.ae32_ready_d != 0 { o.ae32_ready_d } else { prog_mode_word };
-    let mut mode = (r8 & 0xff) as u8;
+    let route_int_7 = if o.claim_setup_second != 0 { o.claim_setup_second } else { prog_mode_word };
+    let mut mode = (route_int_7 & 0xff) as u8;
     if mode == 2 {
         // every path rejoins (the cells below are always written)
         if ctx_mode_cell == 0 {
@@ -151,18 +151,18 @@ pub fn negotiate(prev_cell_a: u32, prog_opacity_bit: bool, n: Option<&Negotiatio
     if n.kind == 3 || !n.acquire_present || !n.suite_acquired || n.ret1 != 0 {
         return f;
     }
-    let mut ecx = false;
+    let mut found = false;
     if n.fmt == b"BGRA" && n.mode == 0xffff {
         f |= 0x8;
-        ecx = true;
+        found = true;
     }
     if n.fmt == b"ARGB" && n.mode == 0x8000 {
-        ecx = true;
+        found = true;
     }
     if !prog_opacity_bit && n.flag != 0 {
         return f & !0xc;
     }
-    if !ecx {
+    if !found {
         return f;
     }
     if n.ret2 != 0 {
@@ -179,20 +179,20 @@ pub fn negotiate(prev_cell_a: u32, prog_opacity_bit: bool, n: Option<&Negotiatio
 /// `a8[k]` the dword at [rbp+4k-0xa8] (a byte of the k-th host checkout result, written or zeroed).
 #[derive(Clone, Debug)]
 pub struct LateInputs {
-    pub ae32_ready_b: u32,
-    pub ae32_ready_a: u8,
+    pub claim_ready_in: u32,
+    pub claim_owner_mode: u8,
     pub prog_mode_word: u32,
     /// [prog] as the signed byte movsx reads it
     pub late_inputs_a: i8,
     pub rect_flag: Vec<u8>,
-    pub a8: Vec<u32>,
+    pub slot_marks: Vec<u32>,
 }
 
 /// The flag the stage keeps in [rbp] (stored later as byte [out] and dword [out_ptr]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LateOut {
-    pub ae32_ready_d: u32,
-    pub rbp_cell_a: u32,
+    pub claim_setup_second: u32,
+    pub held_word: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -206,43 +206,43 @@ pub enum LateError {
 /// or when [owner] is 3 and ([prog] is 3, or it is 2 and the checkout byte is non-zero, or it is 2 and the
 /// rectangle flag test above holds). Otherwise [rbp] = 0 and the cell is unchanged.
 pub fn later_stage(i: &LateInputs) -> Result<LateOut, LateError> {
-    let keep = LateOut { ae32_ready_d: i.ae32_ready_b, rbp_cell_a: 0 };
-    let set = LateOut { ae32_ready_d: 3, rbp_cell_a: 1 };
+    let keep = LateOut { claim_setup_second: i.claim_ready_in, held_word: 0 };
+    let set = LateOut { claim_setup_second: 3, held_word: 1 };
     // cmp [owner cell],3; je 
-    if i.ae32_ready_b == 3 {
+    if i.claim_ready_in == 3 {
         return Ok(set);
     }
     let idx = |i_: &LateInputs| -> Result<usize, LateError> {
         let k = i_.late_inputs_a;
-        if k < 0 || (k as usize) >= i_.a8.len() || (k as usize) >= i_.rect_flag.len() {
+        if k < 0 || (k as usize) >= i_.slot_marks.len() || (k as usize) >= i_.rect_flag.len() {
             Err(LateError::IndexOutOfRange)
         } else {
             Ok(k as usize)
         }
     };
-    let eax = i.prog_mode_word;
-    if i.ae32_ready_a == 3 {
+    let mode_word = i.prog_mode_word;
+    if i.claim_owner_mode == 3 {
         // 
-        if eax == 3 {
+        if mode_word == 3 {
             return Ok(set);
         }
-        if eax != 2 {
+        if mode_word != 2 {
             return Ok(keep);
         }
         let k = idx(i)?;
-        if i.a8[k] != 0 {
+        if i.slot_marks[k] != 0 {
             return Ok(set);
         }
         // jmp : the same test as the arm without reloading rcx
-        return Ok(if i.rect_flag[k] == 1 || i.a8[k] != 0 { set } else { keep });
+        return Ok(if i.rect_flag[k] == 1 || i.slot_marks[k] != 0 { set } else { keep });
     }
-    if eax == 2 {
+    if mode_word == 2 {
         // rect flag == 1 stores; else a8 == 0 does not store, a8 != 0 stores
         let k = idx(i)?;
         if i.rect_flag[k] == 1 {
             return Ok(set);
         }
-        return Ok(if i.a8[k] == 0 { keep } else { set });
+        return Ok(if i.slot_marks[k] == 0 { keep } else { set });
     }
     Ok(keep)
 }
@@ -290,7 +290,7 @@ mod tests {
                 params.push(p("opacity", 4, opac));
             }
             let (o, c) = derive(def_dynamic, late_out_a >= 0 && (late_out_a & 4) != 0, &params, 1, 1, 0).unwrap();
-            assert_eq!(vec![o.ae32_ready_c, o.ae32_ready_d, o.late_out_c, o.late_out_d], rec, "{}: owner cells", run);
+            assert_eq!(vec![o.claim_setup_first, o.claim_setup_second, o.late_out_c, o.late_out_d], rec, "{}: owner cells", run);
             if ctx_cells_d >= 0 {
                 assert_eq!(c.ctx_cells_d as i64, ctx_cells_d, "{}: ctx_postdiv_cell", run);
                 ctx_postdiv_checked += 1;
@@ -306,38 +306,38 @@ mod tests {
     fn time_warp_opacity_output_opacity_pairs() {
         for (op, out, want) in [(1.0f32, 0.0f32, [1, 3, 1, 0]), (0.0, 0.0, [0, 3, 0, 0]), (2.0, 0.0, [2, 3, 0, 0]), (1.0, 1.0, [1, 0, 1, 0])] {
             let o = setup_arm(false, false, &[p("opacity", 4, op), p("output_opacity", 4, out)]).unwrap();
-            assert_eq!([o.ae32_ready_c, o.ae32_ready_d, o.late_out_c, o.late_out_d], want, "opacity {} output_opacity {}", op, out);
+            assert_eq!([o.claim_setup_first, o.claim_setup_second, o.late_out_c, o.late_out_d], want, "opacity {} output_opacity {}", op, out);
         }
         // the opacity-only list (the pre-TWR1 fx_run list) leaves [owner] 0 on the first three pairs: the defect the pairs discriminate
         let o = setup_arm(false, false, &[p("opacity", 4, 1.0)]).unwrap();
-        assert_eq!([o.ae32_ready_c, o.ae32_ready_d, o.late_out_c, o.late_out_d], [1, 0, 1, 1]);
+        assert_eq!([o.claim_setup_first, o.claim_setup_second, o.late_out_c, o.late_out_d], [1, 0, 1, 1]);
     }
 
     #[test]
     fn arm_table() {
         // no opacity parameter, no dynamic: the arm in every bit 2 state
         let a = setup_arm(false, false, &[]).unwrap();
-        assert_eq!(a, OwnerCells { ae32_ready_c: 2, ae32_ready_d: 0, late_out_c: 0, late_out_d: 0, bit3: true });
+        assert_eq!(a, OwnerCells { claim_setup_first: 2, claim_setup_second: 0, late_out_c: 0, late_out_d: 0, bit3: true });
         // opacity popup = 1 (Normal), bit 2 clear: v = 1
         let b = setup_arm(false, false, &[p("opacity", 4, 1.0)]).unwrap();
-        assert_eq!((b.ae32_ready_c, b.late_out_c, b.late_out_d, b.bit3), (1, 1, 1, false));
+        assert_eq!((b.claim_setup_first, b.late_out_c, b.late_out_d, b.bit3), (1, 1, 1, false));
         // bit 2 set: nothing more
         let b2 = setup_arm(false, true, &[p("opacity", 4, 1.0)]).unwrap();
-        assert_eq!((b2.ae32_ready_c, b2.late_out_c, b2.late_out_d, b2.bit3), (1, 0, 0, true));
+        assert_eq!((b2.claim_setup_first, b2.late_out_c, b2.late_out_d, b2.bit3), (1, 0, 0, true));
         // opacity 0 (All_Opaque): 1358 = 3, v = 0
         let z = setup_arm(false, false, &[p("opacity", 4, 0.0)]).unwrap();
-        assert_eq!((z.ae32_ready_c, z.ae32_ready_d, z.late_out_c, z.late_out_d, z.bit3), (0, 3, 0, 0, true));
+        assert_eq!((z.claim_setup_first, z.claim_setup_second, z.late_out_c, z.late_out_d, z.bit3), (0, 3, 0, 0, true));
         // opacity 2 (As_Premult): 1354 = 2, v stays 0
         let t = setup_arm(false, false, &[p("opacity", 4, 2.0)]).unwrap();
-        assert_eq!((t.ae32_ready_c, t.late_out_c, t.late_out_d), (2, 0, 0));
+        assert_eq!((t.claim_setup_first, t.late_out_c, t.late_out_d), (2, 0, 0));
         // kind 5 named opacity is not the arm
         let k = setup_arm(false, false, &[p("opacity", 5, 1.0)]).unwrap();
         assert_eq!(k, a);
         // dynamic: ordinary arm
         let d = setup_arm(true, false, &[]).unwrap();
-        assert_eq!((d.ae32_ready_c, d.late_out_c, d.late_out_d, d.bit3), (1, 1, 1, false));
+        assert_eq!((d.claim_setup_first, d.late_out_c, d.late_out_d, d.bit3), (1, 1, 1, false));
         let d2 = setup_arm(true, true, &[]).unwrap();
-        assert_eq!((d2.ae32_ready_c, d2.late_out_c, d2.late_out_d, d2.bit3), (1, 0, 0, true));
+        assert_eq!((d2.claim_setup_first, d2.late_out_c, d2.late_out_d, d2.bit3), (1, 0, 0, true));
         // NaN and out-of-range refused
         assert_eq!(setup_arm(false, false, &[p("opacity", 4, f32::NAN)]), Err(ArmError::ValueOutOfRange));
         assert_eq!(setup_arm(false, false, &[p("opacity", 4, 3.0e9)]), Err(ArmError::ValueOutOfRange));
@@ -404,21 +404,21 @@ mod tests {
         assert_eq!(negotiate(0x10, true, Some(&n)), 0x10);
     }
 
-    fn late(ae32_ready_b: u32, ae32_ready_a: u8, g3_in_a: u32, late_inputs_a: i8, rect: [u8; 5], a8: [u32; 5]) -> LateInputs {
-        LateInputs { ae32_ready_b, ae32_ready_a, prog_mode_word: g3_in_a, late_inputs_a, rect_flag: rect.to_vec(), a8: a8.to_vec() }
+    fn late(claim_ready_in: u32, claim_owner_mode: u8, g3_in_a: u32, late_inputs_a: i8, rect: [u8; 5], slot_marks: [u32; 5]) -> LateInputs {
+        LateInputs { claim_ready_in, claim_owner_mode, prog_mode_word: g3_in_a, late_inputs_a, rect_flag: rect.to_vec(), slot_marks: slot_marks.to_vec() }
     }
 
     #[test]
     fn later_stage_recorded_cells() {
-        // records (pvHS, Hue_Sat_Bright_Autogen, two pre-renders): ae32_ready_b 0, prog_mode_word 2, ae32_ready_a 4, late_inputs_a 0,
+        // records (pvHS, Hue_Sat_Bright_Autogen, two pre-renders): claim_ready_in 0, prog_mode_word 2, claim_owner_mode 4, late_inputs_a 0,
         // rect flag[0] 0, a8[0] 0: no store, the recorded [owner cell] stays 0 at both entries (MEASURED).
         let a = later_stage(&late(0, 4, 2, 0, [0, 1, 86, 0, 0], [0, 0, 2146420336, 0, 275190146])).unwrap();
-        assert_eq!(a, LateOut { ae32_ready_d: 0, rbp_cell_a: 0 });
+        assert_eq!(a, LateOut { claim_setup_second: 0, held_word: 0 });
         let b = later_stage(&late(0, 4, 2, 0, [0, 1, 0, 0, 0], [0, 0, 1621312320, 0, 1621178880])).unwrap();
-        assert_eq!(b, LateOut { ae32_ready_d: 0, rbp_cell_a: 0 });
+        assert_eq!(b, LateOut { claim_setup_second: 0, held_word: 0 });
         // records (pvBL, Blur_Color, prog_mode_word 1): never stores
         let c = later_stage(&late(0, 4, 1, 0, [0, 1, 64, 0, 0], [0, 0, 1624846784, 0, 1624802816])).unwrap();
-        assert_eq!(c, LateOut { ae32_ready_d: 0, rbp_cell_a: 0 });
+        assert_eq!(c, LateOut { claim_setup_second: 0, held_word: 0 });
     }
 
     #[test]
@@ -426,25 +426,25 @@ mod tests {
         let z = [0u32; 5];
         let r0 = [0u8; 5];
         // already 3 stays 3 and sets the flag
-        assert_eq!(later_stage(&late(3, 4, 1, 0, r0, z)).unwrap(), LateOut { ae32_ready_d: 3, rbp_cell_a: 1 });
+        assert_eq!(later_stage(&late(3, 4, 1, 0, r0, z)).unwrap(), LateOut { claim_setup_second: 3, held_word: 1 });
         // prog_mode_word 2, rect flag 1 at index 0: store
-        assert_eq!(later_stage(&late(0, 4, 2, 0, [1, 0, 0, 0, 0], z)).unwrap().ae32_ready_d, 3);
+        assert_eq!(later_stage(&late(0, 4, 2, 0, [1, 0, 0, 0, 0], z)).unwrap().claim_setup_second, 3);
         // prog_mode_word 2, checkout byte non-zero at the index: store
-        assert_eq!(later_stage(&late(0, 4, 2, 1, r0, [0, 7, 0, 0, 0])).unwrap().ae32_ready_d, 3);
+        assert_eq!(later_stage(&late(0, 4, 2, 1, r0, [0, 7, 0, 0, 0])).unwrap().claim_setup_second, 3);
         // prog_mode_word 2, both clear: no store
-        assert_eq!(later_stage(&late(0, 4, 2, 1, r0, z)).unwrap().ae32_ready_d, 0);
+        assert_eq!(later_stage(&late(0, 4, 2, 1, r0, z)).unwrap().claim_setup_second, 0);
         // the index is the signed byte [prog]: negative or past the arrays is refused
         assert_eq!(later_stage(&late(0, 4, 2, -1, r0, z)), Err(LateError::IndexOutOfRange));
         assert_eq!(later_stage(&late(0, 4, 2, 5, r0, z)), Err(LateError::IndexOutOfRange));
         // prog_mode_word 3 stores only when [owner] is 3
-        assert_eq!(later_stage(&late(0, 4, 3, 0, r0, z)).unwrap().ae32_ready_d, 0);
-        assert_eq!(later_stage(&late(0, 3, 3, 0, r0, z)).unwrap().ae32_ready_d, 3);
-        // ae32_ready_a 3 with prog_mode_word 2: checkout byte non-zero stores; else the rect flag decides
-        assert_eq!(later_stage(&late(0, 3, 2, 0, r0, [1, 0, 0, 0, 0])).unwrap().ae32_ready_d, 3);
-        assert_eq!(later_stage(&late(0, 3, 2, 0, [1, 0, 0, 0, 0], z)).unwrap().ae32_ready_d, 3);
-        assert_eq!(later_stage(&late(0, 3, 2, 0, r0, z)).unwrap().ae32_ready_d, 0);
-        // ae32_ready_a 3 with prog_mode_word 1: no store
-        assert_eq!(later_stage(&late(0, 3, 1, 0, r0, z)).unwrap().ae32_ready_d, 0);
+        assert_eq!(later_stage(&late(0, 4, 3, 0, r0, z)).unwrap().claim_setup_second, 0);
+        assert_eq!(later_stage(&late(0, 3, 3, 0, r0, z)).unwrap().claim_setup_second, 3);
+        // claim_owner_mode 3 with prog_mode_word 2: checkout byte non-zero stores; else the rect flag decides
+        assert_eq!(later_stage(&late(0, 3, 2, 0, r0, [1, 0, 0, 0, 0])).unwrap().claim_setup_second, 3);
+        assert_eq!(later_stage(&late(0, 3, 2, 0, [1, 0, 0, 0, 0], z)).unwrap().claim_setup_second, 3);
+        assert_eq!(later_stage(&late(0, 3, 2, 0, r0, z)).unwrap().claim_setup_second, 0);
+        // claim_owner_mode 3 with prog_mode_word 1: no store
+        assert_eq!(later_stage(&late(0, 3, 1, 0, r0, z)).unwrap().claim_setup_second, 0);
     }
 
     /// The mode byte seen by the second call with the stage in place: a stored 3 turns ctx into 3
@@ -453,7 +453,7 @@ mod tests {
     fn later_stage_feeds_ctx_init() {
         let mut o = setup_arm(false, false, &[]).unwrap();
         let l = later_stage(&late(0, 4, 2, 0, [1, 0, 0, 0, 0], [0; 5])).unwrap();
-        o.ae32_ready_d = l.ae32_ready_d;
+        o.claim_setup_second = l.claim_setup_second;
         let c = ctx_init(&o, 2, 1, 0);
         assert_eq!(c.ctx_cells_a, 3);
         // without the stage the mode byte would come from prog_mode_word (2, adjusted by ctx_mode_cell / dest_desc_mode)
@@ -461,7 +461,7 @@ mod tests {
         assert_eq!(ctx_init(&o0, 2, 1, 0).ctx_cells_a, 2);
         // [owner cell] = 1 and [owner cell] = 3 both are non-zero and select the cell as the mode: `!= 0` and `> 1` differ at 1 (not reachable: [owner cell] is 0 or 3)
         let mut o1 = o0;
-        o1.ae32_ready_d = 1;
+        o1.claim_setup_second = 1;
         assert_eq!(ctx_init(&o1, 2, 1, 0).ctx_cells_a, 1);
     }
 }

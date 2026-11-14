@@ -7,7 +7,7 @@
 //! by device: that number is the `N` of `--device gpu=N`. No arithmetic beyond integer
 //! comparisons.
 
-use crate::cl::{self, ClError};
+use crate::ocl::{self, ClError};
 
 /// What one device reports. Built by [`read`] from a live device or written by hand in tests.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -65,13 +65,13 @@ impl DeviceInfo {
 
     /// `gpu`, `cpu`, `accelerator`, `custom` or `other` from the type bits.
     pub fn type_name(&self) -> &'static str {
-        if self.device_type & cl::CL_DEVICE_TYPE_GPU != 0 {
+        if self.device_type & ocl::CL_DEVICE_TYPE_GPU != 0 {
             "gpu"
-        } else if self.device_type & cl::CL_DEVICE_TYPE_CPU != 0 {
+        } else if self.device_type & ocl::CL_DEVICE_TYPE_CPU != 0 {
             "cpu"
-        } else if self.device_type & cl::CL_DEVICE_TYPE_ACCELERATOR != 0 {
+        } else if self.device_type & ocl::CL_DEVICE_TYPE_ACCELERATOR != 0 {
             "accelerator"
-        } else if self.device_type & cl::CL_DEVICE_TYPE_CUSTOM != 0 {
+        } else if self.device_type & ocl::CL_DEVICE_TYPE_CUSTOM != 0 {
             "custom"
         } else {
             "other"
@@ -89,14 +89,14 @@ pub struct Probe {
 
 /// The fp config bits by name, in bit order.
 pub const FP_FLAGS: &[(u64, &str)] = &[
-    (cl::CL_FP_DENORM, "DENORM"),
-    (cl::CL_FP_INF_NAN, "INF_NAN"),
-    (cl::CL_FP_ROUND_TO_NEAREST, "ROUND_TO_NEAREST"),
-    (cl::CL_FP_ROUND_TO_ZERO, "ROUND_TO_ZERO"),
-    (cl::CL_FP_ROUND_TO_INF, "ROUND_TO_INF"),
-    (cl::CL_FP_FMA, "FMA"),
-    (cl::CL_FP_SOFT_FLOAT, "SOFT_FLOAT"),
-    (cl::CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT, "CORRECTLY_ROUNDED_DIVIDE_SQRT"),
+    (ocl::CL_FP_DENORM, "DENORM"),
+    (ocl::CL_FP_INF_NAN, "INF_NAN"),
+    (ocl::CL_FP_ROUND_TO_NEAREST, "ROUND_TO_NEAREST"),
+    (ocl::CL_FP_ROUND_TO_ZERO, "ROUND_TO_ZERO"),
+    (ocl::CL_FP_ROUND_TO_INF, "ROUND_TO_INF"),
+    (ocl::CL_FP_FMA, "FMA"),
+    (ocl::CL_FP_SOFT_FLOAT, "SOFT_FLOAT"),
+    (ocl::CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT, "CORRECTLY_ROUNDED_DIVIDE_SQRT"),
 ];
 
 /// The names of the bits set in `bits`, plus `0x...` for bits no name covers.
@@ -111,15 +111,15 @@ pub fn fp_flags(bits: u64) -> Vec<String> {
 
 /// Single precision bits a device must report.
 pub const SINGLE_REQUIRED: &[(u64, &str)] = &[
-    (cl::CL_FP_DENORM, "DENORM"),
-    (cl::CL_FP_INF_NAN, "INF_NAN"),
-    (cl::CL_FP_ROUND_TO_NEAREST, "ROUND_TO_NEAREST"),
-    (cl::CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT, "CORRECTLY_ROUNDED_DIVIDE_SQRT"),
+    (ocl::CL_FP_DENORM, "DENORM"),
+    (ocl::CL_FP_INF_NAN, "INF_NAN"),
+    (ocl::CL_FP_ROUND_TO_NEAREST, "ROUND_TO_NEAREST"),
+    (ocl::CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT, "CORRECTLY_ROUNDED_DIVIDE_SQRT"),
 ];
 
 /// Double precision bits a device must report.
 pub const DOUBLE_REQUIRED: &[(u64, &str)] =
-    &[(cl::CL_FP_DENORM, "DENORM"), (cl::CL_FP_INF_NAN, "INF_NAN"), (cl::CL_FP_ROUND_TO_NEAREST, "ROUND_TO_NEAREST")];
+    &[(ocl::CL_FP_DENORM, "DENORM"), (ocl::CL_FP_INF_NAN, "INF_NAN"), (ocl::CL_FP_ROUND_TO_NEAREST, "ROUND_TO_NEAREST")];
 
 /// `major.minor` after `prefix` at the start of `text` (`OpenCL 3.0 CUDA` with prefix `OpenCL `
 /// gives `(3, 0)`); `None` when the text has another shape.
@@ -198,7 +198,7 @@ pub fn memory_budget(info: &DeviceInfo) -> u64 {
 /// Reads what `device` reports. A failed query leaves its field at the default and adds a line
 /// to `errors`; the double precision config of a device without `cl_khr_fp64` may fail and
 /// counts as 0.
-pub fn read(device: &cl::Device, index: usize, platform: &str, platform_version: &str) -> DeviceInfo {
+pub fn read(device: &ocl::Device, index: usize, platform: &str, platform_version: &str) -> DeviceInfo {
     let mut info = DeviceInfo { index, platform: platform.to_string(), platform_version: platform_version.to_string(), ..Default::default() };
     let mut errors = Vec::new();
     macro_rules! get {
@@ -212,27 +212,27 @@ pub fn read(device: &cl::Device, index: usize, platform: &str, platform_version:
             }
         };
     }
-    info.name = get!(info_string, cl::CL_DEVICE_NAME, "CL_DEVICE_NAME");
-    info.vendor = get!(info_string, cl::CL_DEVICE_VENDOR, "CL_DEVICE_VENDOR");
-    info.version = get!(info_string, cl::CL_DEVICE_VERSION, "CL_DEVICE_VERSION");
-    info.driver = get!(info_string, cl::CL_DRIVER_VERSION, "CL_DRIVER_VERSION");
-    info.c_version = get!(info_string, cl::CL_DEVICE_OPENCL_C_VERSION, "CL_DEVICE_OPENCL_C_VERSION");
-    info.profile = get!(info_string, cl::CL_DEVICE_PROFILE, "CL_DEVICE_PROFILE");
-    info.device_type = get!(info_u64, cl::CL_DEVICE_TYPE, "CL_DEVICE_TYPE");
-    info.little_endian = get!(info_bool, cl::CL_DEVICE_ENDIAN_LITTLE, "CL_DEVICE_ENDIAN_LITTLE");
-    info.available = get!(info_bool, cl::CL_DEVICE_AVAILABLE, "CL_DEVICE_AVAILABLE");
-    info.compiler_available = get!(info_bool, cl::CL_DEVICE_COMPILER_AVAILABLE, "CL_DEVICE_COMPILER_AVAILABLE");
-    info.global_memory = get!(info_u64, cl::CL_DEVICE_GLOBAL_MEM_SIZE, "CL_DEVICE_GLOBAL_MEM_SIZE");
-    info.max_allocation = get!(info_u64, cl::CL_DEVICE_MAX_MEM_ALLOC_SIZE, "CL_DEVICE_MAX_MEM_ALLOC_SIZE");
-    info.unified_memory = get!(info_bool, cl::CL_DEVICE_HOST_UNIFIED_MEMORY, "CL_DEVICE_HOST_UNIFIED_MEMORY");
-    info.compute_units = get!(info_u32, cl::CL_DEVICE_MAX_COMPUTE_UNITS, "CL_DEVICE_MAX_COMPUTE_UNITS");
-    let extensions: String = get!(info_string, cl::CL_DEVICE_EXTENSIONS, "CL_DEVICE_EXTENSIONS");
+    info.name = get!(info_string, ocl::CL_DEVICE_NAME, "CL_DEVICE_NAME");
+    info.vendor = get!(info_string, ocl::CL_DEVICE_VENDOR, "CL_DEVICE_VENDOR");
+    info.version = get!(info_string, ocl::CL_DEVICE_VERSION, "CL_DEVICE_VERSION");
+    info.driver = get!(info_string, ocl::CL_DRIVER_VERSION, "CL_DRIVER_VERSION");
+    info.c_version = get!(info_string, ocl::CL_DEVICE_OPENCL_C_VERSION, "CL_DEVICE_OPENCL_C_VERSION");
+    info.profile = get!(info_string, ocl::CL_DEVICE_PROFILE, "CL_DEVICE_PROFILE");
+    info.device_type = get!(info_u64, ocl::CL_DEVICE_TYPE, "CL_DEVICE_TYPE");
+    info.little_endian = get!(info_bool, ocl::CL_DEVICE_ENDIAN_LITTLE, "CL_DEVICE_ENDIAN_LITTLE");
+    info.available = get!(info_bool, ocl::CL_DEVICE_AVAILABLE, "CL_DEVICE_AVAILABLE");
+    info.compiler_available = get!(info_bool, ocl::CL_DEVICE_COMPILER_AVAILABLE, "CL_DEVICE_COMPILER_AVAILABLE");
+    info.global_memory = get!(info_u64, ocl::CL_DEVICE_GLOBAL_MEM_SIZE, "CL_DEVICE_GLOBAL_MEM_SIZE");
+    info.max_allocation = get!(info_u64, ocl::CL_DEVICE_MAX_MEM_ALLOC_SIZE, "CL_DEVICE_MAX_MEM_ALLOC_SIZE");
+    info.unified_memory = get!(info_bool, ocl::CL_DEVICE_HOST_UNIFIED_MEMORY, "CL_DEVICE_HOST_UNIFIED_MEMORY");
+    info.compute_units = get!(info_u32, ocl::CL_DEVICE_MAX_COMPUTE_UNITS, "CL_DEVICE_MAX_COMPUTE_UNITS");
+    let extensions: String = get!(info_string, ocl::CL_DEVICE_EXTENSIONS, "CL_DEVICE_EXTENSIONS");
     info.extensions = extensions.split_whitespace().map(str::to_string).collect();
     if info.has_extension("cl_amd_device_attribute_query") {
-        info.board = device.info_string(cl::CL_DEVICE_BOARD_NAME_AMD).unwrap_or_default();
+        info.board = device.info_string(ocl::CL_DEVICE_BOARD_NAME_AMD).unwrap_or_default();
     }
-    info.single_fp = get!(info_u64, cl::CL_DEVICE_SINGLE_FP_CONFIG, "CL_DEVICE_SINGLE_FP_CONFIG");
-    info.double_fp = match device.info_u64(cl::CL_DEVICE_DOUBLE_FP_CONFIG) {
+    info.single_fp = get!(info_u64, ocl::CL_DEVICE_SINGLE_FP_CONFIG, "CL_DEVICE_SINGLE_FP_CONFIG");
+    info.double_fp = match device.info_u64(ocl::CL_DEVICE_DOUBLE_FP_CONFIG) {
         Ok(v) => v,
         Err(_) if !info.has_extension("cl_khr_fp64") => 0,
         Err(e) => {
@@ -245,12 +245,12 @@ pub fn read(device: &cl::Device, index: usize, platform: &str, platform_version:
 }
 
 /// Every device of `api` with its handle, numbered as [`probe`] numbers them.
-pub fn devices(api: &'static cl::Api) -> Result<(Vec<(cl::Device, DeviceInfo)>, Vec<String>), ClError> {
+pub fn devices(api: &'static ocl::Api) -> Result<(Vec<(ocl::Device, DeviceInfo)>, Vec<String>), ClError> {
     let mut out = Vec::new();
     let mut errors = Vec::new();
-    for (p, platform) in cl::platforms(api)?.into_iter().enumerate() {
-        let name = platform.info_string(cl::CL_PLATFORM_NAME).unwrap_or_else(|e| format!("platform {p} ({e})"));
-        let version = platform.info_string(cl::CL_PLATFORM_VERSION).unwrap_or_default();
+    for (p, platform) in ocl::platforms(api)?.into_iter().enumerate() {
+        let name = platform.info_string(ocl::CL_PLATFORM_NAME).unwrap_or_else(|e| format!("platform {p} ({e})"));
+        let version = platform.info_string(ocl::CL_PLATFORM_VERSION).unwrap_or_default();
         match platform.devices() {
             Ok(list) => {
                 for device in list {
@@ -267,20 +267,20 @@ pub fn devices(api: &'static cl::Api) -> Result<(Vec<(cl::Device, DeviceInfo)>, 
 /// Probes the system runtime. `Err` only when no OpenCL runtime can be loaded or the platform list
 /// itself fails; a runtime with no platform gives an empty probe.
 pub fn probe() -> Result<Probe, ClError> {
-    probe_api(cl::runtime()?)
+    probe_api(ocl::runtime()?)
 }
 
 /// [`probe`] over a given runtime.
-pub fn probe_api(api: &'static cl::Api) -> Result<Probe, ClError> {
-    let _create = cl::serialize_creation();
+pub fn probe_api(api: &'static ocl::Api) -> Result<Probe, ClError> {
+    let _create = ocl::serialize_creation();
     let (list, errors) = devices(api)?;
     Ok(Probe { devices: list.into_iter().map(|(_, info)| info).collect(), errors })
 }
 
 /// The live device numbered `index` and what it reports.
-pub fn open(index: usize) -> Result<(cl::Device, DeviceInfo), ClError> {
-    let _create = cl::serialize_creation();
-    let (mut list, _) = devices(cl::runtime()?)?;
+pub fn open(index: usize) -> Result<(ocl::Device, DeviceInfo), ClError> {
+    let _create = ocl::serialize_creation();
+    let (mut list, _) = devices(ocl::runtime()?)?;
     if index >= list.len() {
         return Err(ClError::Usage(format!("no OpenCL device {index} ({} listed)", list.len())));
     }

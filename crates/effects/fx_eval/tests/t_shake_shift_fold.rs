@@ -1,7 +1,7 @@
 //! The constant fold of shake_shift against the crate's own body run at the same constant arguments.
 use fx_eval::compile::ArgView2;
 use fx_eval::fold::{fold_kind, fold_lanes};
-use shake_shift::body::{shake_shift_body, Config, Frame, Globals, Params, TAB_LEN};
+use shake_shift::body::{shake_shift_body, Config, Globals, Params, TAB_LEN};
 
 fn s(x: f32) -> ArgView2 {
     ArgView2 { is_const: true, lanes: [x; 4], n: 1, elnum: Some(1) }
@@ -12,8 +12,8 @@ fn crate_value(a: &[f32; 12]) -> f32 {
     let t = shake_shift::weights::build_avx();
     let scale = shake_shift::weights::scale_from_cutoff(t.cutoff.expect("the weight table ends in a zero entry"));
     let mut g = Globals { guard: 0, tab: vec![[0; 3]; TAB_LEN], tail: [0; 3], weights: t.float, scale };
-    let p = Params { p4c: a[0], p7c: a[1], pac: a[2], pdc: a[3], p10c: a[4], p13c: a[5], p16c: a[6], p19c: a[7], p1cc: a[8], p1fc: a[9], p22c: a[10], p25c: a[11] };
-    shake_shift_body(&p, &Config::default(), &mut g, &mut shake_shift::RefServices::new(), &mut Frame::new())
+    let p = Params { seed_x: a[0], time: a[1], amp_x: a[2], rate_x: a[3], sine_amp: a[4], sine_freq: a[5], amp_y: a[6], rate_y: a[7], seed_y: a[8], route: a[9], limit_gap: a[10], gain: a[11] };
+    shake_shift_body(&p, &Config::default(), &mut g, &mut shake_shift::RefServices::new())
 }
 
 fn cases() -> Vec<[f32; 12]> {

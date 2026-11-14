@@ -42,22 +42,22 @@ float rtp_mul(float x, float y) {
     return isnan(r) ? rtp_pick2(x, y) : r;
 }
 
-/* vfmadd213ss: d * s2 + s3 */
-float rtp_fma213(float d, float s2, float s3) {
-    float r = fma(d, s2, s3);
-    return isnan(r) ? rtp_pick3(d, s2, s3) : r;
+/* vfmadd213ss: d * second + third */
+float rtp_fma213(float d, float second, float third) {
+    float r = fma(d, second, third);
+    return isnan(r) ? rtp_pick3(d, second, third) : r;
 }
 
-/* vfmsub213ss: d * s2 - s3 */
-float rtp_fms213(float d, float s2, float s3) {
-    float r = fma(d, s2, -s3);
-    return isnan(r) ? rtp_pick3(d, s2, s3) : r;
+/* vfmsub213ss: d * second - third */
+float rtp_fms213(float d, float second, float third) {
+    float r = fma(d, second, -third);
+    return isnan(r) ? rtp_pick3(d, second, third) : r;
 }
 
-/* vfnmadd213ss: -(d * s2) + s3 */
-float rtp_fnma213(float d, float s2, float s3) {
-    float r = fma(-d, s2, s3);
-    return isnan(r) ? rtp_pick3(d, s2, s3) : r;
+/* vfnmadd213ss: -(d * second) + third */
+float rtp_fnma213(float d, float second, float third) {
+    float r = fma(-d, second, third);
+    return isnan(r) ? rtp_pick3(d, second, third) : r;
 }
 
 float rtp_floor(float v) {
@@ -261,14 +261,14 @@ void rtp_sextant(float hh, float p, float v, uint vb, __private uint* out) {
 }
 
 /* One pixel of hsv_to_rgb::pixel (plane form) */
-__kernel void rtp_hsv_to_rgb(__global const float* hp, __global const float* sp, __global const float* vp,
-                             __global float* rp, __global float* gp, __global float* bp, uint n) {
+__kernel void rtp_hsv_to_rgb(__global const float* hp, __global const float* sat_plane, __global const float* vp,
+                             __global float* rp, __global float* gp, __global float* blue_plane, uint n) {
     size_t i = get_global_id(0);
     if (i >= n) {
         return;
     }
     float h = hp[i];
-    float s = sp[i];
+    float s = sat_plane[i];
     float v = vp[i];
     uint vb = as_uint(v);
     uint o[3];
@@ -287,6 +287,6 @@ __kernel void rtp_hsv_to_rgb(__global const float* hp, __global const float* sp,
     }
     rp[i] = as_float(o[0]);
     gp[i] = as_float(o[1]);
-    bp[i] = as_float(o[2]);
+    blue_plane[i] = as_float(o[2]);
 }
 "#;

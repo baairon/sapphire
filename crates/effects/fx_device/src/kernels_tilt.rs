@@ -23,19 +23,19 @@ float tl_flip(float x) {
     return as_float(as_uint(x) ^ 0x80000000u);
 }
 
-/* fused step with the NaN priority d, s2, s3 of fx_common::nanop */
-float tl_fz(float r, float d, float s2, float s3) {
-    return isnan(r) ? nanx_pick3(d, s2, s3) : r;
+/* fused step with the NaN priority d, second, third of fx_common::nanop */
+float tl_fz(float r, float d, float second, float third) {
+    return isnan(r) ? nanx_pick3(d, second, third) : r;
 }
-float tl_fma213(float d, float s2, float s3) { return tl_fz(fma(d, s2, s3), d, s2, s3); }
-float tl_fma231(float d, float s2, float s3) { return tl_fz(fma(s2, s3, d), d, s2, s3); }
-float tl_fma132(float d, float s2, float s3) { return tl_fz(fma(d, s3, s2), d, s2, s3); }
-float tl_fms213(float d, float s2, float s3) { return tl_fz(fma(d, s2, -s3), d, s2, s3); }
-float tl_fms231(float d, float s2, float s3) { return tl_fz(fma(s2, s3, -d), d, s2, s3); }
-float tl_fms132(float d, float s2, float s3) { return tl_fz(fma(d, s3, -s2), d, s2, s3); }
-float tl_fnma213(float d, float s2, float s3) { return tl_fz(fma(-d, s2, s3), d, s2, s3); }
-float tl_fnma231(float d, float s2, float s3) { return tl_fz(fma(-s2, s3, d), d, s2, s3); }
-float tl_fnms213(float d, float s2, float s3) { return tl_fz(fma(-d, s2, -s3), d, s2, s3); }
+float tl_fma213(float d, float second, float third) { return tl_fz(fma(d, second, third), d, second, third); }
+float tl_fma231(float d, float second, float third) { return tl_fz(fma(second, third, d), d, second, third); }
+float tl_fma132(float d, float second, float third) { return tl_fz(fma(d, third, second), d, second, third); }
+float tl_fms213(float d, float second, float third) { return tl_fz(fma(d, second, -third), d, second, third); }
+float tl_fms231(float d, float second, float third) { return tl_fz(fma(second, third, -d), d, second, third); }
+float tl_fms132(float d, float second, float third) { return tl_fz(fma(d, third, -second), d, second, third); }
+float tl_fnma213(float d, float second, float third) { return tl_fz(fma(-d, second, third), d, second, third); }
+float tl_fnma231(float d, float second, float third) { return tl_fz(fma(-second, third, d), d, second, third); }
+float tl_fnms213(float d, float second, float third) { return tl_fz(fma(-d, second, -third), d, second, third); }
 
 /* tilt::clamp: a NaN is quieted, otherwise the double precision clamp to [-63.9, 63.9] */
 float tl_clamp(float x) {
@@ -62,7 +62,7 @@ float tl_invd(float den, int ca_positive, float hm_ca, float cos_over_persp, flo
     return tl_div(cos_over_persp, tl_flip(den));
 }
 
-void tilt_v_general(__global const uint* pr, float xv, float yv, float* o1, float* o2) {
+void tilt_v_general(__global const uint* pr, float xv, float yv, float* p_out, float* q_out) {
     float scale_x = as_float(pr[5]);
     float scale_y = as_float(pr[6]);
     float shear_x = as_float(pr[7]);
@@ -116,11 +116,11 @@ void tilt_v_general(__global const uint* pr, float xv, float yv, float* o1, floa
     }
     float out_p = (wrap_x == 0u) ? tl_clamp(pre_p) : pre_p;
     float out_q = (wrap_y == 0u) ? tl_clamp(pre_q) : pre_q;
-    *o1 = out_p;
-    *o2 = out_q;
+    *p_out = out_p;
+    *q_out = out_q;
 }
 
-void tilt_v_rot_shear(__global const uint* pr, float xv, float yv, float* o1, float* o2) {
+void tilt_v_rot_shear(__global const uint* pr, float xv, float yv, float* p_out, float* q_out) {
     float scale_x = as_float(pr[5]);
     float scale_y = as_float(pr[6]);
     float shear_x = as_float(pr[7]);
@@ -174,11 +174,11 @@ void tilt_v_rot_shear(__global const uint* pr, float xv, float yv, float* o1, fl
     float sheared_q_rot = tl_add(shear_prod_a, rot_q_scaled);
     float neg_rot_p = tl_flip(rot_p_scaled);
     float sheared_p_rot = tl_add(shear_prod_b, neg_rot_p);
-    *o1 = sheared_p_rot;
-    *o2 = sheared_q_rot;
+    *p_out = sheared_p_rot;
+    *q_out = sheared_q_rot;
 }
 
-void tilt_v_rot_plain(__global const uint* pr, float xv, float yv, float* o1, float* o2) {
+void tilt_v_rot_plain(__global const uint* pr, float xv, float yv, float* p_out, float* q_out) {
     float scale_x = as_float(pr[5]);
     float scale_y = as_float(pr[6]);
     float shear_x = as_float(pr[7]);
@@ -226,11 +226,11 @@ void tilt_v_rot_plain(__global const uint* pr, float xv, float yv, float* o1, fl
     float neg_rot_q = tl_flip(rot_q_plain);
     float out_q = (wrap_y == 0u) ? tl_clamp(neg_rot_q) : neg_rot_q;
     float rot_p_plain = tl_mul(scale_x, rot_u);
-    *o1 = rot_p_plain;
-    *o2 = out_q;
+    *p_out = rot_p_plain;
+    *q_out = out_q;
 }
 
-void tilt_v_rot_shear_wrapy(__global const uint* pr, float xv, float yv, float* o1, float* o2) {
+void tilt_v_rot_shear_wrapy(__global const uint* pr, float xv, float yv, float* p_out, float* q_out) {
     float scale_x = as_float(pr[5]);
     float scale_y = as_float(pr[6]);
     float shear_x = as_float(pr[7]);
@@ -284,11 +284,11 @@ void tilt_v_rot_shear_wrapy(__global const uint* pr, float xv, float yv, float* 
     float neg_rot_p = tl_flip(rot_p_scaled);
     float sheared_p_rot = tl_add(shear_prod_b, neg_rot_p);
     float wrapped_q_fused = tl_clamp(sheared_q_fused);
-    *o1 = sheared_p_rot;
-    *o2 = wrapped_q_fused;
+    *p_out = sheared_p_rot;
+    *q_out = wrapped_q_fused;
 }
 
-void tilt_v_rot_plain_wrapx(__global const uint* pr, float xv, float yv, float* o1, float* o2) {
+void tilt_v_rot_plain_wrapx(__global const uint* pr, float xv, float yv, float* p_out, float* q_out) {
     float scale_x = as_float(pr[5]);
     float scale_y = as_float(pr[6]);
     float shear_x = as_float(pr[7]);
@@ -337,11 +337,11 @@ void tilt_v_rot_plain_wrapx(__global const uint* pr, float xv, float yv, float* 
     float neg_rot_p = tl_flip(rot_p_scaled);
     float wrapped_neg_p = tl_clamp(neg_rot_p);
     float rot_q_scaled = tl_mul(scale_y, rot_v);
-    *o1 = wrapped_neg_p;
-    *o2 = rot_q_scaled;
+    *p_out = wrapped_neg_p;
+    *q_out = rot_q_scaled;
 }
 
-void tilt_v_rot_plain_wrapxy(__global const uint* pr, float xv, float yv, float* o1, float* o2) {
+void tilt_v_rot_plain_wrapxy(__global const uint* pr, float xv, float yv, float* p_out, float* q_out) {
     float scale_x = as_float(pr[5]);
     float scale_y = as_float(pr[6]);
     float shear_x = as_float(pr[7]);
@@ -391,11 +391,11 @@ void tilt_v_rot_plain_wrapxy(__global const uint* pr, float xv, float yv, float*
     float rot_q_scaled = tl_mul(scale_y, rot_v);
     float wrapped_neg_p = tl_clamp(neg_rot_p);
     float wrapped_q = tl_clamp(rot_q_scaled);
-    *o1 = wrapped_neg_p;
-    *o2 = wrapped_q;
+    *p_out = wrapped_neg_p;
+    *q_out = wrapped_q;
 }
 
-void tilt_v_rot_shear_wrapx(__global const uint* pr, float xv, float yv, float* o1, float* o2) {
+void tilt_v_rot_shear_wrapx(__global const uint* pr, float xv, float yv, float* p_out, float* q_out) {
     float scale_x = as_float(pr[5]);
     float scale_y = as_float(pr[6]);
     float shear_x = as_float(pr[7]);
@@ -450,11 +450,11 @@ void tilt_v_rot_shear_wrapx(__global const uint* pr, float xv, float yv, float* 
     float sheared_q_rot = tl_add(shear_prod_a, rot_q_scaled);
     float sheared_p_rot = tl_add(shear_prod_b, neg_rot_p);
     float wrapped_sheared_p = tl_clamp(sheared_p_rot);
-    *o1 = wrapped_sheared_p;
-    *o2 = sheared_q_rot;
+    *p_out = wrapped_sheared_p;
+    *q_out = sheared_q_rot;
 }
 
-void tilt_v_rot_shear_wrapxy(__global const uint* pr, float xv, float yv, float* o1, float* o2) {
+void tilt_v_rot_shear_wrapxy(__global const uint* pr, float xv, float yv, float* p_out, float* q_out) {
     float scale_x = as_float(pr[5]);
     float scale_y = as_float(pr[6]);
     float shear_x = as_float(pr[7]);
@@ -510,8 +510,8 @@ void tilt_v_rot_shear_wrapxy(__global const uint* pr, float xv, float yv, float*
     float sheared_p_rot = tl_add(shear_prod_b, neg_rot_p);
     float wrapped_sheared_p = tl_clamp(sheared_p_rot);
     float wrapped_sheared_q = tl_clamp(sheared_q_rot);
-    *o1 = wrapped_sheared_p;
-    *o2 = wrapped_sheared_q;
+    *p_out = wrapped_sheared_p;
+    *q_out = wrapped_sheared_q;
 }
 
 __kernel void tilt_f32(__global const float* x, __global const float* y, __global float* out1, __global float* out2,

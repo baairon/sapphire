@@ -47,8 +47,8 @@ fn t34_vector_hardcode_lanes_equal_reader() {
         let mut li = read_layout(rows[0]).unwrap_or_else(|e| panic!("{}: {}", prog, e));
         if *prog == "Texture_Chroma_Spiral_Autogen" {
             // FINDING: this row also carries `:modify... = 0`, which merge refuses first by name; the registered merge stays refused.
-            let mut g0 = build_effect(&c, c.find_effect(prog, None).unwrap()).unwrap();
-            let e = merge_layout(&mut g0, &li).unwrap_err();
+            let mut effect = build_effect(&c, c.find_effect(prog, None).unwrap()).unwrap();
+            let e = merge_layout(&mut effect, &li).unwrap_err();
             assert!(e.starts_with("LAYOUT-MODIFY-VALUE-UNSUPPORTED"), "{}", e);
             // test-only: the :modify value flag cleared so that the merge reaches the vector hardcode
             for it in li.items.iter_mut() {
@@ -81,11 +81,11 @@ fn t34_vector_hardcode_lanes_equal_reader() {
         assert_eq!(rep.hardcoded_vec.len(), 1, "{}", prog);
         let got = &g.nodes[ni];
         // the reader's lanes for the same literal text: the def default replaced by the hardcode text, built by the genotype reader
-        let t2 = with_def_default(&tsv, prog, name, lit);
-        let c2 = Corpus::from_programs_tsv(&t2);
-        let g2 = build_effect(&c2, c2.find_effect(prog, None).unwrap()).unwrap();
-        let n2 = g2.params.iter().find(|p| p.name == *name).and_then(|p| p.node).expect("reader node");
-        let want = &g2.nodes[n2];
+        let tsv_text = with_def_default(&tsv, prog, name, lit);
+        let c2 = Corpus::from_programs_tsv(&tsv_text);
+        let build_effect_2 = build_effect(&c2, c2.find_effect(prog, None).unwrap()).unwrap();
+        let sum_2 = build_effect_2.params.iter().find(|p| p.name == *name).and_then(|p| p.node).expect("reader node");
+        let want = &build_effect_2.nodes[sum_2];
         assert_eq!(want.kind, NodeKind::Vector, "{}: reader type", prog);
         assert_eq!(got.kind, want.kind, "{}: type", prog);
         assert_eq!(got.nlanes, want.nlanes, "{}: lanes", prog);
@@ -151,9 +151,9 @@ fn t34_refusals_by_name() {
     let c = Corpus::from_programs_tsv(&tsv);
     let rows = find_layout_text(c.layout_texts.iter().map(|x| x.1.as_str()), "Mosaic_Autogen");
     // lane count differs from the def parameter's
-    let t3 = rows[0].replacen(":hardcode wrap = [ 2 2 ]", ":hardcode wrap = [ 2 2 2 ]", 1);
-    assert_ne!(t3, rows[0]);
-    let li = read_layout(&t3).unwrap();
+    let edited_row = rows[0].replacen(":hardcode wrap = [ 2 2 ]", ":hardcode wrap = [ 2 2 2 ]", 1);
+    assert_ne!(edited_row, rows[0]);
+    let li = read_layout(&edited_row).unwrap();
     let mut g = build_effect(&c, c.find_effect("Mosaic_Autogen", None).unwrap()).unwrap();
     let e = merge_layout(&mut g, &li).unwrap_err();
     assert_eq!(e, "LAYOUT-HARDCODE-LANES-MISMATCH (Mosaic_Autogen: wrap: def 2 lanes, hardcode 3)");

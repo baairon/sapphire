@@ -257,7 +257,7 @@ const MUTANTS: &[(&str, &str, &str)] = &[
     ("branch arm of the shear and wrap-y variant", "tilt_v_rot_shear_wrapy(pr, xv, yv, &p, &q);", "tilt_v_rot_shear_wrapx(pr, xv, yv, &p, &q);"),
     ("shear factor of the plain loop", "float k = tl_mul(q, shear_x);", "float k = tl_mul(q, shear_y);"),
     ("sign flip as an or", "float tl_flip(float x) {\n    return as_float(as_uint(x) ^ 0x80000000u);", "float tl_flip(float x) {\n    return as_float(as_uint(x) | 0x80000000u);"),
-    ("sign of the subtrahend in a negated fused step", "tl_fz(fma(-d, s2, -s3), d, s2, s3)", "tl_fz(fma(-d, s2, s3), d, s2, s3)"),
+    ("sign of the subtrahend in a negated fused step", "tl_fz(fma(-d, second, -third), d, second, third)", "tl_fz(fma(-d, second, third), d, second, third)"),
     ("NaN of the clamp replaced by the default NaN", "return as_float(as_uint(x) | 0x00400000u);\n    }\n    double d = (double)x;", "return as_float(0xffc00000u);\n    }\n    double d = (double)x;"),
     ("value of the zero depth route", "return ca_over_eps;", "return cos_over_persp;"),
 ];

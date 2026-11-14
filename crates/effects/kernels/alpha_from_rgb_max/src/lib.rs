@@ -86,17 +86,17 @@ pub fn imul(a: f32, b: f32) -> f32 {
     }
 }
 
-fn channel_value<'a>(src: &'a Source<'a>, ch: usize, n: usize) -> Result<ChanSrc<'a>, Error> {
+fn channel_value<'a>(src: &'a Source<'a>, chan: usize, n: usize) -> Result<ChanSrc<'a>, Error> {
     match src {
         Source::Planes(p) => {
-            let pl = p.get(ch).ok_or(Error::NoChannels)?;
+            let pl = p.get(chan).ok_or(Error::NoChannels)?;
             if pl.len() < n {
                 return Err(Error::ShortPlane);
             }
             Ok(ChanSrc::Plane(pl))
         }
         Source::Const { bits, is_int } => {
-            let b = *bits.get(ch).ok_or(Error::ShortConst)?;
+            let b = *bits.get(chan).ok_or(Error::ShortConst)?;
             Ok(ChanSrc::Value(if *is_int { (b as i32) as f32 } else { f32::from_bits(b) }))
         }
     }
@@ -109,11 +109,11 @@ enum ChanSrc<'a> {
 
 fn copy_channel(src: &Source, nch: i32, i: i32, n: usize, dst: &mut [f32]) -> Result<(), Error> {
     // the caller clamps to nch - 1; the helper clamps to the descriptor count (equal, AFRM-A1)
-    let ch = i.min(nch - 1).max(-1);
-    if ch < 0 {
+    let chan = i.min(nch - 1).max(-1);
+    if chan < 0 {
         return Err(Error::NoChannels);
     }
-    match channel_value(src, ch as usize, n)? {
+    match channel_value(src, chan as usize, n)? {
         ChanSrc::Plane(p) => dst[..n].copy_from_slice(&p[..n]),
         ChanSrc::Value(v) => dst[..n].iter_mut().for_each(|d| *d = v),
     }
@@ -173,29 +173,29 @@ pub fn run_traced(p: &Params, src: &Source, out: &mut [&mut [f32]], mut trace: O
         return Ok(());
     }
     let (a, b) = out.split_at_mut(3);
-    let (o3, a) = (&mut b[0][..n], &*a);
+    let (bits_3, a) = (&mut b[0][..n], &*a);
     if p.nch == 1 {
         if s == 1.0 {
-            o3.iter_mut().for_each(|d| *d = 1.0);
+            bits_3.iter_mut().for_each(|d| *d = 1.0);
         } else {
             let c2 = &a[2][..n];
-            for (i, (d, &x)) in o3.iter_mut().zip(c2).enumerate() {
+            for (i, (d, &x)) in bits_3.iter_mut().zip(c2).enumerate() {
                 rec(i, s, x);
                 *d = imul(s, x);
             }
         }
         return Ok(());
     }
-    let (c0, c1, c2) = (&a[0][..n], &a[1][..n], &a[2][..n]);
+    let (src_ch0, c1, c2) = (&a[0][..n], &a[1][..n], &a[2][..n]);
     if s == 1.0 {
         for i in 0..n {
-            o3[i] = imax(imax(c0[i], c1[i]), c2[i]);
+            bits_3[i] = imax(imax(src_ch0[i], c1[i]), c2[i]);
         }
     } else {
         for i in 0..n {
-            let m = imax(imax(c0[i], c1[i]), c2[i]);
+            let m = imax(imax(src_ch0[i], c1[i]), c2[i]);
             rec(i, s, m);
-            o3[i] = imul(s, m);
+            bits_3[i] = imul(s, m);
         }
     }
     Ok(())

@@ -6,7 +6,7 @@
 //! reach outside a plane buffer (the CPU function would panic), an element count outside 32 bits. A non positive row count writes
 //! nothing, as on the CPU.
 
-use fx_device::cl::{Arg as ClArg, Buffer};
+use fx_device::ocl::{Arg as ClArg, Buffer};
 use fx_device::{DevError, Session};
 use optical_flow_solve::PolarConsts;
 use std::sync::Arc;

@@ -190,8 +190,8 @@ pub fn render(p: &Params, args: &[Block], outs: &mut [&mut [f32]]) -> Result<Vec
         C_CELL_A => {
             let n = if m(1) { tag.saturating_sub(1) } else { tag };
             for c in 0..n {
-                let ch = if m(2) { (n - 1 - c) as i32 } else { c as i32 };
-                copy(p, args, &mut acts, ch, outs[c])?;
+                let src_chan = if m(2) { (n - 1 - c) as i32 } else { c as i32 };
+                copy(p, args, &mut acts, src_chan, outs[c])?;
             }
         }
         D_CELL_A => {
@@ -231,14 +231,14 @@ pub fn render(p: &Params, args: &[Block], outs: &mut [&mut [f32]]) -> Result<Vec
             }
         }
         P_CELL_A => {
-            let ch = if m(12) {
+            let src_chan = if m(12) {
                 args[0].maxch
             } else if m(13) {
                 0
             } else {
                 args[0].maxch.wrapping_sub(1)
             };
-            copy(p, args, &mut acts, ch, outs[0])?;
+            copy(p, args, &mut acts, src_chan, outs[0])?;
         }
     }
     Ok(acts)

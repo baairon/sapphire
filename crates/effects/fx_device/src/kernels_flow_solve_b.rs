@@ -126,45 +126,45 @@ float ofb_div(float a, float b) {
     float r = a / b;
     return (r == r) ? r : ofb_pick(a, b);
 }
-float ofb_fma213(float d, float s2, float s3) {
-    float r = fma(d, s2, s3);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fma213(float d, float second, float third) {
+    float r = fma(d, second, third);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
-float ofb_fma231(float d, float s2, float s3) {
-    float r = fma(s2, s3, d);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fma231(float d, float second, float third) {
+    float r = fma(second, third, d);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
-float ofb_fma132(float d, float s2, float s3) {
-    float r = fma(d, s3, s2);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fma132(float d, float second, float third) {
+    float r = fma(d, third, second);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
-float ofb_fms213(float d, float s2, float s3) {
-    float r = fma(d, s2, -s3);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fms213(float d, float second, float third) {
+    float r = fma(d, second, -third);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
-float ofb_fms231(float d, float s2, float s3) {
-    float r = fma(s2, s3, -d);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fms231(float d, float second, float third) {
+    float r = fma(second, third, -d);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
-float ofb_fms132(float d, float s2, float s3) {
-    float r = fma(d, s3, -s2);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fms132(float d, float second, float third) {
+    float r = fma(d, third, -second);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
-float ofb_fnma231(float d, float s2, float s3) {
-    float r = fma(-s2, s3, d);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fnma231(float d, float second, float third) {
+    float r = fma(-second, third, d);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
-float ofb_fnma132(float d, float s2, float s3) {
-    float r = fma(-d, s3, s2);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fnma132(float d, float second, float third) {
+    float r = fma(-d, third, second);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
-float ofb_fnms213(float d, float s2, float s3) {
-    float r = fma(-d, s2, -s3);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fnms213(float d, float second, float third) {
+    float r = fma(-d, second, -third);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
-float ofb_fnms132(float d, float s2, float s3) {
-    float r = fma(-d, s3, -s2);
-    return (r == r) ? r : ofb_pick3(d, s2, s3);
+float ofb_fnms132(float d, float second, float third) {
+    float r = fma(-d, third, -second);
+    return (r == r) ? r : ofb_pick3(d, second, third);
 }
 
 /* minss and maxss on words: the second operand when either is NaN or the two compare equal. */
