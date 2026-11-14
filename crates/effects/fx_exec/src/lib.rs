@@ -15,8 +15,13 @@ pub mod device_ops;
 pub mod device_ops_pointwise;
 /// device ops of the sampling and warp family
 pub mod device_ops_warp;
+/// launch functions of the optical flow solve tile kernels, first group
+pub mod device_ops_flow_solve_a;
 /// the warp footprint prefill on the device (slot 33 log2 of gradient maps)
 pub mod device_ops_footprint;
+/// device launch helpers of the optical flow solve kernels, part B (smooth_normalise, median network and median_pair, vector math lanes)
+pub mod device_ops_flow_solve_b;
+pub mod device_ops_flow_solve_b_gen;
 /// device ops of the ripmap family (make_mipmap, blur_warp)
 pub mod device_ops_ripmap;
 /// device ops of blur, masked_blur, grad, sharpen, edge_aware_sharpen and static2
@@ -31,6 +36,12 @@ pub mod device_ops_glow_ops;
 pub mod device_ops_blur_channels;
 /// device ops of glow (bright pass, then the neighbourhood blur passes)
 pub mod device_ops_glow;
+pub mod device_ops_flow_fetch;
+pub mod device_ops_flow_polar;
+pub mod device_ops_flow;
+/// device ops of xy_to_polar and hsv_to_rgb
+pub mod device_ops_retime_polar;
+pub mod device_ops_interp_maps;
 pub mod device_ops_tilt;
 pub mod device_ops_tilt_alpha;
 pub mod device_ops_edge;

@@ -23,6 +23,7 @@ use fx_device::selfcheck::{adversarial_f32, compare_f32, Mismatch, NanPayloads, 
 use fx_device::{DevError, DevImage, Session};
 use crate::device_ops_warp as warp;
 use crate::device_ops_ripmap as ripmap;
+use crate::device_ops_flow as flow;
 use std::sync::Arc;
 
 /// What an operand looks like, for `accepts`.
@@ -78,6 +79,8 @@ pub static DEVICE_OPS: &[DeviceOp] = &[
     DeviceOp { class: "perspective_alpha", accepts: warp::persp_alpha_accepts, run: warp::persp_alpha_run, corpus: warp::empty_corpus },
     // the ripmap family (device_ops_ripmap.rs); make_mipmap leaves its pyramid on the device (Val::DevMip)
     DeviceOp { class: "make_mipmap", accepts: ripmap::make_mipmap_accepts, run: ripmap::make_mipmap_run, corpus: ripmap::empty_corpus },
+    // the optical flow op (device_ops_flow.rs): the crate control code on the host over a device plane store
+    flow::OPTICAL_FLOW,
     DeviceOp { class: "blur_warp", accepts: ripmap::blur_warp_accepts, run: ripmap::blur_warp_run, corpus: ripmap::empty_corpus },
     // pointwise ops (device_ops_pointwise.rs)
     crate::device_ops_pointwise::ADD,
@@ -149,10 +152,15 @@ pub static DEVICE_OPS: &[DeviceOp] = &[
     crate::device_ops_blur_channels::BLUR_CHANNELS,
     // glint: the CPU's dispatcher and worker on the host, the passes on the device (device_ops_glint.rs)
     crate::device_ops_glint::GLINT,
+    // xy_to_polar and hsv_to_rgb (device_ops_retime_polar.rs)
+    crate::device_ops_retime_polar::XY_TO_POLAR,
+    crate::device_ops_retime_polar::HSV_TO_RGB,
+    // optical_flow_interp_maps: splat, scan, fill passes, interpolation (device_ops_interp_maps.rs)
+    crate::device_ops_interp_maps::INTERP_MAPS,
 ];
 
 /// Ops allowed to run on a device.
-pub const ALLOWLIST: &[&str] = &["copy", "one_minus", "warp_rel", "warp", "rotate", "perspective", "perspective_alpha", "blur", "masked_blur", "grad", "sharpen", "edge_aware_sharpen", "static2", "+", "-", "*", "/", "max", "min", "diff", "abs", "negate", "if+", "if>", "clamp", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "max_element", "min_element", "screen_super", "interp", "dissolve", "comp_premult", "comp_rgba", "postdivide", "round", "scale_rgb", "add_rgb", "sat_scale", "hue_shift", "hue_shift_preserve_luma", "monochrome", "monochrome_a", "make_mipmap", "blur_warp", "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append", "screen", "overlay_super", "alpha_from_rgb_max", "glow", "tilt", "tilt_alpha", "edge_detect", "blur_channels", "glint"];
+pub const ALLOWLIST: &[&str] = &["copy", "one_minus", "warp_rel", "warp", "rotate", "perspective", "perspective_alpha", "blur", "masked_blur", "grad", "sharpen", "edge_aware_sharpen", "static2", "+", "-", "*", "/", "max", "min", "diff", "abs", "negate", "if+", "if>", "clamp", "v2", "v3", "v4", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "max_element", "min_element", "screen_super", "interp", "dissolve", "comp_premult", "comp_rgba", "postdivide", "round", "scale_rgb", "add_rgb", "sat_scale", "hue_shift", "hue_shift_preserve_luma", "monochrome", "monochrome_a", "make_mipmap", "blur_warp", "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append", "screen", "overlay_super", "alpha_from_rgb_max", "glow", "tilt", "tilt_alpha", "edge_detect", "blur_channels", "glint", "xy_to_polar", "hsv_to_rgb", "optical_flow_interp_maps", "optical_flow"];
 
 /// Allowlisted ops whose device output may hold a NaN: every NaN their kernels write comes from an `isnan` test and a select in
 /// the CPU's operand order (the first NaN operand quieted by OR 0x00400000, a fresh NaN written as 0xffc00000, a min or max
@@ -163,6 +171,7 @@ pub const NAN_EXACT: &[&str] = &[
     "coerce_to_alpha", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of",
     "make_mipmap", "alpha_from_rgb_max", "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append",
     "blur", "masked_blur", "sharpen", "edge_aware_sharpen", "tilt", "tilt_alpha", "edge_detect", "blur_channels", "glint",
+    "xy_to_polar", "hsv_to_rgb", "optical_flow_interp_maps", "optical_flow",
 ];
 
 /// The [`NAN_EXACT`] ops whose NaN words follow from the CPU source on every compiler: a two-NaN pick written as `nanop`, an
@@ -173,6 +182,7 @@ pub const NAN_EXACT_WRITTEN: &[&str] = &[
     "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "remove_alpha", "v3_to_v4", "v3_to_v4_if4", "element_of", "alpha_from_rgb_max",
     "copy_alpha", "get_alpha", "v3_to_v4_if4_a", "append",
     "blur", "masked_blur", "sharpen", "edge_aware_sharpen", "tilt", "tilt_alpha", "edge_detect", "blur_channels", "glint",
+    "xy_to_polar", "hsv_to_rgb", "optical_flow_interp_maps", "optical_flow",
 ];
 
 /// The [`NAN_EXACT`] ops whose NaN words are those of the compiled CPU instruction: a commutative `+` or `*` (the compiler may
@@ -193,10 +203,6 @@ pub const NAN_TWIN_CAP: usize = 600;
 /// Ops with no device kernel, each with the reason. The list shrinks as kernels land. `get_frame`, `get_prev_dest` and
 /// `save_prev_dest` are host data movement (`kernels::HOST_CLASSES`) and are not kernel ops.
 pub const CPU_ONLY: &[(&str, &str)] = &[
-    ("xy_to_polar", "the angle runs the 8-lane atan2 and its scalar helper on the CPU; no device kernel yet"),
-    ("hsv_to_rgb", "scalar sextant switch with fused steps, run on the CPU; no device kernel yet"),
-    ("optical_flow_interp_maps", "CPU-side resampling pass over flow maps (splat, hole fill, interpolation); no device kernel yet"),
-    ("optical_flow", "CPU-side pyramid, solve and warp passes over the composed plane store; no device kernel yet"),
 ];
 
 fn copy_calls_are_identity(tag: i32) -> bool {

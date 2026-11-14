@@ -68,6 +68,10 @@ monochrome_a = { path = "../kernels/monochrome_a" }
 scale_rgb = { path = "../kernels/scale_rgb" }
 
 optical_flow_entry = { path = "../kernels/optical_flow_entry" }
+optical_flow_solve = { path = "../kernels/optical_flow_solve" }
+optical_flow_pyramid = { path = "../kernels/optical_flow_pyramid" }
+optical_flow = { path = "../kernels/optical_flow" }
+optical_flow_resample = { path = "../kernels/optical_flow_resample" }
 make_mipmap = { path = "../kernels/make_mipmap" }
 blur_warp = { path = "../kernels/blur_warp" }
 warp_rel = { path = "../kernels/warp_rel" }
@@ -168,3 +172,6 @@ m3p2_threeplane_body_mut = []
 
 [dev-dependencies]
 effects_vecdir = { path = "../vecdir" }
+optical_flow = { path = "../kernels/optical_flow" }
+optical_flow_solve = { path = "../kernels/optical_flow_solve" }
+optical_flow_resample = { path = "../kernels/optical_flow_resample" }

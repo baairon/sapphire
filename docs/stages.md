@@ -327,8 +327,12 @@ The `S_DissolveShake` stage is registered as well. Its plan does not always read
 | `warp_transform_autogen` | - | 0.91 / 0.88 | 1.27 / 1.11 |
 | `stage apply glow_edges` | - | 0.89 / 0.91 | 0.77 / 0.79 |
 | `glint` | - | 1.40 / 1.46 | 1.01 / 1.05 |
+| `retime_speed` | - | 20.91 / 20.68 | 3.85 / 3.93 |
+| `retime_longer` | - | 20.72 / 20.34 | 3.95 / 4.08 |
 
 The rows of `blur_motion_autogen`, `blur_motion_mono_autogen`, `warp_transform_autogen`, `stage apply glow_edges` and `glint` were measured in a later session at a one-minute load of 6.5 to 7.4, CPU and device runs interleaved. In that session `transform_and_blur_autogen` measures 0.99 / 1.02 s on the CPU and 0.77 / 0.77 s on PoCL, and `blur_motion_curves_no_transform_autogen` 1.31 / 1.10 s and 0.79 / 0.83 s: within 0.10 s of their cells above, except the first CPU run of `blur_motion_curves_no_transform_autogen` (1.31 s against 1.09 s). At its default parameters, which the timing uses, the plan of `warp_transform_autogen` holds only `make_mipmap` and `postdivide`: with `rotate` and `shear` set (golden `+tl`) it adds `tilt` and `warp`.
+
+The rows of `retime_speed` and `retime_longer` were measured in a third session at a one-minute load of 4.1 to 6.5, CPU and device runs interleaved. Both stages read the whole clip: their cells are the wall time of a 3 frame clip (`--frames 3`, three different random frames) divided by 3. In every PoCL run the output equals the CPU output by SHA-256 and the report line ends `fallback: none`. At their recorded sizes the 58 runs of `S_Retime` through `fx_run` take 11 s on the CPU and 150 to 208 s on PoCL in all.
 
 The CPU cells use the default thread count (all 12 cores) and are sensitive to machine load. `distort_rgb_autogen` shows it most: at a one-minute load of 6 to 9 this build and the earlier in-process builds all measure 4.4 to 4.9 s for its frame, most of it system time in the threaded path, and 1.7 to 2.0 s with `SAPPHIRE_THREADS=1`, so its CPU cell is a contention figure and not a slower kernel. `sharpen_best_quality_autogen`'s `after, CPU` cell lies above its `before` cell for the same reason: the build before this table, timed interleaved with it under the same load, measures 2.5 to 3.6 s against 2.8 to 3.3 s, with equal output bytes.
 
