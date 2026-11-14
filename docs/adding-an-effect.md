@@ -77,6 +77,7 @@ Add a section to [Effects](effects.md), in the order of the status table, with t
 4. A parameter table per stage: `--param ID=V`, type and lanes, as `sapphire stage list --json` prints them. No defaults or ranges.
 5. One worked `sapphire stage apply` command on `in.raw`, with values a verified comparison used, run and ending with exit 0.
 6. Parity in plain terms: verified comparisons, recorded renders, re-rendered units, any approximate reciprocal bound, and how many counted recorded renders match the stage's host arrangement. Every figure is labelled MEASURED or INFERRED where it is not a plain count.
+7. A closing line, `Internals:` with a link to the page of the effect in `docs/internals/` (named by the effect name without its prefix, in lower case, its words joined by hyphens), and that page itself, written to the template of [Effect internals](internals/README.md) and listed in its table.
 
 Add the effect's row to `docs/data/effects_status.tsv`, run `python -I tools/gen_docs.py`, and set the status of its row in [the roadmap](roadmap.md) to done.
 
