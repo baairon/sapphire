@@ -148,13 +148,13 @@ MEASURED: the default mode prints L1 `4 passed, 7 failed` and L3 `32 passed, 1 f
 
 ## Effects provider
 
-`sapphire stage list --json` also lists one stage per registered style of the nineteen landed effects (25 stages). Each stage renders in process through the `fx_exec` library, the same code as `fx_run`, on the verified render path, the host arrangement the recorded renders of the parity record used. A later effect joins by adding rows to `crates/neutral-handoff/data/fx_stages.tsv` and `fx_params.tsv`.
+`sapphire stage list --json` also lists one stage per rebuilt style of the twenty landed effects (27 stages). Each stage renders in process through the `fx_exec` library, the same code as `fx_run`, on the verified render path, the host arrangement the recorded renders of the parity record used. A later effect joins by adding rows to `crates/neutral-handoff/data/fx_stages.tsv` and `fx_params.tsv`.
 
 **Requirements.** The stages are linked into `sapphire`; the effects need no external data, and no `fx_run` executable is needed. A run writes no scratch files and no debug side files (only the Trails history route chains its renders through a scratch folder, removed on every exit path). `--device cpu|gpu|gpu=N|auto` picks the backend (default `cpu`); the device path is described in [Rendering on a device](guide.md#rendering-on-a-device) and falls back to the CPU for any node, or the whole run, that a device cannot serve exactly.
 
 **Per frame.** The input frame is handed to the runner in memory as 'ae32' words (A, R, G, B words per pixel, f32 bits, straight alpha); no file is written. At depth 32 this is a pure byte permutation of the frames/2 planes G, B, R, A. Depths 8 and 16 convert through f32 (`v/255`, `v/65535`, back with round half to even and a clamp) and are not verified. The runner's output words are relaid back the same way.
 
-The stages as `sapphire stage list` prints them (the literal output of that command; the last 25 lines are the effect stages):
+The stages as `sapphire stage list` prints them (the literal output of that command; the last 27 lines are the effect stages):
 
 ```text
 id               name             family    kind   depths    params  layers
@@ -185,6 +185,8 @@ blur_motion_mono_autogen Blur_Motion_Mono_Autogen S_BlurMotion temporal 8,16,32 
 warp_transform_autogen Warp_Transform_Autogen S_WarpTransform temporal 8,16,32   11      0
 glow_edges       Glow_Edges       S_GlowEdges temporal 8,16,32   20      0
 glint            Glint            S_Glint   temporal 8,16,32   16      0
+retime_speed     Retime_Speed     S_Retime  temporal 8,16,32   1       0
+retime_longer    Retime_Longer    S_Retime  temporal 8,16,32   1       0
 ```
 
 Through each stage, the counted recorded renders of the parity record that match the stage's host arrangement are rendered again and compared by full SHA-256 (MEASURED). For the stages of `S_Blur`, `S_BlurMoCurves`, `S_Diffuse`, `S_DistortRGB`, `S_DropShadow`, `S_HueSatBright`, `S_Sharpen`, `S_TimeWarpRGB`, `S_Trails` and `S_WarpPerspective` this is the stage provider's parity run, `tests/fx_stage_parity.rs`: 382 of 382 byte identical. The counted renders of `flicker`, `glow`, `swishpan`, the three `S_Shake` stages, the `S_DissolveShake` stage, the two `S_BlurMotion` stages, `warp_transform_autogen`, the `S_GlowEdges` stage and the `glint` stage are not part of that test; each was rendered through `sapphire stage apply` and compared with the original's output. For the three `S_Shake` stages and the `S_DissolveShake` stage the second number counts the counted renders that equal the original; the four that differ are described in [Effects](effects.md):
@@ -206,6 +208,8 @@ Through each stage, the counted recorded renders of the parity record that match
 | Glow | 36 of 36 |
 | Glow_Edges | 34 of 34 |
 | Hue_Sat_Bright_Autogen | 118 of 130 |
+| Retime_Speed | 18 of 20 |
+| Retime_Longer | 15 of 17; the stage runs phase 0, and the 72x24 renders, recorded at other phases, are rendered through `fx_run` |
 | Shake_Normal_Autogen | 17 of 22 |
 | Shake_Twitchy_Autogen | 18 of 22 |
 | Shake_Jumpy_Autogen | 19 of 22 |
@@ -221,7 +225,7 @@ Through each stage, the counted recorded renders of the parity record that match
 
 **Writer phase lists.** A placement entry `--xy-base-list COUNT:B,B;COUNT:B` gives one phase list per default-xy writer count, and the stage passes the list for the writer count of the compiled plan (`S_BlurMotion` runs one writer at Blur Res Half and Quarter and two otherwise; a `tilt_alpha` plan of `S_WarpTransform` runs two). A plan with no default-xy writer takes no list. A writer count that the placement does not list is refused with `XY-BASE-LIST-UNSERVED`.
 
-**Host variants.** `host_variants` is the last column of `fx_stages.tsv`. It is `-` on 14 of the 25 effect stages. `glow`, `swishpan`, the three `S_Shake` stages, the `S_DissolveShake` stage, the two `S_BlurMotion` stages, `warp_transform_autogen` and the `S_GlowEdges` stage carry entries keyed by `cset_opacity` for the Opacity answers 1 and 3, taken from the recorded runs at those answers. `glint` carries one entry, for the Opacity answer 3: its recorded runs hold no answer 1, so that answer meets `SOURCE-VARIANT-MISMATCH` (exit 3, MEASURED). A row carries entries only when the recorded runs of its style at some value of one offered parameter (another opacity answer, for example) used a host option other than the `host` column's, such as another source plane count or reader head. The entries are separated by `;`, and each is `PARAM_ID=VALUE:` followed by options in the form of the `host` column, `--opt value|--opt value`. The unit tests use this text on a copy of the `blur_color_autogen` row (`--extra-opt` stands for an option the `host` column lacks):
+**Host variants.** `host_variants` is the last column of `fx_stages.tsv`. It is `-` on 16 of the 27 effect stages. `glow`, `swishpan`, the three `S_Shake` stages, the `S_DissolveShake` stage, the two `S_BlurMotion` stages, `warp_transform_autogen` and the `S_GlowEdges` stage carry entries keyed by `cset_opacity` for the Opacity answers 1 and 3, taken from the recorded runs at those answers. `glint` carries one entry, for the Opacity answer 3: its recorded runs hold no answer 1, so that answer meets `SOURCE-VARIANT-MISMATCH` (exit 3, MEASURED). A row carries entries only when the recorded runs of its style at some value of one offered parameter (another opacity answer, for example) used a host option other than the `host` column's, such as another source plane count or reader head. The entries are separated by `;`, and each is `PARAM_ID=VALUE:` followed by options in the form of the `host` column, `--opt value|--opt value`. The unit tests use this text on a copy of the `blur_color_autogen` row (`--extra-opt` stands for an option the `host` column lacks):
 
 ```text
 cset_opacity=1:--src-planes 3|--src-head 0x7e91c0|--extra-opt 9;cset_opacity=3:--src-head 0x7ea840

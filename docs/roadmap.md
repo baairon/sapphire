@@ -1,6 +1,6 @@
 # Roadmap
 
-The roadmap lists the twenty effects the rebuild covers. Nineteen are done: each matches the original bit for bit on every compared case, apart from four counted comparisons of `S_Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner, and 34 of `S_GlowEdges` that were run with slider values passed as decimals, not as the 16.16 fixed-point values a host passes ([what that covers](effects.md#what-rebuilt-means)). `S_Retime` is not yet done. The styles, parameters and parity of each done effect are in [effects](effects.md), and a new effect follows the conventions of [Adding an effect](adding-an-effect.md).
+The roadmap lists the twenty effects the rebuild covers. All twenty are done: each matches the original bit for bit on every compared case, apart from four counted comparisons of `S_Shake` and `S_DissolveShake` whose recorded renders were made before three faults were corrected, two in the native code and one in a value handed to the runner, and 34 of `S_GlowEdges` that were run with slider values passed as decimals, not as the 16.16 fixed-point values a host passes ([what that covers](effects.md#what-rebuilt-means)). The styles, parameters and parity of each done effect are in [effects](effects.md), and a new effect follows the conventions of [Adding an effect](adding-an-effect.md).
 
 Effect names are the plugin's own name strings from the [name bank](glossary.md#name-bank). `S_Shake` and `S_BlurMoCurves` are host effects; the bank holds no name string for either, so they are written as the plugin's documentation names them.
 
@@ -20,6 +20,7 @@ Effect names are the plugin's own name strings from the [name bank](glossary.md#
 | `S_Glow` | Bright highlights and a cinematic glow | done |
 | `S_GlowEdges` | Glowing outlines and edge highlights | done |
 | `S_HueSatBright` | Hue, saturation and brightness adjustments | done |
+| `S_Retime` | Slow motion and speed changes | done |
 | `S_Shake` | Impact shakes, hits and dramatic moments | done |
 | `S_Sharpen` | Crisp, detailed footage | done |
 | `S_SwishPan` | Fast directional transitions | done |
@@ -27,7 +28,6 @@ Effect names are the plugin's own name strings from the [name bank](glossary.md#
 | `S_Trails` | Fading trails behind moving content | done |
 | `S_WarpPerspective` | The image on a plane seen in perspective | done |
 | `S_WarpTransform` | Zooms, rotations and dynamic framing | done |
-| `S_Retime` | Slow motion and speed changes | |
 
 ## Common combinations
 

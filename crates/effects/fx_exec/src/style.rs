@@ -19,6 +19,17 @@ pub fn style_index(prog_count: i16, answer: i32) -> usize {
     }
 }
 
+/// The styles of S_Retime that are not rebuilt (the rebuilt ones are Retime_Speed and Retime_Longer).
+pub const RETIME_STYLES_NOT_REBUILT: [&str; 4] = ["Retime_Scale", "Retime_FPS", "Retime_Length", "Retime_Variable_Speed"];
+
+/// The refusal text for a program of a style that is not rebuilt, `None` for every other name (an `_Autogen` suffix is ignored).
+pub fn style_not_rebuilt(program: &str) -> Option<String> {
+    let core = program.strip_suffix("_Autogen").unwrap_or(program);
+    RETIME_STYLES_NOT_REBUILT
+        .contains(&core)
+        .then(|| format!("STYLE-NOT-REBUILT ({}: this style of S_Retime is not rebuilt; Retime_Speed and Retime_Longer are)", program))
+}
+
 /// The program table [owner] per multi-style effect, in index order, as MEASURED (for S_Blur). Effects not listed are not
 /// claimed here; a style of one of them is refused by STYLE-SELECT only when the run declares an Effect answer.
 pub const STYLE_TABLE: &[(&str, &[&str])] = &[
@@ -110,5 +121,20 @@ mod tests {
         assert_eq!(select("Blur_Mono", 2, 1).unwrap().2, "Blur_Color"); // a Mono label without Effect = 2 runs Color (VOID-NOT-MONO)
         assert!(select("Blur_Mono", 2, 3).is_err());
         assert!(select("Diffuse", 1, 1).is_err());
+    }
+}
+
+#[cfg(test)]
+mod not_rebuilt_tests {
+    use super::style_not_rebuilt;
+
+    #[test]
+    fn the_four_styles_are_refused_by_name() {
+        for p in ["Retime_Scale", "Retime_FPS", "Retime_Length", "Retime_Variable_Speed", "Retime_Scale_Autogen"] {
+            let t = style_not_rebuilt(p).expect(p);
+            assert!(t.starts_with(&format!("STYLE-NOT-REBUILT ({}:", p)), "{t}");
+        }
+        assert!(style_not_rebuilt("Retime_Speed").is_none());
+        assert!(style_not_rebuilt("Retime_Longer").is_none());
     }
 }

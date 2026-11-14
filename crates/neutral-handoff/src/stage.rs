@@ -401,11 +401,22 @@ impl FrameStage for Invert {
     }
 }
 
+/// The stage ids of the styles of S_Retime that are not rebuilt.
+pub(crate) const STYLES_NOT_REBUILT: [&str; 4] = ["retime_scale", "retime_fps", "retime_length", "retime_variable_speed"];
+
+/// The error for a stage id that is not registered: a style that is not rebuilt is named, any other id is unknown.
+pub fn unknown_stage_error(id: &str) -> Error {
+    if STYLES_NOT_REBUILT.contains(&id) {
+        return Error::unsupported(format!("STYLE-NOT-REBUILT ({}: this style of S_Retime is not rebuilt; the stages of the effect are retime_speed and retime_longer)", id));
+    }
+    Error::unsupported(format!("unknown stage `{}`, `sapphire stage list` shows the registered ones", id))
+}
+
 /// Build the stage `id` for frames of `spec` with `params`.
 pub fn build(id: &str, spec: FrameSpec, params: &[String]) -> Result<Box<dyn FrameStage>> {
     let def = match find(id) {
         Some(d) => d,
-        None => return Err(Error::unsupported(format!("unknown stage `{}`, `sapphire stage list` shows the registered ones", id))),
+        None => return Err(unknown_stage_error(id)),
     };
     let values = check_params(&def, params)?;
     match def.id {
@@ -516,7 +527,7 @@ mod tests {
     fn the_registry_holds_the_conformance_ffmpeg_and_effect_stages() {
         let defs = definitions();
         let ids: Vec<&str> = defs.iter().map(|d| d.id).collect();
-        assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen", "flicker", "glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake", "blur_motion_autogen", "blur_motion_mono_autogen", "warp_transform_autogen", "glow_edges", "glint"]);
+        assert_eq!(ids, ["selftest-invert", "ffmpeg-filter", "blur_color_autogen", "blur_mono_autogen", "transform_and_blur_autogen", "blur_motion_curves_no_transform_autogen", "diffuse_autogen", "distort_rgb_autogen", "drop_shadow", "hue_sat_bright_autogen", "sharpen_best_quality_autogen", "sharpen_fast_autogen", "time_warp_rgb_autogen", "trails_autogen", "warp_perspective_autogen", "flicker", "glow", "swishpan", "shake_normal_autogen", "shake_twitchy_autogen", "shake_jumpy_autogen", "dissolve_shake", "blur_motion_autogen", "blur_motion_mono_autogen", "warp_transform_autogen", "glow_edges", "glint", "retime_speed", "retime_longer"]);
         assert_eq!(defs[0].depths, vec![8, 16, 32]);
         assert_eq!((defs[0].geometry, defs[0].spool), ("preserve", false));
         assert_eq!((defs[1].geometry, defs[1].spool), ("declared", false));
@@ -654,6 +665,17 @@ mod tests {
         );
         let shape = check_params(&def, &["invert_alpha".into()]).unwrap_err();
         assert_eq!(shape.code, Code::Usage);
+    }
+
+    #[test]
+    fn the_styles_not_rebuilt_are_refused_by_name() {
+        for id in ["retime_scale", "retime_fps", "retime_length", "retime_variable_speed"] {
+            let err = build(id, spec(Depth::U8), &[]).err().unwrap();
+            assert_eq!(err.code, Code::Unsupported);
+            assert_eq!(err.exit_code(), 3);
+            assert!(err.message.starts_with(&format!("STYLE-NOT-REBUILT ({}:", id)), "{}", err.message);
+        }
+        assert!(build("retime", spec(Depth::U8), &[]).err().unwrap().message.starts_with("unknown stage `retime`"));
     }
 
     #[test]

@@ -1,0 +1,12 @@
+[package]
+name = "optical_flow_resample"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Separable cubic resample passes of the optical flow class: a horizontal pass (rows) and a vertical pass (columns), AVX2 and FMA arm."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+fx_common = { path = "../../fx_common" }

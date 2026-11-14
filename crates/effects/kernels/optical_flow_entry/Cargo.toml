@@ -1,0 +1,15 @@
+[package]
+name = "optical_flow_entry"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Slot 52 entry of the optical flow class: lane parameter block, launch order, the final confidence warp callback (AVX2 and FMA arm) and the entry wiring."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+fx_common = { path = "../../fx_common" }
+optical_flow_solve = { path = "../optical_flow_solve" }
+optical_flow = { path = "../optical_flow" }
+optical_flow_pyramid = { path = "../optical_flow_pyramid" }

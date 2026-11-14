@@ -1,0 +1,11 @@
+[package]
+name = "optical_flow_pyramid"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Typed level table of the optical flow class, shared by the build, the stage and the solve."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

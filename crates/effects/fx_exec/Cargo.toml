@@ -67,6 +67,7 @@ warp_log_gradient = { path = "../kernels/warp_log_gradient" }
 monochrome_a = { path = "../kernels/monochrome_a" }
 scale_rgb = { path = "../kernels/scale_rgb" }
 
+optical_flow_entry = { path = "../kernels/optical_flow_entry" }
 make_mipmap = { path = "../kernels/make_mipmap" }
 blur_warp = { path = "../kernels/blur_warp" }
 warp_rel = { path = "../kernels/warp_rel" }
@@ -75,9 +76,11 @@ static2 = { path = "../kernels/static2" }
 tilt_alpha = { path = "../kernels/tilt_alpha" }
 monochrome = { path = "../kernels/monochrome" }
 rotate2d = { path = "../kernels/rotate2d" }
+xy_to_polar = { path = "../kernels/xy_to_polar" }
 libm_sincos = { path = "../kernels/libm_sincos" }
 tilt = { path = "../kernels/tilt" }
 ops_coerce = { path = "../kernels/ops_coerce" }
+optical_flow_interp_maps = { path = "../kernels/optical_flow_interp_maps" }
 blur = { path = "../kernels/blur" }
 blur_channels = { path = "../kernels/blur_channels" }
 glow_layer = { path = "../kernels/glow_layer" }
@@ -89,6 +92,7 @@ edge_aware_sharpen_box_filter = { path = "../kernels/edge_aware_sharpen_box_filt
 edge_aware_sharpen_render = { path = "../kernels/edge_aware_sharpen_render" }
 edge_aware_sharpen = { path = "../kernels/edge_aware_sharpen" }
 fx_common = { path = "../fx_common" }
+hsv_to_rgb = { path = "../kernels/hsv_to_rgb" }
 
 [features]
 # Class-3 VB4 mutants: the path read through R4, and the wrong lanes handed over; each must fail the dsoc1rec line
@@ -160,6 +164,7 @@ g3r_mut_r3b = []
 # Mode-3 mutants: the refusal kept at mode 3 with 1 plane; the 3-plane body at 1 plane; each must fail the m3p2 tests
 m3p2_refusal_kept_mut = []
 m3p2_threeplane_body_mut = []
+
 
 [dev-dependencies]
 effects_vecdir = { path = "../vecdir" }

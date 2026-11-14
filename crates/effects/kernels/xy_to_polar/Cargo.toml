@@ -1,0 +1,12 @@
+[package]
+name = "xy_to_polar"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of class xy_to_polar (angle in turns and magnitude of a vector plane pair), AVX2 body."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+fx_common = { path = "../../fx_common" }

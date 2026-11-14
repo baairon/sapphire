@@ -1,0 +1,55 @@
+// Generated from the recorded host data of the styles; plain definitions, no file is read.
+// Rows are the ones the effects read; each field is a value the code uses. Do not edit by hand.
+//! Style Retime_Scale: program Retime_Scale.
+use crate::types::*;
+
+pub static STYLE: Style = Style {
+    name: "Retime_Scale",
+    programs: &["Retime_Scale"],
+    style_params: &[
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Load Preset", param: "-", host_index: 1, host_type: 15, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Save Preset", param: "-", host_index: 2, host_type: 15, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Effect", param: "-", host_index: 3, host_type: 7, popup_choices: Some(6), default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "speed", display_name: "Speed", param: "speed", host_index: 4, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Percent Longer", param: "-", host_index: 5, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Percent", param: "-", host_index: 6, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(13107200), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Input Fps", param: "-", host_index: 7, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Output Fps", param: "-", host_index: 8, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Output Length", param: "-", host_index: 9, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Input Frame", param: "-", host_index: 10, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "result", display_name: "Result", param: "result", host_index: 11, host_type: 7, popup_choices: Some(2), default_checkout_integer: Some(1), registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "start_frame", display_name: "Start Frame", param: "start_frame", host_index: 12, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(0), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "motion_blur", display_name: "Motion Blur", param: "motion_blur", host_index: 13, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(0), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "field_dominance", display_name: "Field Dominance", param: "field_dominance", host_index: 14, host_type: 7, popup_choices: Some(2), default_checkout_integer: Some(1), registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Flow Tuning", param: "-", host_index: 15, host_type: 13, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "flow_field_smoothness", display_name: "Flow Field Smoothness", param: "flow_field_smoothness", host_index: 16, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(52428), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "emphasize_edges", display_name: "Emphasize Edges", param: "emphasize_edges", host_index: 17, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(0), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "flow_view_scale", display_name: "Flow View Scale", param: "flow_view_scale", host_index: 18, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(58982), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "", param: "-", host_index: 19, host_type: 14, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Crop Input", param: "-", host_index: 20, host_type: 13, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Crop Left", param: "-", host_index: 21, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(0), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Crop Right", param: "-", host_index: 22, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(0), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Crop Top", param: "-", host_index: 23, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(0), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Crop Bottom", param: "-", host_index: 24, host_type: 2, popup_choices: None, default_checkout_integer: None, registered_value_bits: Some(0), record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "", param: "-", host_index: 25, host_type: 14, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+        StyleParam { program: "Retime_Scale", style: "Retime_Scale", record_name: "-", display_name: "Help", param: "-", host_index: 26, host_type: 15, popup_choices: None, default_checkout_integer: None, registered_value_bits: None, record: "CTX_Retime_Scale_rd1c50_50x7.json" },
+    ],
+    tickmap: &[
+    ],
+    ranges: &[
+        RangeDef { program: "Retime_Scale", parameter: "percent", ptype: "scalar", lanes: 1, min: 1.0, max: 1e+04, default: "200", min_enforced: true, max_enforced: true },
+        RangeDef { program: "Retime_Scale", parameter: "result", ptype: "popup", lanes: 1, min: 0.0, max: 1.0, default: "0", min_enforced: true, max_enforced: true },
+        RangeDef { program: "Retime_Scale", parameter: "start_frame", ptype: "int", lanes: 1, min: 0.0, max: 1e+06, default: "0", min_enforced: true, max_enforced: false },
+        RangeDef { program: "Retime_Scale", parameter: "motion_blur", ptype: "scalar", lanes: 1, min: 0.0, max: 2.0, default: "0", min_enforced: true, max_enforced: true },
+        RangeDef { program: "Retime_Scale", parameter: "field_dominance", ptype: "popup", lanes: 1, min: 0.0, max: 1.0, default: "0", min_enforced: true, max_enforced: true },
+        RangeDef { program: "Retime_Scale", parameter: "smoothness", ptype: "scalar", lanes: 1, min: 0.0, max: 1e+06, default: "0.8", min_enforced: true, max_enforced: false },
+        RangeDef { program: "Retime_Scale", parameter: "std_texture", ptype: "scalar", lanes: 1, min: 0.0, max: 1.0, default: "0", min_enforced: true, max_enforced: true },
+        RangeDef { program: "Retime_Scale", parameter: "flow_scale", ptype: "scalar", lanes: 1, min: 0.0, max: 1e+06, default: "0.9", min_enforced: true, max_enforced: false },
+    ],
+    inputs: &[
+    ],
+    input_records: &[
+    ],
+    ns: &[
+    ],
+};

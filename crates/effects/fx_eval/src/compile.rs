@@ -1098,6 +1098,9 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
                             nodes[id].cls = name.clone();
                             nodes[id].args.clear();
                             folds.push(format!("{}#{}", name, id));
+                        } else if name == "get_field" {
+                            // only the progressive field order (0) is rebuilt; an interlaced host value leaves the field branches live
+                            diags.push(format!("INTERLACED-FIELDS-NOT-REBUILT\tnode {}\tget_field is {} and only the progressive field order 0 is rebuilt (interlace_get_frames is not rebuilt)", id, hv.and_then(|h| h.first()).map(|v| v.to_string()).unwrap_or_default()));
                         }
                     }
                 }
@@ -1198,7 +1201,7 @@ pub fn compile(g0: &Genotype, combos: &ComboTable, opt: &CompileOptions) -> Resu
     if let Some(m) = ifneq_refusal.borrow_mut().take() {
         return Err(CompileError { msg: m });
     }
-    if let Some(d) = diags.iter().find(|d| d.starts_with("BLUR-EVEN-TAG-OPEN")) {
+    if let Some(d) = diags.iter().find(|d| d.starts_with("BLUR-EVEN-TAG-OPEN") || d.starts_with("INTERLACED-FIELDS-NOT-REBUILT")) {
         return Err(CompileError { msg: d.clone() });
     }
     if opt.strict {
@@ -1670,7 +1673,7 @@ impl CompiledProgram {
 pub fn fixed_out(class: &str) -> Option<i32> {
     match class {
         "static2" | "get_frame_half_dims" => Some(2),
-        "get_frame_number" | "get_time" | "get_percent_time" | "get_total_frames" | "get_frames_per_second" | "get_aspect_ratio" | "mocha_render" => Some(1),
+        "get_frame_number" | "get_time" | "get_percent_time" | "get_total_frames" | "get_frames_per_second" | "get_aspect_ratio" | "get_field" | "get_frame_width" | "mocha_render" => Some(1),
         _ => None,
     }
 }

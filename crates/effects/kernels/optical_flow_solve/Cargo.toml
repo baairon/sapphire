@@ -1,0 +1,14 @@
+[package]
+name = "optical_flow_solve"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the AVX2 route of the optical flow solver body: level loop, tile kernels, stretch between levels, tail blocks and the scalar median callback."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+fx_common = { path = "../../fx_common" }
+optical_flow_resample = { path = "../optical_flow_resample" }
+optical_flow_pyramid = { path = "../optical_flow_pyramid" }

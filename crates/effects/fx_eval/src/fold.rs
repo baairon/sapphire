@@ -383,6 +383,11 @@ pub fn fold_kind(class: &str) -> Option<(FoldKind, bool)> {
         "slow_in_out" => (FoldKind::Special, false),
         // 30 in all 24 folded nodes of the dumps (HOST-CONTEXT-MINIMAL frame rate)
         "get_frames_per_second" => (FoldKind::Host, true),
+        // host field order: 0 on a progressive host, the only host rebuilt (a recorded plan holds no get_field node, it folded); a nonzero
+        // (interlaced) field order does not fold and the compiler refuses it by name
+        "get_field" => (FoldKind::Host, true),
+        // host frame width in pixels; the value is an explicit input, as the aspect ratio is
+        "get_frame_width" => (FoldKind::Host, false),
         "cmult" | "cexp" => (FoldKind::Complex, true),
         "cdiv" | "clog" => (FoldKind::Complex, false),
         "interp" | "min_element" | "max_element" | "mocha_render" | "get_alpha" | "log_for_mipmap_rotate" => (FoldKind::Special, true),
@@ -715,10 +720,16 @@ pub fn fold_lanes(class: &str, a: &[ArgView2], out_el: i32, host: Option<&[f32]>
             out[3] = a[1].lanes[0];
         }
         FoldKind::Host => {
-            if host.is_none() && matches!(class, "get_percent_time" | "get_total_frames" | "get_aspect_ratio" | "get_time") {
+            if host.is_none() && matches!(class, "get_percent_time" | "get_total_frames" | "get_aspect_ratio" | "get_time" | "get_frame_width") {
                 return None;
             }
-            if let Some(h) = host {
+            if class == "get_field" {
+                // the progressive field order 0 is the only one rebuilt; any other value is left unfolded (see INTERLACED-FIELDS-NOT-REBUILT)
+                if host.is_some_and(|h| h.first().is_some_and(|&v| v != 0.0)) {
+                    return None;
+                }
+                out[0] = 0.0;
+            } else if let Some(h) = host {
                 for i in 0..n.min(h.len()) {
                     out[i] = h[i];
                 }

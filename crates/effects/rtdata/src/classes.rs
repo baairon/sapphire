@@ -36,8 +36,10 @@ pub static CLASS_FLAGS: &[(&str, u32)] = &[
     ("get_alpha", 0x30),
     ("get_aspect_ratio", 0x10),
     ("get_curve_val", 0x110),
+    ("get_field", 0x10),
     ("get_frame", 0x413),
     ("get_frame_number", 0x110),
+    ("get_frame_width", 0x10),
     ("get_frames_per_second", 0x10),
     ("get_percent_time", 0x110),
     ("get_prev_dest", 0x917),
@@ -46,12 +48,14 @@ pub static CLASS_FLAGS: &[(&str, u32)] = &[
     ("glint", 0x2235),
     ("glow", 0x2235),
     ("grad", 0x2231),
+    ("hsv_to_rgb", 0x30),
     ("hue_shift", 0x34),
     ("hue_shift_preserve_luma", 0x34),
     ("if+", 0x34),
     ("if>", 0x34),
     ("if_eq", 0x10),
     ("if_neq_const", 0x10),
+    ("interlace_get_frames", 0x2413),
     ("interp", 0x30),
     ("make_mipmap", 0x30),
     ("masked_blur", 0x2235),
@@ -66,6 +70,8 @@ pub static CLASS_FLAGS: &[(&str, u32)] = &[
     ("motion_blur", 0x50010),
     ("negate", 0x34),
     ("one_minus", 0x34),
+    ("optical_flow", 0x31),
+    ("optical_flow_interp_maps", 0x11),
     ("overlay_super", 0x34),
     ("perspective", 0x30),
     ("perspective_alpha", 0x30),
@@ -73,6 +79,7 @@ pub static CLASS_FLAGS: &[(&str, u32)] = &[
     ("random_sawtooth", 0x10),
     ("remove_alpha", 0x30),
     ("rotate", 0x30),
+    ("round", 0x34),
     ("sat_scale", 0x34),
     ("save_prev_dest", 0x15),
     ("scale_rgb", 0x34),
@@ -98,6 +105,7 @@ pub static CLASS_FLAGS: &[(&str, u32)] = &[
     ("warp_noise", 0x30),
     ("warp_noise3", 0x30),
     ("warp_rel", 0x6030),
+    ("xy_to_polar", 0x30),
 ];
 
 /// (primitive, argument index) pairs whose argument is an image only.
@@ -654,6 +662,12 @@ pub static COMBOS: &[ComboClass] = &[
         ],
     },
     ComboClass {
+        class: "hsv_to_rgb",
+        entries: &[
+            ComboEntry { vals: &[3], tag: 3 },
+        ],
+    },
+    ComboClass {
         class: "hue_shift",
         entries: &[
             ComboEntry { vals: &[1, 1], tag: 1 },
@@ -706,6 +720,14 @@ pub static COMBOS: &[ComboClass] = &[
             ComboEntry { vals: &[1, 1, 4, 4], tag: 4 },
             ComboEntry { vals: &[4, 4, 1, 1], tag: 1 },
             ComboEntry { vals: &[4, 4, 3, 3], tag: 3 },
+        ],
+    },
+    ComboClass {
+        class: "interlace_get_frames",
+        entries: &[
+            ComboEntry { vals: &[1, 1, 1, 1, 1, 1, 1, 1], tag: 1 },
+            ComboEntry { vals: &[3, 1, 1, 3, 1, 1, 1, 1], tag: 3 },
+            ComboEntry { vals: &[4, 1, 1, 4, 1, 1, 1, 1], tag: 4 },
         ],
     },
     ComboClass {
@@ -877,6 +899,20 @@ pub static COMBOS: &[ComboClass] = &[
         ],
     },
     ComboClass {
+        class: "optical_flow",
+        entries: &[
+            ComboEntry { vals: &[1, 1, 1, 1, 1, 1, 1, 1, 1], tag: 3 },
+        ],
+    },
+    ComboClass {
+        class: "optical_flow_interp_maps",
+        entries: &[
+            ComboEntry { vals: &[4, 4, 3, 1], tag: 4 },
+            ComboEntry { vals: &[3, 3, 3, 1], tag: 4 },
+            ComboEntry { vals: &[1, 1, 3, 1], tag: 4 },
+        ],
+    },
+    ComboClass {
         class: "overlay_super",
         entries: &[
             ComboEntry { vals: &[1, 1], tag: 1 },
@@ -933,6 +969,23 @@ pub static COMBOS: &[ComboClass] = &[
         class: "rotate",
         entries: &[
             ComboEntry { vals: &[2, 1, 2], tag: 2 },
+        ],
+    },
+    ComboClass {
+        class: "round",
+        entries: &[
+            ComboEntry { vals: &[1, 1], tag: 1 },
+            ComboEntry { vals: &[2, 2], tag: 2 },
+            ComboEntry { vals: &[2, 1], tag: 2 },
+            ComboEntry { vals: &[1, 2], tag: 2 },
+            ComboEntry { vals: &[3, 3], tag: 3 },
+            ComboEntry { vals: &[3, 1], tag: 3 },
+            ComboEntry { vals: &[1, 3], tag: 3 },
+            ComboEntry { vals: &[4, 4], tag: 4 },
+            ComboEntry { vals: &[4, 1], tag: 4 },
+            ComboEntry { vals: &[1, 4], tag: 4 },
+            ComboEntry { vals: &[3, 4], tag: 4 },
+            ComboEntry { vals: &[4, 3], tag: 4 },
         ],
     },
     ComboClass {
@@ -1142,6 +1195,12 @@ pub static COMBOS: &[ComboClass] = &[
             ComboEntry { vals: &[2, 2, 2, 1], tag: 2 },
             ComboEntry { vals: &[3, 2, 2, 1], tag: 3 },
             ComboEntry { vals: &[4, 2, 2, 1], tag: 4 },
+        ],
+    },
+    ComboClass {
+        class: "xy_to_polar",
+        entries: &[
+            ComboEntry { vals: &[2, 1], tag: 2 },
         ],
     },
 ];
@@ -1631,6 +1690,12 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         ],
     },
     ExecClass {
+        class: "hsv_to_rgb",
+        entries: &[
+            ExecEntry { vals: &[3], tag: 3, len: 1 },
+        ],
+    },
+    ExecClass {
         class: "hue_shift",
         entries: &[
             ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
@@ -1683,6 +1748,14 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
             ExecEntry { vals: &[1, 1, 4, 4], tag: 4, len: 4 },
             ExecEntry { vals: &[4, 4, 1, 1], tag: 1, len: 4 },
             ExecEntry { vals: &[4, 4, 3, 3], tag: 3, len: 4 },
+        ],
+    },
+    ExecClass {
+        class: "interlace_get_frames",
+        entries: &[
+            ExecEntry { vals: &[1, 1, 1, 1, 1, 1, 1, 1], tag: 1, len: 8 },
+            ExecEntry { vals: &[3, 1, 1, 3, 1, 1, 1, 1], tag: 3, len: 8 },
+            ExecEntry { vals: &[4, 1, 1, 4, 1, 1, 1, 1], tag: 4, len: 8 },
         ],
     },
     ExecClass {
@@ -1854,6 +1927,20 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         ],
     },
     ExecClass {
+        class: "optical_flow",
+        entries: &[
+            ExecEntry { vals: &[1, 1, 1, 1, 1, 1, 1, 1, 1], tag: 3, len: 9 },
+        ],
+    },
+    ExecClass {
+        class: "optical_flow_interp_maps",
+        entries: &[
+            ExecEntry { vals: &[4, 4, 3, 1], tag: 4, len: 4 },
+            ExecEntry { vals: &[3, 3, 3, 1], tag: 4, len: 4 },
+            ExecEntry { vals: &[1, 1, 3, 1], tag: 4, len: 4 },
+        ],
+    },
+    ExecClass {
         class: "overlay_super",
         entries: &[
             ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
@@ -1910,6 +1997,23 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
         class: "rotate",
         entries: &[
             ExecEntry { vals: &[2, 1, 2], tag: 2, len: 3 },
+        ],
+    },
+    ExecClass {
+        class: "round",
+        entries: &[
+            ExecEntry { vals: &[1, 1], tag: 1, len: 2 },
+            ExecEntry { vals: &[2, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[2, 1], tag: 2, len: 2 },
+            ExecEntry { vals: &[1, 2], tag: 2, len: 2 },
+            ExecEntry { vals: &[3, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[3, 1], tag: 3, len: 2 },
+            ExecEntry { vals: &[1, 3], tag: 3, len: 2 },
+            ExecEntry { vals: &[4, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 1], tag: 4, len: 2 },
+            ExecEntry { vals: &[1, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[3, 4], tag: 4, len: 2 },
+            ExecEntry { vals: &[4, 3], tag: 4, len: 2 },
         ],
     },
     ExecClass {
@@ -2125,6 +2229,12 @@ pub static COMBOS_EXEC: &[ExecClass] = &[
             ExecEntry { vals: &[2, 2, 2, 1], tag: 2, len: 4 },
             ExecEntry { vals: &[3, 2, 2, 1], tag: 3, len: 4 },
             ExecEntry { vals: &[4, 2, 2, 1], tag: 4, len: 4 },
+        ],
+    },
+    ExecClass {
+        class: "xy_to_polar",
+        entries: &[
+            ExecEntry { vals: &[2, 1], tag: 2, len: 2 },
         ],
     },
 ];

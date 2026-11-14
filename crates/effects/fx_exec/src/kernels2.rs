@@ -13,7 +13,7 @@ use plane_service as ps;
 pub const WIRED: &[&str] = &[
     "make_mipmap", "blur_warp", "warp_rel", "static2", "monochrome", "coerce_up", "coerce_up_a1", "coerce_to", "coerce_to_alpha", "rotate", "max_element",
     "min_element", "blur", "blur_channels", "dissolve", "coerce_to_v3", "coerce_to_v4", "coerce_up_to_v3", "v3_to_v4", "sharpen", "monochrome_a",
-    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "copy_alpha", "grad", "edge_detect", "perspective", "perspective_alpha", "tilt", "tilt_alpha", "warp", "postdivide", "glow", "alpha_from_rgb_max", "append", "v3_to_v4_if4_a", "get_alpha", "glint",
+    "remove_alpha", "edge_aware_sharpen", "round", "scale_rgb", "add_rgb", "masked_blur", "comp_premult", "copy", "copy_alpha", "grad", "edge_detect", "perspective", "perspective_alpha", "tilt", "tilt_alpha", "warp", "postdivide", "glow", "alpha_from_rgb_max", "append", "v3_to_v4_if4_a", "get_alpha", "glint", "xy_to_polar", "hsv_to_rgb", "optical_flow_interp_maps", "optical_flow",
 ];
 
 /// Result of one run-primitive: a plain planar image or the ripmap object of make_mipmap.
@@ -806,6 +806,25 @@ fn masked_blur_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> Re
     Ok(Image { n: w * h, planes: outv })
 }
 
+/// hsv_to_rgb: operand 0 a 3 channel image (hue, saturation, value planes); outputs the red, green and blue planes.
+/// Refused by name: a constant operand (the constant-input form of the original is not wired) and any other channel count.
+fn hsv_to_rgb_k(args: &[Arg], tag: i32, n: usize) -> Result<Image, ExecError> {
+    need(args, 1, "hsv_to_rgb")?;
+    if tag != 3 {
+        return Err(unsupported("hsv_to_rgb", "combo tag other than 3 is not rebuilt"));
+    }
+    let (h, s, v) = match &args[0] {
+        Arg::Img(i) if i.channels() == 3 => (&i.planes[0], &i.planes[1], &i.planes[2]),
+        Arg::Const { .. } => return Err(unsupported("hsv_to_rgb", "HSV-CONST-FORM-NOT-WIRED (the original's constant-input form, flag byte [obj+0x44] set, is ported in the kernel but no plan selects it and the executor does not feed it)")),
+        _ => return Err(unsupported("hsv_to_rgb", "the operand must be a 3 channel image (a plane count below 3 takes the original's plane service route, which is not rebuilt)")),
+    };
+    if h.len() < n || s.len() < n || v.len() < n {
+        return Err(unsupported("hsv_to_rgb", "input plane shorter than the element count"));
+    }
+    let planes = hsv_to_rgb::hsv_to_rgb(&h[..n], &s[..n], &v[..n]).map_err(|_| unsupported("hsv_to_rgb", "input planes differ in length"))?;
+    Ok(Image { n, planes: planes.into_iter().collect() })
+}
+
 /// `comp_premult` (slot 53, AVX2 body, crate `comp_premult` from K-PARITY at floor, R-PARITY for
 /// the 10 measured combo rows, ROUTE AVX2-ONLY). Argument 0 = A (this), argument 1 = B (0x70 .), argument 2 =
 /// T, the alpha (0xa0 ...). `tag` (the combo row's output tag) is the class count getter (virtual slot 31) = number of output channels
@@ -912,6 +931,32 @@ fn rotate_k(args: &[Arg], n: usize) -> Result<Image, ExecError> {
     Ok(Image { n, planes: vec![ox, oy] })
 }
 
+/// xy_to_polar: operand 0 a 2 channel vector plane, operand 1 the dir_offset constant; outputs the angle plane and the magnitude plane.
+fn xy_to_polar_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, ExecError> {
+    need(args, 2, "xy_to_polar")?;
+    if tag != 2 {
+        return Err(unsupported("xy_to_polar", "combo tag other than 2 is not rebuilt"));
+    }
+    let (x, y) = match &args[0] {
+        Arg::Img(i) if i.channels() == 2 => (i.planes[0].clone(), i.planes[1].clone()),
+        Arg::Const { .. } => return Err(unsupported("xy_to_polar", "the constant-input route is not rebuilt")),
+        _ => return Err(unsupported("xy_to_polar", "vector operand must be a 2 channel image")),
+    };
+    let dir = match &args[1] {
+        Arg::Const { .. } => args[1].f32s()[0],
+        _ => return Err(unsupported("xy_to_polar", "dir_offset operand must be a constant")),
+    };
+    let mut ang = vec![0.0f32; n];
+    let mut mag = vec![0.0f32; n];
+    xy_to_polar::xy_to_polar(&x, &y, dir, &mut ang, &mut mag, kp.polar_mag_phase as usize).map_err(|e| match e {
+        xy_to_polar::Refusal::Atan2General { .. } => unsupported(
+            "xy_to_polar",
+            "ATAN2-GENERAL-NOT-PORTED (xy_to_polar: a vector whose two finite non-zero components lie outside [2^-125, 2^122) with exponents less than 54 apart takes the original's table branch of its scalar atan2, which is not rebuilt; no output is written)",
+        ),
+    })?;
+    Ok(Image { n, planes: vec![ang, mag] })
+}
+
 fn element_reduce_k(class: &str, args: &[Arg], n: usize, kp: &KParams) -> Result<Image, ExecError> {
     need(args, 1, class)?;
     let a = &args[0];
@@ -1008,6 +1053,28 @@ fn blur_channels_k(args: &[Arg], tag: i32, w: usize, h: usize, kp: &KParams) -> 
         blur_channels::render(&chan_params, &src_planes, &mut dp).map_err(|e| kerr("blur_channels", e))?;
     }
     Ok(Image { n: w * h, planes: outv })
+}
+
+/// optical_flow_interp_maps (slot 52, AVX2 route): arguments (previous colour, next colour, flow, scale); the tag is the colour channel count.
+/// The result image holds the four output planes of the parameter record. Stand-ins: ONE-CHUNK, X8 (see the crate's `native_assumptions`).
+fn optical_flow_interp_maps_k(args: &[Arg], tag: i32, w: usize, h: usize) -> Result<Image, ExecError> {
+    need(args, 4, "optical_flow_interp_maps")?;
+    let prev = image_or_const(&args[0], w * h, "optical_flow_interp_maps")?;
+    let next_colour = image_or_const(&args[1], w * h, "optical_flow_interp_maps")?;
+    let flow = image_or_const(&args[2], w * h, "optical_flow_interp_maps")?;
+    let c = tag.max(0) as usize;
+    if c == 0 || c > 4 || prev.channels() < c || next_colour.channels() < c || flow.channels() < 2 {
+        return Err(ExecError::Shape("optical_flow_interp_maps: operands smaller than the combo tag".into()));
+    }
+    let scale = const_lane(&args[3], 0, "optical_flow_interp_maps", "scale")?;
+    match optical_flow_interp_maps::native::interp_maps(w, h, &prev.planes[..c], &next_colour.planes[..c], &flow.planes[0], &flow.planes[1], scale, 0.0) {
+        Ok(o) => Ok(Image { n: w * h, planes: o.into_iter().collect() }),
+        Err(optical_flow_interp_maps::native::NativeError::ExtentOneRefused) => Err(ExecError::Kernel {
+            class: "optical_flow_interp_maps".into(),
+            msg: "EXTENT-ONE-REFUSED (width or height 1: every sample fetch of the original reads outside the frame)".into(),
+        }),
+        Err(optical_flow_interp_maps::native::NativeError::Shape(m)) => Err(ExecError::Shape(m)),
+    }
 }
 
 /// IN3-A1 (dissolve, slot 53 -> AVX2 body, crate `dissolve`K-PARITY plus RPARITY.tsv "ACHIEVED (I)"): the plan's
@@ -1511,6 +1578,51 @@ fn append_k(args: &[Arg], tag: i32, n: usize, kp: &KParams) -> Result<Image, Exe
     Ok(Image { n, planes: outv })
 }
 
+/// The seven constants of optical_flow's program call, taken from the nine operands by index (operands 0 and 1 are the images).
+pub fn flow_constants(args: &[Arg]) -> Result<optical_flow_entry::compose::FlowConstants, ExecError> {
+    use optical_flow_entry::compose::FlowConstants;
+    let lane = |k: usize, what: &str| const_lane(&args[k], 0, "optical_flow", what);
+    Ok(FlowConstants {
+        max_warps: cvt_i32(lane(2, "max_warps")?),
+        max_outer: cvt_i32(lane(3, "max_outer")?),
+        max_inner: cvt_i32(lane(4, "max_inner")?),
+        lambda: lane(5, "lambda")?,
+        use_median: cvt_i32(lane(6, "use_median")?),
+        texture_scale: lane(7, "texture_scale")?,
+        std_smooth: lane(8, "std_smooth")?,
+    })
+}
+
+/// optical_flow (slot 52, AVX2 route): nine operands (previous colour, next colour, max_warps, max_outer, max_inner, lambda,
+/// use_median, the texture scale, std_smooth); the tag is the output plane count (flow u, flow v, confidence). `host_phase` is the
+/// ALIGN-PHASE-HOST value the op's plane placement starts from.
+fn optical_flow_k(args: &[Arg], tag: i32, w: usize, h: usize, host_phase: u32) -> Result<Image, ExecError> {
+    use optical_flow_entry::compose::{run_flow_at, FlowStop};
+    use optical_flow_entry::wiring::refusal_text;
+    need(args, 9, "optical_flow")?;
+    if tag != 3 {
+        return Err(ExecError::Shape(format!("optical_flow: tag {} (the combo row is tag 3)", tag)));
+    }
+    let first_img = image_or_const(&args[0], w * h, "optical_flow")?;
+    let second_img = image_or_const(&args[1], w * h, "optical_flow")?;
+    if first_img.planes.is_empty() || second_img.planes.is_empty() {
+        return Err(ExecError::Shape("optical_flow: an operand image has no plane".into()));
+    }
+    let c = flow_constants(args)?;
+    let kernel = |msg: String| ExecError::Kernel { class: "optical_flow".into(), msg };
+    if !optical_flow_entry::placement::host_phase_valid(host_phase) {
+        return Err(kernel(format!("OPTICAL-FLOW-BAD-HOST-VALUE-REFUSED (flow_host_phase {} is not a multiple of 4 modulo 64, 0 to 60)", host_phase)));
+    }
+    match run_flow_at(&first_img.planes[0], &second_img.planes[0], w as i32, h as i32, &c, host_phase, || false) {
+        Ok(p) => Image::from_planes(vec![p.flow_u, p.flow_v, p.confidence]),
+        Err(FlowStop::Refused(r)) => Err(kernel(refusal_text(r).to_string())),
+        Err(FlowStop::PyramidStopped) => Err(kernel(optical_flow_entry::wiring::TOO_FEW_LEVELS_REFUSAL.to_string())),
+        Err(FlowStop::Aborted) => Err(kernel("OPTICAL-FLOW-ABORTED (optical_flow: the run was stopped)".into())),
+        Err(FlowStop::NoLevels) => Err(kernel("OPTICAL-FLOW-NO-LEVELS (optical_flow: the level table is empty)".into())),
+        Err(FlowStop::Host(m)) => Err(kernel(format!("OPTICAL-FLOW-HOST ({m})"))),
+    }
+}
+
 /// Runs one wired class. `tag` is the selector's result; `(w, h)` the frame.
 pub fn run_wired(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, usize), kp: &KParams) -> Result<Out, ExecError> {
     let (w, h) = dims;
@@ -1526,6 +1638,9 @@ pub fn run_wired(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, us
         "tilt" => Out::Img(tilt_k(args, n)?),
         "coerce_up" | "coerce_up_a1" | "coerce_to" | "coerce_to_alpha" => Out::Img(coerce_k(class, args, tag, n, kp)?),
         "rotate" => Out::Img(rotate_k(args, n)?),
+        "xy_to_polar" => Out::Img(xy_to_polar_k(args, tag, n, kp)?),
+        "hsv_to_rgb" => Out::Img(hsv_to_rgb_k(args, tag, n)?),
+        "optical_flow_interp_maps" => Out::Img(optical_flow_interp_maps_k(args, tag, w, h)?),
         "max_element" | "min_element" => Out::Img(element_reduce_k(class, args, n, kp)?),
         "blur" => Out::Img(blur_k(args, tag, w, h, kp)?),
         "blur_channels" => Out::Img(blur_channels_k(args, tag, w, h, kp)?),
@@ -1551,9 +1666,32 @@ pub fn run_wired(class: &str, tag: i32, args: &[Arg], n: usize, dims: (usize, us
         "glow" => Out::Img(glow_k(args, tag, w, h, kp)?),
         "glint" => Out::Img(glint_k(args, tag, w, h, kp)?),
         "alpha_from_rgb_max" => Out::Img(alpha_from_rgb_max_k(args, tag, n)?),
+        "optical_flow" => Out::Img(optical_flow_k(args, tag, w, h, kp.flow_host_phase)?),
         "append" => Out::Img(append_k(args, tag, n, kp)?),
         "v3_to_v4_if4_a" => Out::Img(v3_to_v4_if4_a_k(args, tag, n, kp)?),
         "get_alpha" => Out::Img(get_alpha_k(args, tag, n, kp)?),
         other => return Err(unsupported(other, "not a wired class")),
     })
+}
+
+#[cfg(test)]
+mod flow_refusal_tests {
+    use super::*;
+
+    fn c(x: f32) -> Arg<'static> {
+        Arg::Const { n: 1, lanes: [x.to_bits(); 4] }
+    }
+
+    #[test]
+    fn a_three_by_three_frame_is_refused_with_the_label() {
+        let img = Image::from_planes(vec![vec![0.5f32; 9]]).expect("image");
+        let args = [Arg::Img(&img), Arg::Img(&img), c(1.0), c(1.0), c(1.0), c(0.1), c(1.0), c(0.5), c(0.2)];
+        match optical_flow_k(&args, 3, 3, 3, optical_flow_entry::placement::HOST_PHASE_DEFAULT) {
+            Err(ExecError::Kernel { class, msg }) => {
+                assert_eq!(class, "optical_flow");
+                assert!(msg.starts_with("OPTICAL-FLOW-TOO-FEW-LEVELS-REFUSED"), "{msg}");
+            }
+            _ => panic!("expected a kernel refusal"),
+        }
+    }
 }

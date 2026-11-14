@@ -193,6 +193,10 @@ pub const NAN_TWIN_CAP: usize = 600;
 /// Ops with no device kernel, each with the reason. The list shrinks as kernels land. `get_frame`, `get_prev_dest` and
 /// `save_prev_dest` are host data movement (`kernels::HOST_CLASSES`) and are not kernel ops.
 pub const CPU_ONLY: &[(&str, &str)] = &[
+    ("xy_to_polar", "the angle runs the 8-lane atan2 and its scalar helper on the CPU; no device kernel yet"),
+    ("hsv_to_rgb", "scalar sextant switch with fused steps, run on the CPU; no device kernel yet"),
+    ("optical_flow_interp_maps", "CPU-side resampling pass over flow maps (splat, hole fill, interpolation); no device kernel yet"),
+    ("optical_flow", "CPU-side pyramid, solve and warp passes over the composed plane store; no device kernel yet"),
 ];
 
 fn copy_calls_are_identity(tag: i32) -> bool {

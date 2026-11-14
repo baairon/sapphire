@@ -1,0 +1,12 @@
+[package]
+name = "optical_flow_interp_maps"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Native port of the AVX2 route of the flow interpolation map generator: the splat scan, the five tile kernels and the sequence that runs them."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+fx_common = { path = "../../fx_common" }
