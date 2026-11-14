@@ -319,6 +319,10 @@ pub fn describe_params_json(progs: &[&str]) -> String {
 
 fn describe_params(a: &[String]) -> i32 {
     let progs: Vec<&str> = a.iter().skip(1).filter(|x| !x.starts_with("--") && x.as_str() != "-").map(|x| x.as_str()).collect();
+    if let Some(t) = progs.iter().find_map(|p| crate::style::style_not_rebuilt(p)) {
+        crate::fxrun::elog!("{}", t);
+        return 2;
+    }
     println!("{}", describe_params_json(&progs));
     0
 }
@@ -408,6 +412,10 @@ fn run_locked(a0: &[String]) -> i32 {
     let a: &[String] = &a_style;
     let path = a[1].clone();
     let prog = a[2].clone();
+    if let Some(t) = crate::style::style_not_rebuilt(&prog) {
+        crate::fxrun::elog!("{}", t);
+        return 2;
+    }
     let (mut w, mut h) = (0usize, 0usize);
     let mut out = String::new();
     let mut b = Binding::defaults();
@@ -512,6 +520,17 @@ fn run_locked(a0: &[String]) -> i32 {
                     }
                 }
                 b.kp.ds_dst_phase = ds_phase_opt.unwrap();
+                i += 1;
+            }
+            "--flow-host-phase" => {
+                // ALIGN-PHASE-HOST: byte phase of optical_flow's first level-0 image; any value not a multiple of 4 below 64 (modulo 64, 0 to 60) is refused when the op runs
+                match val.parse::<u32>() {
+                    Ok(p) => b.kp.flow_host_phase = p,
+                    Err(_) => {
+                        crate::fxrun::elog!("--flow-host-phase takes a byte count");
+                        return 2;
+                    }
+                }
                 i += 1;
             }
             "--src-chan" => {
@@ -1832,8 +1851,9 @@ fn run_locked(a0: &[String]) -> i32 {
                 write_plan_text(&plan_text_path, &plan_text)
             }
             Err(e) => {
-                crate::fxrun::elog!("ERR {}", e);
-                exec_failure_code()
+                let t = failure_text(&e);
+                crate::fxrun::elog!("ERR {}", t);
+                exec_failure_code(&t)
             }
         };
     }
@@ -1899,8 +1919,9 @@ fn run_locked(a0: &[String]) -> i32 {
             write_plan_text(&plan_text_path, &plan_text)
         }
         Err(e) => {
-            crate::fxrun::elog!("ERR {}", e);
-            exec_failure_code()
+            let t = failure_text(&e);
+            crate::fxrun::elog!("ERR {}", t);
+            exec_failure_code(&t)
         }
     }
 }
@@ -1928,9 +1949,42 @@ fn compile_failure_code(e: &crate::ExecError) -> i32 {
     }
 }
 
-/// The status of a failed execution: 2 (a refusal) when the failure is the missing device that `SAPPHIRE_REQUIRE_DEVICE=1` demands,
-/// else 1.
-fn exec_failure_code() -> i32 {
+/// The refusal labels of the optical flow route that fx_run reports with status 2: the interp maps extent refusal, the four labels
+/// of the optical_flow entry's `refusal_text`, the too-few-levels refusal of its wiring and the refusal of the Result answers that are not
+/// rebuilt. Other kernel refusals keep the status of a failed execution.
+const FLOW_ROUTE_REFUSAL_LABELS: [&str; 8] = [
+    "EXTENT-ONE-REFUSED",
+    "OPTICAL-FLOW-SMALL-LEVEL-REFUSED",
+    "OPTICAL-FLOW-LEVEL-TABLE-FULL-REFUSED",
+    "OPTICAL-FLOW-NULL-IMAGE-REFUSED",
+    "OPTICAL-FLOW-FLAG-ROUTE-REFUSED",
+    "OPTICAL-FLOW-TOO-FEW-LEVELS-REFUSED",
+    "OPTICAL-FLOW-BAD-HOST-VALUE-REFUSED",
+    "RESULT-NOT-REBUILT",
+];
+
+/// The failure text of an execution. A plan that holds a get_frame_width no fold resolved (the Result answers of S_Retime that show the flow
+/// vectors) has no kernel wrapper; that failure is reported as the named refusal RESULT-NOT-REBUILT, ahead of the original text.
+fn failure_text(e: &dyn std::fmt::Display) -> String {
+    let t = e.to_string();
+    if t.contains("unsupported class get_frame_width") {
+        format!("RESULT-NOT-REBUILT (this Result answer of the program is not rebuilt; {})", t)
+    } else {
+        t
+    }
+}
+
+/// True when the failure text carries one of the flow route's refusal labels.
+fn is_flow_route_refusal(text: &str) -> bool {
+    FLOW_ROUTE_REFUSAL_LABELS.iter().any(|l| text.contains(l))
+}
+
+/// The status of a failed execution: 2 (a refusal) when the failure is the missing device that `SAPPHIRE_REQUIRE_DEVICE=1` demands
+/// or carries one of the flow route's refusal labels (`FLOW_ROUTE_REFUSAL_LABELS`), else 1.
+fn exec_failure_code(e: &dyn std::fmt::Display) -> i32 {
+    if is_flow_route_refusal(&e.to_string()) {
+        return 2;
+    }
     if crate::backend::required_device_missing() {
         2
     } else {
@@ -4163,5 +4217,60 @@ mod xy_route_tests {
         assert!(l.starts_with("FRAME-SIZE-OVER-I32 (fx_run: the plane length W x H is 2147488281,"), "{}", l);
         assert!(frame_over_i32(i32::MAX as usize + 1, 1).is_some());
         assert!(frame_over_i32(usize::MAX, 2).unwrap().contains("FRAME-SIZE-OVER-I32"));
+    }
+}
+
+#[cfg(test)]
+mod flow_refusal_status_tests {
+    use super::*;
+    use optical_flow_entry::wiring::{refusal_text, EntryRefusal, TOO_FEW_LEVELS_REFUSAL};
+
+    /// Every refusal variant, by an exhaustive match: a new variant fails to compile until it is listed here.
+    fn every_variant(r: EntryRefusal) -> EntryRefusal {
+        match r {
+            EntryRefusal::SmallLevel => r,
+            EntryRefusal::LevelTableFull => r,
+            EntryRefusal::NullImage => r,
+            EntryRefusal::FlagRoute => r,
+        }
+    }
+
+    #[test]
+    fn each_flow_route_refusal_gives_status_two() {
+        for r in [EntryRefusal::SmallLevel, EntryRefusal::LevelTableFull, EntryRefusal::NullImage, EntryRefusal::FlagRoute] {
+            let text = refusal_text(every_variant(r));
+            assert!(FLOW_ROUTE_REFUSAL_LABELS.iter().any(|l| text.starts_with(l)), "{text}");
+            let e = crate::ExecError::Kernel { class: "optical_flow".into(), msg: text.to_string() };
+            assert_eq!(exec_failure_code(&e), 2, "{text}");
+        }
+        let e = crate::ExecError::Kernel { class: "optical_flow_interp_maps".into(), msg: "EXTENT-ONE-REFUSED (width or height 1)".into() };
+        assert_eq!(exec_failure_code(&e), 2);
+        let e = crate::ExecError::Kernel { class: "optical_flow".into(), msg: TOO_FEW_LEVELS_REFUSAL.to_string() };
+        assert_eq!(exec_failure_code(&e), 2);
+        for v in [2u32, 33, 64, 65] {
+            let msg = format!("OPTICAL-FLOW-BAD-HOST-VALUE-REFUSED (flow_host_phase {v} is not a multiple of 4 modulo 64, 0 to 60)");
+            assert!(FLOW_ROUTE_REFUSAL_LABELS.iter().any(|l| msg.starts_with(l)), "{msg}");
+            let e = crate::ExecError::Kernel { class: "optical_flow".into(), msg };
+            assert_eq!(exec_failure_code(&e), 2, "{v}");
+        }
+    }
+
+    #[test]
+    fn an_unfolded_frame_width_is_the_named_result_refusal() {
+        let e = crate::ExecError::Unsupported { class: "get_frame_width".into(), reason: "no kernel wrapper in fx_exec (builtin not wired or not rebuilt)".into() };
+        let t = failure_text(&e);
+        assert!(t.starts_with("RESULT-NOT-REBUILT ("), "{t}");
+        assert_eq!(exec_failure_code(&t), 2);
+        let other = crate::ExecError::Unsupported { class: "get_time".into(), reason: "x".into() };
+        assert_eq!(failure_text(&other), other.to_string());
+        assert_eq!(exec_failure_code(&other), 1);
+    }
+
+    #[test]
+    fn other_kernel_errors_keep_status_one() {
+        for msg in ["HOST-BRANCH-REFUSED (a kernel of another class)", "OPTICAL-FLOW-ABORTED (the run was stopped)", "OPTICAL-FLOW-NO-LEVELS (optical_flow: the level table is empty)", "OPTICAL-FLOW-HOST (a host failure)", "a plain failure"] {
+            let e = crate::ExecError::Kernel { class: "k".into(), msg: msg.into() };
+            assert_eq!(exec_failure_code(&e), 1, "{msg}");
+        }
     }
 }

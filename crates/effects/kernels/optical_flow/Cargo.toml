@@ -1,0 +1,15 @@
+[package]
+name = "optical_flow"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Native port of the AVX2 route of the optical flow flow-build body: plane callbacks, typed level loop and composed plane host."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+fx_common = { path = "../../fx_common" }
+optical_flow_resample = { path = "../optical_flow_resample" }
+warp_log_gradient = { path = "../warp_log_gradient" }
+optical_flow_pyramid = { path = "../optical_flow_pyramid" }

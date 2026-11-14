@@ -374,6 +374,7 @@ fn refusals_come_before_any_frame_moves() {
         (refuse(&clip, &["--stage", "'unterminated"]), ("usage", "pre1", 2, "No closing quotation")),
         (refuse(&odd_s, &["--stage", "no-such apply --frames {frames}", "--lossless"]), ("usage", "pre1", 2, "--stage 1: {frames} is not known for this input")),
         (refuse(&clip, &["--stage", "@nope"]), ("unsupported", "pre1", 3, "unknown stage `@nope`")),
+        (refuse(&clip, &["--stage", "@retime_scale"]), ("unsupported", "pre1", 3, "STYLE-NOT-REBUILT (retime_scale:")),
         (refuse(&clip, &["--stage", "@selftest-invert invert_alpha=maybe"]), ("unsupported", "pre1", 3, "bad value for `invert_alpha`: cannot parse `maybe`")),
         (refuse(&clip, &[]), ("usage", "args", 2, "give an EFFECT or at least one --stage")),
         (refuse(&clip, &["--stage", "@selftest-invert", "--param", "a=1"]), ("usage", "args", 2, "--param needs an EFFECT")),

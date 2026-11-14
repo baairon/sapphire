@@ -596,7 +596,8 @@ pub fn prepare_with(
                 match kind.clone() {
                     StepKind::Builtin { id, params } => {
                         let def = crate::stage::find(&id).ok_or_else(|| {
-                            Error::unsupported(format!("unknown stage `@{}`, `sapphire stage list` shows the registered ones", id)).at(&name)
+                            let missing = if crate::stage::STYLES_NOT_REBUILT.contains(&id.as_str()) { id.clone() } else { format!("@{}", id) };
+                            crate::stage::unknown_stage_error(&missing).at(&name)
                         })?;
                         let values = crate::stage::check_params(&def, &params).map_err(|e| e.at(&name))?;
                         if id == crate::ffstage::ID {

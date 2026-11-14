@@ -244,6 +244,9 @@ pub fn parse_tables(stages: &str, params: &str) -> Vec<Profile> {
             .filter(|t| !t.is_empty())
             .filter_map(|t| t.split_once('=').map(|(s, o)| (s.to_string(), pairs(o))))
             .collect();
+        if !matches!(c[3], "frame" | "temporal" | "requested") {
+            panic!("stage table: kind {} is not frame, temporal or requested", c[3]);
+        }
         out.push(Profile {
             id: c[0].to_string(),
             program: c[1].to_string(),
@@ -404,6 +407,16 @@ pub fn missing() -> Option<String> {
     None
 }
 
+/// The manifest kind of a route kind: the internal route kind `requested` (a stage that serves each output frame
+/// from frames requested of the clip) is a temporal stage to a caller.
+pub fn manifest_kind(route_kind: &str) -> &'static str {
+    match route_kind {
+        "frame" => "frame",
+        "temporal" | "requested" => "temporal",
+        other => panic!("stage table: kind {} is not frame, temporal or requested", other),
+    }
+}
+
 /// The stage definitions (hidden while the bundle is absent).
 pub fn definitions() -> Vec<StageDef> {
     let hidden = missing().is_some();
@@ -413,7 +426,7 @@ pub fn definitions() -> Vec<StageDef> {
             id: leak(&p.id),
             name: leak(&p.program),
             family: leak(&p.family),
-            kind: leak(&p.kind),
+            kind: manifest_kind(&p.kind),
             spool: p.spool,
             geometry: "preserve",
             depths: Depth::ALL.iter().map(|d| d.bits()).collect(),
@@ -772,6 +785,74 @@ pub fn parse_curve_missing(stderr: &str) -> Option<CurveKey> {
 /// How many times one frame may be repeated to learn host curve samples before the stage refuses it.
 const CURVE_RERUNS: usize = 64;
 
+/// How many distinct clip frames one render of a `requested` stage may be served.
+const REQUEST_LIMIT: usize = 8;
+
+/// The key of a get_frame request that fx_run could not answer: the frame and the stored time's f32 bits.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FrameRequest {
+    /// The absolute frame the plan asks.
+    pub frame: i64,
+    /// The bits of the stored time of the request.
+    pub stored_bits: u32,
+}
+
+/// The request named by fx_run's log: the last request line of the get_frame route (tab separated `frame=K`, `stored=HHHHHHHH`, `arg=A`), else the text of
+/// the refusal `get_frame request frame K stored S (bits HHHHHHHH) argument A`. `None` when neither is present and well formed.
+pub fn parse_host_request(log: &str) -> Option<FrameRequest> {
+    let from_line = log.lines().rev().find(|l| l.starts_with(&request_line_head())).and_then(|l| {
+        let mut it = l.split('\t').skip(1);
+        let frame = it.next()?.strip_prefix("frame=")?.parse::<i64>().ok()?;
+        let bits = it.next()?.strip_prefix("stored=")?;
+        if bits.len() != 8 {
+            return None;
+        }
+        Some(FrameRequest { frame, stored_bits: u32::from_str_radix(bits, 16).ok()? })
+    });
+    if from_line.is_some() {
+        return from_line;
+    }
+    let line = log.lines().rev().find(|l| l.contains("get_frame request frame "))?;
+    let rest = line.split("get_frame request frame ").nth(1)?;
+    let (frame, rest) = rest.split_once(" stored ")?;
+    let bits = rest.split_once(" (bits ")?.1.split_once(')')?.0;
+    if bits.len() != 8 {
+        return None;
+    }
+    Some(FrameRequest { frame: frame.parse().ok()?, stored_bits: u32::from_str_radix(bits, 16).ok()? })
+}
+
+/// The head of the request lines fx_run logs for each get_frame it answers.
+fn request_line_head() -> String {
+    format!("{}-{}\t", "HOST", "REQUEST")
+}
+
+/// Whether fx_run's log ends in a get_frame request that it was not given.
+fn request_unanswered(log: &str) -> bool {
+    log.contains("get_frame request frame ")
+}
+
+/// Decide whether the stage serves `req` for output frame `f` of a clip of `n` frames, given the frames `served` so far.
+/// A frame outside the clip, a stored time other than the frame, and a request beyond `REQUEST_LIMIT` distinct frames are
+/// refused by name.
+pub fn serve_request(f: u64, req: FrameRequest, n: usize, served: &[i64]) -> Result<()> {
+    if req.frame < 0 || req.frame >= n as i64 {
+        return Err(Error::unsupported(format!("FRAME-REQUEST-OUTSIDE-CLIP (frame {}: the compiled plan asks frame {} of a clip of {} frames)", f, req.frame, n)));
+    }
+    if req.stored_bits != (req.frame as f32).to_bits() {
+        return Err(Error::unsupported(format!(
+            "FRAME-REQUEST-STORED-UNMEASURED (frame {}: the compiled plan asks frame {} with the stored time {}; the stage serves a frame only at a stored time equal to the frame)",
+            f,
+            req.frame,
+            f32::from_bits(req.stored_bits)
+        )));
+    }
+    if served.len() >= REQUEST_LIMIT || served.contains(&req.frame) {
+        return Err(Error::unsupported(format!("FRAME-REQUESTS-UNSERVED (frame {}: the compiled plan asks more than {} frames)", f, REQUEST_LIMIT)));
+    }
+    Ok(())
+}
+
 /// The default-xy writer count named by `XY-BASE-LIST-MISMATCH (the placement model has N default-xy writers, --xy-base-list gives M)`.
 pub fn parse_xy_writers(stderr: &str) -> Option<usize> {
     let line = stderr.lines().find(|l| l.contains("XY-BASE-LIST-MISMATCH (the placement model has "))?;
@@ -851,6 +932,8 @@ struct Extra {
     host_values: Vec<(String, f32)>,
     /// The clip length in frames: the `N` field of a `--tw-route` value stands for it.
     clip_len: Option<u64>,
+    /// The whole clip of a `requested` stage: the frames its plan asks are served from it.
+    requested: Option<std::sync::Arc<Vec<Vec<u32>>>>,
 }
 
 /// A fixed stage value with its size placeholders filled in: `W` of `--palpha-cells` is the frame width, and the first `N` of
@@ -907,6 +990,7 @@ fn run_fx(
 ) -> Result<Vec<Vec<u32>>> {
     let (w, h) = (spec.width, spec.height);
     let hist = extra.history.is_some();
+    let clip = extra.requested.clone();
     // The history route (Trails) chains renders through `prev.f32` and the meta file, which need a real directory.
     let scratch = if hist { Some(Scratch::new()?) } else { None };
     let mut files = RunFiles { words: Vec::new(), curve: None };
@@ -1016,6 +1100,7 @@ fn run_fx(
     #[cfg(test)]
     LAST_RUN.with(|l| *l.borrow_mut() = Some((args.clone(), files.words.iter().map(|(k, v)| (k.clone(), v.clone())).collect())));
     let (mut code, mut io) = exec(&args, &files);
+    let mut served: Vec<i64> = Vec::new();
     // The owner-arm `do_postdiv` is a required cross-check that the run reveals only through its refusal; the library hands
     // over the value the owner arm derives, it is learned once per clip and kept. The samples the route reads from the stage's
     // own constant curve are learned the same way: each `HOST-CURVE-VALUE-MISSING` (in a plan error or a refusal) names one
@@ -1073,6 +1158,20 @@ fn run_fx(
             files.curve = Some((curve_name.clone(), constant_curve(w, h, index, &learned.curve_keys(index))));
             (code, io) = exec(&args, &files);
             continue;
+        }
+        // A `requested` stage serves the frame the plan asks and runs the frame again, a few times at most.
+        if let Some(c) = &clip {
+            if matches!(code, 1 | 2) && request_unanswered(&text) {
+                let req = parse_host_request(&text).ok_or_else(|| Error::unsupported(format!("frame {}: FRAME-REQUESTS-UNSERVED (fx_run's request cannot be read)", index)))?;
+                serve_request(index, req, c.len(), &served)?;
+                served.push(req.frame);
+                let name = format!("fwreq{}.u32", req.frame);
+                files.words.push((name.clone(), std::sync::Arc::new(c[req.frame as usize].clone())));
+                args.push("--frame-words".into());
+                args.push(format!("{},{}={}", req.frame, req.frame, name));
+                (code, io) = exec(&args, &files);
+                continue;
+            }
         }
         // A clip the compiled plan does not read (Dissolve_Shake below its dissolve threshold drops To, and after the dissolve it drops
         // From) is not an input of the plan: the run names it, and the frame is rendered again without that source.
@@ -1246,6 +1345,12 @@ impl Keyed {
             if !crate::keys::is_keyed(value) {
                 plain.push((id.clone(), value.clone()));
                 continue;
+            }
+            if p.kind == "requested" {
+                return Err(Error::unsupported(format!(
+                    "bad value for `{}`: {} serves each output frame from a constant parameter value, so its parameters cannot change from frame to frame",
+                    id, p.id
+                )));
             }
             if p.spool {
                 return Err(Error::unsupported(format!(
@@ -1484,6 +1589,21 @@ pub fn apply(
     output: &mut dyn Write,
 ) -> Result<()> {
     let p = profile(id).ok_or_else(|| Error::unsupported(format!("unknown stage `{}`", id)))?;
+    apply_profile(p, spec, rate, values, layers, frames, device, input, output)
+}
+
+/// Run the stage of profile `p` over `input`.
+fn apply_profile(
+    p: &Profile,
+    spec: FrameSpec,
+    rate: Option<&crate::rate::Rate>,
+    values: &[(String, String)],
+    layers: &[String],
+    frames: Option<u64>,
+    device: fx_exec::fxrun::Device,
+    input: &mut dyn Read,
+    output: &mut dyn Write,
+) -> Result<()> {
     if !layers.is_empty() && !p.is_transition() {
         return Err(Error::unsupported(format!("LAYER-INPUT-UNSUPPORTED: {} takes no `--layer` input; only transition stages take a second layer", p.id)));
     }
@@ -1550,6 +1670,27 @@ pub fn apply(
             count += 1;
             f += 1;
         }
+    } else if p.kind == "requested" {
+        // The whole clip is read first; each frame is rendered with the frames its plan asks served from the clip.
+        let mut clip: Vec<Vec<u32>> = Vec::new();
+        while read_frame(input, &mut buf, clip.len() as u64)? {
+            clip.push(frame_to_words(spec, &buf));
+        }
+        let n = clip.len() as u64;
+        if let Some(want) = frames {
+            if want != n {
+                return Err(Error::bad_input(format!("the input holds {} frames, but --frames says {}", n, want)));
+            }
+        }
+        let clip = std::sync::Arc::new(clip);
+        for f in 0..n {
+            let vf = keyed.values_at(f);
+            let extra = Extra { host_values: time_values(Some(n), rate, f, spec)?, requested: Some(clip.clone()), clip_len: Some(clip.len() as u64), ..Extra::default() };
+            let words = run_fx(&runner, p, spec, f, clip[f as usize].clone(), layer_words(f)?, &param_args(p, &vf, spec.width)?, &host_at(p, &vf), extra, &learned)?.remove(0);
+            words_to_frame(spec, &words, &mut out);
+            write_out(output, &out, f)?;
+            count += 1;
+        }
     } else if p.spool {
         // Trails: buffer the clip, run the measured history route once (render k is frame k-1 at time k)
         let mut clip: Vec<Vec<u32>> = Vec::new();
@@ -1557,7 +1698,7 @@ pub fn apply(
             clip.push(frame_to_words(spec, &buf));
         }
         if !clip.is_empty() {
-            let extra = Extra { frame_words: Vec::new(), history: Some(clip), host_values: Vec::new(), clip_len: None };
+            let extra = Extra { frame_words: Vec::new(), history: Some(clip), host_values: Vec::new(), clip_len: None, requested: None };
             let outs = run_fx(&runner, p, spec, 0, Vec::new(), Vec::new(), &args_at(0)?, &host_at(p, &keyed.values_at(0)), extra, &learned)?;
             for (i, words) in outs.iter().enumerate() {
                 words_to_frame(spec, words, &mut out);
@@ -1718,9 +1859,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tables_parse_for_twenty_five_stages() {
+    fn tables_parse_for_twenty_seven_stages() {
         let ps = profiles();
-        assert_eq!(ps.len(), 25);
+        assert_eq!(ps.len(), 27);
         let hsb = profile("hue_sat_bright_autogen").expect("hsb");
         assert_eq!(hsb.family, "S_HueSatBright");
         assert_eq!(hsb.kind, "temporal");
@@ -2551,5 +2692,161 @@ mod popup_default_tests {
         let p = profile("time_warp_rgb_autogen").expect("stage");
         let route = p.fixed.iter().find(|(k, _)| k == "--tw-route").expect("route");
         assert!(route.1.starts_with("N,"), "{}", route.1);
+    }
+}
+
+#[cfg(test)]
+mod requested_route_tests {
+    use super::*;
+
+    fn req(frame: i64, value: f32) -> FrameRequest {
+        FrameRequest { frame, stored_bits: value.to_bits() }
+    }
+
+    #[test]
+    fn parses_a_host_request_line() {
+        let log = "noise\nHOST-REQUEST\tframe=3\tstored=40400000\targ=3\nHOST-REQUEST\tframe=11\tstored=41300000\targ=13\nrefused\n";
+        assert_eq!(parse_host_request(log), Some(req(11, 11.0)));
+    }
+
+    #[test]
+    fn parses_the_missing_host_frame_text() {
+        let log = "error: missing host frame get_frame request frame 5 stored 5 (bits 40a00000) argument 5.5";
+        assert_eq!(parse_host_request(log), Some(req(5, 5.0)));
+        assert!(request_unanswered(log));
+    }
+
+    #[test]
+    fn malformed_requests_give_none() {
+        for log in [
+            "",
+            "HOST-REQUEST\tframe=x\tstored=40400000\targ=3",
+            "HOST-REQUEST\tframe=3\tstored=4040\targ=3",
+            "HOST-REQUEST\tframe=3\tstored=zzzzzzzz\targ=3",
+            "HOST-REQUEST\tframe=3",
+            "missing host frame get_frame request frame 5 stored 5 (bits 40a0) argument 1",
+            "missing host frame get_frame request frame five stored 5 (bits 40a00000) argument 1",
+        ] {
+            assert_eq!(parse_host_request(log), None, "{:?}", log);
+        }
+    }
+
+    fn refusal(r: Result<()>) -> String {
+        format!("{}", r.expect_err("refused"))
+    }
+
+    #[test]
+    fn serves_a_frame_inside_the_clip() {
+        assert!(serve_request(2, req(0, 0.0), 12, &[]).is_ok());
+        assert!(serve_request(2, req(11, 11.0), 12, &[3]).is_ok());
+    }
+
+    #[test]
+    fn refuses_a_frame_outside_the_clip() {
+        assert!(refusal(serve_request(4, req(12, 12.0), 12, &[])).contains("FRAME-REQUEST-OUTSIDE-CLIP (frame 4: the compiled plan asks frame 12 of a clip of 12 frames)"));
+        assert!(refusal(serve_request(4, req(-1, -1.0), 12, &[])).contains("FRAME-REQUEST-OUTSIDE-CLIP"));
+    }
+
+    #[test]
+    fn refuses_a_stored_time_other_than_the_frame() {
+        let m = refusal(serve_request(4, req(1, 1.5), 12, &[]));
+        assert!(m.contains("FRAME-REQUEST-STORED-UNMEASURED (frame 4: the compiled plan asks frame 1 with the stored time 1.5; the stage serves a frame only at a stored time equal to the frame)"), "{}", m);
+    }
+
+    #[test]
+    fn refuses_a_ninth_frame() {
+        let served: Vec<i64> = (0..8).collect();
+        assert!(refusal(serve_request(4, req(9, 9.0), 12, &served)).contains("FRAME-REQUESTS-UNSERVED (frame 4: the compiled plan asks more than 8 frames)"));
+        assert!(serve_request(4, req(7, 7.0), 12, &served[..7]).is_ok());
+    }
+
+    fn clip_bytes(spec: FrameSpec, n: u64) -> Vec<u8> {
+        let per = spec.width as usize * spec.height as usize * 4;
+        let mut out = Vec::with_capacity(per * 4 * n as usize);
+        for f in 0..n as usize {
+            for i in 0..per {
+                let v = if i % 4 == 3 { 1.0f32 } else { ((f * 37 + i * 11) % 251) as f32 / 255.0 };
+                out.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        out
+    }
+
+    fn shifts() -> Vec<(String, String)> {
+        [("shift_frames_red", "2"), ("shift_frames_green", "-2"), ("shift_frames_blue", "1")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+
+    fn requested_copy(route: Option<&str>) -> Profile {
+        let mut q = profile("time_warp_rgb_autogen").expect("stage").clone();
+        q.kind = "requested".into();
+        q.id = "requested_copy".into();
+        q.fixed.retain(|(k, _)| k != "--tw-route");
+        if let Some(r) = route {
+            q.fixed.push(("--tw-route".into(), r.into()));
+        }
+        q
+    }
+
+    fn render(p: &Profile, spec: FrameSpec, n: u64) -> Result<Vec<u8>> {
+        let rate = crate::rate::Rate::parse("24/1").expect("rate");
+        let bytes = clip_bytes(spec, n);
+        let mut out = Vec::new();
+        apply_profile(p, spec, Some(&rate), &shifts(), &[], None, fx_exec::fxrun::Device::Cpu, &mut &bytes[..], &mut out)?;
+        Ok(out)
+    }
+
+    #[test]
+    fn requested_route_equals_the_time_warp_route() {
+        let spec = FrameSpec { width: 64, height: 32, depth: Depth::F32 };
+        let base = render(profile("time_warp_rgb_autogen").expect("stage"), spec, 12).expect("time warp route");
+        let got = render(&requested_copy(Some("N,0,1,1,0,0,1")), spec, 12).expect("requested route");
+        assert_eq!(base.len(), 12 * spec.frame_bytes() as usize);
+        assert!(base == got, "the requested route differs from the time warp route");
+    }
+
+    #[test]
+    fn requested_route_without_a_route_is_refused_by_fx_run() {
+        let spec = FrameSpec { width: 64, height: 32, depth: Depth::F32 };
+        let e = render(&requested_copy(None), spec, 4).expect_err("refused");
+        let m = format!("{} {:?}", e, e.stderr_tail);
+        assert!(m.contains("FRAME-REQUEST-INPUT-UNRECORDED"), "{}", m);
+    }
+
+    #[test]
+    fn manifest_kinds_are_in_the_schema_enum() {
+        let schema = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../contracts/stage-manifest.schema.json")).expect("schema");
+        let at = schema.find("frame: output frame N").expect("kind description");
+        let tail = &schema[at..];
+        let open = tail.find("\"enum\": [").expect("kind enum") + "\"enum\": [".len();
+        let close = open + tail[open..].find(']').expect("enum end");
+        let allowed: Vec<String> = tail[open..close].split(',').map(|t| t.trim().trim_matches('"').to_string()).collect();
+        assert!(!allowed.is_empty());
+        for p in profiles() {
+            assert!(allowed.iter().any(|a| a == manifest_kind(&p.kind)), "{} {}", p.id, p.kind);
+        }
+    }
+
+    #[test]
+    fn requested_stage_kind_is_temporal() {
+        assert_eq!(manifest_kind(&requested_copy(None).kind), "temporal");
+        assert_eq!(requested_copy(None).kind, "requested");
+        for id in ["retime_speed", "retime_longer"] {
+            if let Some(p) = profiles().iter().find(|p| p.id == id) {
+                assert_eq!(definitions().iter().find(|d| d.id == id).expect("def").kind, "temporal", "{}", p.id);
+            }
+        }
+    }
+
+    #[test]
+    fn keyed_value_on_a_requested_stage_is_refused() {
+        let spec = FrameSpec { width: 8, height: 8, depth: Depth::F32 };
+        let rate = crate::rate::Rate::parse("24/1").expect("rate");
+        let bytes = clip_bytes(spec, 4);
+        let mut out = Vec::new();
+        let vals = vec![("shift_frames_red".to_string(), "1@0;2@2".to_string())];
+        let e = apply_profile(&requested_copy(Some("N,0,1,1,0,0,1")), spec, Some(&rate), &vals, &[], None, fx_exec::fxrun::Device::Cpu, &mut &bytes[..], &mut out).expect_err("refused");
+        assert_eq!(e.exit_code(), 3, "{}", e);
+        assert_eq!(e.to_string(), "bad value for `shift_frames_red`: requested_copy serves each output frame from a constant parameter value, so its parameters cannot change from frame to frame");
+        assert!(out.is_empty());
     }
 }

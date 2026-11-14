@@ -362,3 +362,5 @@ glint	glint_from_alpha	--set	glint_from_alpha	2
 glint	scale_source	--set	scale_source	2
 glint	scale_background	--set	scale_background	2
 glint	cset_opacity	--cset	Opacity	2
+retime_speed	speed	--set	speed	8
+retime_longer	percent_longer	--set	percent_longer	7

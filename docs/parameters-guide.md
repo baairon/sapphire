@@ -1,6 +1,6 @@
 # Driving the effect parameters
 
-How to run each of the 25 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
+How to run each of the 27 effect stages with `sapphire stage apply`, what every offered parameter controls, how to write its value, and how the stage hands the value to `fx_run`.
 
 The stages themselves (requirements, host arrangement, exits, limits) are described in [Effects provider](stages.md#effects-provider). This page is about the parameters.
 
@@ -8,7 +8,7 @@ The stages themselves (requirements, host arrangement, exits, limits) are descri
 
 - **INFERRED** marks a description that rests on reading the effect graph (the native program constructors in `crates/effects/fx_eval/src/programs_native.rs` and the parameter definitions in `crates/effects/rtdata`), not on a measurement.
 - **MEASURED** marks a statement checked by running the code. "Verified at these values" lists the parameter values at which the stage output is byte identical to a recorded render of the original (MEASURED at depth 32, full SHA-256: by `crates/neutral-handoff/tests/fx_stage_parity.rs` for 382 recorded renders over the 13 stages of `S_Blur`, `S_BlurMoCurves`, `S_Diffuse`, `S_DistortRGB`, `S_DropShadow`, `S_HueSatBright`, `S_Sharpen`, `S_TimeWarpRGB`, `S_Trails` and `S_WarpPerspective`, and for `flicker`, `glow`, `swishpan`, the three `S_Shake` stages and the `S_DissolveShake` stage by rendering through `sapphire stage apply` their counted renders that match the stage's host arrangement, 24, 36, 32, 54 and 27, and for the two `S_BlurMotion` stages, `warp_transform_autogen`, the `S_GlowEdges` stage and the `glint` stage the same way, 112, 120, 61, 34 and 22; all byte identical). Values outside those lists run through the same code path and are INFERRED.
-- Every worked command below was run on this tree and ended with exit 0 (MEASURED, 64x32 `testsrc` clip, 3 frames, depth 32; the `S_Glint` command on a 64x32 clip of random values, 3 frames, depth 32, and that its exit does not depend on the clip is INFERRED).
+- Every worked command below was run on this tree and ended with exit 0 (MEASURED, 64x32 `testsrc` clip, 3 frames, depth 32; the `S_Glint` command on a 64x32 clip of random values, 3 frames, depth 32, and that its exit does not depend on the clip is INFERRED; the `S_Retime` commands on a 64x32 clip of random values, 3 frames, depth 32).
 
 ## Running a stage
 
@@ -340,6 +340,22 @@ One stage, `hue_sat_bright_autogen` (program `Hue_Sat_Bright_Autogen`). It rotat
 target/release/sapphire stage apply hue_sat_bright_autogen --width 64 --height 32 --depth 32 --frames 3 \
   --param hue_shift=-0.25 --param saturation=1.5 --param brightness=0.8 --param scale_colors=1,0.9,0.8 \
   --param preserve_luma=1 --in clip.raw --out out.raw
+```
+
+## `S_Retime`
+
+Two stages, `retime_speed` (program `Retime_Speed`) and `retime_longer` (program `Retime_Longer`), two of the six styles of the effect's Effect popup. Each makes every output frame from the clip frames around a source time, warped along the optical flow between them (INFERRED). The stages read the whole clip first and give each frame's plan the clip frames it requests (kind `temporal`, with no keyed value, see [Stage kinds](cli.md#stage-kinds-spool-and-keyframes)). They offer no opacity popup, and each offers one parameter; the other parameters of the two programs keep their registered defaults, as in every verified comparison.
+
+- `speed` (`retime_speed`), scalar, `--set`. The playback speed: the output frame at time t shows the source at time `speed` x t (INFERRED). Verified at `0.350006103515625`, `0.4499969482421875`, `0.600006103515625`, `0.6999969482421875`, `0.8000030517578125`, `1.25`, `1.399993896484375`, `1.600006103515625`, `2.1999969482421875`, `2.5`, `3`, `4`, `7.5` and `10`; the renders that leave it unset run the registered default.
+- `percent_longer` (`retime_longer`), scalar, `--set`. How much longer the clip becomes, in percent: the output frame at time t shows the source at time t x 100 / (100 + `percent_longer`) (INFERRED). Verified at `35`, `40`, `45`, `60`, `70`, `75`, `85`, `90`, `110`, `125`, `130`, `150` and `1000`; the renders that leave it unset run the registered default.
+
+The verified sizes are 50x7, 64x32 and 72x24, on a clip of 240 frames served by request (see `S_Retime` in [Effects](effects.md)).
+
+```sh
+target/release/sapphire stage apply retime_speed --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param speed=2.5 --in clip.raw --out out.raw
+target/release/sapphire stage apply retime_longer --width 64 --height 32 --depth 32 --fps 24 --frames 3 \
+  --param percent_longer=90 --in clip.raw --out out.raw
 ```
 
 ## `S_Shake`

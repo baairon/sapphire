@@ -281,6 +281,14 @@ pub struct KParams {
     pub palpha_cells: Option<(i32, i32, f64)>,
     /// destination plane base address modulo 32 (bytes) of the small planes of exec-downsampled (picks the alignment peel of the down kernel); MEASURED 0 in the emulator runs, a host allocator value otherwise
     pub ds_dst_phase: u32,
+    /// ALIGN-PHASE-HOST: byte phase (address modulo 64) of the first level-0 image (the plane the op reads through descriptor word 9),
+    /// in bytes, a multiple of 4 from 0 to 60 (modulo 64, 0 to 60); the low 5 bits choose the row sum's order, bit 5 the relaxation's
+    /// and the stencil's split on rows of 1,200 or more elements; other values are refused as a bad host value. A host's allocator sets it; optical_flow
+    /// places every other op plane from it by the in-op chain (optical_flow_entry::placement), and its row sums key their vector
+    /// order on the resulting phases. Default 0, the value recorded at 64x32, 72x24 and 128x64.
+    pub flow_host_phase: u32,
+    /// magnitude plane base address modulo 32 (bytes) of xy_to_polar (selects the vector body for 1,200 pixels or more); ALIGN-PHASE, a host value, default 0
+    pub polar_mag_phase: u32,
     /// DS1-OFF: skip the exec-downsampled model (the executor then runs the body at full size, the pre-DS1 behaviour)
     pub ds_off: bool,
     /// `info != 0` of the image object read by class grad. PARAM-UNCAPTURED in (GR-A1); an explicit input with a labelled STAND-IN default of false (no value was chosen by; false is the value measured at host aspect 1.0 in its E1 runs unfinished)
@@ -301,7 +309,7 @@ pub struct KParams {
 
 impl KParams {
     pub fn standin() -> KParams {
-        KParams { vec_one: 1.0, dst3_phase_bytes: 0, in_pool: false, geom: None, geom_mode: GeomMode::Dump, host_aspect: 1.0, static2_seed_a: 0, pad_pixel: [0.0; 4], blur_edge: 1, blur_render_scale: if std::env::var("NV9_BLUR_SCALE_OLD").map(|v| v == "1").unwrap_or(false) { 1 } else { 0 }, xy_head: 0, xy_head_mode: XyHeadMode::OneHead, persp_base: -1, palpha_base: -1, persp_rowbuf: false, palpha_rowbuf: false, xy_base: -1, palpha_cells: None, ds_dst_phase: 0, ds_off: std::env::var("DS1_OFF").map(|v| v == "1").unwrap_or(false), kparams_a: None, sharpen_count: None, sharpen_alias: false, blur_aspect: None, glint_align: glint_wire::host::Align::default() }
+        KParams { vec_one: 1.0, dst3_phase_bytes: 0, in_pool: false, geom: None, geom_mode: GeomMode::Dump, host_aspect: 1.0, static2_seed_a: 0, polar_mag_phase: 0, pad_pixel: [0.0; 4], blur_edge: 1, blur_render_scale: if std::env::var("NV9_BLUR_SCALE_OLD").map(|v| v == "1").unwrap_or(false) { 1 } else { 0 }, xy_head: 0, xy_head_mode: XyHeadMode::OneHead, persp_base: -1, palpha_base: -1, persp_rowbuf: false, palpha_rowbuf: false, xy_base: -1, palpha_cells: None, ds_dst_phase: 0, flow_host_phase: optical_flow_entry::placement::HOST_PHASE_DEFAULT, ds_off: std::env::var("DS1_OFF").map(|v| v == "1").unwrap_or(false), kparams_a: None, sharpen_count: None, sharpen_alias: false, blur_aspect: None, glint_align: glint_wire::host::Align::default() }
     }
 }
 

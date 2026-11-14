@@ -28,6 +28,12 @@ mod blur_motion_mono;
 mod warp_transform;
 mod glow_edges;
 mod glint;
+mod retime_speed;
+mod retime_longer;
+mod retime_scale;
+mod retime_fps;
+mod retime_length;
+mod retime_variable_speed;
 
 /// Every style, in the order of the effect list.
 pub static STYLES: &[&Style] = &[
@@ -56,4 +62,10 @@ pub static STYLES: &[&Style] = &[
     &warp_transform::STYLE,
     &glow_edges::STYLE,
     &glint::STYLE,
+    &retime_speed::STYLE,
+    &retime_longer::STYLE,
+    &retime_scale::STYLE,
+    &retime_fps::STYLE,
+    &retime_length::STYLE,
+    &retime_variable_speed::STYLE,
 ];

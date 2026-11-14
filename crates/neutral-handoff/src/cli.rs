@@ -435,7 +435,7 @@ fn stage_apply(args: &[String], stdin: &mut dyn Read, out: &mut dyn Write, termi
         Some(a) => a,
     };
     let def = stage::find(&a.stage)
-        .ok_or_else(|| Error::unsupported(format!("unknown stage `{}`, `sapphire stage list` shows the registered ones", a.stage)))?;
+        .ok_or_else(|| stage::unknown_stage_error(&a.stage))?;
     if !a.layers.is_empty() && def.layers.is_empty() && def.kind == "frame" {
         return Err(Error::usage(format!("{} is a frame effect, --layer only apply to temporal effects", def.id)));
     }
@@ -689,6 +689,19 @@ mod tests {
         let (code, again, _) = run(&["stage", "apply", "selftest-invert", "--width", "2", "--height", "1", "--depth", "8"], &out);
         assert_eq!(code, 0);
         assert_eq!(again, frame);
+    }
+
+    #[test]
+    fn retime_styles_that_are_not_offered_are_refused_by_name() {
+        for id in ["retime_scale", "retime_fps", "retime_length", "retime_variable_speed"] {
+            let (code, out, err) = run(&["stage", "apply", id, "--width", "2", "--height", "1", "--depth", "8"], b"");
+            assert_eq!(code, 3, "{}", id);
+            assert!(out.is_empty(), "{}", id);
+            assert!(err.trim().starts_with(&format!("error: unsupported: STYLE-NOT-REBUILT ({}:", id)), "{}", err);
+        }
+        for id in ["retime_speed", "retime_longer"] {
+            assert!(crate::stage::find(id).is_some(), "{}", id);
+        }
     }
 
     #[test]

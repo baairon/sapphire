@@ -5273,6 +5273,461 @@ fn layout_glint() -> Vec<Sx> {
     ]
 }
 
+fn eff_retime_fps(a: &mut Arena) -> EffectDef {
+    let params = vec![
+        param(a, "input_fps", D::N(30.0), &["min", "1.0", "max", "1000.0", "slider_max", "100.0", "not_shared"]),
+        param(a, "output_fps", D::N(60.0), &["min", "1.0", "max", "1000.0", "slider_max", "100.0", "not_shared"]),
+        param(a, "start_frame", D::N(0.0), &["int"]),
+        param(a, "smoothness", D::N(0.8), &["slider_max", "1.0"]),
+        param(a, "std_texture", D::N(0.0), &["max", "1.0"]),
+        param(a, "flow_scale", D::N(0.90000004), &["slider_max", "1.0"]),
+        param(a, "result", D::N(0.0), &["popup", "Result", "Flow_Vectors"]),
+        param(a, "field_dominance", D::N(0.0), &["popup", "Normal", "Reverse"]),
+        param(a, "motion_blur", D::N(0.0), &["slider_max", "1.0", "max", "2.0"]),
+    ];
+    let body = lower(a, &lt(vec![
+        (&["speed"], call("/", vec![id("input_fps"), id("output_fps")])),
+        (&["lambda"], call("TO_LAMBDA", vec![id("smoothness")])),
+    ], call("retime_fields", vec![
+        id("Source"),
+        call("retime_source_frame", vec![id("start_frame"), id("speed")]),
+        id("lambda"),
+        id("std_texture"),
+        id("flow_scale"),
+        id("result"),
+        id("field_dominance"),
+        id("motion_blur"),
+    ])));
+    EffectDef { name: "Retime_FPS".into(), va: "0x146c9c0".into(), inputs: vec![inp("Source", None)], flags: strv(&["rgba_ok", "renders_everywhere", "no_tiled_rendering", "enable_gpu", "share_all", "warp_crop", "skip_auto_mocha", "skip_auto_mask"]), params, body }
+}
+
+fn eff_retime_length(a: &mut Arena) -> EffectDef {
+    let params = vec![
+        param(a, "output_length", D::N(30.0), &["int", "min", "2", "max", "10000", "slider_max", "1000", "not_shared"]),
+        param(a, "start_frame", D::N(0.0), &["int"]),
+        param(a, "smoothness", D::N(0.8), &["slider_max", "1.0"]),
+        param(a, "std_texture", D::N(0.0), &["max", "1.0"]),
+        param(a, "flow_scale", D::N(0.90000004), &["slider_max", "1.0"]),
+        param(a, "result", D::N(0.0), &["popup", "Result", "Flow_Vectors"]),
+        param(a, "field_dominance", D::N(0.0), &["popup", "Normal", "Reverse"]),
+        param(a, "motion_blur", D::N(0.0), &["slider_max", "1.0", "max", "2.0"]),
+    ];
+    let body = lower(a, &lt(vec![
+        (&["speed"], call("/", vec![call("get_total_frames", vec![]), id("output_length")])),
+        (&["lambda"], call("TO_LAMBDA", vec![id("smoothness")])),
+    ], call("retime_fields", vec![
+        id("Source"),
+        call("retime_source_frame", vec![id("start_frame"), id("speed")]),
+        id("lambda"),
+        id("std_texture"),
+        id("flow_scale"),
+        id("result"),
+        id("field_dominance"),
+        id("motion_blur"),
+    ])));
+    EffectDef { name: "Retime_Length".into(), va: "0x146ccc0".into(), inputs: vec![inp("Source", None)], flags: strv(&["rgba_ok", "renders_everywhere", "no_tiled_rendering", "enable_gpu", "share_all", "warp_crop", "skip_auto_mocha", "skip_auto_mask"]), params, body }
+}
+
+fn eff_retime_longer(a: &mut Arena) -> EffectDef {
+    let params = vec![
+        param(a, "percent_longer", D::N(100.0), &["max", "10000.0", "slider_max", "1000.0", "not_shared"]),
+        param(a, "start_frame", D::N(0.0), &["int"]),
+        param(a, "smoothness", D::N(0.8), &["slider_max", "1.0"]),
+        param(a, "std_texture", D::N(0.0), &["max", "1.0"]),
+        param(a, "flow_scale", D::N(0.90000004), &["slider_max", "1.0"]),
+        param(a, "result", D::N(0.0), &["popup", "Result", "Flow_Vectors"]),
+        param(a, "field_dominance", D::N(0.0), &["popup", "Normal", "Reverse"]),
+        param(a, "motion_blur", D::N(0.0), &["slider_max", "1.0", "max", "2.0"]),
+    ];
+    let body = lower(a, &lt(vec![
+        (&["speed"], call("/", vec![n(100.0), call("+", vec![id("percent_longer"), n(100.0)])])),
+        (&["lambda"], call("TO_LAMBDA", vec![id("smoothness")])),
+    ], call("retime_fields", vec![
+        id("Source"),
+        call("retime_source_frame", vec![id("start_frame"), id("speed")]),
+        id("lambda"),
+        id("std_texture"),
+        id("flow_scale"),
+        id("result"),
+        id("field_dominance"),
+        id("motion_blur"),
+    ])));
+    EffectDef { name: "Retime_Longer".into(), va: "0x146cf80".into(), inputs: vec![inp("Source", None)], flags: strv(&["rgba_ok", "renders_everywhere", "no_tiled_rendering", "enable_gpu", "share_all", "warp_crop", "skip_auto_mocha", "skip_auto_mask"]), params, body }
+}
+
+fn eff_retime_scale(a: &mut Arena) -> EffectDef {
+    let params = vec![
+        param(a, "percent", D::N(200.0), &["min", "1.0", "max", "10000.0", "slider_max", "1000.0", "not_shared"]),
+        param(a, "start_frame", D::N(0.0), &["int"]),
+        param(a, "smoothness", D::N(0.8), &["slider_max", "1.0"]),
+        param(a, "std_texture", D::N(0.0), &["max", "1.0"]),
+        param(a, "flow_scale", D::N(0.90000004), &["slider_max", "1.0"]),
+        param(a, "result", D::N(0.0), &["popup", "Result", "Flow_Vectors"]),
+        param(a, "field_dominance", D::N(0.0), &["popup", "Normal", "Reverse"]),
+        param(a, "motion_blur", D::N(0.0), &["slider_max", "1.0", "max", "2.0"]),
+    ];
+    let body = lower(a, &lt(vec![
+        (&["speed"], call("/", vec![n(100.0), id("percent")])),
+        (&["lambda"], call("TO_LAMBDA", vec![id("smoothness")])),
+    ], call("retime_fields", vec![
+        id("Source"),
+        call("retime_source_frame", vec![id("start_frame"), id("speed")]),
+        id("lambda"),
+        id("std_texture"),
+        id("flow_scale"),
+        id("result"),
+        id("field_dominance"),
+        id("motion_blur"),
+    ])));
+    EffectDef { name: "Retime_Scale".into(), va: "0x146d240".into(), inputs: vec![inp("Source", None)], flags: strv(&["rgba_ok", "renders_everywhere", "no_tiled_rendering", "enable_gpu", "share_all", "warp_crop", "skip_auto_mocha", "skip_auto_mask"]), params, body }
+}
+
+fn eff_retime_speed(a: &mut Arena) -> EffectDef {
+    let params = vec![
+        param(a, "speed", D::N(0.5), &["max", "10", "min", "0.01", "not_shared"]),
+        param(a, "start_frame", D::N(0.0), &["int"]),
+        param(a, "smoothness", D::N(0.8), &["slider_max", "1.0"]),
+        param(a, "std_texture", D::N(0.0), &["max", "1.0"]),
+        param(a, "flow_scale", D::N(0.90000004), &["slider_max", "1.0"]),
+        param(a, "result", D::N(0.0), &["popup", "Result", "Flow_Vectors"]),
+        param(a, "field_dominance", D::N(0.0), &["popup", "Normal", "Reverse"]),
+        param(a, "motion_blur", D::N(0.0), &["slider_max", "1.0", "max", "2.0"]),
+    ];
+    let body = lower(a, &lt(vec![
+        (&["lambda"], call("TO_LAMBDA", vec![id("smoothness")])),
+    ], call("retime_fields", vec![
+        id("Source"),
+        call("retime_source_frame", vec![id("start_frame"), id("speed")]),
+        id("lambda"),
+        id("std_texture"),
+        id("flow_scale"),
+        id("result"),
+        id("field_dominance"),
+        id("motion_blur"),
+    ])));
+    EffectDef { name: "Retime_Speed".into(), va: "0x146d500".into(), inputs: vec![inp("Source", None)], flags: strv(&["rgba_ok", "renders_everywhere", "no_tiled_rendering", "enable_gpu", "share_all", "warp_crop", "skip_auto_mocha", "skip_auto_mask"]), params, body }
+}
+
+fn eff_retime_variable_speed(a: &mut Arena) -> EffectDef {
+    let params = vec![
+        param(a, "input_frame", D::N(1.0), &["max", "10000.0", "slider_max", "1000.0", "not_shared"]),
+        param(a, "start_frame", D::N(0.0), &["int"]),
+        param(a, "smoothness", D::N(0.8), &["slider_max", "1.0"]),
+        param(a, "std_texture", D::N(0.0), &["max", "1.0"]),
+        param(a, "flow_scale", D::N(0.90000004), &["slider_max", "1.0"]),
+        param(a, "result", D::N(0.0), &["popup", "Result", "Flow_Vectors"]),
+        param(a, "field_dominance", D::N(0.0), &["popup", "Normal", "Reverse"]),
+        param(a, "motion_blur", D::N(0.0), &["slider_max", "1.0", "max", "2.0"]),
+    ];
+    let body = lower(a, &lt(vec![
+        (&["lambda"], call("TO_LAMBDA", vec![id("smoothness")])),
+        (&["source_frame"], call("+", vec![id("start_frame"), id("input_frame")])),
+    ], call("retime_fields", vec![
+        id("Source"),
+        id("source_frame"),
+        id("lambda"),
+        id("std_texture"),
+        id("flow_scale"),
+        id("result"),
+        id("field_dominance"),
+        id("motion_blur"),
+    ])));
+    EffectDef { name: "Retime_Variable_Speed".into(), va: "0x146d780".into(), inputs: vec![inp("Source", None)], flags: strv(&["rgba_ok", "renders_everywhere", "no_tiled_rendering", "enable_gpu", "share_all", "warp_crop", "skip_auto_mocha", "skip_auto_mask"]), params, body }
+}
+
+fn defun_to_lambda(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &call("clamp", vec![
+        call("+", vec![
+            call("*", vec![n(50.0), call("-", vec![n(1.0), id("flow_field_smoothness")])]),
+            n(20.0),
+        ]),
+        n(1.0),
+        n(100.0),
+    ]));
+    DefunDef { name: "TO_LAMBDA".into(), va: "0x1483320".into(), args: strv(&["flow_field_smoothness"]), body }
+}
+
+fn defun_to_scale(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &call("clamp", vec![
+        call("+", vec![call("*", vec![n(50.0), call("-", vec![n(1.0), id("flow_scale")])]), n(1.0)]),
+        n(0.010000001),
+        n(100.0),
+    ]));
+    DefunDef { name: "TO_SCALE".into(), va: "0x14833a0".into(), args: strv(&["flow_scale"]), body }
+}
+
+fn defun_retime_core(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &lt(vec![
+        (&["max_warps"], n(5.0)),
+        (&["max_outer"], n(3.0)),
+        (&["max_inner"], n(1.0)),
+        (&["std_smooth"], n(0.2)),
+        (&["rotate"], n(0.5)),
+        (&["mix_original"], n(0.15)),
+        (&["show"], n(0.0)),
+        (&["flow"], call("optical_flow", vec![
+            call("monochrome", vec![id("prev_frame")]),
+            call("monochrome", vec![id("next_frame")]),
+            id("max_warps"),
+            id("max_outer"),
+            id("max_inner"),
+            id("lambda"),
+            n(1.0),
+            call("*", vec![n(0.5), id("std_texture")]),
+            id("std_smooth"),
+        ])),
+        (&["coords_all"], call("optical_flow_interp_maps", vec![
+            call("coerce_up", vec![id("prev_frame"), id("Output")]),
+            call("coerce_up", vec![id("next_frame"), id("Output")]),
+            id("flow"),
+            id("interp_amount"),
+        ])),
+        (&["coords_from"], call("element_of", vec![id("coords_all"), v(&[0.0, 1.0])])),
+        (&["coords_to"], call("element_of", vec![id("coords_all"), v(&[2.0, 3.0])])),
+        (&["warp_from"], call("warp_rel", vec![
+            call("make_mipmap", vec![id("prev_frame"), v(&[2.0, 2.0]), n(1.0)]),
+            id("coords_from"),
+            v(&[2.0, 2.0]),
+            n(1.0),
+        ])),
+        (&["warp_to"], call("warp_rel", vec![
+            call("make_mipmap", vec![id("next_frame"), v(&[2.0, 2.0]), n(1.0)]),
+            id("coords_to"),
+            v(&[2.0, 2.0]),
+            n(1.0),
+        ])),
+        (&["time_interp"], call("dissolve", vec![id("warp_from"), id("warp_to"), id("interp_amount")])),
+        (&["scale"], call("/", vec![
+            call("TO_SCALE", vec![id("flow_scale")]),
+            call("/", vec![n(720.0), call("get_frame_width", vec![])]),
+        ])),
+        (&["xyd"], call("/", vec![call("coerce_up", vec![id("flow"), v(&[0.0, 0.0, 0.0])]), id("scale")])),
+        (&["flow_xya"], call("element_of", vec![id("xyd"), v(&[0.0, 1.0])])),
+        (&["flow_xy"], call("*", vec![id("flow_xya"), v(&[-1.0, 1.0])])),
+        (&["confidence"], call("element_of", vec![id("xyd"), n(2.0)])),
+        (&["flow_polar"], call("xy_to_polar", vec![id("flow_xy"), id("rotate")])),
+        (&["rgb"], call("hsv_to_rgb", vec![call("append", vec![id("flow_polar"), n(1.0)])])),
+        (&["chart"], call("hsv_to_rgb", vec![
+            call("append", vec![call("xy_to_polar", vec![id("xy"), id("rotate")]), n(1.0)]),
+        ])),
+        (&["flow_view"], call("interp", vec![
+            call("switch", vec![id("show"), n(0.0), id("rgb"), n(1.0), id("chart"), id("confidence")]),
+            id("prev_frame"),
+            id("mix_original"),
+        ])),
+        (&["dest0"], call("if+", vec![id("result"), id("flow_view"), id("time_interp")])),
+        (&["flow_for_motion_blur"], call("*", vec![
+            call("/", vec![id("motion_blur"), call("get_frame_width", vec![])]),
+            call("element_of", vec![id("flow"), v(&[0.0, 1.0])]),
+        ])),
+    ], call("if+", vec![
+        id("motion_blur"),
+        call("blur_warp", vec![
+            call("make_mipmap", vec![id("dest0"), v(&[2.0, 2.0]), n(1.0)]),
+            call("-", vec![id("xy"), id("flow_for_motion_blur")]),
+            call("+", vec![id("xy"), id("flow_for_motion_blur")]),
+            v(&[1.0, 1.0]),
+            n(1.0),
+            v(&[2.0, 2.0]),
+            n(1.0),
+            n(0.0),
+        ]),
+        id("dest0"),
+    ])));
+    DefunDef { name: "retime_core".into(), va: "0x14deae0".into(), args: strv(&["prev_frame", "next_frame", "lambda", "std_texture", "interp_amount", "flow_scale", "result", "motion_blur"]), body }
+}
+
+fn defun_retime_fields(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &lt(vec![
+        (&["fields"], call("get_field", vec![])),
+        (&["source_field"], call("*", vec![n(2.0), id("source_frame")])),
+        (&["source_field_int"], call("round", vec![id("source_field"), n(1.0)])),
+        (&["prev_frame_int"], call("round", vec![call("*", vec![id("source_field_int"), n(0.5)]), n(1.0)])),
+        (&["prev_field01"], call("round", vec![call("mod", vec![id("source_field_int"), n(2.0)]), n(1.0)])),
+        (&["field_interp_amount"], call("-", vec![id("source_field"), id("source_field_int")])),
+        (&["next_frame_int"], call("+", vec![id("prev_frame_int"), id("prev_field01")])),
+        (&["next_field01"], call("-", vec![n(1.0), id("prev_field01")])),
+        (&["prev_field"], call("if+", vec![
+            id("field_dominance"),
+            call("-", vec![n(1.0), id("prev_field01")]),
+            id("prev_field01"),
+        ])),
+        (&["next_field"], call("if+", vec![
+            id("field_dominance"),
+            call("-", vec![n(1.0), id("next_field01")]),
+            id("next_field01"),
+        ])),
+        (&["prev_full_frame_int"], call("round", vec![id("source_frame"), n(1.0)])),
+        (&["next_full_frame_int"], call("+", vec![id("prev_full_frame_int"), n(1.0)])),
+        (&["interp_amount"], call("if_eq", vec![
+            id("fields"),
+            n(0.0),
+            call("-", vec![id("source_frame"), id("prev_full_frame_int")]),
+            id("field_interp_amount"),
+        ])),
+        (&["prev_frame"], call("if_eq", vec![
+            id("fields"),
+            n(0.0),
+            call("get_frame", vec![id("Source"), id("prev_full_frame_int"), n(0.0)]),
+            call("interlace_get_frames", vec![
+                id("Source"),
+                id("prev_frame_int"),
+                id("prev_field"),
+                id("Source"),
+                id("prev_frame_int"),
+                id("prev_field"),
+                n(0.0),
+                id("field_dominance"),
+            ]),
+        ])),
+        (&["next_frame"], call("if_eq", vec![
+            id("fields"),
+            n(0.0),
+            call("get_frame", vec![id("Source"), id("next_full_frame_int"), n(0.0)]),
+            call("interlace_get_frames", vec![
+                id("Source"),
+                id("next_frame_int"),
+                id("next_field"),
+                id("Source"),
+                id("next_frame_int"),
+                id("next_field"),
+                n(0.0),
+                id("field_dominance"),
+            ]),
+        ])),
+    ], call("retime_core", vec![
+        id("prev_frame"),
+        id("next_frame"),
+        id("lambda"),
+        id("std_texture"),
+        id("interp_amount"),
+        id("scale"),
+        id("result"),
+        id("motion_blur"),
+    ])));
+    DefunDef { name: "retime_fields".into(), va: "0x14df100".into(), args: strv(&["Source", "source_frame", "lambda", "std_texture", "scale", "result", "field_dominance", "motion_blur"]), body }
+}
+
+fn defun_retime_source_frame(a: &mut Arena) -> DefunDef {
+    let body = lower(a, &call("+", vec![id("start_frame"), call("*", vec![call("get_frame_number", vec![]), id("speed")])]));
+    DefunDef { name: "retime_source_frame".into(), va: "0x14df600".into(), args: strv(&["start_frame", "speed"]), body }
+}
+
+fn layout_retime_speed() -> Vec<Sx> {
+    vec![
+        a("layout_effect"),
+        a("Retime_Speed"),
+        l(vec![a("Source")]),
+        l(vec![]),
+        l(vec![
+            a("speed"),
+            a("result"),
+            a("start_frame"),
+            a("motion_blur"),
+            a("field_dominance"),
+            l(vec![a(":modify"), a("flow_field_smoothness"), a("smoothness"), l(vec![a("group_start"), a("flow_tuning")])]),
+            l(vec![a(":modify"), a("emphasize_edges"), a("std_texture")]),
+            l(vec![a(":modify"), a("flow_view_scale"), a("flow_scale"), l(vec![a("group_end"), a("flow_tuning")])]),
+        ]),
+    ]
+}
+
+fn layout_retime_longer() -> Vec<Sx> {
+    vec![
+        a("layout_effect"),
+        a("Retime_Longer"),
+        l(vec![a("Source")]),
+        l(vec![]),
+        l(vec![
+            a("percent_longer"),
+            a("result"),
+            a("start_frame"),
+            a("motion_blur"),
+            a("field_dominance"),
+            l(vec![a(":modify"), a("flow_field_smoothness"), a("smoothness"), l(vec![a("group_start"), a("flow_tuning")])]),
+            l(vec![a(":modify"), a("emphasize_edges"), a("std_texture")]),
+            l(vec![a(":modify"), a("flow_view_scale"), a("flow_scale"), l(vec![a("group_end"), a("flow_tuning")])]),
+        ]),
+    ]
+}
+
+fn layout_retime_scale() -> Vec<Sx> {
+    vec![
+        a("layout_effect"),
+        a("Retime_Scale"),
+        l(vec![a("Source")]),
+        l(vec![]),
+        l(vec![
+            a("percent"),
+            a("result"),
+            a("start_frame"),
+            a("motion_blur"),
+            a("field_dominance"),
+            l(vec![a(":modify"), a("flow_field_smoothness"), a("smoothness"), l(vec![a("group_start"), a("flow_tuning")])]),
+            l(vec![a(":modify"), a("emphasize_edges"), a("std_texture")]),
+            l(vec![a(":modify"), a("flow_view_scale"), a("flow_scale"), l(vec![a("group_end"), a("flow_tuning")])]),
+        ]),
+    ]
+}
+
+fn layout_retime_fps() -> Vec<Sx> {
+    vec![
+        a("layout_effect"),
+        a("Retime_FPS"),
+        l(vec![a("Source")]),
+        l(vec![]),
+        l(vec![
+            a("input_fps"),
+            a("output_fps"),
+            a("result"),
+            a("start_frame"),
+            a("motion_blur"),
+            a("field_dominance"),
+            l(vec![a(":modify"), a("flow_field_smoothness"), a("smoothness"), l(vec![a("group_start"), a("flow_tuning")])]),
+            l(vec![a(":modify"), a("emphasize_edges"), a("std_texture")]),
+            l(vec![a(":modify"), a("flow_view_scale"), a("flow_scale"), l(vec![a("group_end"), a("flow_tuning")])]),
+        ]),
+    ]
+}
+
+fn layout_retime_length() -> Vec<Sx> {
+    vec![
+        a("layout_effect"),
+        a("Retime_Length"),
+        l(vec![a("Source")]),
+        l(vec![]),
+        l(vec![
+            a("output_length"),
+            a("result"),
+            a("start_frame"),
+            a("motion_blur"),
+            a("field_dominance"),
+            l(vec![a(":modify"), a("flow_field_smoothness"), a("smoothness"), l(vec![a("group_start"), a("flow_tuning")])]),
+            l(vec![a(":modify"), a("emphasize_edges"), a("std_texture")]),
+            l(vec![a(":modify"), a("flow_view_scale"), a("flow_scale"), l(vec![a("group_end"), a("flow_tuning")])]),
+        ]),
+    ]
+}
+
+fn layout_retime_variable_speed() -> Vec<Sx> {
+    vec![
+        a("layout_effect"),
+        a("Retime_Variable_Speed"),
+        l(vec![a("Source")]),
+        l(vec![]),
+        l(vec![
+            a("input_frame"),
+            a("result"),
+            a("start_frame"),
+            a("motion_blur"),
+            a("field_dominance"),
+            l(vec![a(":modify"), a("flow_field_smoothness"), a("smoothness"), l(vec![a("group_start"), a("flow_tuning")])]),
+            l(vec![a(":modify"), a("emphasize_edges"), a("std_texture")]),
+            l(vec![a(":modify"), a("flow_view_scale"), a("flow_scale"), l(vec![a("group_end"), a("flow_tuning")])]),
+        ]),
+    ]
+}
+
 pub(crate) fn effects(a: &mut Arena) -> Vec<EffectDef> {
     vec![
         eff_blur_color(a),
@@ -5318,6 +5773,12 @@ pub(crate) fn effects(a: &mut Arena) -> Vec<EffectDef> {
         eff_warp_transform(a),
         eff_warp_transform_autogen(a),
         eff_glint(a),
+        eff_retime_fps(a),
+        eff_retime_length(a),
+        eff_retime_longer(a),
+        eff_retime_scale(a),
+        eff_retime_speed(a),
+        eff_retime_variable_speed(a),
     ]
 }
 
@@ -5353,6 +5814,11 @@ pub(crate) fn defuns(a: &mut Arena) -> Vec<DefunDef> {
         defun_twitch(a),
         defun_eq(a),
         defun_glint_rgba_combine(a),
+        defun_to_lambda(a),
+        defun_to_scale(a),
+        defun_retime_core(a),
+        defun_retime_fields(a),
+        defun_retime_source_frame(a),
     ]
 }
 
@@ -5383,5 +5849,11 @@ pub(crate) fn layouts() -> Vec<Vec<Sx>> {
         layout_glow_edges(),
         layout_warp_transform_autogen(),
         layout_glint(),
+        layout_retime_speed(),
+        layout_retime_longer(),
+        layout_retime_scale(),
+        layout_retime_fps(),
+        layout_retime_length(),
+        layout_retime_variable_speed(),
     ]
 }
