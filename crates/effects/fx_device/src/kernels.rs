@@ -123,6 +123,14 @@ pub const SOURCES: &[Source] = &[
     Source { name: "kernels_glint_passes::GLINT_PASSES", text: crate::kernels_glint_passes::GLINT_PASSES, mirrors_mul_add: true },
     Source { name: "kernels_glint_diag::GLINT_DIAG", text: crate::kernels_glint_diag::GLINT_DIAG, mirrors_mul_add: false },
     Source { name: "kernels_glint::GLINT_BLEND", text: crate::kernels_glint::GLINT_BLEND, mirrors_mul_add: true },
+    Source { name: "kernels_retime_polar::RETIME_POLAR", text: crate::kernels_retime_polar::RETIME_POLAR, mirrors_mul_add: true },
+    Source { name: "kernels_interp_maps::INTERP_MAPS", text: crate::kernels_interp_maps::INTERP_MAPS, mirrors_mul_add: true },
+    Source { name: "kernels_flow_solve_a::FLOW_SOLVE_A", text: crate::kernels_flow_solve_a::FLOW_SOLVE_A, mirrors_mul_add: true },
+    Source { name: "kernels_flow_solve_b::FLOW_SOLVE_B", text: crate::kernels_flow_solve_b::FLOW_SOLVE_B, mirrors_mul_add: true },
+    Source { name: "kernels_flow_fetch::FLOW_FETCH", text: crate::kernels_flow_fetch::FLOW_FETCH, mirrors_mul_add: true },
+    Source { name: "kernels_flow_fetch::FLOW_RESAMPLE", text: crate::kernels_flow_fetch::FLOW_RESAMPLE, mirrors_mul_add: true },
+    Source { name: "kernels_flow_polar::FLOW_POLAR", text: crate::kernels_flow_polar::FLOW_POLAR, mirrors_mul_add: true },
+    Source { name: "kernels_flow_compose::FLOW_COMPOSE", text: crate::kernels_flow_compose::FLOW_COMPOSE, mirrors_mul_add: true },
 ];
 
 /// The parts that make up the one device program (every kernel above, after the prelude).
@@ -157,6 +165,14 @@ pub const PROGRAM_PARTS: &[&str] = &[
     crate::kernels_glint_passes::GLINT_PASSES,
     crate::kernels_glint_diag::GLINT_DIAG,
     crate::kernels_glint::GLINT_BLEND,
+    crate::kernels_retime_polar::RETIME_POLAR,
+    crate::kernels_interp_maps::INTERP_MAPS,
+    crate::kernels_flow_solve_a::FLOW_SOLVE_A,
+    crate::kernels_flow_solve_b::FLOW_SOLVE_B,
+    crate::kernels_flow_fetch::FLOW_FETCH,
+    crate::kernels_flow_fetch::FLOW_RESAMPLE,
+    crate::kernels_flow_polar::FLOW_POLAR,
+    crate::kernels_flow_compose::FLOW_COMPOSE,
 ];
 
 /// One program text: the prelude, then `parts` in order.

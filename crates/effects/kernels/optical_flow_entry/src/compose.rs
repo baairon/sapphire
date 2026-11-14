@@ -73,7 +73,7 @@ pub enum FlowStop {
 }
 
 /// Ids of the level 0 planes and the scratch planes (arena identifiers chosen by the host).
-fn level0_record() -> LevelRecord {
+pub fn level0_record() -> LevelRecord {
     LevelRecord {
         image_a: 1,
         image_b: 2,
@@ -102,12 +102,12 @@ fn level0_record() -> LevelRecord {
 /// The smoothing stages' scratch planes are level 0's own working planes (the original's stages use the shared planes of the level
 /// table: warped_image as the result, warped_grad_x, warped_grad_y and coeff as the stencil planes, flow_u_next as the source copy), so
 /// their content after the stages is what the later passes of both bodies start from.
-fn smoothing_scratch() -> Scratch {
+pub fn smoothing_scratch() -> Scratch {
     let l = level0_record();
     Scratch { result: l.warped_image, flow_x: l.warped_grad_x, flow_y: l.warped_grad_y, work: l.coeff, source_copy: l.flow_u_next }
 }
-const LAUNCHER: u64 = 7;
-const PLANE_SLACK: usize = 64;
+pub const LAUNCHER: u64 = 7;
+pub const PLANE_SLACK: usize = 64;
 
 /// Host image service: the plane id of `c.plane` at level `c.level` (never 0 for a served level, which is at least 1).
 pub fn served_image(c: &ImgCall) -> u64 {
@@ -133,13 +133,13 @@ pub fn pyramid_body_result(end: BodyEnd) -> (i32, Option<EntryRefusal>) {
     }
 }
 
-fn bytes_of(v: &[f32], len: usize) -> Vec<u8> {
+pub fn bytes_of(v: &[f32], len: usize) -> Vec<u8> {
     let mut b: Vec<u8> = v.iter().flat_map(|x| x.to_le_bytes()).collect();
     b.resize(len, 0);
     b
 }
 
-fn compact(data: &[f32], w: usize, h: usize, stride: usize) -> Vec<f32> {
+pub fn compact(data: &[f32], w: usize, h: usize, stride: usize) -> Vec<f32> {
     let mut out = Vec::with_capacity(w * h);
     for y in 0..h {
         out.extend_from_slice(&data[y * stride..y * stride + w]);
