@@ -284,7 +284,7 @@ The `S_DissolveShake` stage is registered as well. Its plan does not always read
 |---|---|
 | Depth 32, the sizes and parameter values of the counted recorded renders that match the stage's host arrangement | byte identical to the recorded renders, full SHA-256 (MEASURED by `tests/fx_stage_parity.rs` for the stages of `S_Blur`, `S_BlurMoCurves`, `S_Diffuse`, `S_DistortRGB`, `S_DropShadow`, `S_HueSatBright`, `S_Sharpen`, `S_TimeWarpRGB`, `S_Trails` and `S_WarpPerspective`, and for `flicker`, `glow`, `swishpan`, the three `S_Shake` stages and the `S_DissolveShake` stage by rendering each counted render through `sapphire stage apply`) |
 | Other sizes and values | INFERRED (the same code path) |
-| Buffer placement at sizes other than the measured ones | INFERRED |
+| Buffer placement and host buffer phases at sizes other than the measured ones | INFERRED; above the thresholds in [limits common to the effects](effects.md#limits-common-to-the-effects) the original's own output depends on the phase |
 | Trails clips longer than the measured histories, Time_Warp windows beyond the measured shifts | INFERRED |
 | Host curves other than the identity curve | INFERRED, except the recorded Wipe Percent curves of the counted `swishpan` renders with `auto_trans` 0, which are byte identical through the stage |
 | Keyed values between keys | INFERRED (each frame is a plain run at its value, MEASURED) |
