@@ -1,6 +1,6 @@
 # sapphire
 
-The pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. Standard library only, no unsafe code. The plan, the ffmpeg and `vfx` command lines, the checks and the output naming are those of twixtor's `tools/apply.py`, so the same input, effect and flags give the same output frames: equal on <!--f:pipeline_parity_equal-->43<!--/f--> of <!--f:pipeline_parity_rows-->43<!--/f--> rows of `docs/data/pipeline_parity.tsv`. The convention it implements is [handoff](../../docs/handoff.md).
+The pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository. Standard library only, no unsafe code. The plan, the ffmpeg and `vfx` command lines, the checks and the output naming are those of twixtor's `tools/apply.py`, so the same input, effect and flags give the same output frames: equal on <!--f:pipeline_parity_equal-->43<!--/f--> of <!--f:pipeline_parity_rows-->43<!--/f--> rows of `docs/data/pipeline_parity.tsv`. Measured against `tools/apply.py` of twixtor 8087d06 the two wrappers differ in the input preparation: at `--depth 16` and `32` sapphire decodes an 8 bit source directly through ffmpeg to the raw format of `--depth` (an 8 bit white arrives as 65283 at depth 16), while apply.py decodes it as `rgba` and expands it exactly (v x 257 at depth 16, v / 255 at depth 32, the alpha white), so their frames differ there; apply.py also encodes an output with an odd side as yuv444p where sapphire refuses it (exit 3), and prints `[step]` lines and the `prepare` and `temp_files` keys that sapphire does not. At `--depth 8` the frames are equal. The rows of that table were recorded against an earlier `tools/apply.py`. The convention it implements is [handoff](../../docs/handoff.md).
 
 ```text
 input file --ffprobe--> plan (size, rate, colour matrix, stream)
@@ -82,7 +82,7 @@ In the pipeline, `--stage @selftest-invert` runs that stage in process; `--stage
 
 ## Tests
 
-`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->287<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
+`cargo test --release --offline -p neutral-handoff -- --test-threads=2` from the repository root; <!--f:tests_scan_neutral_handoff-->290<!--/f--> `#[test]` lines by text scan ([crates](../../docs/generated/crates.md)).
 
 | File | Checks | Needs |
 |---|---|---|
@@ -91,10 +91,10 @@ In the pipeline, `--stage @selftest-invert` runs that stage in process; `--stage
 | `tests/stage_cli.rs` | `stage list --json` and `stage apply selftest-invert` as a process | nothing |
 | `tests/pipeline_fake.rs` | stage order, the in-process stage, the error object for every way a stage can misbehave | ffmpeg |
 | `tests/frames2.rs` | the manifest, `--describe`, `ffmpeg-filter`, geometry through the wrapper, `role` and `index`, the exits | ffmpeg |
-| `tests/parity_apply_py.rs` | the same plan, command lines, refusals and frames as twixtor's `tools/apply.py` | ffmpeg, Python, twixtor |
-| `tests/cross_twixtor.rs` | each tool as a stage of the other, inverting twice in every order | ffmpeg, Python, twixtor's `vfx` and `tools/apply.py` |
+| `tests/parity_apply_py.rs` | the same plan, command lines, refusals and frames as twixtor's `tools/apply.py`; against apply.py 8087d06 the depth 16 and 32 frame rows, the dry run rows and the odd side refusal row differ (the input preparation above) | ffmpeg, Python, twixtor |
+| `tests/cross_twixtor.rs` | each tool as a stage of the other, inverting twice in every order; against apply.py 8087d06 the case that runs this crate's stage inside apply.py at depth 16 differs (the input preparation above) | ffmpeg, Python, twixtor's `vfx` and `tools/apply.py` |
 
-A test whose tools are missing prints a `SKIPPED` line with its reason and returns; under `HANDOFF_REQUIRE_PEERS=1` a missing twixtor fails the test instead. The cross repository tests find twixtor's `vfx` through the lookup of `src/tools.rs` (`VFX_PATH`, the build folders, `HANDOFF_TWIXTOR_DIR` or a sibling checkout found by its markers, `PATH`), and its `tools/apply.py` through `HANDOFF_TWIXTOR_DIR`, `APPLY_PY` or that sibling checkout.
+A test whose tools are missing prints a `SKIPPED` line with its reason and returns; under `HANDOFF_REQUIRE_PEERS=1` a missing twixtor fails the test instead. The cross repository tests find twixtor's `vfx` through the lookup of `src/tools.rs` (`VFX_PATH`, the build folders, `HANDOFF_TWIXTOR_DIR` or a sibling checkout found by its markers, `PATH`), and its `tools/apply.py` through `HANDOFF_TWIXTOR_DIR`, `APPLY_PY` or that sibling checkout. The sibling search is relative to the source tree the binary was compiled in (`CARGO_MANIFEST_DIR`), not to the folder it runs from, so a copied or installed binary keeps searching beside that source tree.
 
 ## Limits
 

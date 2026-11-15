@@ -6,7 +6,8 @@
 //! |---|---|
 //! | Parameters | `graph` (an ffmpeg filter graph, default `null`), `expect` (`preserve` or `declared`, default `preserve`), `unsafe` (checkbox) |
 //! | `expect preserve` | bytes out equal bytes in: the same size, rate and frame count; a graph that changes one of them is `unsupported` (exit 3) |
-//! | `expect declared` | `--describe` measures width, height and frame count with a bounded dry run ([`DRY_RUN_FRAMES`] frames, at most [`DRY_RUN_SECONDS`] seconds of input) |
+//! | `expect declared` | `--describe` measures width, height and frame count with a bounded dry run ([`DRY_RUN_FRAMES`] frames, at most [`DRY_RUN_SECONDS`] seconds of input, at most the input); the count is the measured one when the dry run saw the whole input, the input count when the graph kept the count, else unknown (`null`) |
+//! | Early end | a graph that ends before its input (`trim=end_frame=N`) closes ffmpeg's input; the stage then reads the rest of its input without feeding it and finishes normally |
 //! | Rate | an exact fraction; a graph that changes it is `unsupported` under either value |
 //! | Safe filters | without `--param unsafe=1` a graph may only use the frame filters of [`SAFE_FILTERS`], which read and write nothing but the frames; any other filter needs it |
 //! | Probing | `ffmpeg -version`, `-pix_fmts` and `-filters` run before use; [`MEASURED_VERSION`] is the measured version, another one is reported as unverified on standard error |
@@ -352,6 +353,28 @@ pub fn dry_run_frames(rate: &Rate) -> u64 {
     two_seconds.clamp(1, DRY_RUN_FRAMES)
 }
 
+/// Frames fed to the dry run for an input of `frames` (when known): [`dry_run_frames`], at most
+/// the input, at least 1 (twixtor's `tools/ffstage.py` `dry_count`).
+pub fn dry_run_fed(rate: &Rate, frames: Option<u64>) -> u64 {
+    let k = dry_run_frames(rate);
+    match frames {
+        Some(n) => k.min(n).max(1),
+        None => k,
+    }
+}
+
+/// The output frame count of `--describe` for an input of `frames`, when the dry run turned
+/// `fed` frames into `out`: unknown without an input count; the measured count when the dry run
+/// saw the whole input; the input count when the graph kept the count; else unknown.
+pub fn described_frames(frames: Option<u64>, fed: u64, out: u64) -> Option<u64> {
+    match frames {
+        None => None,
+        Some(0) => Some(0),
+        Some(n) if n <= fed => Some(out),
+        Some(n) => (out == fed).then_some(n),
+    }
+}
+
 /// What the dry run measured.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Measured {
@@ -395,9 +418,9 @@ pub fn parse_framemd5(text: &str, rate: &Rate) -> Option<Measured> {
     Some(Measured { size: size?, frames: rows.len() as u64, frame_bytes: rows.first().map(|r| r.2), same_rate })
 }
 
-/// The bounded dry run: [`dry_run_frames`] grey frames of `spec` through the graph, measured.
-pub fn measure(spec: FrameSpec, rate: &Rate, opts: &Options, ffmpeg: &Path) -> Result<(Measured, u64)> {
-    let k = dry_run_frames(rate);
+/// The bounded dry run: [`dry_run_fed`] grey frames of `spec` through the graph, measured.
+pub fn measure(spec: FrameSpec, rate: &Rate, frames: Option<u64>, opts: &Options, ffmpeg: &Path) -> Result<(Measured, u64)> {
+    let k = dry_run_fed(rate, frames);
     let fmt = spec.depth.pix_fmt_name();
     let source = format!("color=c=gray:s={}x{}:r={},format={},trim=end_frame={}", spec.width, spec.height, rate.text(), fmt, k);
     let args: Vec<String> = [
@@ -429,7 +452,7 @@ pub fn describe(spec: FrameSpec, rate: &Rate, frames: Option<u64>, opts: &Option
 fn describe_probed(spec: FrameSpec, rate: &Rate, frames: Option<u64>, opts: &Options, ffmpeg: &Path) -> Result<(Answer, Caps)> {
     let caps = probe(ffmpeg)?;
     check(&caps, opts, spec)?;
-    let (m, k) = measure(spec, rate, opts, ffmpeg)?;
+    let (m, k) = measure(spec, rate, frames, opts, ffmpeg)?;
     if !m.same_rate {
         return Err(Error::unsupported(format!("the graph `{}` changes the frame rate; a rate change is not supported", opts.graph)));
     }
@@ -450,7 +473,7 @@ fn describe_probed(spec: FrameSpec, rate: &Rate, frames: Option<u64>, opts: &Opt
             opts.graph, spec.width, spec.height, w, h, k, m.frames
         )));
     }
-    let answer = Answer { stage: ID.to_string(), width: w, height: h, depth: spec.depth, fps: *rate, frames: if same_count { frames } else { None } };
+    let answer = Answer { stage: ID.to_string(), width: w, height: h, depth: spec.depth, fps: *rate, frames: described_frames(frames, k, m.frames) };
     Ok((answer, caps))
 }
 
@@ -471,6 +494,10 @@ fn write_frame<W: Write>(output: &mut W, frame: &FrameBuf, index: u64) -> Result
 }
 
 /// Run the graph over whole frames from `input` to `output`; returns the frames written.
+///
+/// A graph that ends before its input (`trim=end_frame=N`) makes ffmpeg close its input: the
+/// stage then stops feeding it, still reads and counts the rest of its own input, and finishes
+/// with the frames ffmpeg wrote.
 ///
 /// The input is counted frame by frame and byte by byte (ffmpeg exits 0 on a truncated
 /// stream): a stream that ends inside a frame is `partial_frame`. Under `expect preserve` the
@@ -507,6 +534,7 @@ pub fn apply<R: Read, W: Write>(
     let bytes = spec.frame_bytes() as usize;
     let mut buf = vec![0u8; bytes];
     let (mut read, mut written) = (0u64, 0u64);
+    let mut feeding = true;
     loop {
         let mut got = 0usize;
         while got < bytes {
@@ -526,9 +554,16 @@ pub fn apply<R: Read, W: Write>(
                 format!("frame {}: input ends with a partial frame ({} of {} bytes) after {} whole frames", read, got, bytes, read),
             ));
         }
-        let frame = FrameBuf::from_slice(fmt, spec.width, spec.height, &buf).map_err(|e| bridge_error(&e))?;
-        filter.push(&frame).map_err(|e| bridge_error(&e))?;
         read += 1;
+        if feeding {
+            let frame = FrameBuf::from_slice(fmt, spec.width, spec.height, &buf).map_err(|e| bridge_error(&e))?;
+            match filter.push(&frame) {
+                Ok(()) => {}
+                // ffmpeg ended cleanly and closed its input: the graph wants no more frames
+                Err(BridgeError::Io { source, .. }) if source.kind() == io::ErrorKind::BrokenPipe => feeding = false,
+                Err(e) => return Err(bridge_error(&e)),
+            }
+        }
         while let Some(out) = filter.try_pull().map_err(|e| bridge_error(&e))? {
             write_frame(output, &out, written)?;
             written += 1;
@@ -639,6 +674,22 @@ mod tests {
         assert_eq!(colour_matrix(1280, 2), "bt709");
         assert_eq!(colour_matrix(2, 720), "bt709");
         assert_eq!(colour_matrix(1279, 719), "smpte170m");
+    }
+
+    #[test]
+    fn the_dry_run_sees_at_most_the_input_and_answers_its_count() {
+        let rate = Rate::parse("24/1").unwrap();
+        assert_eq!(dry_run_fed(&rate, None), 48);
+        assert_eq!(dry_run_fed(&rate, Some(24)), 24);
+        assert_eq!(dry_run_fed(&rate, Some(0)), 1);
+        assert_eq!(dry_run_fed(&rate, Some(72)), 48);
+        // trim=end_frame=10 over 24 frames: the dry run fed the whole input
+        assert_eq!(described_frames(Some(24), 24, 10), Some(10));
+        // over 72 frames the dry run saw 48 of them, and the graph changed the count
+        assert_eq!(described_frames(Some(72), 48, 10), None);
+        assert_eq!(described_frames(Some(72), 48, 48), Some(72));
+        assert_eq!(described_frames(None, 48, 48), None);
+        assert_eq!(described_frames(Some(0), 1, 1), Some(0));
     }
 
     #[test]

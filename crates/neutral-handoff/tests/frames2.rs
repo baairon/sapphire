@@ -141,6 +141,25 @@ fn ffmpeg_filter_counts_frames_because_ffmpeg_exits_0_on_truncation() {
     assert_eq!(wrong.code, 4, "{}", wrong.stderr);
 }
 
+#[test]
+fn ffmpeg_filter_finishes_a_graph_that_ends_before_its_input() {
+    let Some(ffmpeg) = ffmpeg_or_skip("ffmpeg_filter_finishes_a_graph_that_ends_before_its_input") else { return };
+    let (w, h, n) = (96u32, 64u32, 24usize);
+    let frame = w as usize * h as usize * 4;
+    let data: Vec<u8> = (0..frame * n).map(|i| (i * 7 % 251) as u8).collect();
+    let trim = ["graph=trim=end_frame=10", "expect=declared"];
+    let described = ff_apply(&ffmpeg, w, h, 8, &trim, &["--frames", "24", "--describe"], Vec::new());
+    assert_eq!(described.code, 0, "{}", described.stderr);
+    assert!(described.out_text().contains(r#""frames": 10}"#), "the dry run fed the whole input: {}", described.out_text());
+    let longer = ff_apply(&ffmpeg, w, h, 8, &trim, &["--frames", "72", "--describe"], Vec::new());
+    assert!(longer.out_text().contains(r#""frames": null}"#), "the dry run saw 48 of 72 frames: {}", longer.out_text());
+    for extra in [&[][..], &["--frames", "24"][..]] {
+        let ran = ff_apply(&ffmpeg, w, h, 8, &trim, extra, data.clone());
+        assert_eq!(ran.code, 0, "{:?}: {}", extra, ran.stderr);
+        assert!(ran.stdout == data[..frame * 10], "{:?}: the first 10 frames, unchanged", extra);
+    }
+}
+
 fn clip(test: &str) -> Option<(PathBuf, PathBuf)> {
     require_media(test)?;
     let dir = scratch(test);
@@ -173,6 +192,27 @@ fn the_wrapper_chains_declared_geometry_into_encode_and_verify() {
     }
     assert_eq!(stages[1].get("exit_code").and_then(|v| v.as_i64()), Some(0));
     assert_eq!(decode_raw(&out, "rgba").len(), 12 * 80 * 48 * 4, "the output has the declared size");
+}
+
+#[test]
+fn the_wrapper_keeps_an_unknown_declared_count_unknown() {
+    let Some(_) = require_media("the_wrapper_keeps_an_unknown_declared_count_unknown") else { return };
+    let dir = scratch("the_wrapper_keeps_an_unknown_declared_count_unknown");
+    let c = make_clip(&dir, "long.mp4", 96, 64, 72, 24, 0.0).to_string_lossy().into_owned();
+    let short = make_clip(&dir, "short.mp4", 96, 64, 24, 24, 0.0).to_string_lossy().into_owned();
+    let stage = "@ffmpeg-filter graph=trim=end_frame=10 expect=declared";
+    for (i, (input, frames)) in [(&c, None), (&short, Some(10))].into_iter().enumerate() {
+        let described = nh(&[input, "--stage", stage, "--depth", "8", "--describe"], None);
+        assert_eq!(described.code, 0, "{}", described.stderr);
+        let doc = Json::parse(described.out_text().trim()).unwrap();
+        assert_eq!(doc.get("frames").and_then(|v| v.as_i64()), frames, "{}", described.out_text());
+        let o = dir.join(format!("trim{}.mkv", i)).to_string_lossy().into_owned();
+        let ran = nh(&[input, "--stage", stage, "--depth", "8", "--lossless", "-o", &o, "--json"], None);
+        assert_eq!(ran.code, 0, "{}{}", ran.out_text(), ran.stderr);
+        let doc = Json::parse(&ran.out_text()).unwrap();
+        assert_eq!(doc.get("geometry").and_then(|g| g.get("frames")).and_then(|v| v.as_i64()), frames);
+        assert_eq!(decode_raw(Path::new(&o), "rgba").len(), 10 * 96 * 64 * 4, "the graph wrote 10 frames");
+    }
 }
 
 #[test]

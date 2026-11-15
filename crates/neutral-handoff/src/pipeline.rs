@@ -839,8 +839,10 @@ fn analyse(cfg: &PipelineConfig, results: &[Done], procs: &[Proc], drained: &[(u
         let ok_run = matches!(writer.map(|d| &d.outcome), Some(Outcome::Ok)) && matches!(reader.map(|d| &d.outcome), Some(Outcome::Ok));
         let ok_builtin = matches!(builtin.map(|d| &d.outcome), Some(Outcome::Ok));
         if ok_run || ok_builtin {
+            // a declared stage that answered `frames: null` may write any count
             let expected = match (step.frames_in, step.frames_out) {
                 (a, Some(b)) if a != Some(b) => b,
+                (_, None) if step.declared => frames_out,
                 _ => frames_in,
             };
             if frames_out < expected {
