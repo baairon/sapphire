@@ -147,6 +147,9 @@ pub struct Step {
     /// The step reads its whole input before it writes (a spooling stage), so the stall watch
     /// does not judge it while its input is open.
     pub spool: bool,
+    /// The stage declares its geometry (`--describe`): a `frames_out` of `None` is then an
+    /// unknown count, and the run does not check the frames it writes against its input.
+    pub declared: bool,
 }
 
 impl Step {
@@ -568,7 +571,7 @@ pub fn prepare_with(
                     return Err(Error::unsupported("the effect runs at the input size, so a stage with declared geometry can only follow it").at("vfx"));
                 }
                 let after = if e.kind == Kind::Temporal && request.frames.is_some() { out_frames } else { count };
-                steps.push(Step { name: "vfx".into(), kind: StepKind::Vfx, argv: Vec::new(), frames_in: count, frames_out: after, spec_in: cur, spec_out: cur, spool: false });
+                steps.push(Step { name: "vfx".into(), kind: StepKind::Vfx, argv: Vec::new(), frames_in: count, frames_out: after, spec_in: cur, spec_out: cur, spool: false, declared: false });
                 count = after;
             }
             Raw::Stage { index, name, text } => {
@@ -646,7 +649,8 @@ pub fn prepare_with(
                         .at(&name))
                     }
                 };
-                steps.push(Step { name, kind, argv, frames_in: count, frames_out, spec_in: cur, spec_out, spool });
+                let declared = geometry.as_deref() == Some("declared");
+                steps.push(Step { name, kind, argv, frames_in: count, frames_out, spec_in: cur, spec_out, spool, declared });
                 cur = spec_out;
                 count = frames_out;
             }
@@ -764,9 +768,13 @@ impl Prepared {
         self.steps.iter().any(|s| s.spec_out != s.spec_in || (s.kind != StepKind::Vfx && s.frames_out != s.frames_in))
     }
 
-    /// Frames of the output, when known.
+    /// Frames of the output, when known: the count of the last step. A declared stage that
+    /// answers `frames: null` keeps the output count unknown.
     pub fn output_frames(&self) -> Option<u64> {
-        self.steps.last().and_then(|s| s.frames_out).or_else(|| self.effect_frames())
+        match self.steps.last() {
+            Some(s) => s.frames_out,
+            None => self.effect_frames(),
+        }
     }
 
     /// The plan and the commands for `scratch` (the folder is named here, not created).
@@ -1356,7 +1364,7 @@ mod tests {
             (Kind::Temporal, Some(n)) => Some(n),
             _ => info.exact_frames(),
         };
-        let steps = vec![Step { name: "vfx".into(), kind: StepKind::Vfx, argv: Vec::new(), frames_in: info.exact_frames(), frames_out, spec_in: spec, spec_out: spec, spool: false }];
+        let steps = vec![Step { name: "vfx".into(), kind: StepKind::Vfx, argv: Vec::new(), frames_in: info.exact_frames(), frames_out, spec_in: spec, spec_out: spec, spool: false, declared: false }];
         Prepared {
             request,
             media: Media { ffmpeg: "ffmpeg".into(), ffprobe: "ffprobe".into() },

@@ -3,7 +3,7 @@
   "path": "README.md",
   "title": "sapphire",
   "line": "An independent open source reimplementation of Sapphire behaviour, function by function.",
-  "bytes": 39895,
+  "bytes": 40605,
   "generated": false
  },
  {
@@ -17,7 +17,7 @@
   "path": "crates/neutral-handoff/README.md",
   "title": "sapphire",
   "line": "The pipeline from ffmpeg through twixtor's `vfx` and back to ffmpeg, plus the stage commands of this repository.",
-  "bytes": 8311,
+  "bytes": 9498,
   "generated": false
  },
  {
@@ -52,7 +52,7 @@
   "path": "docs/cli.md",
   "title": "Command-line reference",
   "line": "This page is the exact interface of the `sapphire` executable and of `fx_run --describe-params`, as a calling program sees it.",
-  "bytes": 77204,
+  "bytes": 77533,
   "generated": false
  },
  {
@@ -80,7 +80,7 @@
   "path": "docs/effects.md",
   "title": "Effects",
   "line": "Twenty of the plugin's effects are rebuilt in this repository as native Rust code.",
-  "bytes": 109725,
+  "bytes": 110182,
   "generated": false
  },
  {
@@ -395,7 +395,7 @@
   "path": "docs/internals/retime.md",
   "title": "Internals of `stage apply retime_speed` and `stage apply retime_longer`",
   "line": "How the code of these stages is built, how a render reaches its kernels, how it is checked and what limits it has.",
-  "bytes": 46472,
+  "bytes": 46507,
   "generated": false
  },
  {
