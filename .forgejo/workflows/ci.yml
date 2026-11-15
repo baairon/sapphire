@@ -40,7 +40,6 @@ jobs:
       # 3.12-only syntax.
       - run: |
           apt-get update && apt-get install -y --no-install-recommends python3 xz-utils
-          POCL_SUDO= bash tools/ci_install_pocl.sh
           curl -sSfL https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-gpl-9.0.tar.xz | tar -xJ -C /opt
           echo /opt/ffmpeg-n9.0-latest-linux64-gpl-9.0/bin >> "$GITHUB_PATH"
 
@@ -58,7 +57,7 @@ jobs:
       - run: cargo build --release -p neutral-handoff
 
       # The 15 effect crates outside the default members (docs/effects): fx_run builds, and their tests that need no stored data run;
-      # the ones that need the original-derived data print NOT RUN.
+      # the ones that need the original-derived data print NOT RUN, and so do the device tests: this job has no OpenCL platform.
       - run: |
           cargo build --release -p fx_exec
           cargo test --release -p fx_eval -p fx_exec -p edge_aware_sharpen_weights -p edge_aware_sharpen_jobs -p edge_aware_sharpen_blur_core -p edge_aware_sharpen_box_filter -p edge_aware_sharpen_render -p edge_aware_sharpen -p sharpen -p warp_render -p make_mipmap -p rotate2d -p interp -p effects_rtdata -p effects_vecdir
@@ -68,17 +67,10 @@ jobs:
       # names the style.
       - run: python3 -I tools/fx_golden.py
 
-      # The device foundation: source lint, host simulator, probe and self-check corpus, then, with PoCL installed above, the
-      # allowlisted ops against the CPU kernels and the 20 styles rendered through the device backend to the same hashes.
-      # SAPPHIRE_REQUIRE_DEVICE=1 turns a missing device into a failure, so an unusable PoCL install cannot pass as NOT RUN.
-      # The device integration tests run one binary at a time on one thread: OpenCL platform discovery is not thread safe.
-      - env:
-          SAPPHIRE_REQUIRE_DEVICE: "1"
-        run: |
-          cargo test --release -p fx_device -- --test-threads=1
-          cargo test --release -p fx_exec --lib device -- --test-threads=1
-          cargo test --release -p fx_exec --test device_backend --test device_pointwise --test device_warp --test device_ripmap --test device_neighbourhood --test device_glow --test device_glow_ops --test device_footprint --test device_edge --test device_edge_mutants --test device_tilt --test device_tilt_alpha --test device_glint --test device_glint_diag --test device_glint_passes --test device_retime -- --test-threads=1
-          SAPPHIRE_REQUIRE_DEVICE=1 SAPPHIRE_DEVICE=gpu python3 -I tools/fx_golden.py
+      # The device foundation (docs/adding-an-effect.md, Device): the kernel source lint, the host simulator, the probe,
+      # the self-check corpus and the unsafe scan. They need no device; the tests that need one print NOT RUN here and
+      # run in the device job below.
+      - run: cargo test --release -p fx_device -- --test-threads=1
 
       # The Python tools need no packages beyond the standard library to
       # compile, so a syntax slip anywhere in them fails here.
@@ -107,3 +99,43 @@ jobs:
 
       # Every effect has golden rows and calls no platform math library.
       - run: python3 -I tools/test_effect_rules.py
+
+  # The device backend on PoCL (an OpenCL runtime on the CPU, so the self-check runs on a runner with no GPU), as in the
+  # GitHub workflow. It is a job of its own with its own time limit: with PoCL installed in the job above, the general
+  # fx_exec step ran every device test binary on PoCL as well, and the two together outran 60 minutes on this runner.
+  # Both jobs are required for a green run.
+  device:
+    name: device backend on PoCL
+    runs-on: docker
+    timeout-minutes: 60
+    container:
+      image: "docker.io/library/node:24-bookworm"
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v6
+
+      - run: |
+          apt-get update && apt-get install -y --no-install-recommends python3 xz-utils
+          POCL_SUDO= bash tools/ci_install_pocl.sh
+
+      - run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      # The stage provider and fx_run that the device steps drive.
+      - run: cargo build --release -p neutral-handoff
+
+      - run: cargo build --release -p fx_exec
+
+      # Linux with PoCL: the device foundation with a device present, every allowlisted op against the CPU kernel, the
+      # seam tests, and the 20 styles rendered through the device backend (SAPPHIRE_DEVICE=gpu) to the same hashes as
+      # tools/fx_golden.tsv. SAPPHIRE_REQUIRE_DEVICE=1 turns a missing device into a failure, so an unusable PoCL
+      # install cannot pass as NOT RUN. The device integration tests run one binary at a time on one thread: OpenCL
+      # platform discovery is not thread safe.
+      - env:
+          SAPPHIRE_REQUIRE_DEVICE: "1"
+        run: |
+          cargo test --release -p fx_device -- --test-threads=1
+          cargo test --release -p fx_exec --lib device -- --test-threads=1
+          cargo test --release -p fx_exec --test device_backend --test device_pointwise --test device_warp --test device_ripmap --test device_neighbourhood --test device_glow --test device_glow_ops --test device_footprint --test device_edge --test device_edge_mutants --test device_tilt --test device_tilt_alpha --test device_glint --test device_glint_diag --test device_glint_passes --test device_retime -- --test-threads=1
+          SAPPHIRE_REQUIRE_DEVICE=1 SAPPHIRE_DEVICE=gpu python3 -I tools/fx_golden.py
